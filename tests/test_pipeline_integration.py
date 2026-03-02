@@ -801,3 +801,92 @@ class TestCLI:
             f.flush()
             result = runner.invoke(cli, ["convert", f.name, "--passes", "3"])
             assert result.exit_code != 0
+
+
+class TestTruncatedResponseIntegration:
+    """Integration tests proving max_tokens responses fail safe through the real calling path."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_max_tokens_pass1_returns_pending(self):
+        """A pass-1 response with stop_reason='max_tokens' must return SlideAnalysis.pending()."""
+        from folio.pipeline.analysis import analyze_slides
+
+        mock_response = MagicMock()
+        mock_content = MagicMock()
+        mock_content.text = "Slide Type: data\nFramework: none"
+        mock_response.content = [mock_content]
+        mock_response.stop_reason = "max_tokens"
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(return_value=mock_response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "slide-001.png"
+            img.write_bytes(self._make_unique_png(200))
+
+            with patch("anthropic.Anthropic", return_value=mock_client):
+                results = analyze_slides([img], model="test")
+
+        assert results[1].slide_type == "pending"
+        assert results[1].framework == "pending"
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_max_tokens_pass2_returns_empty(self):
+        """A pass-2 response with stop_reason='max_tokens' must return no evidence."""
+        from folio.pipeline.analysis import analyze_slides_deep, SlideAnalysis
+
+        # Set up pass-1 results with a high-density slide
+        pass1_results = {
+            1: SlideAnalysis(
+                slide_type="data",
+                framework="tam-sam-som",
+                key_data="TAM $4.2B, SAM $1.2B, SOM $300M, CAGR 12%",
+                evidence=[
+                    {"claim": "TAM", "quote": "TAM $4.2B", "confidence": "high", "validated": True, "pass": 1},
+                    {"claim": "Growth", "quote": "CAGR 12%", "confidence": "high", "validated": True, "pass": 1},
+                    {"claim": "SAM", "quote": "SAM $1.2B", "confidence": "high", "validated": True, "pass": 1},
+                ],
+            ),
+        }
+        slide_texts = {
+            1: SlideText(
+                slide_num=1,
+                full_text="TAM $4.2B, SAM $1.2B, SOM $300M. CAGR 12%. " + " ".join(["word"] * 200),
+                elements=[],
+            ),
+        }
+
+        mock_response = MagicMock()
+        mock_content = MagicMock()
+        mock_content.text = "Evidence:\n- Claim: partial"
+        mock_response.content = [mock_content]
+        mock_response.stop_reason = "max_tokens"
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(return_value=mock_response)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "slide-001.png"
+            img.write_bytes(self._make_unique_png(201))
+
+            with patch("anthropic.Anthropic", return_value=mock_client):
+                results = analyze_slides_deep(
+                    pass1_results=pass1_results,
+                    slide_texts=slide_texts,
+                    image_paths=[img],
+                    model="test",
+                    density_threshold=2.0,
+                )
+
+        # Pass-2 evidence should NOT have been merged (max_tokens rejected)
+        slide1_passes = set(ev.get("pass", 1) for ev in results[1].evidence)
+        assert 2 not in slide1_passes

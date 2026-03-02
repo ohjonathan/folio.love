@@ -511,9 +511,24 @@ class TestMalformedResponses:
         truncated = "Slide Type: data\nVisual Description: A chart showing..."
         assert not _is_valid_pass1_response(truncated)
 
+    def test_pass1_with_only_headers_rejected(self):
+        """A response with only Slide Type + Framework but no evidence is rejected."""
+        from folio.pipeline.analysis import _is_valid_pass1_response
+        headers_only = "Slide Type: data\nFramework: none"
+        assert not _is_valid_pass1_response(headers_only)
+
+    def test_pass1_with_evidence_header_but_no_claim_rejected(self):
+        """A response with Evidence: but no - Claim: is rejected."""
+        from folio.pipeline.analysis import _is_valid_pass1_response
+        no_claim = "Slide Type: data\nFramework: none\nEvidence:\nSome text without claims"
+        assert not _is_valid_pass1_response(no_claim)
+
     def test_valid_pass1(self):
         from folio.pipeline.analysis import _is_valid_pass1_response
-        valid = "Slide Type: data\nFramework: tam-sam-som\nVisual: chart"
+        valid = (
+            "Slide Type: data\nFramework: tam-sam-som\nVisual: chart\n"
+            "Evidence:\n- Claim: Revenue\n  Quote: \"$10M\"\n  Confidence: high"
+        )
         assert _is_valid_pass1_response(valid)
 
     def test_malformed_pass2_no_claim(self):

@@ -141,10 +141,16 @@ def _sanitize_for_prompt(value: str, max_length: int = 200) -> str:
 
 
 def _is_valid_pass1_response(raw_text: str) -> bool:
-    """Check if a pass-1 response contains required structural markers."""
+    """Check if a pass-1 response contains required structural markers.
+
+    Requires Slide Type, Framework, Evidence header, and at least one Claim.
+    A response with only headers but no grounded evidence is rejected.
+    """
     has_slide_type = bool(re.search(r"Slide Type:", raw_text, re.IGNORECASE))
     has_framework = bool(re.search(r"Framework:", raw_text, re.IGNORECASE))
-    return has_slide_type and has_framework
+    has_evidence = bool(re.search(r"Evidence:", raw_text, re.IGNORECASE))
+    has_claim = bool(re.search(r"-\s*Claim:", raw_text, re.IGNORECASE))
+    return has_slide_type and has_framework and has_evidence and has_claim
 
 
 def _is_valid_pass2_response(raw_text: str) -> bool:
@@ -256,7 +262,8 @@ def _analyze_single_slide(
                 }],
             )
             if getattr(response, 'stop_reason', None) == "max_tokens":
-                logger.warning("Slide analysis may be truncated (hit max_tokens limit)")
+                logger.warning("Slide analysis truncated (max_tokens) — treating as pending")
+                return SlideAnalysis.pending()
             raw_text = response.content[0].text
 
             # Validate response structure
@@ -718,7 +725,8 @@ def _run_depth_pass(
                 }],
             )
             if getattr(response, 'stop_reason', None) == "max_tokens":
-                logger.warning("Depth pass may be truncated (hit max_tokens limit)")
+                logger.warning("Depth pass truncated (max_tokens) — discarding")
+                return [], None, None
             raw_text = response.content[0].text
 
             # Validate response structure

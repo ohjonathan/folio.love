@@ -5,13 +5,22 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
+
+if TYPE_CHECKING:
+    from ..pipeline.text import SlideText
+
+#: Values accepted as slide text: raw strings or SlideText objects.
+SlideTextLike = Union[str, "SlideText"]
 
 logger = logging.getLogger(__name__)
 
 
-def _to_str(val: Union[str, object]) -> str:
-    """Convert a value to string, supporting SlideText objects."""
+def _to_str(val: SlideTextLike) -> str:
+    """Convert a slide text value to a plain string.
+
+    Accepts both raw strings and SlideText objects (via .full_text).
+    """
     if isinstance(val, str):
         return val
     return getattr(val, "full_text", str(val))
@@ -62,14 +71,14 @@ class VersionInfo:
 
 
 def detect_changes(
-    old_texts: dict[int, str],
-    new_texts: dict[int, str],
+    old_texts: dict[int, SlideTextLike],
+    new_texts: dict[int, SlideTextLike],
 ) -> ChangeSet:
     """Detect changes between two versions of slide text.
 
     Args:
-        old_texts: Previous version's slide texts {slide_num: text}.
-        new_texts: Current version's slide texts {slide_num: text}.
+        old_texts: Previous version's slide texts {slide_num: str or SlideText}.
+        new_texts: Current version's slide texts {slide_num: str or SlideText}.
 
     Returns:
         ChangeSet describing what changed.
@@ -115,7 +124,7 @@ def compute_version(
     source_hash: str,
     source_path: str,
     slide_count: int,
-    new_texts: dict[int, str],
+    new_texts: dict[int, SlideTextLike],
     note: Optional[str] = None,
 ) -> VersionInfo:
     """Compute version info for a conversion, including change detection.
@@ -125,7 +134,7 @@ def compute_version(
         source_hash: Current source file hash.
         source_path: Relative path to source.
         slide_count: Number of slides.
-        new_texts: Current slide texts.
+        new_texts: Current slide texts (str or SlideText values).
         note: Optional version note.
 
     Returns:
