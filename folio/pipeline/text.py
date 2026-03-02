@@ -2,6 +2,7 @@
 
 import logging
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -11,14 +12,88 @@ class TextExtractionError(Exception):
     """Raised when text extraction fails."""
 
 
-def extract(source_path: Path) -> dict[int, str]:
+@dataclass
+class SlideText:
+    """Structured text extracted from a single slide."""
+    slide_num: int
+    full_text: str
+    elements: list[dict] = field(default_factory=list)
+    # Each element: {"type": "title"|"body"|"note", "text": "..."}
+
+
+def _detect_elements(text: str) -> list[dict]:
+    """Detect element types from extracted slide text.
+
+    Heuristic:
+    - First H1/H2 markdown line → title
+    - Everything else → body
+    - Speaker notes (prefixed with "Notes:" or similar) → note
+    """
+    elements = []
+    lines = text.split("\n")
+    title_found = False
+    body_lines = []
+    note_lines = []
+    in_notes = False
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if in_notes:
+                note_lines.append("")
+            else:
+                body_lines.append("")
+            continue
+
+        # Detect speaker notes section
+        if re.match(r"^(?:Notes?|Speaker\s+Notes?)\s*:", stripped, re.IGNORECASE):
+            in_notes = True
+            remainder = re.sub(r"^(?:Notes?|Speaker\s+Notes?)\s*:\s*", "", stripped, flags=re.IGNORECASE)
+            if remainder:
+                note_lines.append(remainder)
+            continue
+
+        if in_notes:
+            note_lines.append(stripped)
+            continue
+
+        # Detect title (first H1/H2 line)
+        if not title_found and re.match(r"^#{1,2}\s+", stripped):
+            title_text = re.sub(r"^#{1,2}\s+", "", stripped)
+            elements.append({"type": "title", "text": title_text})
+            title_found = True
+            continue
+
+        # Detect title from bold-only first line
+        if not title_found and re.match(r"^\*\*[^*]+\*\*$", stripped):
+            title_text = stripped.strip("*")
+            elements.append({"type": "title", "text": title_text})
+            title_found = True
+            continue
+
+        body_lines.append(stripped)
+
+    # Consolidate body
+    body_text = "\n".join(body_lines).strip()
+    if body_text:
+        elements.append({"type": "body", "text": body_text})
+
+    # Consolidate notes
+    note_text = "\n".join(note_lines).strip()
+    if note_text:
+        elements.append({"type": "note", "text": note_text})
+
+    return elements
+
+
+def extract(source_path: Path) -> dict[int, "SlideText"]:
     """Extract text from PPTX/PDF with per-slide boundaries.
 
     Args:
         source_path: Path to the original source file (PPTX preferred).
 
     Returns:
-        Dict mapping slide number (1-indexed) to extracted text.
+        Dict mapping slide number (1-indexed) to SlideText.
         Empty dict if extraction fails completely (logged as warning).
     """
     source_path = Path(source_path)
@@ -33,7 +108,7 @@ def extract(source_path: Path) -> dict[int, str]:
         return {}
 
 
-def _extract_pptx(source_path: Path) -> dict[int, str]:
+def _extract_pptx(source_path: Path) -> dict[int, "SlideText"]:
     """Extract text from PPTX using MarkItDown."""
     try:
         from markitdown import MarkItDown
@@ -50,23 +125,36 @@ def _extract_pptx(source_path: Path) -> dict[int, str]:
         logger.warning("MarkItDown extraction failed for %s: %s", source_path.name, e)
         return {}
 
-    slides = _parse_slide_boundaries(raw_text)
+    raw_slides = _parse_slide_boundaries(raw_text)
 
-    if not slides:
+    if not raw_slides:
         # Fallback: treat entire text as slide 1
         logger.warning(
             "No slide boundaries detected in %s. Treating as single block.",
             source_path.name,
         )
         if raw_text.strip():
-            return {1: raw_text.strip()}
+            text = raw_text.strip()
+            return {1: SlideText(
+                slide_num=1,
+                full_text=text,
+                elements=_detect_elements(text),
+            )}
         return {}
+
+    slides = {}
+    for slide_num, text in raw_slides.items():
+        slides[slide_num] = SlideText(
+            slide_num=slide_num,
+            full_text=text,
+            elements=_detect_elements(text),
+        )
 
     logger.info("Extracted text for %d slides from %s", len(slides), source_path.name)
     return slides
 
 
-def _extract_pdf(source_path: Path) -> dict[int, str]:
+def _extract_pdf(source_path: Path) -> dict[int, "SlideText"]:
     """Extract text from PDF. Less reliable slide boundaries than PPTX."""
     try:
         import pdfplumber
@@ -81,9 +169,14 @@ def _extract_pdf(source_path: Path) -> dict[int, str]:
         slides = {}
         with pdfplumber.open(str(source_path)) as pdf:
             for i, page in enumerate(pdf.pages, 1):
-                text = page.extract_text()
-                if text and text.strip():
-                    slides[i] = text.strip()
+                page_text = page.extract_text()
+                if page_text and page_text.strip():
+                    text = page_text.strip()
+                    slides[i] = SlideText(
+                        slide_num=i,
+                        full_text=text,
+                        elements=_detect_elements(text),
+                    )
         logger.info("Extracted text for %d pages from %s", len(slides), source_path.name)
         return slides
     except Exception as e:

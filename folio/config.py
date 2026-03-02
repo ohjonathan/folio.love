@@ -29,6 +29,8 @@ class ConversionConfig:
     image_dpi: int = 150
     image_format: str = "png"
     libreoffice_timeout: int = 60
+    default_passes: int = 1
+    density_threshold: float = 2.0
 
 
 @dataclass
@@ -65,6 +67,8 @@ class FolioConfig:
             image_dpi=conv_raw.get("image_dpi", 150),
             image_format=conv_raw.get("image_format", "png"),
             libreoffice_timeout=conv_raw.get("libreoffice_timeout", 60),
+            default_passes=conv_raw.get("default_passes", 1),
+            density_threshold=conv_raw.get("density_threshold", 2.0),
         )
 
         return cls(

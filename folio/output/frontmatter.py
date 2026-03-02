@@ -75,6 +75,11 @@ def generate(
     if tags:
         frontmatter["tags"] = sorted(tags)
 
+    # Grounding summary from evidence
+    grounding = _compute_grounding_summary(analyses)
+    if grounding["total_claims"] > 0:
+        frontmatter["grounding_summary"] = grounding
+
     # Use block style for lists, flow style would be less readable
     yaml_str = yaml.dump(
         frontmatter,
@@ -99,6 +104,58 @@ def _collect_unique(
         if value and value not in exclude:
             values.add(value)
     return sorted(values)
+
+
+def _compute_grounding_summary(analyses: dict[int, SlideAnalysis]) -> dict:
+    """Compute aggregate grounding statistics from all slide analyses."""
+    total = 0
+    high = 0
+    medium = 0
+    low = 0
+    validated = 0
+    unvalidated = 0
+    pass_1 = 0
+    pass_2 = 0
+    pass_2_slides = set()
+
+    for slide_num, analysis in analyses.items():
+        for ev in getattr(analysis, "evidence", []):
+            total += 1
+            conf = ev.get("confidence", "medium")
+            if conf == "high":
+                high += 1
+            elif conf == "medium":
+                medium += 1
+            else:
+                low += 1
+
+            if ev.get("validated", False):
+                validated += 1
+            else:
+                unvalidated += 1
+
+            pass_num = ev.get("pass", 1)
+            if pass_num == 2:
+                pass_2 += 1
+                pass_2_slides.add(slide_num)
+            else:
+                pass_1 += 1
+
+    summary = {
+        "total_claims": total,
+        "high_confidence": high,
+        "medium_confidence": medium,
+        "low_confidence": low,
+        "validated": validated,
+        "unvalidated": unvalidated,
+    }
+
+    if pass_2 > 0:
+        summary["pass_1_claims"] = pass_1
+        summary["pass_2_claims"] = pass_2
+        summary["pass_2_slides"] = len(pass_2_slides)
+
+    return summary
 
 
 def _generate_tags(

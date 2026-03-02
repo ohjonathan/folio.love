@@ -5,9 +5,16 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 logger = logging.getLogger(__name__)
+
+
+def _to_str(val: Union[str, object]) -> str:
+    """Convert a value to string, supporting SlideText objects."""
+    if isinstance(val, str):
+        return val
+    return getattr(val, "full_text", str(val))
 
 
 @dataclass
@@ -78,8 +85,8 @@ def detect_changes(
     unchanged = []
 
     for slide_num in sorted(common):
-        old_text = _normalize_text(old_texts[slide_num])
-        new_text = _normalize_text(new_texts[slide_num])
+        old_text = _normalize_text(_to_str(old_texts[slide_num]))
+        new_text = _normalize_text(_to_str(new_texts[slide_num]))
         if old_text != new_text:
             modified.append(slide_num)
         else:
@@ -198,10 +205,10 @@ def load_texts_cache(cache_path: Path) -> dict[int, str]:
         return {}
 
 
-def save_texts_cache(cache_path: Path, texts: dict[int, str]):
+def save_texts_cache(cache_path: Path, texts: dict) -> None:
     """Save slide texts cache for future change detection."""
-    # Store with string keys for JSON compatibility
-    data = {str(k): v for k, v in texts.items()}
+    # Store with string keys for JSON compatibility; extract full_text from SlideText
+    data = {str(k): _to_str(v) for k, v in texts.items()}
     _atomic_write_json(cache_path, data)
 
 
