@@ -86,7 +86,22 @@ def _detect_elements(text: str) -> list[dict]:
     return elements
 
 
-def extract(source_path: Path) -> dict[int, "SlideText"]:
+def extract(source_path: Path) -> dict[int, str]:
+    """Extract text from PPTX/PDF with per-slide boundaries.
+
+    Backward-compatible wrapper that returns plain strings.
+
+    Args:
+        source_path: Path to the original source file (PPTX preferred).
+
+    Returns:
+        Dict mapping slide number (1-indexed) to plain text string.
+        Empty dict if extraction fails completely (logged as warning).
+    """
+    return {num: st.full_text for num, st in extract_structured(source_path).items()}
+
+
+def extract_structured(source_path: Path) -> dict[int, "SlideText"]:
     """Extract text from PPTX/PDF with per-slide boundaries.
 
     Args:

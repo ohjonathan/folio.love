@@ -1,8 +1,10 @@
 """Tests for SlideText dataclass and element detection."""
 
+from unittest.mock import patch
+
 import pytest
 
-from folio.pipeline.text import SlideText, _detect_elements
+from folio.pipeline.text import SlideText, _detect_elements, extract, extract_structured
 from folio.tracking.versions import detect_changes
 
 
@@ -124,3 +126,38 @@ class TestDetectChangesWithSlideText:
         changes = detect_changes(old, new)
         assert changes.unchanged == [1]
         assert changes.modified == [2]
+
+
+class TestExtractBackwardCompat:
+    """Test extract() vs extract_structured() return types."""
+
+    def test_extract_returns_strings(self):
+        """extract() should return dict[int, str] for backward compatibility."""
+        mock_slides = {
+            1: SlideText(slide_num=1, full_text="Slide one text", elements=[{"type": "body", "text": "Slide one text"}]),
+            2: SlideText(slide_num=2, full_text="Slide two text", elements=[]),
+        }
+        with patch("folio.pipeline.text._extract_pptx", return_value=mock_slides):
+            from pathlib import Path
+            result = extract(Path("test.pptx"))
+        assert isinstance(result, dict)
+        for key, value in result.items():
+            assert isinstance(key, int)
+            assert isinstance(value, str)
+        assert result[1] == "Slide one text"
+        assert result[2] == "Slide two text"
+
+    def test_extract_structured_returns_slidetext(self):
+        """extract_structured() should return dict[int, SlideText]."""
+        mock_slides = {
+            1: SlideText(slide_num=1, full_text="Slide one text", elements=[{"type": "body", "text": "Slide one text"}]),
+        }
+        with patch("folio.pipeline.text._extract_pptx", return_value=mock_slides):
+            from pathlib import Path
+            result = extract_structured(Path("test.pptx"))
+        assert isinstance(result, dict)
+        for key, value in result.items():
+            assert isinstance(key, int)
+            assert isinstance(value, SlideText)
+        assert result[1].full_text == "Slide one text"
+        assert len(result[1].elements) == 1

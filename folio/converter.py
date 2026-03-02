@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import yaml as yaml_lib
+
 from .config import FolioConfig
 from .pipeline import normalize, images, text, analysis
 from .tracking import sources, versions
@@ -97,7 +99,7 @@ class FolioConverter:
 
             # Stage 3: Extract text
             logger.info("  Extracting text...")
-            slide_texts = text.extract(source_path)
+            slide_texts = text.extract_structured(source_path)
 
             if slide_texts and len(image_paths) != len(slide_texts):
                 logger.warning(
@@ -145,6 +147,9 @@ class FolioConverter:
         history_path = deck_dir / "version_history.json"
         version_history = versions.load_version_history(history_path)
 
+        # Read existing frontmatter for reconversion preservation
+        existing_fm = _read_existing_frontmatter(markdown_path)
+
         # Generate frontmatter
         fm = frontmatter.generate(
             title=_title_from_name(deck_name),
@@ -155,6 +160,7 @@ class FolioConverter:
             analyses=slide_analyses,
             client=client,
             engagement=engagement,
+            existing_frontmatter=existing_fm,
         )
 
         # Assemble markdown
@@ -246,3 +252,21 @@ def _generate_id(
     parts.append(_sanitize_name(deck_name))
 
     return "_".join(parts)
+
+
+def _read_existing_frontmatter(markdown_path: Path) -> Optional[dict]:
+    """Read existing YAML frontmatter from a markdown file, if it exists.
+
+    Returns the parsed YAML dict, or None if the file doesn't exist
+    or doesn't have valid frontmatter.
+    """
+    if not markdown_path.exists():
+        return None
+    try:
+        content = markdown_path.read_text()
+        if not content.startswith("---"):
+            return None
+        end = content.index("---", 3)
+        return yaml_lib.safe_load(content[3:end])
+    except (ValueError, yaml_lib.YAMLError, OSError):
+        return None

@@ -72,12 +72,12 @@ class FolioConfig:
         sources = [
             SourceConfig(**s) for s in raw.get("sources", [])
         ]
-        llm_raw = raw.get("llm", {})
+        llm_raw = raw.get("llm") or {}
         llm = LLMConfig(
             provider=llm_raw.get("provider", "anthropic"),
             model=llm_raw.get("model", "claude-sonnet-4-20250514"),
         )
-        conv_raw = raw.get("conversion", {})
+        conv_raw = raw.get("conversion") or {}
         conversion = ConversionConfig(
             image_dpi=conv_raw.get("image_dpi", 150),
             image_format=conv_raw.get("image_format", "png"),

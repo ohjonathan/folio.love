@@ -19,6 +19,7 @@ def generate(
     analyses: dict[int, SlideAnalysis],
     client: Optional[str] = None,
     engagement: Optional[str] = None,
+    existing_frontmatter: Optional[dict] = None,
 ) -> str:
     """Generate YAML frontmatter conforming to Folio Ontology v2 schema.
 
@@ -42,9 +43,18 @@ def generate(
     # Auto-generate tags from frameworks and slide types
     tags = _generate_tags(frameworks, slide_types, title)
 
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Preserve id and created from existing frontmatter on reconversion
+    preserved_id = deck_id
+    preserved_created = now_str
+    if existing_frontmatter:
+        preserved_id = existing_frontmatter.get("id", deck_id)
+        preserved_created = existing_frontmatter.get("created", now_str)
+
     frontmatter = {
         # Identity
-        "id": deck_id,
+        "id": preserved_id,
         "title": title,
         "type": "evidence",
         "subtype": "research",
@@ -53,11 +63,11 @@ def generate(
         "source_hash": source_hash,
         "source_type": "deck",
         "version": version_info.version,
-        "converted": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "modified": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "converted": now_str,
+        "created": preserved_created,
+        "modified": now_str,
         # Organization
-        "status": "current",
+        "status": "active",
         # Ontology
         "authority": "captured",
         "curation_level": "L0",
@@ -98,10 +108,17 @@ def _collect_unique(
     field: str,
     exclude: set[str] | None = None,
 ) -> list[str]:
-    """Collect unique values of a field across all slide analyses."""
+    """Collect unique values of a field across all slide analyses.
+
+    Skips slides where evidence exists but none is validated (all unvalidated).
+    Slides with no evidence (no grounding attempted) are still included.
+    """
     exclude = exclude or set()
     values = set()
     for analysis in analyses.values():
+        evidence = getattr(analysis, "evidence", [])
+        if evidence and not any(ev.get("validated", False) for ev in evidence):
+            continue  # All evidence unvalidated — skip
         value = getattr(analysis, field, "")
         if value and value not in exclude:
             values.add(value)

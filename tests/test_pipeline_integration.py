@@ -407,3 +407,397 @@ class TestEvidenceVerificationIndicator:
         )
         output = _format_slide(slide_num=1, text=None, analysis=analysis)
         assert "[unverified]" not in output
+
+
+class TestAPIPayloadIncludesText:
+    """Test that API payloads include extracted text context."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass1_payload_includes_extracted_text(self):
+        """Pass-1 API call should include EXTRACTED SLIDE TEXT in prompt."""
+        import tempfile
+        from folio.pipeline.analysis import analyze_slides
+
+        captured_prompts = []
+
+        def mock_create(**kwargs):
+            for msg in kwargs.get("messages", []):
+                for content in msg.get("content", []):
+                    if isinstance(content, dict) and content.get("type") == "text":
+                        captured_prompts.append(content["text"])
+            return _mock_anthropic_response(MOCK_PASS1_RESPONSES[1])
+
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            img = tmpdir_path / "slide-001.png"
+            img.write_bytes(self._make_unique_png(100))
+
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Market Analysis Q1 2026", elements=[]),
+            }
+
+            with patch("anthropic.Anthropic", return_value=mock_client):
+                analyze_slides([img], model="test", slide_texts=slide_texts)
+
+        assert len(captured_prompts) >= 1
+        assert "EXTRACTED SLIDE TEXT" in captured_prompts[0]
+        assert "Market Analysis Q1 2026" in captured_prompts[0]
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass1_without_text_degrades_gracefully(self):
+        """Pass-1 without text should include 'No extracted text' note."""
+        import tempfile
+        from folio.pipeline.analysis import analyze_slides
+
+        captured_prompts = []
+
+        def mock_create(**kwargs):
+            for msg in kwargs.get("messages", []):
+                for content in msg.get("content", []):
+                    if isinstance(content, dict) and content.get("type") == "text":
+                        captured_prompts.append(content["text"])
+            return _mock_anthropic_response(MOCK_PASS1_RESPONSES[1])
+
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            img = tmpdir_path / "slide-001.png"
+            img.write_bytes(self._make_unique_png(101))
+
+            with patch("anthropic.Anthropic", return_value=mock_client):
+                analyze_slides([img], model="test", slide_texts=None)
+
+        assert len(captured_prompts) >= 1
+        assert "No extracted text available" in captured_prompts[0]
+
+
+class TestUnvalidatedFrontmatter:
+    """Test that unvalidated analyses are excluded from frontmatter aggregation."""
+
+    def test_unvalidated_only_slide_excluded(self):
+        """Slide with evidence where ALL items are unvalidated should be excluded."""
+        from folio.output.frontmatter import _collect_unique
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                framework="tam-sam-som",
+                evidence=[
+                    {"claim": "A", "confidence": "high", "validated": False},
+                    {"claim": "B", "confidence": "medium", "validated": False},
+                ],
+            ),
+            2: SlideAnalysis(
+                slide_type="framework",
+                framework="scr",
+                evidence=[
+                    {"claim": "C", "confidence": "high", "validated": True},
+                ],
+            ),
+        }
+        frameworks = _collect_unique(analyses, "framework", exclude={"none", "pending"})
+        slide_types = _collect_unique(analyses, "slide_type", exclude={"unknown", "pending"})
+        # Slide 1 excluded (all unvalidated), slide 2 included
+        assert "tam-sam-som" not in frameworks
+        assert "scr" in frameworks
+        assert "data" not in slide_types
+        assert "framework" in slide_types
+
+    def test_no_evidence_slide_still_included(self):
+        """Slide with no evidence (no grounding attempted) should still be included."""
+        from folio.output.frontmatter import _collect_unique
+
+        analyses = {
+            1: SlideAnalysis(slide_type="title", framework="none", evidence=[]),
+        }
+        slide_types = _collect_unique(analyses, "slide_type", exclude={"unknown", "pending"})
+        assert "title" in slide_types
+
+    def test_mixed_validation_included(self):
+        """Slide with at least one validated evidence item should be included."""
+        from folio.output.frontmatter import _collect_unique
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                framework="tam-sam-som",
+                evidence=[
+                    {"claim": "A", "confidence": "high", "validated": True},
+                    {"claim": "B", "confidence": "medium", "validated": False},
+                ],
+            ),
+        }
+        frameworks = _collect_unique(analyses, "framework", exclude={"none", "pending"})
+        assert "tam-sam-som" in frameworks
+
+
+class TestFrontmatterSchemaFix:
+    """Test frontmatter schema corrections."""
+
+    def test_status_is_active(self):
+        """Status should be 'active', not 'current'."""
+        import yaml
+        from folio.output.frontmatter import generate
+        from folio.tracking.versions import VersionInfo, ChangeSet
+
+        analyses = {1: SlideAnalysis(slide_type="title")}
+        version_info = VersionInfo(
+            version=1, timestamp="2026-01-01T00:00:00Z",
+            source_hash="abc123", source_path="deck.pptx",
+            note=None, slide_count=1, changes=ChangeSet(added=[1]),
+        )
+        fm = generate(
+            title="Test", deck_id="test_id",
+            source_relative_path="deck.pptx", source_hash="abc123",
+            version_info=version_info, analyses=analyses,
+        )
+        parsed = yaml.safe_load(fm.strip("---").strip())
+        assert parsed["status"] == "active"
+
+    def test_created_preserved_on_reconversion(self):
+        """On reconversion, 'id' and 'created' should be preserved from existing frontmatter."""
+        import yaml
+        from folio.output.frontmatter import generate
+        from folio.tracking.versions import VersionInfo, ChangeSet
+
+        analyses = {1: SlideAnalysis(slide_type="title")}
+        version_info = VersionInfo(
+            version=2, timestamp="2026-03-02T00:00:00Z",
+            source_hash="def456", source_path="deck.pptx",
+            note=None, slide_count=1, changes=ChangeSet(modified=[1]),
+        )
+        existing_fm = {
+            "id": "original_id_123",
+            "created": "2025-01-15T10:00:00Z",
+        }
+        fm = generate(
+            title="Test", deck_id="new_id_456",
+            source_relative_path="deck.pptx", source_hash="def456",
+            version_info=version_info, analyses=analyses,
+            existing_frontmatter=existing_fm,
+        )
+        parsed = yaml.safe_load(fm.strip("---").strip())
+        assert parsed["id"] == "original_id_123"
+        assert parsed["created"] == "2025-01-15T10:00:00Z"
+
+    def test_first_conversion_generates_new_values(self):
+        """First conversion (no existing frontmatter) should generate fresh values."""
+        import yaml
+        from folio.output.frontmatter import generate
+        from folio.tracking.versions import VersionInfo, ChangeSet
+
+        analyses = {1: SlideAnalysis(slide_type="title")}
+        version_info = VersionInfo(
+            version=1, timestamp="2026-01-01T00:00:00Z",
+            source_hash="abc123", source_path="deck.pptx",
+            note=None, slide_count=1, changes=ChangeSet(added=[1]),
+        )
+        fm = generate(
+            title="Test", deck_id="fresh_id",
+            source_relative_path="deck.pptx", source_hash="abc123",
+            version_info=version_info, analyses=analyses,
+        )
+        parsed = yaml.safe_load(fm.strip("---").strip())
+        assert parsed["id"] == "fresh_id"
+        assert "created" in parsed
+
+
+class TestEndToEndConverter:
+    """End-to-end converter tests with all pipeline stages mocked."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    def _setup_mocks(self, tmpdir: Path, slide_count: int = 3):
+        """Create fake source, images, and slide texts."""
+        source = tmpdir / "test_deck.pptx"
+        source.write_bytes(b"fake pptx content")
+
+        image_paths = []
+        for i in range(1, slide_count + 1):
+            img = tmpdir / f"slide-{i:03d}.png"
+            img.write_bytes(self._make_unique_png(i + 200))
+            image_paths.append(img)
+
+        slide_texts = {}
+        for i in range(1, slide_count + 1):
+            slide_texts[i] = SlideText(
+                slide_num=i,
+                full_text=f"Slide {i} text content",
+                elements=[{"type": "body", "text": f"Slide {i} text content"}],
+            )
+
+        return source, image_paths, slide_texts
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_convert_pass1(self):
+        """Full pass-1 conversion with mocked pipeline stages."""
+        import yaml
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source, image_paths, slide_texts = self._setup_mocks(tmpdir_path)
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            # Create mock response
+            mock_client = MagicMock()
+            call_idx = [0]
+
+            def mock_create(**kwargs):
+                call_idx[0] += 1
+                idx = min(call_idx[0], 3)
+                return _mock_anthropic_response(MOCK_PASS1_RESPONSES[idx])
+
+            mock_client.messages.create = mock_create
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+                 patch("folio.pipeline.images.extract", return_value=image_paths), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client):
+
+                converter = FolioConverter(config)
+                result = converter.convert(
+                    source_path=source,
+                    target=target_dir,
+                    passes=1,
+                )
+
+            assert result.slide_count == 3
+            assert result.output_path.exists()
+
+            # Verify markdown content
+            content = result.output_path.read_text()
+            assert content.startswith("---")
+            # Parse frontmatter
+            end = content.index("---", 3)
+            fm = yaml.safe_load(content[3:end])
+            assert fm["status"] == "active"
+            assert fm["slide_count"] == 3
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_convert_pass2(self):
+        """Full pass-2 conversion adds evidence on dense slides."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source, image_paths, slide_texts = self._setup_mocks(tmpdir_path)
+
+            # Make slide 2 high density text
+            slide_texts[2] = SlideText(
+                slide_num=2,
+                full_text="TAM $4.2B, SAM $1.2B, SOM $300M. CAGR 12%. " + " ".join(["word"] * 200),
+                elements=[],
+            )
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            mock_client = MagicMock()
+            call_idx = [0]
+
+            def mock_create(**kwargs):
+                call_idx[0] += 1
+                prompt_text = ""
+                for msg in kwargs.get("messages", []):
+                    for content in msg.get("content", []):
+                        if isinstance(content, dict) and content.get("type") == "text":
+                            prompt_text = content.get("text", "")
+                if "prior_analysis" in prompt_text.lower():
+                    return _mock_anthropic_response(
+                        "Slide Type Reassessment: unchanged\n"
+                        "Framework Reassessment: unchanged\n" + MOCK_PASS2_RESPONSE
+                    )
+                idx = min(call_idx[0], 3)
+                return _mock_anthropic_response(MOCK_PASS1_RESPONSES[idx])
+
+            mock_client.messages.create = mock_create
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+                 patch("folio.pipeline.images.extract", return_value=image_paths), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client):
+
+                converter = FolioConverter(config)
+                result = converter.convert(
+                    source_path=source,
+                    target=target_dir,
+                    passes=2,
+                )
+
+            assert result.slide_count == 3
+            assert result.output_path.exists()
+
+
+class TestCLI:
+    """Test CLI argument validation using click's test runner."""
+
+    def test_convert_passes_1_accepted(self):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        runner = CliRunner()
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as f:
+            f.write(b"fake")
+            f.flush()
+            # Just test that --passes 1 is accepted (will fail at conversion, but CLI arg is valid)
+            result = runner.invoke(cli, ["convert", f.name, "--passes", "1"])
+            # Should NOT fail with "Invalid value for '--passes'"
+            assert "Invalid value for '--passes'" not in (result.output or "")
+
+    def test_convert_passes_2_accepted(self):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        runner = CliRunner()
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as f:
+            f.write(b"fake")
+            f.flush()
+            result = runner.invoke(cli, ["convert", f.name, "--passes", "2"])
+            assert "Invalid value for '--passes'" not in (result.output or "")
+
+    def test_convert_passes_0_rejected(self):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        runner = CliRunner()
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as f:
+            f.write(b"fake")
+            f.flush()
+            result = runner.invoke(cli, ["convert", f.name, "--passes", "0"])
+            assert result.exit_code != 0
+
+    def test_convert_passes_3_rejected(self):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        runner = CliRunner()
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as f:
+            f.write(b"fake")
+            f.flush()
+            result = runner.invoke(cli, ["convert", f.name, "--passes", "3"])
+            assert result.exit_code != 0
