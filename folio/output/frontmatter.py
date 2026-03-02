@@ -19,6 +19,7 @@ def generate(
     analyses: dict[int, SlideAnalysis],
     client: Optional[str] = None,
     engagement: Optional[str] = None,
+    existing_frontmatter: Optional[dict] = None,
 ) -> str:
     """Generate YAML frontmatter conforming to Folio Ontology v2 schema.
 
@@ -42,9 +43,18 @@ def generate(
     # Auto-generate tags from frameworks and slide types
     tags = _generate_tags(frameworks, slide_types, title)
 
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Preserve id and created from existing frontmatter on reconversion
+    preserved_id = deck_id
+    preserved_created = now_str
+    if existing_frontmatter:
+        preserved_id = existing_frontmatter.get("id", deck_id)
+        preserved_created = existing_frontmatter.get("created", now_str)
+
     frontmatter = {
         # Identity
-        "id": deck_id,
+        "id": preserved_id,
         "title": title,
         "type": "evidence",
         "subtype": "research",
@@ -53,9 +63,11 @@ def generate(
         "source_hash": source_hash,
         "source_type": "deck",
         "version": version_info.version,
-        "converted": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "converted": now_str,
+        "created": preserved_created,
+        "modified": now_str,
         # Organization
-        "status": "current",
+        "status": "active",
         # Ontology
         "authority": "captured",
         "curation_level": "L0",
@@ -75,6 +87,11 @@ def generate(
     if tags:
         frontmatter["tags"] = sorted(tags)
 
+    # Grounding summary from evidence
+    grounding = _compute_grounding_summary(analyses)
+    if grounding["total_claims"] > 0:
+        frontmatter["grounding_summary"] = grounding
+
     # Use block style for lists, flow style would be less readable
     yaml_str = yaml.dump(
         frontmatter,
@@ -91,14 +108,73 @@ def _collect_unique(
     field: str,
     exclude: set[str] | None = None,
 ) -> list[str]:
-    """Collect unique values of a field across all slide analyses."""
+    """Collect unique values of a field across all slide analyses.
+
+    Skips slides where evidence exists but none is validated (all unvalidated).
+    Slides with no evidence (no grounding attempted) are still included.
+    """
     exclude = exclude or set()
     values = set()
     for analysis in analyses.values():
+        evidence = getattr(analysis, "evidence", [])
+        if evidence and not any(ev.get("validated", False) for ev in evidence):
+            continue  # All evidence unvalidated — skip
         value = getattr(analysis, field, "")
         if value and value not in exclude:
             values.add(value)
     return sorted(values)
+
+
+def _compute_grounding_summary(analyses: dict[int, SlideAnalysis]) -> dict:
+    """Compute aggregate grounding statistics from all slide analyses."""
+    total = 0
+    high = 0
+    medium = 0
+    low = 0
+    validated = 0
+    unvalidated = 0
+    pass_1 = 0
+    pass_2 = 0
+    pass_2_slides = set()
+
+    for slide_num, analysis in analyses.items():
+        for ev in getattr(analysis, "evidence", []):
+            total += 1
+            conf = ev.get("confidence", "medium")
+            if conf == "high":
+                high += 1
+            elif conf == "medium":
+                medium += 1
+            else:
+                low += 1
+
+            if ev.get("validated", False):
+                validated += 1
+            else:
+                unvalidated += 1
+
+            pass_num = ev.get("pass", 1)
+            if pass_num == 2:
+                pass_2 += 1
+                pass_2_slides.add(slide_num)
+            else:
+                pass_1 += 1
+
+    summary = {
+        "total_claims": total,
+        "high_confidence": high,
+        "medium_confidence": medium,
+        "low_confidence": low,
+        "validated": validated,
+        "unvalidated": unvalidated,
+    }
+
+    if pass_2 > 0:
+        summary["pass_1_claims"] = pass_1
+        summary["pass_2_claims"] = pass_2
+        summary["pass_2_slides"] = len(pass_2_slides)
+
+    return summary
 
 
 def _generate_tags(
@@ -118,7 +194,10 @@ def _generate_tags(
     # Extract meaningful words from title
     title_words = re.findall(r"[a-z][a-z-]+", title.lower().replace("_", "-"))
     # Filter out noise words
-    noise = {"the", "a", "an", "and", "or", "for", "of", "in", "to", "is", "by"}
+    noise = {
+        "the", "a", "an", "and", "or", "for", "of", "in", "to", "is", "by",
+        "v1", "v2", "v3", "v4", "v5", "final", "draft", "rev", "copy", "version",
+    }
     for word in title_words:
         if word not in noise and len(word) > 2:
             tags.add(word)

@@ -1,9 +1,10 @@
 """Markdown assembly: combine all pipeline outputs into final document."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from ..pipeline.analysis import SlideAnalysis
+from ..pipeline.text import SlideText
 from ..tracking.versions import VersionInfo, ChangeSet
 
 
@@ -12,7 +13,7 @@ def assemble(
     frontmatter: str,
     source_display_path: str,
     version_info: VersionInfo,
-    slide_texts: dict[int, str],
+    slide_texts: dict[int, Union[str, SlideText]],
     slide_analyses: dict[int, SlideAnalysis],
     slide_count: int,
     version_history: list[dict],
@@ -98,7 +99,7 @@ def _format_changes(version_info: VersionInfo) -> str:
 
 def _format_slide(
     slide_num: int,
-    text: Optional[str],
+    text: Optional[Union[str, SlideText]],
     analysis: Optional[SlideAnalysis],
     is_modified: bool = False,
     is_added: bool = False,
@@ -119,12 +120,15 @@ def _format_slide(
     lines.append(f"![Slide {slide_num}](slides/slide-{slide_num:03d}.png)")
     lines.append("")
 
+    # Resolve text content from SlideText or plain string
+    text_content = text.full_text if isinstance(text, SlideText) else text
+
     # Verbatim text
-    if text:
+    if text_content:
         lines.append("### Text (Verbatim)")
         lines.append("")
         # Blockquote format for visual distinction
-        for line in text.split("\n"):
+        for line in text_content.split("\n"):
             lines.append(f"> {line}" if line.strip() else ">")
         lines.append("")
 
@@ -141,6 +145,23 @@ def _format_slide(
         if analysis.main_insight:
             lines.append(f"**Main Insight:** {analysis.main_insight}")
         lines.append("")
+
+        # Evidence block
+        if analysis.evidence:
+            lines.append("**Evidence:**")
+            for ev in analysis.evidence:
+                claim = ev.get("claim", "")
+                confidence = ev.get("confidence", "medium")
+                quote = ev.get("quote", "")
+                element_type = ev.get("element_type", "body")
+                pass_num = ev.get("pass", 1)
+                pass_label = f", pass {pass_num}" if pass_num > 1 else ""
+                verified_label = "" if ev.get("validated", False) else " [unverified]"
+                lines.append(
+                    f'- **{claim} ({confidence}{pass_label}):** '
+                    f'"{quote}" *({element_type})*{verified_label}'
+                )
+            lines.append("")
     elif analysis and analysis.slide_type == "pending":
         lines.append("### Analysis")
         lines.append("")

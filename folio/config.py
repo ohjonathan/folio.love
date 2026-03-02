@@ -29,6 +29,8 @@ class ConversionConfig:
     image_dpi: int = 150
     image_format: str = "png"
     libreoffice_timeout: int = 60
+    default_passes: int = 1
+    density_threshold: float = 2.0
 
 
 @dataclass
@@ -38,6 +40,21 @@ class FolioConfig:
     sources: list[SourceConfig] = field(default_factory=list)
     llm: LLMConfig = field(default_factory=LLMConfig)
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
+
+    def __post_init__(self):
+        self._validate()
+
+    def _validate(self):
+        """Validate config values have correct types and ranges."""
+        c = self.conversion
+        if not isinstance(c.image_dpi, int) or c.image_dpi <= 0:
+            raise ValueError(f"image_dpi must be a positive integer, got {c.image_dpi!r}")
+        if not isinstance(c.default_passes, int) or c.default_passes not in (1, 2):
+            raise ValueError(f"default_passes must be 1 or 2, got {c.default_passes!r}")
+        if not isinstance(c.density_threshold, (int, float)) or c.density_threshold <= 0:
+            raise ValueError(f"density_threshold must be a positive number, got {c.density_threshold!r}")
+        if not isinstance(c.libreoffice_timeout, (int, float)) or c.libreoffice_timeout <= 0:
+            raise ValueError(f"libreoffice_timeout must be a positive number, got {c.libreoffice_timeout!r}")
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":
@@ -55,16 +72,18 @@ class FolioConfig:
         sources = [
             SourceConfig(**s) for s in raw.get("sources", [])
         ]
-        llm_raw = raw.get("llm", {})
+        llm_raw = raw.get("llm") or {}
         llm = LLMConfig(
             provider=llm_raw.get("provider", "anthropic"),
             model=llm_raw.get("model", "claude-sonnet-4-20250514"),
         )
-        conv_raw = raw.get("conversion", {})
+        conv_raw = raw.get("conversion") or {}
         conversion = ConversionConfig(
             image_dpi=conv_raw.get("image_dpi", 150),
             image_format=conv_raw.get("image_format", "png"),
             libreoffice_timeout=conv_raw.get("libreoffice_timeout", 60),
+            default_passes=conv_raw.get("default_passes", 1),
+            density_threshold=conv_raw.get("density_threshold", 2.0),
         )
 
         return cls(

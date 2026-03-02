@@ -5,9 +5,25 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional, Union
+
+if TYPE_CHECKING:
+    from ..pipeline.text import SlideText
+
+#: Values accepted as slide text: raw strings or SlideText objects.
+SlideTextLike = Union[str, "SlideText"]
 
 logger = logging.getLogger(__name__)
+
+
+def _to_str(val: SlideTextLike) -> str:
+    """Convert a slide text value to a plain string.
+
+    Accepts both raw strings and SlideText objects (via .full_text).
+    """
+    if isinstance(val, str):
+        return val
+    return getattr(val, "full_text", str(val))
 
 
 @dataclass
@@ -55,14 +71,14 @@ class VersionInfo:
 
 
 def detect_changes(
-    old_texts: dict[int, str],
-    new_texts: dict[int, str],
+    old_texts: dict[int, SlideTextLike],
+    new_texts: dict[int, SlideTextLike],
 ) -> ChangeSet:
     """Detect changes between two versions of slide text.
 
     Args:
-        old_texts: Previous version's slide texts {slide_num: text}.
-        new_texts: Current version's slide texts {slide_num: text}.
+        old_texts: Previous version's slide texts {slide_num: str or SlideText}.
+        new_texts: Current version's slide texts {slide_num: str or SlideText}.
 
     Returns:
         ChangeSet describing what changed.
@@ -78,8 +94,8 @@ def detect_changes(
     unchanged = []
 
     for slide_num in sorted(common):
-        old_text = _normalize_text(old_texts[slide_num])
-        new_text = _normalize_text(new_texts[slide_num])
+        old_text = _normalize_text(_to_str(old_texts[slide_num]))
+        new_text = _normalize_text(_to_str(new_texts[slide_num]))
         if old_text != new_text:
             modified.append(slide_num)
         else:
@@ -108,7 +124,7 @@ def compute_version(
     source_hash: str,
     source_path: str,
     slide_count: int,
-    new_texts: dict[int, str],
+    new_texts: dict[int, SlideTextLike],
     note: Optional[str] = None,
 ) -> VersionInfo:
     """Compute version info for a conversion, including change detection.
@@ -118,7 +134,7 @@ def compute_version(
         source_hash: Current source file hash.
         source_path: Relative path to source.
         slide_count: Number of slides.
-        new_texts: Current slide texts.
+        new_texts: Current slide texts (str or SlideText values).
         note: Optional version note.
 
     Returns:
@@ -198,10 +214,10 @@ def load_texts_cache(cache_path: Path) -> dict[int, str]:
         return {}
 
 
-def save_texts_cache(cache_path: Path, texts: dict[int, str]):
+def save_texts_cache(cache_path: Path, texts: dict) -> None:
     """Save slide texts cache for future change detection."""
-    # Store with string keys for JSON compatibility
-    data = {str(k): v for k, v in texts.items()}
+    # Store with string keys for JSON compatibility; extract full_text from SlideText
+    data = {str(k): _to_str(v) for k, v in texts.items()}
     _atomic_write_json(cache_path, data)
 
 
