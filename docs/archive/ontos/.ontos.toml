@@ -7,7 +7,7 @@ logs_dir = "docs/logs"
 context_map = "Ontos_Context_Map.md"
 
 [scanning]
-skip_patterns = ["_template.md", "archive/*", ".git/*", "node_modules/*", "__pycache__/*"]
+skip_patterns = ["_template.md", "archive/*", ".git/*", "node_modules/*", "__pycache__/*", "*/.venv/*", "*/.pytest_cache/*", "*/*.egg-info/*"]
 scan_paths = []
 default_scope = "docs"
 
