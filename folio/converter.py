@@ -99,6 +99,13 @@ class FolioConverter:
             logger.info("  Extracting text...")
             slide_texts = text.extract(source_path)
 
+            if slide_texts and len(image_paths) != len(slide_texts):
+                logger.warning(
+                    "Slide count mismatch: %d images vs %d text slides. "
+                    "Image count (%d) is authoritative.",
+                    len(image_paths), len(slide_texts), len(image_paths),
+                )
+
             # Stage 4: LLM analysis
             logger.info("  Running LLM analysis...")
             slide_analyses = analysis.analyze_slides(

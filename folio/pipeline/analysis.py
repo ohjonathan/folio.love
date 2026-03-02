@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import string
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -167,7 +168,8 @@ def _analyze_single_slide(
         try:
             response = client.messages.create(
                 model=model,
-                max_tokens=1500,
+                max_tokens=2048,
+                timeout=120.0,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -186,6 +188,8 @@ def _analyze_single_slide(
                     ],
                 }],
             )
+            if getattr(response, 'stop_reason', None) == "max_tokens":
+                logger.warning("Slide analysis may be truncated (hit max_tokens limit)")
             raw_text = response.content[0].text
             analysis = _parse_analysis(raw_text)
 
@@ -337,13 +341,13 @@ def _normalize_for_matching(text: str) -> str:
     return text.strip()
 
 
-DEPTH_PROMPT = """You previously analyzed this consulting slide. Now look deeper.
+DEPTH_PROMPT = string.Template("""You previously analyzed this consulting slide. Now look deeper.
 
 Previous analysis found:
-- Slide type: {slide_type}
-- Framework: {framework}
-- Key data: {key_data}
-- Main insight: {main_insight}
+- Slide type: $slide_type
+- Framework: $framework
+- Key data: $key_data
+- Main insight: $main_insight
 
 Now extract additional details:
 1. Additional data points not captured in the first pass
@@ -358,7 +362,7 @@ Evidence:
 - Claim: [what this evidence supports]
   Quote: "[exact text from slide]"
   Element: [title|body|note]
-  Confidence: [high|medium|low]"""
+  Confidence: [high|medium|low]""")
 
 DATA_HEAVY_TYPES = {"data", "framework", "executive-summary"}
 
@@ -504,7 +508,7 @@ def analyze_slides_deep(
         else:
             # Build depth prompt with Pass 1 context
             analysis = results[slide_num]
-            prompt = DEPTH_PROMPT.format(
+            prompt = DEPTH_PROMPT.safe_substitute(
                 slide_type=analysis.slide_type,
                 framework=analysis.framework,
                 key_data=analysis.key_data,
@@ -552,6 +556,7 @@ def _run_depth_pass(
             response = client.messages.create(
                 model=model,
                 max_tokens=1500,
+                timeout=120.0,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -570,6 +575,8 @@ def _run_depth_pass(
                     ],
                 }],
             )
+            if getattr(response, 'stop_reason', None) == "max_tokens":
+                logger.warning("Depth pass may be truncated (hit max_tokens limit)")
             raw_text = response.content[0].text
             evidence = _parse_evidence(raw_text)
 
@@ -589,11 +596,15 @@ def _run_depth_pass(
 
 
 def _load_cache_deep(cache_dir: Path) -> dict:
-    """Load deep analysis cache from disk."""
+    """Load deep analysis cache from disk, invalidating if prompt changed."""
     cache_file = cache_dir / ".analysis_cache_deep.json"
     if cache_file.exists():
         try:
-            return json.loads(cache_file.read_text())
+            data = json.loads(cache_file.read_text())
+            if data.get("_prompt_version") != _prompt_version(DEPTH_PROMPT.template):
+                logger.info("Depth prompt changed — invalidating deep cache")
+                return {}
+            return data
         except (json.JSONDecodeError, OSError):
             return {}
     return {}
@@ -603,6 +614,7 @@ def _save_cache_deep(cache_dir: Path, cache: dict):
     """Save deep analysis cache to disk."""
     cache_file = cache_dir / ".analysis_cache_deep.json"
     cache_dir.mkdir(parents=True, exist_ok=True)
+    cache["_prompt_version"] = _prompt_version(DEPTH_PROMPT.template)
     tmp_file = cache_file.with_suffix(".tmp")
     tmp_file.write_text(json.dumps(cache, indent=2))
     tmp_file.rename(cache_file)
@@ -617,12 +629,21 @@ def _hash_image(image_path: Path) -> str:
     return sha256.hexdigest()[:16]
 
 
+def _prompt_version(prompt_text: str) -> str:
+    """Hash the first 500 chars of a prompt to detect prompt changes."""
+    return hashlib.sha256(prompt_text[:500].encode()).hexdigest()[:8]
+
+
 def _load_cache(cache_dir: Path) -> dict:
-    """Load analysis cache from disk."""
+    """Load analysis cache from disk, invalidating if prompt changed."""
     cache_file = cache_dir / ".analysis_cache.json"
     if cache_file.exists():
         try:
-            return json.loads(cache_file.read_text())
+            data = json.loads(cache_file.read_text())
+            if data.get("_prompt_version") != _prompt_version(ANALYSIS_PROMPT):
+                logger.info("Analysis prompt changed — invalidating cache")
+                return {}
+            return data
         except (json.JSONDecodeError, OSError):
             return {}
     return {}
@@ -632,6 +653,7 @@ def _save_cache(cache_dir: Path, cache: dict):
     """Save analysis cache to disk."""
     cache_file = cache_dir / ".analysis_cache.json"
     cache_dir.mkdir(parents=True, exist_ok=True)
+    cache["_prompt_version"] = _prompt_version(ANALYSIS_PROMPT)
     # Atomic write
     tmp_file = cache_file.with_suffix(".tmp")
     tmp_file.write_text(json.dumps(cache, indent=2))

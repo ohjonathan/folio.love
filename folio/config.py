@@ -41,6 +41,21 @@ class FolioConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
 
+    def __post_init__(self):
+        self._validate()
+
+    def _validate(self):
+        """Validate config values have correct types and ranges."""
+        c = self.conversion
+        if not isinstance(c.image_dpi, int) or c.image_dpi <= 0:
+            raise ValueError(f"image_dpi must be a positive integer, got {c.image_dpi!r}")
+        if not isinstance(c.default_passes, int) or c.default_passes not in (1, 2):
+            raise ValueError(f"default_passes must be 1 or 2, got {c.default_passes!r}")
+        if not isinstance(c.density_threshold, (int, float)) or c.density_threshold <= 0:
+            raise ValueError(f"density_threshold must be a positive number, got {c.density_threshold!r}")
+        if not isinstance(c.libreoffice_timeout, (int, float)) or c.libreoffice_timeout <= 0:
+            raise ValueError(f"libreoffice_timeout must be a positive number, got {c.libreoffice_timeout!r}")
+
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":
         """Load config from folio.yaml, falling back to defaults."""

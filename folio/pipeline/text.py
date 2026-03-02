@@ -12,7 +12,7 @@ class TextExtractionError(Exception):
     """Raised when text extraction fails."""
 
 
-@dataclass
+@dataclass(frozen=True)
 class SlideText:
     """Structured text extracted from a single slide."""
     slide_num: int

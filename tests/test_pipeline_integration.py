@@ -15,41 +15,6 @@ from folio.pipeline.text import SlideText
 from folio.output.frontmatter import _compute_grounding_summary
 
 
-def _create_sample_pptx(path: Path) -> Path:
-    """Create a minimal PPTX file for testing."""
-    try:
-        from pptx import Presentation
-    except ImportError:
-        pytest.skip("python-pptx not installed")
-
-    prs = Presentation()
-    # Slide 1: title
-    slide1 = prs.slides.add_slide(prs.slide_layouts[0])
-    slide1.shapes.title.text = "Market Analysis"
-    slide1.placeholders[1].text = "Q1 2026 Review"
-
-    # Slide 2: data-heavy
-    slide2 = prs.slides.add_slide(prs.slide_layouts[1])
-    slide2.shapes.title.text = "Revenue Growth"
-    slide2.placeholders[1].text = (
-        "TAM $4.2B, SAM $1.2B, SOM $300M. "
-        "CAGR 12% projected through 2028. "
-        "Market share target: 5% by year 3. "
-        "Revenue $10M in FY2025, projected $15M in FY2026. "
-        "Key drivers: enterprise expansion, product-led growth, "
-        "international markets opening Q3 2026."
-    )
-
-    # Slide 3: simple narrative
-    slide3 = prs.slides.add_slide(prs.slide_layouts[1])
-    slide3.shapes.title.text = "Next Steps"
-    slide3.placeholders[1].text = "Follow up with client on timeline."
-
-    pptx_path = path / "test_deck.pptx"
-    prs.save(str(pptx_path))
-    return pptx_path
-
-
 def _mock_anthropic_response(text: str):
     """Create a mock Anthropic API response."""
     mock_response = MagicMock()
@@ -404,3 +369,41 @@ class TestPipelineIntegration:
         assert gs["validated"] == 2
         assert gs["pass_1_claims"] == 1
         assert gs["pass_2_claims"] == 1
+
+
+class TestEvidenceVerificationIndicator:
+    """Test that unverified evidence gets a visual indicator in markdown."""
+
+    def test_unverified_evidence_indicator(self):
+        from folio.output.markdown import _format_slide
+
+        analysis = SlideAnalysis(
+            slide_type="data",
+            framework="none",
+            visual_description="Chart",
+            key_data="$10M",
+            main_insight="Revenue",
+            evidence=[
+                {"claim": "Revenue", "quote": "$10M", "element_type": "body",
+                 "confidence": "high", "pass": 1, "validated": False},
+            ],
+        )
+        output = _format_slide(slide_num=1, text=None, analysis=analysis)
+        assert "[unverified]" in output
+
+    def test_verified_evidence_no_indicator(self):
+        from folio.output.markdown import _format_slide
+
+        analysis = SlideAnalysis(
+            slide_type="data",
+            framework="none",
+            visual_description="Chart",
+            key_data="$10M",
+            main_insight="Revenue",
+            evidence=[
+                {"claim": "Revenue", "quote": "$10M", "element_type": "body",
+                 "confidence": "high", "pass": 1, "validated": True},
+            ],
+        )
+        output = _format_slide(slide_num=1, text=None, analysis=analysis)
+        assert "[unverified]" not in output

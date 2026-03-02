@@ -1,9 +1,7 @@
 """Markdown assembly: combine all pipeline outputs into final document."""
 
 from pathlib import Path
-from typing import Optional
-
-from typing import Union
+from typing import Optional, Union
 
 from ..pipeline.analysis import SlideAnalysis
 from ..pipeline.text import SlideText
@@ -15,7 +13,7 @@ def assemble(
     frontmatter: str,
     source_display_path: str,
     version_info: VersionInfo,
-    slide_texts: dict[int, str],
+    slide_texts: dict[int, Union[str, SlideText]],
     slide_analyses: dict[int, SlideAnalysis],
     slide_count: int,
     version_history: list[dict],
@@ -158,9 +156,10 @@ def _format_slide(
                 element_type = ev.get("element_type", "body")
                 pass_num = ev.get("pass", 1)
                 pass_label = f", pass {pass_num}" if pass_num > 1 else ""
+                verified_label = "" if ev.get("validated", False) else " [unverified]"
                 lines.append(
                     f'- **{claim} ({confidence}{pass_label}):** '
-                    f'"{quote}" *({element_type})*'
+                    f'"{quote}" *({element_type})*{verified_label}'
                 )
             lines.append("")
     elif analysis and analysis.slide_type == "pending":

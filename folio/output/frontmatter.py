@@ -54,6 +54,8 @@ def generate(
         "source_type": "deck",
         "version": version_info.version,
         "converted": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "modified": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         # Organization
         "status": "current",
         # Ontology
@@ -175,7 +177,10 @@ def _generate_tags(
     # Extract meaningful words from title
     title_words = re.findall(r"[a-z][a-z-]+", title.lower().replace("_", "-"))
     # Filter out noise words
-    noise = {"the", "a", "an", "and", "or", "for", "of", "in", "to", "is", "by"}
+    noise = {
+        "the", "a", "an", "and", "or", "for", "of", "in", "to", "is", "by",
+        "v1", "v2", "v3", "v4", "v5", "final", "draft", "rev", "copy", "version",
+    }
     for word in title_words:
         if word not in noise and len(word) > 2:
             tags.add(word)

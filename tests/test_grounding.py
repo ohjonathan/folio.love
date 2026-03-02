@@ -287,10 +287,8 @@ class TestDensityScoring:
             elements=[],
         )
         score = _compute_density_score(analysis, text)
-        # framework=1.0 + evidence(1*0.3) + words(0.5) = 1.8 (below 2.0)
-        # But data-heavy for "framework" type: +0.5 → doesn't apply since framework isn't in DATA_HEAVY_TYPES
-        # Actually framework IS in DATA_HEAVY_TYPES... let me check
-        assert score > 0
+        # framework=1.0 + evidence(1*0.3) + words(0.5) + data-heavy(0.5) = 2.3
+        assert score >= 2.0
 
     def test_word_count_thresholds(self):
         """Test the word count scoring thresholds."""

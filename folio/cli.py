@@ -91,7 +91,7 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
 @click.option("--note", "-n", default=None, help="Version note for all conversions.")
 @click.option("--client", default=None, help="Client name for all conversions.")
 @click.option("--engagement", default=None, help="Engagement identifier for all conversions.")
-@click.option("--passes", "-p", type=click.IntRange(1, 2), default=None,
+@click.option("--passes", type=click.IntRange(1, 2), default=None,
               help="Analysis depth: 1=standard, 2=deep (selective second pass on dense slides).")
 @click.pass_context
 def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement: str, passes: int):
