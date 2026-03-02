@@ -1,3 +1,12 @@
+---
+id: doc_01_vision_document
+type: atom
+status: scaffold
+ontos_schema: 2.2
+curation_level: 0
+generated_by: ontos_scaffold
+---
+
 # Folio: Vision Document
 
 **Version 1.0 | January 2026**  

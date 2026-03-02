@@ -1,3 +1,12 @@
+---
+id: doc_03_technical_architecture
+type: atom
+status: scaffold
+ontos_schema: 2.2
+curation_level: 0
+generated_by: ontos_scaffold
+---
+
 # Folio: Technical Architecture
 
 **Version 1.0 | January 2026**  

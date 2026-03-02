@@ -1,3 +1,12 @@
+---
+id: doc_05_user_stories
+type: product
+status: scaffold
+ontos_schema: 2.2
+curation_level: 0
+generated_by: ontos_scaffold
+---
+
 # Folio: User Stories & Use Cases
 
 **Version 1.0 | January 2026**  

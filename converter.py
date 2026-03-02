@@ -1,0 +1,226 @@
+"""Main conversion orchestrator. Ties the pipeline stages together."""
+
+import logging
+import re
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from .config import FolioConfig
+from .pipeline import normalize, images, text, analysis
+from .tracking import sources, versions
+from .output import frontmatter, markdown
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ConversionResult:
+    """Result of a single file conversion."""
+    output_path: Path
+    slide_count: int
+    version: int
+    changes: versions.ChangeSet
+    deck_id: str
+
+
+class FolioConverter:
+    """Orchestrates the full conversion pipeline."""
+
+    def __init__(self, config: Optional[FolioConfig] = None):
+        self.config = config or FolioConfig.load()
+
+    def convert(
+        self,
+        source_path: Path,
+        note: Optional[str] = None,
+        client: Optional[str] = None,
+        engagement: Optional[str] = None,
+        target: Optional[Path] = None,
+    ) -> ConversionResult:
+        """Convert a single PPTX/PDF to Folio markdown.
+
+        Args:
+            source_path: Path to the source file.
+            note: Optional version note.
+            client: Client name (for frontmatter and ID).
+            engagement: Engagement identifier (for frontmatter and ID).
+            target: Override target directory in library.
+
+        Returns:
+            ConversionResult with output path and metadata.
+
+        Raises:
+            Various pipeline errors if conversion fails.
+        """
+        source_path = Path(source_path).resolve()
+        if not source_path.exists():
+            raise FileNotFoundError(f"Source file not found: {source_path}")
+
+        deck_name = _sanitize_name(source_path.stem)
+        logger.info("Converting: %s", source_path.name)
+
+        # Determine output location
+        deck_dir = self._resolve_target(
+            source_path, deck_name, client, engagement, target
+        )
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        markdown_path = deck_dir / f"{deck_name}.md"
+
+        # Generate ID
+        deck_id = _generate_id(
+            client=client,
+            engagement=engagement,
+            deck_name=deck_name,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+
+            # Stage 1: Normalize to PDF
+            logger.info("  Normalizing to PDF...")
+            pdf_path = normalize.to_pdf(
+                source_path, tmpdir,
+                timeout=self.config.conversion.libreoffice_timeout,
+            )
+
+            # Stage 2: Extract images
+            logger.info("  Extracting images...")
+            image_paths = images.extract(
+                pdf_path, deck_dir,
+                dpi=self.config.conversion.image_dpi,
+            )
+            slide_count = len(image_paths)
+
+            # Stage 3: Extract text
+            logger.info("  Extracting text...")
+            slide_texts = text.extract(source_path)
+
+            # Stage 4: LLM analysis
+            logger.info("  Running LLM analysis...")
+            slide_analyses = analysis.analyze_slides(
+                image_paths,
+                model=self.config.llm.model,
+                cache_dir=deck_dir,
+            )
+
+        # Compute source tracking
+        source_info = sources.compute_source_info(source_path, markdown_path)
+
+        # Compute version (includes change detection)
+        version_info = versions.compute_version(
+            deck_dir=deck_dir,
+            source_hash=source_info.file_hash,
+            source_path=source_info.relative_path,
+            slide_count=slide_count,
+            new_texts=slide_texts,
+            note=note,
+        )
+
+        # Load full version history for the document
+        history_path = deck_dir / "version_history.json"
+        version_history = versions.load_version_history(history_path)
+
+        # Generate frontmatter
+        fm = frontmatter.generate(
+            title=_title_from_name(deck_name),
+            deck_id=deck_id,
+            source_relative_path=source_info.relative_path,
+            source_hash=source_info.file_hash,
+            version_info=version_info,
+            analyses=slide_analyses,
+            client=client,
+            engagement=engagement,
+        )
+
+        # Assemble markdown
+        md_content = markdown.assemble(
+            title=_title_from_name(deck_name),
+            frontmatter=fm,
+            source_display_path=source_info.relative_path,
+            version_info=version_info,
+            slide_texts=slide_texts,
+            slide_analyses=slide_analyses,
+            slide_count=slide_count,
+            version_history=version_history,
+        )
+
+        # Write output (atomic)
+        tmp_md = markdown_path.with_suffix(".md.tmp")
+        tmp_md.write_text(md_content)
+        tmp_md.rename(markdown_path)
+
+        logger.info(
+            "  ✓ Converted: %s (v%d, %d slides)",
+            markdown_path.name, version_info.version, slide_count,
+        )
+
+        return ConversionResult(
+            output_path=markdown_path,
+            slide_count=slide_count,
+            version=version_info.version,
+            changes=version_info.changes,
+            deck_id=deck_id,
+        )
+
+    def _resolve_target(
+        self,
+        source_path: Path,
+        deck_name: str,
+        client: Optional[str],
+        engagement: Optional[str],
+        target: Optional[Path],
+    ) -> Path:
+        """Determine the output directory for a conversion."""
+        if target:
+            return Path(target)
+
+        library_root = self.config.library_root.resolve()
+
+        if client and engagement:
+            engagement_short = _sanitize_name(engagement)
+            return library_root / client / engagement_short / deck_name
+        elif client:
+            return library_root / client / deck_name
+        else:
+            return library_root / deck_name
+
+
+def _sanitize_name(name: str) -> str:
+    """Sanitize a name for use in file paths and IDs."""
+    # Replace spaces and special chars with underscores
+    name = re.sub(r"[^\w\-.]", "_", name)
+    # Collapse multiple underscores
+    name = re.sub(r"_+", "_", name)
+    return name.strip("_").lower()
+
+
+def _title_from_name(deck_name: str) -> str:
+    """Convert a sanitized deck name to a human-readable title."""
+    return deck_name.replace("_", " ").replace("-", " ").title()
+
+
+def _generate_id(
+    client: Optional[str] = None,
+    engagement: Optional[str] = None,
+    deck_name: str = "",
+) -> str:
+    """Generate a date-based ID following Folio convention.
+
+    Pattern: {client}_{engagement-short}_{type}_{date}_{descriptor}
+    """
+    date_str = datetime.now().strftime("%Y%m%d")
+    parts = []
+
+    if client:
+        parts.append(_sanitize_name(client))
+    if engagement:
+        parts.append(_sanitize_name(engagement))
+
+    parts.append("evidence")
+    parts.append(date_str)
+    parts.append(_sanitize_name(deck_name))
+
+    return "_".join(parts)

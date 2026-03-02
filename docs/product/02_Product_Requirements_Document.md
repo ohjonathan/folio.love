@@ -1,3 +1,12 @@
+---
+id: doc_02_product_requirements_document
+type: atom
+status: scaffold
+ontos_schema: 2.2
+curation_level: 0
+generated_by: ontos_scaffold
+---
+
 # Folio: Product Requirements Document
 
 **Version 1.0 | January 2026**  
