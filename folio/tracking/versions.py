@@ -15,6 +15,10 @@ SlideTextLike = Union[str, "SlideText"]
 
 logger = logging.getLogger(__name__)
 
+# Cache format version. Increment when the data shape of .texts_cache.json changes.
+# On mismatch, the cache is invalidated (forces honest "all added" changeset).
+_TEXTS_CACHE_VERSION = 2  # v2: post-reconciliation texts with gap-filled empties
+
 
 def _to_str(val: SlideTextLike) -> str:
     """Convert a slide text value to a plain string.
@@ -203,12 +207,26 @@ def save_version_history(history_path: Path, versions: list[dict]):
 
 
 def load_texts_cache(cache_path: Path) -> dict[int, str]:
-    """Load cached slide texts for change detection."""
+    """Load cached slide texts for change detection.
+
+    Invalidates the cache if the version marker is missing or mismatched,
+    preventing spurious change detection after upgrades (B3 fix).
+    """
     if not cache_path.exists():
         return {}
     try:
         raw = json.loads(cache_path.read_text())
-        return {int(k): v for k, v in raw.items()}
+        if not isinstance(raw, dict):
+            return {}
+        # Check version marker
+        stored_version = raw.get("_cache_version")
+        if stored_version != _TEXTS_CACHE_VERSION:
+            logger.info(
+                "Texts cache version mismatch (stored=%s, current=%s) — invalidating",
+                stored_version, _TEXTS_CACHE_VERSION,
+            )
+            return {}
+        return {int(k): v for k, v in raw.items() if k != "_cache_version"}
     except (json.JSONDecodeError, OSError, ValueError) as e:
         logger.warning("Failed to load texts cache: %s", e)
         return {}
@@ -218,6 +236,7 @@ def save_texts_cache(cache_path: Path, texts: dict) -> None:
     """Save slide texts cache for future change detection."""
     # Store with string keys for JSON compatibility; extract full_text from SlideText
     data = {str(k): _to_str(v) for k, v in texts.items()}
+    data["_cache_version"] = _TEXTS_CACHE_VERSION
     _atomic_write_json(cache_path, data)
 
 

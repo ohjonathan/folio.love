@@ -20,6 +20,7 @@ def generate(
     client: Optional[str] = None,
     engagement: Optional[str] = None,
     existing_frontmatter: Optional[dict] = None,
+    reconciliation_metadata: Optional[dict] = None,
 ) -> str:
     """Generate YAML frontmatter conforming to Folio Ontology v2 schema.
 
@@ -86,6 +87,10 @@ def generate(
         frontmatter["slide_types"] = sorted(slide_types)
     if tags:
         frontmatter["tags"] = sorted(tags)
+
+    # Reconciliation metadata
+    if reconciliation_metadata:
+        frontmatter.update(reconciliation_metadata)
 
     # Grounding summary from evidence
     grounding = _compute_grounding_summary(analyses)

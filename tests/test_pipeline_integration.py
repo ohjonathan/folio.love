@@ -11,6 +11,7 @@ import pytest
 from folio.config import FolioConfig
 from folio.converter import FolioConverter
 from folio.pipeline.analysis import SlideAnalysis
+from folio.pipeline.images import ImageResult
 from folio.pipeline.text import SlideText
 from folio.output.frontmatter import _compute_grounding_summary
 
@@ -634,10 +635,14 @@ class TestEndToEndConverter:
         source.write_bytes(b"fake pptx content")
 
         image_paths = []
+        image_results = []
         for i in range(1, slide_count + 1):
             img = tmpdir / f"slide-{i:03d}.png"
             img.write_bytes(self._make_unique_png(i + 200))
             image_paths.append(img)
+            image_results.append(ImageResult(
+                path=img, slide_num=i, width=200, height=200,
+            ))
 
         slide_texts = {}
         for i in range(1, slide_count + 1):
@@ -647,7 +652,7 @@ class TestEndToEndConverter:
                 elements=[{"type": "body", "text": f"Slide {i} text content"}],
             )
 
-        return source, image_paths, slide_texts
+        return source, image_paths, image_results, slide_texts
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_convert_pass1(self):
@@ -656,7 +661,7 @@ class TestEndToEndConverter:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
-            source, image_paths, slide_texts = self._setup_mocks(tmpdir_path)
+            source, image_paths, image_results, slide_texts = self._setup_mocks(tmpdir_path)
 
             target_dir = tmpdir_path / "output"
             target_dir.mkdir()
@@ -675,7 +680,7 @@ class TestEndToEndConverter:
             config = FolioConfig()
 
             with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
-                 patch("folio.pipeline.images.extract", return_value=image_paths), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):
 
@@ -703,7 +708,7 @@ class TestEndToEndConverter:
         """Full pass-2 conversion adds evidence on dense slides."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
-            source, image_paths, slide_texts = self._setup_mocks(tmpdir_path)
+            source, image_paths, image_results, slide_texts = self._setup_mocks(tmpdir_path)
 
             # Make slide 2 high density text
             slide_texts[2] = SlideText(
@@ -738,7 +743,7 @@ class TestEndToEndConverter:
             config = FolioConfig()
 
             with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
-                 patch("folio.pipeline.images.extract", return_value=image_paths), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):
 
