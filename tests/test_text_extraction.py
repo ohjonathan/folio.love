@@ -195,6 +195,27 @@ class TestReconcileSlideCount:
         assert hasattr(result, "image_count")
         assert hasattr(result, "alignment_confidence")
 
+    def test_reconciliation_alignment(self):
+        """Spec-required: alignment_confidence = min/max of text vs image counts."""
+        # 3 texts, 5 images → confidence = 3/5 = 0.6
+        texts = {i: SlideText(slide_num=i, full_text=f"S{i}") for i in range(1, 4)}
+        result = reconcile_slide_count(texts, 5)
+        assert result.alignment_confidence == pytest.approx(0.6)
+
+        # 5 texts, 3 images → confidence = 3/5 = 0.6 (truncation)
+        texts2 = {i: SlideText(slide_num=i, full_text=f"S{i}") for i in range(1, 6)}
+        result2 = reconcile_slide_count(texts2, 3)
+        assert result2.alignment_confidence == pytest.approx(0.6)
+
+        # Equal counts → confidence = 1.0
+        texts3 = {i: SlideText(slide_num=i, full_text=f"S{i}") for i in range(1, 4)}
+        result3 = reconcile_slide_count(texts3, 3)
+        assert result3.alignment_confidence == pytest.approx(1.0)
+
+        # No texts → confidence = 0.0
+        result4 = reconcile_slide_count({}, 5)
+        assert result4.alignment_confidence == 0.0
+
 
 class TestSlideTextIsEmpty:
     """Test SlideText.is_empty field."""

@@ -109,7 +109,9 @@ def extract(
             old_dir.rename(slides_dir)
         raise
     finally:
-        if old_dir.exists():
+        # Only delete backup when slides/ has been successfully restored or replaced.
+        # If both renames failed, old_dir is the only remaining copy.
+        if old_dir.exists() and slides_dir.exists():
             shutil.rmtree(old_dir)
 
     # Rewrite paths to final location
