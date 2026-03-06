@@ -253,15 +253,19 @@ def analyze_slides(
         # Check cache (B1: validate _text_hash per entry)
         if image_hash in cache:
             cached_entry = cache[image_hash]
-            current_th = _text_hash(slide_texts.get(i) if slide_texts else None)
-            if cached_entry.get("_text_hash") != current_th:
-                logger.info("Slide %d: text changed — cache miss", i)
-                # Fall through to API call
+            # Validate payload shape (review fix: malformed entries → miss)
+            if not isinstance(cached_entry, dict):
+                logger.warning("Slide %d: malformed cache entry (not dict) — cache miss", i)
             else:
-                logger.debug("Slide %d: using cached analysis", i)
-                results[i] = SlideAnalysis.from_dict(cached_entry)
-                stats.hits += 1
-                continue
+                current_th = _text_hash(slide_texts.get(i) if slide_texts else None)
+                if cached_entry.get("_text_hash") != current_th:
+                    logger.info("Slide %d: text changed — cache miss", i)
+                    # Fall through to API call
+                else:
+                    logger.debug("Slide %d: using cached analysis", i)
+                    results[i] = SlideAnalysis.from_dict(cached_entry)
+                    stats.hits += 1
+                    continue
 
         # Call API
         stats.misses += 1
@@ -664,7 +668,11 @@ def analyze_slides_deep(
         # Check deep cache (B2: validate _text_hash + _pass1_hash)
         if deep_key in deep_cache:
             cached = deep_cache[deep_key]
-            if isinstance(cached, dict):
+            # Validate payload shape (review fix: non-dict or malformed → miss)
+            if not isinstance(cached, dict):
+                logger.warning("Slide %d: malformed deep cache entry (not dict) — miss", slide_num)
+                # Fall through to API call
+            else:
                 current_th = _text_hash(slide_texts.get(slide_num))
                 current_p1h = _pass1_context_hash(results[slide_num])
                 if (cached.get("_text_hash") != current_th or
@@ -672,26 +680,33 @@ def analyze_slides_deep(
                     logger.info("Slide %d: inputs changed — deep cache miss", slide_num)
                     # Fall through to API call
                 else:
-                    logger.debug("Slide %d: using cached deep analysis", slide_num)
                     new_evidence = cached.get("evidence", [])
                     reassessed_type = cached.get("pass2_slide_type")
                     reassessed_framework = cached.get("pass2_framework")
-                    stats.hits += 1
 
-                    # Merge evidence
-                    if new_evidence:
-                        for ev in new_evidence:
-                            ev["pass"] = 2
-                        merged = _deduplicate_evidence(results[slide_num].evidence, new_evidence)
-                        results[slide_num].evidence = merged
+                    # Validate evidence shape (review fix: malformed evidence → miss)
+                    if not isinstance(new_evidence, list) or (
+                        new_evidence and not all(isinstance(e, dict) for e in new_evidence)
+                    ):
+                        logger.warning("Slide %d: malformed evidence in deep cache — miss", slide_num)
+                        # Fall through to API call
+                    else:
+                        logger.debug("Slide %d: using cached deep analysis", slide_num)
+                        stats.hits += 1
 
-                    # Store pass-2 reassessments if they differ
-                    if reassessed_type and reassessed_type != results[slide_num].slide_type:
-                        results[slide_num].pass2_slide_type = reassessed_type
-                    if reassessed_framework and reassessed_framework != results[slide_num].framework:
-                        results[slide_num].pass2_framework = reassessed_framework
-                    continue
-            # else: non-dict cached value (legacy list) — fall through to API call
+                        # Merge evidence
+                        if new_evidence:
+                            for ev in new_evidence:
+                                ev["pass"] = 2
+                            merged = _deduplicate_evidence(results[slide_num].evidence, new_evidence)
+                            results[slide_num].evidence = merged
+
+                        # Store pass-2 reassessments if they differ
+                        if reassessed_type and reassessed_type != results[slide_num].slide_type:
+                            results[slide_num].pass2_slide_type = reassessed_type
+                        if reassessed_framework and reassessed_framework != results[slide_num].framework:
+                            results[slide_num].pass2_framework = reassessed_framework
+                        continue
 
         # API call (cache miss)
         stats.misses += 1
@@ -879,6 +894,7 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None) -> dict:
                 return {}
             return data
         except (json.JSONDecodeError, OSError):
+            logger.warning("Cache file corrupt or unreadable: %s", cache_file)
             return {}
     return {}
 
@@ -886,8 +902,8 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None) -> dict:
 def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None):
     """Save deep analysis cache to disk with metadata markers."""
     cache_file = cache_dir / ".analysis_cache_deep.json"
-    cache_dir.mkdir(parents=True, exist_ok=True)
     try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
         cache["_cache_version"] = _ANALYSIS_CACHE_VERSION
         cache["_prompt_version"] = _prompt_version(DEPTH_PROMPT.template)
         cache["_model_version"] = model
@@ -945,6 +961,7 @@ def _load_cache(cache_dir: Path, model: str | None = None) -> dict:
                 return {}
             return data
         except (json.JSONDecodeError, OSError):
+            logger.warning("Cache file corrupt or unreadable: %s", cache_file)
             return {}
     return {}
 
@@ -952,8 +969,8 @@ def _load_cache(cache_dir: Path, model: str | None = None) -> dict:
 def _save_cache(cache_dir: Path, cache: dict, model: str | None = None):
     """Save analysis cache to disk with metadata markers."""
     cache_file = cache_dir / ".analysis_cache.json"
-    cache_dir.mkdir(parents=True, exist_ok=True)
     try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
         cache["_cache_version"] = _ANALYSIS_CACHE_VERSION
         cache["_prompt_version"] = _prompt_version(ANALYSIS_PROMPT)
         cache["_model_version"] = model

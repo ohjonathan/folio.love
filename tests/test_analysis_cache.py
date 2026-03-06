@@ -375,21 +375,44 @@ class TestDeepCacheContextHash:
         assert stats.hits == 1
         assert stats.misses == 0
 
-    def test_old_format_list_not_loaded(self, tmp_path):
-        """Old-format list deep cache entry not loaded (B3 invalidates)."""
-        from folio.pipeline.analysis import DEPTH_PROMPT
+    def test_old_format_list_entry_triggers_miss(self, tmp_path):
+        """Old-format list deep cache entry triggers miss via isinstance guard."""
+        from folio.pipeline.analysis import DEPTH_PROMPT, _hash_image
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(23))
+        img_hash = _hash_image(img)
+
+        texts = {1: SlideText(slide_num=1, full_text="Dense data " * 40)}
+        analysis = SlideAnalysis(
+            slide_type="data", framework="none",
+            key_data="$10M", main_insight="Revenue",
+            evidence=[{"claim": "A", "confidence": "high", "validated": True, "pass": 1}] * 3,
+        )
+
         cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test",
             "_extraction_version": _EXTRACTION_VERSION,
-            "deadbeef01234567_deep": [{"claim": "old"}],  # list format = legacy
+            f"{img_hash}_deep": [{"claim": "old"}],  # list format = legacy
         }
         (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(cache))
-        result = _load_cache_deep(tmp_path, model="test")
-        # The cache loads (version matches), but the list entry will be
-        # skipped at lookup time in analyze_slides_deep (isinstance check)
-        assert "deadbeef01234567_deep" in result
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+             patch("anthropic.Anthropic", return_value=mock_client):
+            _, stats = analyze_slides_deep(
+                pass1_results={1: analysis}, slide_texts=texts,
+                image_paths=[img], model="test", cache_dir=tmp_path,
+                density_threshold=0.1,
+            )
+
+        # Should miss because list entry is not a dict
+        assert stats.misses == 1
+        mock_client.messages.create.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -665,3 +688,329 @@ class TestCacheStats:
         assert stats.hits == 0
         assert stats.misses == 0
         assert stats.total == 0
+
+
+# ---------------------------------------------------------------------------
+# S-2: Deep cache force_miss
+# ---------------------------------------------------------------------------
+
+class TestDeepCacheForceMiss:
+    """S-2: force_miss for analyze_slides_deep."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_deep_cache_force_miss_skips_read_still_writes(self, tmp_path):
+        """With force_miss=True, deep cache is not read but IS written."""
+        from folio.pipeline.analysis import DEPTH_PROMPT, _hash_image
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(60))
+        img_hash = _hash_image(img)
+
+        texts = {1: SlideText(slide_num=1, full_text="Dense data " * 40)}
+        analysis = SlideAnalysis(
+            slide_type="data", framework="none",
+            key_data="$10M", main_insight="Revenue",
+            evidence=[{"claim": "A", "confidence": "high", "validated": True, "pass": 1}] * 3,
+        )
+
+        # Pre-populate deep cache so we can verify it's NOT read
+        deep_cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            f"{img_hash}_deep": {
+                "evidence": [{"claim": "Stale", "quote": "stale", "confidence": "low", "pass": 2}],
+                "pass2_slide_type": None,
+                "pass2_framework": None,
+                "_text_hash": _text_hash(texts.get(1)),
+                "_pass1_hash": _pass1_context_hash(analysis),
+            },
+        }
+        (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(deep_cache))
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
+
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            _, stats = analyze_slides_deep(
+                pass1_results={1: analysis}, slide_texts=texts,
+                image_paths=[img], model="test", cache_dir=tmp_path,
+                density_threshold=0.1, force_miss=True,
+            )
+
+        # Should miss (skipped cache read) and call API
+        assert stats.misses == 1
+        assert stats.hits == 0
+        mock_client.messages.create.assert_called_once()
+
+        # Cache file should be written with fresh results
+        cache_file = tmp_path / ".analysis_cache_deep.json"
+        assert cache_file.exists()
+        data = json.loads(cache_file.read_text())
+        assert f"{img_hash}_deep" in data
+        # Fresh result should have "Growth rate" claim, not "Stale"
+        fresh_evidence = data[f"{img_hash}_deep"]["evidence"]
+        claims = [e["claim"] for e in fresh_evidence]
+        assert "Growth rate" in claims
+        assert "Stale" not in claims
+
+
+# ---------------------------------------------------------------------------
+# S-3: Save cache OSError graceful degradation
+# ---------------------------------------------------------------------------
+
+class TestSaveCacheOSError:
+    """S-3: _save_cache and _save_cache_deep degrade gracefully on write failure."""
+
+    def test_save_cache_oserror_graceful(self, tmp_path):
+        """_save_cache logs warning and does not raise on write failure."""
+        cache = {"slide1": {"slide_type": "data"}}
+
+        with patch("pathlib.Path.write_text", side_effect=OSError("Permission denied")):
+            # Should not raise
+            _save_cache(tmp_path, cache, model="test")
+
+    def test_save_cache_deep_oserror_graceful(self, tmp_path):
+        """_save_cache_deep logs warning and does not raise on write failure."""
+        cache = {"entry": {"evidence": []}}
+
+        with patch("pathlib.Path.write_text", side_effect=OSError("Disk full")):
+            # Should not raise
+            _save_cache_deep(tmp_path, cache, model="test")
+
+    def test_save_cache_mkdir_failure_graceful(self, tmp_path):
+        """_save_cache degrades gracefully when mkdir fails (blocking 3)."""
+        cache = {"slide1": {"slide_type": "data"}}
+
+        with patch("pathlib.Path.mkdir", side_effect=OSError("Read-only parent")):
+            # Should not raise
+            _save_cache(tmp_path, cache, model="test")
+
+    def test_save_cache_deep_mkdir_failure_graceful(self, tmp_path):
+        """_save_cache_deep degrades gracefully when mkdir fails (blocking 3)."""
+        cache = {"entry": {"evidence": []}}
+
+        with patch("pathlib.Path.mkdir", side_effect=OSError("Read-only parent")):
+            # Should not raise
+            _save_cache_deep(tmp_path, cache, model="test")
+
+
+# ---------------------------------------------------------------------------
+# Malformed cache payload validation (review blocking 1 & 2)
+# ---------------------------------------------------------------------------
+
+class TestMalformedCachePayloads:
+    """Review fix: malformed per-entry payloads fall back to miss, no crash."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass1_list_payload_triggers_miss(self, tmp_path):
+        """Pass-1 cache entry stored as list -> miss, not AttributeError."""
+        from folio.pipeline.analysis import _hash_image
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(70))
+        img_hash = _hash_image(img)
+
+        # Valid v1 metadata but malformed per-slide payload
+        cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            img_hash: ["not", "a", "dict"],  # malformed
+        }
+        (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS1))
+
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            results, stats = analyze_slides(
+                [img], model="test", cache_dir=tmp_path,
+                slide_texts={1: SlideText(slide_num=1, full_text="Test")},
+            )
+
+        assert stats.misses == 1
+        assert results[1].slide_type == "data"
+        mock_client.messages.create.assert_called_once()
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass1_string_payload_triggers_miss(self, tmp_path):
+        """Pass-1 cache entry stored as string -> miss, not crash."""
+        from folio.pipeline.analysis import _hash_image
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(71))
+        img_hash = _hash_image(img)
+
+        cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            img_hash: "corrupted_string",  # malformed
+        }
+        (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS1))
+
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            results, stats = analyze_slides(
+                [img], model="test", cache_dir=tmp_path,
+                slide_texts={1: SlideText(slide_num=1, full_text="Test")},
+            )
+
+        assert stats.misses == 1
+        mock_client.messages.create.assert_called_once()
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass2_string_evidence_triggers_miss(self, tmp_path):
+        """Deep cache evidence stored as string -> miss, not crash."""
+        from folio.pipeline.analysis import DEPTH_PROMPT, _hash_image
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(72))
+        img_hash = _hash_image(img)
+
+        texts = {1: SlideText(slide_num=1, full_text="Dense data " * 40)}
+        analysis = SlideAnalysis(
+            slide_type="data", framework="none",
+            key_data="$10M", main_insight="Revenue",
+            evidence=[{"claim": "A", "confidence": "high", "validated": True, "pass": 1}] * 3,
+        )
+
+        deep_cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            f"{img_hash}_deep": {
+                "evidence": "not_a_list",  # malformed!
+                "pass2_slide_type": None,
+                "pass2_framework": None,
+                "_text_hash": _text_hash(texts.get(1)),
+                "_pass1_hash": _pass1_context_hash(analysis),
+            },
+        }
+        (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(deep_cache))
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
+
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            _, stats = analyze_slides_deep(
+                pass1_results={1: analysis}, slide_texts=texts,
+                image_paths=[img], model="test", cache_dir=tmp_path,
+                density_threshold=0.1,
+            )
+
+        assert stats.misses == 1
+        mock_client.messages.create.assert_called_once()
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass2_evidence_with_non_dict_items_triggers_miss(self, tmp_path):
+        """Deep cache evidence is list but contains non-dict items -> miss."""
+        from folio.pipeline.analysis import DEPTH_PROMPT, _hash_image
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(73))
+        img_hash = _hash_image(img)
+
+        texts = {1: SlideText(slide_num=1, full_text="Dense data " * 40)}
+        analysis = SlideAnalysis(
+            slide_type="data", framework="none",
+            key_data="$10M", main_insight="Revenue",
+            evidence=[{"claim": "A", "confidence": "high", "validated": True, "pass": 1}] * 3,
+        )
+
+        deep_cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            f"{img_hash}_deep": {
+                "evidence": ["not_a_dict", 42],  # list of non-dict
+                "pass2_slide_type": None,
+                "pass2_framework": None,
+                "_text_hash": _text_hash(texts.get(1)),
+                "_pass1_hash": _pass1_context_hash(analysis),
+            },
+        }
+        (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(deep_cache))
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
+
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            _, stats = analyze_slides_deep(
+                pass1_results={1: analysis}, slide_texts=texts,
+                image_paths=[img], model="test", cache_dir=tmp_path,
+                density_threshold=0.1,
+            )
+
+        assert stats.misses == 1
+        mock_client.messages.create.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# S1: Prompt version invalidation (should-fix 1)
+# ---------------------------------------------------------------------------
+
+class TestPromptVersionInvalidation:
+    """S1: Explicit prompt-version invalidation regression tests."""
+
+    def test_pass1_prompt_change_invalidates(self, tmp_path):
+        """Valid v1 cache with wrong _prompt_version -> empty dict."""
+        cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": "wrong_hash",  # Only prompt changed
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            "abc123": {"slide_type": "data"},
+        }
+        (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
+        result = _load_cache(tmp_path, model="test")
+        assert result == {}
+
+    def test_deep_prompt_change_invalidates(self, tmp_path):
+        """Valid v1 deep cache with wrong _prompt_version -> empty dict."""
+        from folio.pipeline.analysis import DEPTH_PROMPT
+        cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": "wrong_hash",  # Only prompt changed
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            "abc_deep": {"evidence": []},
+        }
+        (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(cache))
+        result = _load_cache_deep(tmp_path, model="test")
+        assert result == {}
+
+    def test_pass1_correct_prompt_loads(self, tmp_path):
+        """Valid v1 cache with correct _prompt_version -> data preserved."""
+        cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            "abc123": {"slide_type": "data"},
+        }
+        (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
+        result = _load_cache(tmp_path, model="test")
+        assert "abc123" in result
+
+    def test_deep_correct_prompt_loads(self, tmp_path):
+        """Valid v1 deep cache with correct _prompt_version -> data preserved."""
+        from folio.pipeline.analysis import DEPTH_PROMPT
+        cache = {
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
+            "_model_version": "test",
+            "_extraction_version": _EXTRACTION_VERSION,
+            "abc_deep": {"evidence": []},
+        }
+        (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(cache))
+        result = _load_cache_deep(tmp_path, model="test")
+        assert "abc_deep" in result
