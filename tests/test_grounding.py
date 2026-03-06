@@ -419,14 +419,14 @@ class TestCacheLoading:
     """Test cache loading with legacy and malformed files."""
 
     def test_legacy_cache_without_prompt_version(self):
-        """Legacy cache files without _prompt_version should load successfully."""
+        """Legacy cache files without _cache_version are invalidated (B3)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
             cache_file = cache_dir / ".analysis_cache.json"
             legacy_data = {"abc123": {"slide_type": "data", "framework": "none"}}
             cache_file.write_text(json.dumps(legacy_data))
             result = _load_cache(cache_dir)
-            assert result == legacy_data
+            assert result == {}  # B3: legacy cache invalidated
 
     def test_cache_with_wrong_prompt_version_invalidates(self):
         """Cache with mismatched _prompt_version should be invalidated."""
@@ -457,14 +457,14 @@ class TestCacheLoading:
             assert result == {}
 
     def test_deep_cache_legacy_loads(self):
-        """Legacy deep cache without _prompt_version should load."""
+        """Legacy deep cache without _cache_version is invalidated (B3)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
             cache_file = cache_dir / ".analysis_cache_deep.json"
             legacy_data = {"hash_deep": [{"claim": "test"}]}
             cache_file.write_text(json.dumps(legacy_data))
             result = _load_cache_deep(cache_dir)
-            assert result == legacy_data
+            assert result == {}  # B3: legacy cache invalidated
 
 
 class TestPromptInjection:

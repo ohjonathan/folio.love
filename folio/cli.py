@@ -36,8 +36,10 @@ def cli(ctx, verbose: bool, config: Optional[str]):
 @click.option("--target", "-t", type=click.Path(), default=None, help="Override target directory.")
 @click.option("--passes", "-p", type=click.IntRange(1, 2), default=None,
               help="Analysis depth: 1=standard, 2=deep (selective second pass on dense slides).")
+@click.option("--no-cache", is_flag=True, default=False,
+              help="Force re-analysis; fresh results replace cached entries.")
 @click.pass_context
-def convert(ctx, source: str, note: str, client: str, engagement: str, target: str, passes: int):
+def convert(ctx, source: str, note: str, client: str, engagement: str, target: str, passes: int, no_cache: bool):
     """Convert a single deck to Folio markdown.
 
     SOURCE is the path to a PPTX or PDF file.
@@ -61,6 +63,7 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
             engagement=engagement,
             target=Path(target) if target else None,
             passes=passes,
+            no_cache=no_cache,
         )
         click.echo(f"✓ {Path(source).name}")
         click.echo(f"  {result.slide_count} slides → {result.output_path}")
@@ -73,6 +76,10 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
                 click.echo(f"  Added: slides {', '.join(str(s) for s in result.changes.added)}")
             if result.changes.removed:
                 click.echo(f"  Removed: slides {', '.join(str(s) for s in result.changes.removed)}")
+
+        if result.cache_stats and result.cache_stats.total > 0:
+            s = result.cache_stats
+            click.echo(f"  Cache: {s.hits}/{s.total} hits ({s.hit_rate:.0%})")
 
     except FileNotFoundError as e:
         click.echo(f"✗ Error: {e}", err=True)
@@ -93,8 +100,10 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
 @click.option("--engagement", default=None, help="Engagement identifier for all conversions.")
 @click.option("--passes", type=click.IntRange(1, 2), default=None,
               help="Analysis depth: 1=standard, 2=deep (selective second pass on dense slides).")
+@click.option("--no-cache", is_flag=True, default=False,
+              help="Force re-analysis; fresh results replace cached entries.")
 @click.pass_context
-def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement: str, passes: int):
+def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement: str, passes: int, no_cache: bool):
     """Batch convert all matching files in a directory.
 
     Examples:
@@ -126,6 +135,7 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
                 client=client,
                 engagement=engagement,
                 passes=passes,
+                no_cache=no_cache,
             )
             click.echo(f"✓ {f.name} ({result.slide_count} slides)")
             succeeded += 1

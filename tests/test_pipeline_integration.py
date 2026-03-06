@@ -232,7 +232,7 @@ class TestPipelineIntegration:
             mock_client = self._create_mock_client(calls)
 
             with patch("anthropic.Anthropic", return_value=mock_client):
-                results = analyze_slides(
+                results, _ = analyze_slides(
                     image_paths,
                     model="test-model",
                     slide_texts=slide_texts,
@@ -287,7 +287,7 @@ class TestPipelineIntegration:
 
             with patch("anthropic.Anthropic", return_value=mock_client):
                 # Pass 1 (no cache to keep it clean)
-                pass1_results = analyze_slides(
+                pass1_results, _ = analyze_slides(
                     image_paths,
                     model="test-model",
                     slide_texts=slide_texts,
@@ -298,7 +298,7 @@ class TestPipelineIntegration:
                 )
 
                 # Pass 2
-                pass2_results = analyze_slides_deep(
+                pass2_results, _ = analyze_slides_deep(
                     pass1_results=pass1_results,
                     slide_texts=slide_texts,
                     image_paths=image_paths,
@@ -839,7 +839,7 @@ class TestTruncatedResponseIntegration:
             img.write_bytes(self._make_unique_png(200))
 
             with patch("anthropic.Anthropic", return_value=mock_client):
-                results = analyze_slides([img], model="test")
+                results, _ = analyze_slides([img], model="test")
 
         assert results[1].slide_type == "pending"
         assert results[1].framework == "pending"
@@ -884,7 +884,7 @@ class TestTruncatedResponseIntegration:
             img.write_bytes(self._make_unique_png(201))
 
             with patch("anthropic.Anthropic", return_value=mock_client):
-                results = analyze_slides_deep(
+                results, _ = analyze_slides_deep(
                     pass1_results=pass1_results,
                     slide_texts=slide_texts,
                     image_paths=[img],

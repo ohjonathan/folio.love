@@ -26,6 +26,7 @@ class ConversionResult:
     version: int
     changes: versions.ChangeSet
     deck_id: str
+    cache_stats: Optional["analysis.CacheStats"] = None
 
 
 class FolioConverter:
@@ -42,6 +43,7 @@ class FolioConverter:
         engagement: Optional[str] = None,
         target: Optional[Path] = None,
         passes: Optional[int] = None,
+        no_cache: bool = False,
     ) -> ConversionResult:
         """Convert a single PPTX/PDF to Folio markdown.
 
@@ -114,11 +116,12 @@ class FolioConverter:
 
             # Stage 4: LLM analysis
             logger.info("  Running LLM analysis...")
-            slide_analyses = analysis.analyze_slides(
+            slide_analyses, pass1_stats = analysis.analyze_slides(
                 image_paths,
                 model=self.config.llm.model,
                 cache_dir=deck_dir,
                 slide_texts=slide_texts,
+                force_miss=no_cache,
             )
 
             # Override blank slides with pending() (API call ran but result is unreliable)
@@ -130,7 +133,7 @@ class FolioConverter:
             effective_passes = passes if passes is not None else self.config.conversion.default_passes
             if effective_passes >= 2:
                 logger.info("  Running depth pass (Pass 2)...")
-                slide_analyses = analysis.analyze_slides_deep(
+                slide_analyses, pass2_stats = analysis.analyze_slides_deep(
                     pass1_results=slide_analyses,
                     slide_texts=slide_texts,
                     image_paths=image_paths,
@@ -138,7 +141,11 @@ class FolioConverter:
                     cache_dir=deck_dir,
                     density_threshold=self.config.conversion.density_threshold,
                     skip_slides=blank_slides,
+                    force_miss=no_cache,
                 )
+                combined_stats = pass1_stats.merge(pass2_stats)
+            else:
+                combined_stats = pass1_stats
 
         # Compute source tracking
         source_info = sources.compute_source_info(source_path, markdown_path)
@@ -212,6 +219,7 @@ class FolioConverter:
             version=version_info.version,
             changes=version_info.changes,
             deck_id=deck_id,
+            cache_stats=combined_stats,
         )
 
     def _resolve_target(

@@ -304,3 +304,82 @@ class TestSparsePageAlignment:
         assert result.slide_texts[1].full_text == "Page one content"
         assert result.slide_texts[2].is_empty  # Gap filled
         assert result.slide_texts[3].full_text == "Page three content"
+
+
+class TestNoCacheConverterIntegration:
+    """E2E: --no-cache flag flows through converter.convert() to force re-analysis."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_no_cache_forces_reanalysis_through_pipeline(self):
+        """converter.convert(no_cache=True) re-runs both passes and overwrites stale cache."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            image_paths = []
+            for i in range(1, 3):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(self._make_unique_png(i))
+                image_paths.append(img)
+
+            image_results = [
+                ImageResult(path=image_paths[j], slide_num=j + 1, width=200, height=200)
+                for j in range(2)
+            ]
+
+            slide_texts = {
+                i: SlideText(slide_num=i, full_text=f"Slide {i} content " * 20, elements=[])
+                for i in range(1, 3)
+            }
+
+            api_calls = []
+
+            def mock_create(**kw):
+                api_calls.append(1)
+                return _mock_anthropic_response(MOCK_RESPONSE)
+
+            mock_client = MagicMock()
+            mock_client.messages.create = mock_create
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client):
+
+                converter = FolioConverter(config)
+
+                # Run 1: populate cache (no_cache=False)
+                r1 = converter.convert(source_path=source, target=target_dir, passes=1)
+                calls_run1 = len(api_calls)
+                assert calls_run1 == 2  # 2 slides analyzed
+
+                # Run 2: cached (no_cache=False) — should NOT call API
+                api_calls.clear()
+                r2 = converter.convert(source_path=source, target=target_dir, passes=1)
+                assert len(api_calls) == 0  # All cache hits
+                assert r2.cache_stats is not None
+                assert r2.cache_stats.hits == 2
+                assert r2.cache_stats.misses == 0
+
+                # Run 3: forced re-analysis (no_cache=True) — MUST call API
+                api_calls.clear()
+                r3 = converter.convert(source_path=source, target=target_dir, passes=1, no_cache=True)
+                assert len(api_calls) == 2  # Both slides re-analyzed
+                assert r3.cache_stats is not None
+                assert r3.cache_stats.misses == 2
+                assert r3.cache_stats.hits == 0
