@@ -174,16 +174,37 @@ def _format_slide(
     return "\n".join(lines)
 
 
-def _format_version_history(history: list[dict]) -> str:
-    """Format the version history table."""
+def _format_version_history(history: list[dict], max_display: int = 10) -> str:
+    """Format the version history table.
+
+    Args:
+        history: Full version history list.
+        max_display: Maximum number of versions to show in the table.
+            Full history is preserved in version_history.json.
+
+    Note: Change detection uses positional identity (slide number = identity).
+    Insertions or deletions mid-deck cause subsequent slides to shift, producing
+    inflated "modified" counts. See spec D3 for details and Tier 2+ plans.
+    """
     lines = [
         "## Version History",
         "",
-        "| Version | Date | Changes | Note |",
-        "|---------|------|---------|------|",
     ]
 
-    for v in reversed(history):
+    total = len(history)
+    if total > max_display:
+        lines.append(f"*Showing last {max_display} of {total} versions.*")
+        lines.append("")
+        display_history = history[-max_display:]
+    else:
+        display_history = history
+
+    lines.extend([
+        "| Version | Date | Changes | Note |",
+        "|---------|------|---------|------|",
+    ])
+
+    for v in reversed(display_history):
         changes_parts = []
         ch = v.get("changes", {})
         if ch.get("added"):
