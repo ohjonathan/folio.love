@@ -51,7 +51,12 @@ def compute_source_info(
 
 
 def compute_file_hash(file_path: Path) -> str:
-    """Compute SHA256 hash of a file, returning first 12 hex chars."""
+    """Compute SHA256 hash of a file, returning first 12 hex chars.
+
+    12 hex chars = 48 bits, giving ~1-in-280-trillion collision probability
+    for realistic deck counts (<10,000). Sufficient for staleness detection;
+    not intended as a cryptographic identifier.
+    """
     sha256 = hashlib.sha256()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):

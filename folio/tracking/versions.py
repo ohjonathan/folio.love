@@ -80,6 +80,10 @@ def detect_changes(
 ) -> ChangeSet:
     """Detect changes between two versions of slide text.
 
+    Uses positional identity: slide number = identity. Reordered slides appear
+    as multiple "modified" entries (conservative, never misses a change).
+    Content-based reorder detection deferred to Tier 2+. See spec D3.
+
     Args:
         old_texts: Previous version's slide texts {slide_num: str or SlideText}.
         new_texts: Current version's slide texts {slide_num: str or SlideText}.
@@ -233,7 +237,12 @@ def load_texts_cache(cache_path: Path) -> dict[int, str]:
 
 
 def save_texts_cache(cache_path: Path, texts: dict) -> None:
-    """Save slide texts cache for future change detection."""
+    """Save slide texts cache for future change detection.
+
+    No _EXTRACTION_VERSION marker needed: text diffs are self-correcting.
+    If extraction logic changes, the new text will differ from cached text,
+    and detect_changes() will honestly report the difference. See spec D2.
+    """
     # Store with string keys for JSON compatibility; extract full_text from SlideText
     data = {str(k): _to_str(v) for k, v in texts.items()}
     data["_cache_version"] = _TEXTS_CACHE_VERSION
@@ -241,7 +250,13 @@ def save_texts_cache(cache_path: Path, texts: dict) -> None:
 
 
 def _normalize_text(text: str) -> str:
-    """Normalize text for comparison (collapse whitespace, strip)."""
+    """Normalize text for comparison (collapse whitespace, strip).
+
+    This intentionally differs from analysis.py:_text_hash(), which hashes
+    raw text for API input reproduction. A whitespace-only change will NOT
+    trigger a new version here (correct: semantic content unchanged) but WILL
+    cause an analysis cache miss (correct: different API prompt bytes). See D1.
+    """
     import re
     text = text.strip()
     text = re.sub(r"\s+", " ", text)
@@ -249,7 +264,13 @@ def _normalize_text(text: str) -> str:
 
 
 def _atomic_write_json(path: Path, data: dict):
-    """Write JSON atomically: write to temp file, then rename."""
+    """Write JSON atomically: write to temp file, then rename.
+
+    Intentionally does not catch OSError. Version data is correctness-critical:
+    if version_history.json can't be written, the next conversion would start
+    at v1, losing all provenance. Contrast with analysis.py:_save_cache() which
+    catches OSError because analysis results are already in memory. See spec D4.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(".tmp")
     tmp_path.write_text(json.dumps(data, indent=2))
