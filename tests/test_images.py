@@ -112,6 +112,30 @@ class TestAtomicSwap:
         # Old file should be replaced
         assert not old_file.exists() or old_file.read_bytes() != b"old data"
 
+    def test_atomic_swap_failure_wraps_oserror(self, tmp_path):
+        """Atomic swap rename failure raises ImageExtractionError, not raw OSError."""
+        output_dir = tmp_path / "output"
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True)
+        (slides_dir / "slide-001.png").write_bytes(b"existing")
+
+        pdf = _make_fake_pdf(tmp_path)
+        images_list = self._setup_extract_mock(tmp_path, 1)
+
+        original_rename = Path.rename
+
+        def failing_rename(self_path, target):
+            # Let slides/ -> .slides_old succeed, but fail .slides_tmp -> slides/
+            if self_path.name == ".slides_tmp":
+                raise OSError("Permission denied")
+            return original_rename(self_path, target)
+
+        with patch("shutil.which", return_value="/usr/bin/pdftoppm"), \
+             patch("folio.pipeline.images.convert_from_path", return_value=images_list), \
+             patch.object(Path, "rename", failing_rename):
+            with pytest.raises(ImageExtractionError, match="Atomic swap failed"):
+                extract(pdf, output_dir)
+
     def test_preflight_recovery_stale_old(self, tmp_path):
         """Stranded .slides_old (no slides/) is restored on next run."""
         output_dir = tmp_path / "output"

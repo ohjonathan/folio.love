@@ -69,7 +69,7 @@ class TestNumberedSectionPattern:
     """Test tightened Pattern 3."""
 
     def test_sequential_from_one(self):
-        text = "1\n\nSlide one content\n\n2\n\nSlide two content\n\n3\n\nSlide three content"
+        text = "1\n\nThis is the first slide with enough content to pass the guard\n\n2\n\nThis is the second slide also with enough content\n\n3\n\nThird slide content is here with details"
         result = _parse_slide_boundaries(text)
         assert len(result) == 3
         assert 1 in result
@@ -77,12 +77,24 @@ class TestNumberedSectionPattern:
         assert 3 in result
 
     def test_non_sequential_rejected(self):
-        text = "1\n\nContent\n\n5\n\nMore content\n\n3\n\nOther content"
+        text = "1\n\nContent that is long enough to pass\n\n5\n\nMore content that is long enough\n\n3\n\nOther content that is long enough"
         result = _parse_slide_boundaries(text)
         assert len(result) == 0
 
     def test_not_from_one_rejected(self):
-        text = "2\n\nContent\n\n3\n\nMore content\n\n4\n\nOther content"
+        text = "2\n\nContent that is long enough to pass\n\n3\n\nMore content that is long enough\n\n4\n\nOther content that is long enough"
+        result = _parse_slide_boundaries(text)
+        assert len(result) == 0
+
+    def test_numbered_list_in_body_not_split(self):
+        """Numbered lists within slide body text should not trigger splitting."""
+        text = "Agenda\n1\nFirst point\n2\nSecond point\n3\nThird point"
+        result = _parse_slide_boundaries(text)
+        assert len(result) == 0  # Short content between numbers → no split
+
+    def test_short_content_between_numbers_rejected(self):
+        """Sequential numbers with minimal content between them are not slides."""
+        text = "1\nApple\n2\nBanana\n3\nCherry"
         result = _parse_slide_boundaries(text)
         assert len(result) == 0
 
@@ -309,6 +321,26 @@ class TestPDFFailurePolicy:
         """L2: extract_structured catches TextExtractionError and returns {}."""
         with patch("folio.pipeline.text._extract_pdf", side_effect=TextExtractionError("test error")):
             result = extract_structured(Path("test.pdf"))
+        assert result == {}
+
+
+class TestPPTXParserFailureFallback:
+    """Test that parser failures in _extract_pptx are caught by L2."""
+
+    def test_parse_boundaries_error_caught_at_l2(self):
+        """L2: RuntimeError in _parse_slide_boundaries() degrades to {}."""
+        with patch("folio.pipeline.text._parse_slide_boundaries", side_effect=RuntimeError("parser bug")):
+            with patch("markitdown.MarkItDown") as mock_md:
+                mock_md.return_value.convert.return_value.text_content = "some text"
+                result = extract_structured(Path("test.pptx"))
+        assert result == {}
+
+    def test_detect_elements_error_caught_at_l2(self):
+        """L2: RuntimeError in _detect_elements() degrades to {}."""
+        with patch("folio.pipeline.text._detect_elements", side_effect=RuntimeError("element bug")):
+            with patch("markitdown.MarkItDown") as mock_md:
+                mock_md.return_value.convert.return_value.text_content = "<!-- Slide 1 -->\nContent"
+                result = extract_structured(Path("test.pptx"))
         assert result == {}
 
 

@@ -99,20 +99,25 @@ def extract(
         raise ImageExtractionError(f"pdf2image failed: {e}") from e
 
     # Success: atomic swap
-    if slides_dir.exists():
-        slides_dir.rename(old_dir)
     try:
-        tmp_dir.rename(slides_dir)
-    except Exception:
-        # Restore old slides on rename failure
-        if old_dir.exists():
-            old_dir.rename(slides_dir)
+        if slides_dir.exists():
+            slides_dir.rename(old_dir)
+        try:
+            tmp_dir.rename(slides_dir)
+        except Exception:
+            # Restore old slides on rename failure
+            if old_dir.exists():
+                old_dir.rename(slides_dir)
+            raise
+        finally:
+            # Only delete backup when slides/ has been successfully restored or replaced.
+            # If both renames failed, old_dir is the only remaining copy.
+            if old_dir.exists() and slides_dir.exists():
+                shutil.rmtree(old_dir)
+    except ImageExtractionError:
         raise
-    finally:
-        # Only delete backup when slides/ has been successfully restored or replaced.
-        # If both renames failed, old_dir is the only remaining copy.
-        if old_dir.exists() and slides_dir.exists():
-            shutil.rmtree(old_dir)
+    except Exception as e:
+        raise ImageExtractionError(f"Atomic swap failed: {e}") from e
 
     # Rewrite paths to final location
     image_paths = sorted(slides_dir.glob(f"*.{fmt}"))

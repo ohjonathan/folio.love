@@ -178,40 +178,40 @@ def _extract_pptx(source_path: Path) -> dict[int, "SlideText"]:
         md = MarkItDown()
         result = md.convert(str(source_path))
         raw_text = result.text_content
+
+        raw_slides = _parse_slide_boundaries(raw_text)
+
+        if not raw_slides:
+            # Fallback: treat entire text as slide 1
+            logger.warning(
+                "No slide boundaries detected in %s. Treating as single block.",
+                source_path.name,
+            )
+            if raw_text.strip():
+                text = raw_text.strip()
+                return {1: SlideText(
+                    slide_num=1,
+                    full_text=text,
+                    elements=_detect_elements(text),
+                )}
+            return {}
+
+        slides = {}
+        for slide_num, text in raw_slides.items():
+            slides[slide_num] = SlideText(
+                slide_num=slide_num,
+                full_text=text,
+                elements=_detect_elements(text),
+            )
+
+        logger.info("Extracted text for %d slides from %s", len(slides), source_path.name)
+        return slides
     except TextExtractionError:
         raise
     except Exception as e:
         raise TextExtractionError(
             f"MarkItDown extraction failed for {source_path.name}: {e}"
         ) from e
-
-    raw_slides = _parse_slide_boundaries(raw_text)
-
-    if not raw_slides:
-        # Fallback: treat entire text as slide 1
-        logger.warning(
-            "No slide boundaries detected in %s. Treating as single block.",
-            source_path.name,
-        )
-        if raw_text.strip():
-            text = raw_text.strip()
-            return {1: SlideText(
-                slide_num=1,
-                full_text=text,
-                elements=_detect_elements(text),
-            )}
-        return {}
-
-    slides = {}
-    for slide_num, text in raw_slides.items():
-        slides[slide_num] = SlideText(
-            slide_num=slide_num,
-            full_text=text,
-            elements=_detect_elements(text),
-        )
-
-    logger.info("Extracted text for %d slides from %s", len(slides), source_path.name)
-    return slides
 
 
 def _extract_pdf(pdf_path: Path) -> dict[int, "SlideText"]:
@@ -309,16 +309,23 @@ def _parse_slide_boundaries(raw_text: str) -> dict[int, str]:
             return _split_by_hr(text_for_hr, hr_matches)
 
     # Pattern 3: Numbered sections starting from 1 with sequential numbering.
-    # Known limitation: sequential standalone numbers in body text (e.g., "1\nmillion\n2\nmillion")
-    # can false-positive. Mitigated by requiring sequential from 1 and >= 2 matches.
-    # Track B: consider minimum-content guard similar to Pattern 2.5.
+    # Requires minimum content (>20 chars) between numbered markers to avoid
+    # false-positives on numbered lists within slide body text.
     section_pattern = re.compile(r"^(\d+)\s*$", re.MULTILINE)
     section_matches = list(section_pattern.finditer(raw_text))
     if len(section_matches) >= 2:
         # Validate sequential numbering from 1
         numbers = [int(m.group(1)) for m in section_matches]
         if numbers[0] == 1 and numbers == list(range(1, len(numbers) + 1)):
-            return _split_by_matches(raw_text, section_matches)
+            # Guard: require substantial content between numbered markers
+            has_substantial_content = False
+            for j in range(len(section_matches) - 1):
+                between = raw_text[section_matches[j].end():section_matches[j + 1].start()].strip()
+                if len(between) > 20:
+                    has_substantial_content = True
+                    break
+            if has_substantial_content:
+                return _split_by_matches(raw_text, section_matches)
 
     return {}
 
