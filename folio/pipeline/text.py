@@ -12,7 +12,7 @@ class TextExtractionError(Exception):
     """Raised when text extraction fails."""
 
 
-_EXTRACTION_VERSION = "0.1.0"  # noqa: F841 — Track B: wire into cache invalidation before v1.0
+_EXTRACTION_VERSION = "0.1.0"  # Track B: wired into analysis cache invalidation
 
 
 @dataclass(frozen=True)
