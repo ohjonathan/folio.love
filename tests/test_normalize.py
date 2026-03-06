@@ -87,6 +87,20 @@ class TestComputeTimeout:
         result = _compute_timeout(path, 60)
         assert result == 60
 
+    def test_negative_base(self, tmp_path):
+        """M7: negative base_timeout floors to 10."""
+        path = tmp_path / "test.pptx"
+        path.write_bytes(b"x" * (1024 * 1024))  # 1 MB
+        result = _compute_timeout(path, -5)
+        assert result == 11  # max(-5, 10) + 1 = 11
+
+    def test_zero_base(self, tmp_path):
+        """M7: zero base_timeout floors to 10."""
+        path = tmp_path / "test.pptx"
+        path.write_bytes(b"x" * (1024 * 1024))  # 1 MB
+        result = _compute_timeout(path, 0)
+        assert result == 11  # max(0, 10) + 1 = 11
+
 
 class TestCleanup:
     """Test cleanup on failure."""

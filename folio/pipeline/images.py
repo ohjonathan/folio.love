@@ -99,20 +99,25 @@ def extract(
         raise ImageExtractionError(f"pdf2image failed: {e}") from e
 
     # Success: atomic swap
-    if slides_dir.exists():
-        slides_dir.rename(old_dir)
     try:
-        tmp_dir.rename(slides_dir)
-    except Exception:
-        # Restore old slides on rename failure
-        if old_dir.exists():
-            old_dir.rename(slides_dir)
+        if slides_dir.exists():
+            slides_dir.rename(old_dir)
+        try:
+            tmp_dir.rename(slides_dir)
+        except Exception:
+            # Restore old slides on rename failure
+            if old_dir.exists():
+                old_dir.rename(slides_dir)
+            raise
+        finally:
+            # Only delete backup when slides/ has been successfully restored or replaced.
+            # If both renames failed, old_dir is the only remaining copy.
+            if old_dir.exists() and slides_dir.exists():
+                shutil.rmtree(old_dir)
+    except ImageExtractionError:
         raise
-    finally:
-        # Only delete backup when slides/ has been successfully restored or replaced.
-        # If both renames failed, old_dir is the only remaining copy.
-        if old_dir.exists() and slides_dir.exists():
-            shutil.rmtree(old_dir)
+    except Exception as e:
+        raise ImageExtractionError(f"Atomic swap failed: {e}") from e
 
     # Rewrite paths to final location
     image_paths = sorted(slides_dir.glob(f"*.{fmt}"))
@@ -143,7 +148,6 @@ def extract_with_metadata(
             is_blank = _is_mostly_blank(img, threshold=0.95)
             is_tiny = width < 100 or height < 100
 
-        # S5 fix: suppress duplicate warnings already emitted by _validate_image in extract()
         results.append(ImageResult(
             path=path,
             slide_num=i,
@@ -155,32 +159,37 @@ def extract_with_metadata(
     return results
 
 
-def _validate_image(image_path: Path, image: Image.Image, slide_num: int):
-    """Warn on suspicious images (blank, tiny, etc.)."""
-    # Check file size
+def _validate_image(image_path: Path, image: Image.Image, slide_num: int) -> dict:
+    """Validate image and return metadata. Warns on suspicious images."""
     size_bytes = image_path.stat().st_size
+    width, height = image.size
+    is_blank = False
+    is_tiny = False
+
     if size_bytes == 0:
         logger.warning("Slide %d: image file is empty (0 bytes)", slide_num)
-        return
+        return {"is_blank": False, "is_tiny": False, "width": 0, "height": 0}
 
-    # Check dimensions
-    width, height = image.size
     if width < 100 or height < 100:
-        logger.warning(
-            "Slide %d: unusually small (%dx%d)", slide_num, width, height
-        )
+        logger.warning("Slide %d: unusually small (%dx%d)", slide_num, width, height)
+        is_tiny = True
 
-    # Check for mostly-blank (>95% white pixels)
     if _is_mostly_blank(image, threshold=0.95):
         logger.warning("Slide %d: appears mostly blank", slide_num)
+        is_blank = True
+
+    return {"is_blank": is_blank, "is_tiny": is_tiny, "width": width, "height": height}
 
 
 def _is_mostly_blank(image: Image.Image, threshold: float = 0.95) -> bool:
-    """Check if an image is mostly white/blank."""
+    """Check if an image is mostly white/blank using histogram."""
     try:
         grayscale = image.convert("L")
-        pixels = list(grayscale.getdata())
-        white_count = sum(1 for p in pixels if p > 240)
-        return (white_count / len(pixels)) > threshold
+        hist = grayscale.histogram()
+        total = sum(hist)
+        if total == 0:
+            return False
+        white_count = sum(hist[241:])  # pixels with value > 240
+        return (white_count / total) > threshold
     except Exception:
         return False

@@ -103,7 +103,9 @@ def to_pdf(source_path: Path, output_dir: Path, timeout: int = 60) -> Path:
 
 def _validate_source(source_path: Path) -> None:
     """Pre-flight validation before LibreOffice conversion."""
-    # Note: existence check is included for standalone to_pdf() usage
+    # Note: existence check is included for standalone to_pdf() usage.
+    # TOCTOU between exists() and stat() is acceptable for single-threaded pipeline.
+    # If parallelism is added (Track B), consolidate into a single try/stat() call.
     if not source_path.exists():
         raise NormalizationError(f"Source not found: {source_path}")
 
@@ -143,9 +145,9 @@ def _validate_source(source_path: Path) -> None:
 
 
 def _compute_timeout(source_path: Path, base_timeout: int) -> int:
-    """Scale timeout: base + 1s per MB, capped at 300s."""
+    """Scale timeout: base + 1s per MB, capped at 300s. Minimum 10s."""
     size_mb = source_path.stat().st_size / (1024 * 1024)
-    scaled = base_timeout + int(size_mb)
+    scaled = max(base_timeout, 10) + int(size_mb)
     return min(scaled, 300)
 
 
