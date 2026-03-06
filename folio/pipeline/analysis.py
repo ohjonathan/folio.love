@@ -543,6 +543,8 @@ def analyze_slides_deep(
         model: Claude model to use.
         cache_dir: Directory for analysis cache.
         density_threshold: Minimum density score for second pass.
+        skip_slides: Slide numbers to exclude from density scoring
+            (e.g., blank slides). These are never sent to Pass 2.
 
     Returns:
         Updated analysis results with merged Pass 2 evidence.

@@ -15,10 +15,6 @@ class ImageExtractionError(Exception):
     """Raised when image extraction fails."""
 
 
-# Module-level cache for validation metadata (cleared after each extract_with_metadata call)
-_validation_cache: dict[str, dict] = {}
-
-
 @dataclass
 class ImageResult:
     """Result of extracting a single slide image."""
@@ -89,8 +85,7 @@ def extract(
             image.save(str(image_path))
 
             # Validate: non-zero size, reasonable dimensions
-            meta = _validate_image(image_path, image, slide_num=i)
-            _validation_cache[str(image_path.resolve())] = meta
+            _validate_image(image_path, image, slide_num=i)
 
             image_paths.append(image_path)
 
@@ -143,18 +138,10 @@ def extract_with_metadata(
     paths = extract(pdf_path, output_dir, dpi=dpi, fmt=fmt)
     results = []
     for i, path in enumerate(paths, 1):
-        cache_key = str(path.resolve())
-        cached = _validation_cache.get(cache_key)
-        if cached:
-            is_blank = cached["is_blank"]
-            is_tiny = cached["is_tiny"]
-            width = cached["width"]
-            height = cached["height"]
-        else:
-            with Image.open(path) as img:
-                width, height = img.size
-                is_blank = _is_mostly_blank(img, threshold=0.95)
-                is_tiny = width < 100 or height < 100
+        with Image.open(path) as img:
+            width, height = img.size
+            is_blank = _is_mostly_blank(img, threshold=0.95)
+            is_tiny = width < 100 or height < 100
 
         results.append(ImageResult(
             path=path,
@@ -164,7 +151,6 @@ def extract_with_metadata(
             width=width,
             height=height,
         ))
-    _validation_cache.clear()
     return results
 
 

@@ -251,10 +251,10 @@ class TestTextsCacheMigration:
 class TestBlankSlidesSkipPass2:
     """S4: blank slides are explicitly excluded from Pass 2 density scoring."""
 
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_blank_slides_skip_pass2(self):
         """Blank slides in skip_slides are never scored for density."""
-        from folio.pipeline.analysis import SlideAnalysis, analyze_slides_deep, _compute_density_score
-        from folio.pipeline.text import SlideText
+        from folio.pipeline.analysis import SlideAnalysis, analyze_slides_deep
 
         pass1_results = {
             1: SlideAnalysis(slide_type="data", framework="none", key_data="revenue: $10M, $20M, $30M"),
@@ -262,23 +262,33 @@ class TestBlankSlidesSkipPass2:
             3: SlideAnalysis(slide_type="data", framework="none", key_data="growth: 10%, 20%, 30%"),
         }
         slide_texts = {
-            1: SlideText(slide_num=1, full_text="Revenue data " * 30),  # >150 words to exceed threshold
-            2: SlideText(slide_num=2, full_text="", is_empty=True),
+            1: SlideText(slide_num=1, full_text="Revenue data " * 30),
+            2: SlideText(slide_num=2, full_text="Dense content " * 30, is_empty=True),
             3: SlideText(slide_num=3, full_text="Growth data " * 30),
         }
 
-        # With no API key, analyze_slides_deep returns pass1 unchanged
-        # But we can verify the skip_slides parameter works by checking
-        # that slide 2 is never considered for density scoring
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
-            result = analyze_slides_deep(
+        # Mock _compute_density_score to track which slides get scored
+        scored_slides = []
+        original_compute = __import__("folio.pipeline.analysis", fromlist=["_compute_density_score"])._compute_density_score
+
+        def tracking_density(analysis, text):
+            scored_slides.append(text.slide_num)
+            return original_compute(analysis, text)
+
+        with patch("folio.pipeline.analysis._compute_density_score", side_effect=tracking_density), \
+             patch("anthropic.Anthropic"):
+            analyze_slides_deep(
                 pass1_results=pass1_results,
                 slide_texts=slide_texts,
                 image_paths=[Path("a.png"), Path("b.png"), Path("c.png")],
                 skip_slides={2},
             )
-        # Should return unchanged since no API key
-        assert result == pass1_results
+
+        # Slide 2 should never have been scored for density
+        assert 2 not in scored_slides
+        # Slides 1 and 3 should have been scored
+        assert 1 in scored_slides
+        assert 3 in scored_slides
 
 
 class TestSparsePageAlignment:
