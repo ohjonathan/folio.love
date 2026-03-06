@@ -91,22 +91,26 @@ class FolioConverter:
 
             # Stage 2: Extract images
             logger.info("  Extracting images...")
-            image_paths = images.extract(
+            image_results = images.extract_with_metadata(
                 pdf_path, deck_dir,
                 dpi=self.config.conversion.image_dpi,
             )
-            slide_count = len(image_paths)
+            image_paths = [r.path for r in image_results]
+            slide_count = len(image_results)
+
+            blank_slides = {r.slide_num for r in image_results if r.is_blank}
+            if blank_slides:
+                logger.info("Blank slides detected: %s", sorted(blank_slides))
 
             # Stage 3: Extract text
             logger.info("  Extracting text...")
             slide_texts = text.extract_structured(source_path)
 
-            if slide_texts and len(image_paths) != len(slide_texts):
-                logger.warning(
-                    "Slide count mismatch: %d images vs %d text slides. "
-                    "Image count (%d) is authoritative.",
-                    len(image_paths), len(slide_texts), len(image_paths),
-                )
+            reconciliation = text.reconcile_slide_count(slide_texts, slide_count)
+            slide_texts = reconciliation.slide_texts
+
+            # Blank override MUST occur before Pass 2 density scoring
+            # to prevent hallucinated evidence accumulation on blank slides.
 
             # Stage 4: LLM analysis
             logger.info("  Running LLM analysis...")
@@ -116,6 +120,11 @@ class FolioConverter:
                 cache_dir=deck_dir,
                 slide_texts=slide_texts,
             )
+
+            # Override blank slides with pending() (API call ran but result is unreliable)
+            for slide_num in blank_slides:
+                if slide_num in slide_analyses:
+                    slide_analyses[slide_num] = analysis.SlideAnalysis.pending()
 
             # Stage 4b: Optional depth pass
             effective_passes = passes if passes is not None else self.config.conversion.default_passes
@@ -150,6 +159,16 @@ class FolioConverter:
         # Read existing frontmatter for reconversion preservation
         existing_fm = _read_existing_frontmatter(markdown_path)
 
+        # Build reconciliation metadata for frontmatter
+        reconciliation_meta = None
+        if reconciliation.was_reconciled:
+            reconciliation_meta = {
+                "text_reconciled": True,
+                "text_reconciliation": reconciliation.action,
+                "text_alignment_confidence": round(reconciliation.alignment_confidence, 2),
+                "text_alignment_status": _alignment_status(reconciliation.alignment_confidence),
+            }
+
         # Generate frontmatter
         fm = frontmatter.generate(
             title=_title_from_name(deck_name),
@@ -161,6 +180,7 @@ class FolioConverter:
             client=client,
             engagement=engagement,
             existing_frontmatter=existing_fm,
+            reconciliation_metadata=reconciliation_meta,
         )
 
         # Assemble markdown
@@ -214,6 +234,15 @@ class FolioConverter:
             return library_root / client / deck_name
         else:
             return library_root / deck_name
+
+
+def _alignment_status(confidence: float) -> str:
+    """Map alignment confidence to a status string."""
+    if confidence >= 0.7:
+        return "accepted"
+    elif confidence >= 0.3:
+        return "degraded"
+    return "untrusted"
 
 
 def _sanitize_name(name: str) -> str:

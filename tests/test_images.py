@@ -1,0 +1,225 @@
+"""Tests for images.py: ImageResult, extract_with_metadata, atomic swap."""
+
+import shutil
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+from PIL import Image
+
+from folio.pipeline.images import (
+    ImageExtractionError,
+    ImageResult,
+    extract,
+    extract_with_metadata,
+)
+
+
+def _make_png(tmp_path, name="test.png", width=200, height=200, color="white"):
+    """Create a solid-color PNG image."""
+    img = Image.new("RGB", (width, height), color=color)
+    path = tmp_path / name
+    img.save(str(path))
+    return path
+
+
+def _make_fake_pdf(tmp_path, name="test.pdf"):
+    """Create a fake PDF file."""
+    path = tmp_path / name
+    path.write_bytes(b"%PDF-1.4 test")
+    return path
+
+
+class TestImageResult:
+    """Test ImageResult dataclass."""
+
+    def test_defaults(self):
+        r = ImageResult(path=Path("test.png"), slide_num=1)
+        assert r.is_blank is False
+        assert r.is_tiny is False
+        assert r.width == 0
+        assert r.height == 0
+
+    def test_full_fields(self):
+        r = ImageResult(
+            path=Path("test.png"),
+            slide_num=2,
+            is_blank=True,
+            is_tiny=False,
+            width=800,
+            height=600,
+        )
+        assert r.slide_num == 2
+        assert r.is_blank is True
+
+
+class TestPopperCheck:
+    """Test poppler dependency check."""
+
+    def test_missing_pdftoppm(self, tmp_path):
+        pdf = _make_fake_pdf(tmp_path)
+        with patch("shutil.which", return_value=None):
+            with pytest.raises(ImageExtractionError, match="Poppler not found"):
+                extract(pdf, tmp_path)
+
+
+class TestAtomicSwap:
+    """Test atomic swap behavior for slides directory."""
+
+    def _setup_extract_mock(self, tmp_path, slide_count=3):
+        """Set up mocks for extract() to return images in tmp dir."""
+        images_list = []
+        for i in range(slide_count):
+            img = Image.new("RGB", (200, 200), color="blue")
+            images_list.append(img)
+        return images_list
+
+    def test_preserves_existing_on_failure(self, tmp_path):
+        """Existing slides/ preserved when extraction fails."""
+        output_dir = tmp_path / "output"
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True)
+        existing = slides_dir / "slide-001.png"
+        existing.write_bytes(b"existing image data")
+
+        pdf = _make_fake_pdf(tmp_path)
+
+        with patch("shutil.which", return_value="/usr/bin/pdftoppm"), \
+             patch("folio.pipeline.images.convert_from_path", side_effect=Exception("conversion failed")):
+            with pytest.raises(ImageExtractionError, match="conversion failed"):
+                extract(pdf, output_dir)
+
+        # Existing slides/ should be intact
+        assert existing.exists()
+        assert existing.read_bytes() == b"existing image data"
+
+    def test_replaces_on_success(self, tmp_path):
+        """Old slides/ replaced with new on success."""
+        output_dir = tmp_path / "output"
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True)
+        old_file = slides_dir / "slide-001.png"
+        old_file.write_bytes(b"old data")
+
+        pdf = _make_fake_pdf(tmp_path)
+        images_list = self._setup_extract_mock(tmp_path, 2)
+
+        with patch("shutil.which", return_value="/usr/bin/pdftoppm"), \
+             patch("folio.pipeline.images.convert_from_path", return_value=images_list):
+            result = extract(pdf, output_dir)
+
+        assert len(result) == 2
+        # Old file should be replaced
+        assert not old_file.exists() or old_file.read_bytes() != b"old data"
+
+    def test_preflight_recovery_stale_old(self, tmp_path):
+        """Stranded .slides_old (no slides/) is restored on next run."""
+        output_dir = tmp_path / "output"
+        old_dir = output_dir / ".slides_old"
+        old_dir.mkdir(parents=True)
+        (old_dir / "slide-001.png").write_bytes(b"recovered")
+
+        pdf = _make_fake_pdf(tmp_path)
+        images_list = self._setup_extract_mock(tmp_path, 1)
+
+        with patch("shutil.which", return_value="/usr/bin/pdftoppm"), \
+             patch("folio.pipeline.images.convert_from_path", return_value=images_list):
+            result = extract(pdf, output_dir)
+
+        slides_dir = output_dir / "slides"
+        assert slides_dir.exists()
+        assert not old_dir.exists()
+
+    def test_preflight_cleanup_stale_old_with_slides(self, tmp_path):
+        """Stranded .slides_old (with slides/ present) is deleted."""
+        output_dir = tmp_path / "output"
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True)
+        (slides_dir / "slide-001.png").write_bytes(b"current")
+
+        old_dir = output_dir / ".slides_old"
+        old_dir.mkdir(parents=True)
+        (old_dir / "slide-001.png").write_bytes(b"stale")
+
+        pdf = _make_fake_pdf(tmp_path)
+        images_list = self._setup_extract_mock(tmp_path, 1)
+
+        with patch("shutil.which", return_value="/usr/bin/pdftoppm"), \
+             patch("folio.pipeline.images.convert_from_path", return_value=images_list):
+            extract(pdf, output_dir)
+
+        assert not old_dir.exists()
+
+    def test_preflight_cleanup_stale_tmp(self, tmp_path):
+        """Stranded .slides_tmp from previous failed run is cleaned."""
+        output_dir = tmp_path / "output"
+        tmp_dir = output_dir / ".slides_tmp"
+        tmp_dir.mkdir(parents=True)
+        (tmp_dir / "stale.png").write_bytes(b"stale")
+
+        pdf = _make_fake_pdf(tmp_path)
+        images_list = self._setup_extract_mock(tmp_path, 1)
+
+        with patch("shutil.which", return_value="/usr/bin/pdftoppm"), \
+             patch("folio.pipeline.images.convert_from_path", return_value=images_list):
+            extract(pdf, output_dir)
+
+        assert not tmp_dir.exists()
+
+
+class TestExtractWithMetadata:
+    """Test extract_with_metadata returns ImageResult list."""
+
+    def test_returns_image_results(self, tmp_path):
+        output_dir = tmp_path / "output"
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True)
+
+        # Create test images
+        for i in range(1, 3):
+            img = Image.new("RGB", (200, 200), color="blue")
+            img.save(str(slides_dir / f"slide-{i:03d}.png"))
+
+        paths = sorted(slides_dir.glob("*.png"))
+
+        with patch("folio.pipeline.images.extract", return_value=paths):
+            results = extract_with_metadata(Path("test.pdf"), output_dir)
+
+        assert len(results) == 2
+        for r in results:
+            assert isinstance(r, ImageResult)
+            assert r.width == 200
+            assert r.height == 200
+            assert r.is_blank is False
+            assert r.is_tiny is False
+
+    def test_blank_detection(self, tmp_path):
+        output_dir = tmp_path / "output"
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True)
+
+        # All-white image
+        img = Image.new("RGB", (200, 200), color="white")
+        img.save(str(slides_dir / "slide-001.png"))
+
+        paths = [slides_dir / "slide-001.png"]
+
+        with patch("folio.pipeline.images.extract", return_value=paths):
+            results = extract_with_metadata(Path("test.pdf"), output_dir)
+
+        assert results[0].is_blank is True
+
+    def test_tiny_detection(self, tmp_path):
+        output_dir = tmp_path / "output"
+        slides_dir = output_dir / "slides"
+        slides_dir.mkdir(parents=True)
+
+        img = Image.new("RGB", (50, 50), color="blue")
+        img.save(str(slides_dir / "slide-001.png"))
+
+        paths = [slides_dir / "slide-001.png"]
+
+        with patch("folio.pipeline.images.extract", return_value=paths):
+            results = extract_with_metadata(Path("test.pdf"), output_dir)
+
+        assert results[0].is_tiny is True
