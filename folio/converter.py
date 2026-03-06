@@ -137,6 +137,7 @@ class FolioConverter:
                     model=self.config.llm.model,
                     cache_dir=deck_dir,
                     density_threshold=self.config.conversion.density_threshold,
+                    skip_slides=blank_slides,
                 )
 
         # Compute source tracking

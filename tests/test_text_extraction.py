@@ -56,6 +56,14 @@ class TestHRBoundaryParsing:
         result = _parse_slide_boundaries(text)
         assert len(result) == 0  # Only 1 HR in non-frontmatter zone
 
+    def test_hr_non_yaml_frontmatter_preserved(self):
+        """S2: text starting with --- but non-YAML content should NOT be stripped."""
+        text = "---\nSlide one content here\n---\nSlide two content here\n---\nSlide three content"
+        result = _parse_slide_boundaries(text)
+        # "Slide one content here" is not a YAML dict, so frontmatter is NOT stripped
+        # All 3 HRs remain, content between them → should split
+        assert len(result) >= 2
+
 
 class TestNumberedSectionPattern:
     """Test tightened Pattern 3."""
@@ -152,6 +160,26 @@ class TestReconcileSlideCount:
         }
         result = reconcile_slide_count(texts, 3)
         assert result.gaps_filled == 0
+        assert result.action == "none"
+
+    def test_gap_filled_action(self):
+        """M3: sparse keys with matching image_count produces action='gap_filled'."""
+        texts = {
+            1: SlideText(slide_num=1, full_text="One"),
+            3: SlideText(slide_num=3, full_text="Three"),
+        }
+        result = reconcile_slide_count(texts, 3)
+        assert result.action == "gap_filled"
+        assert result.gaps_filled == 1
+        assert result.was_reconciled
+
+    def test_reconcile_zero_images_nonempty_text(self):
+        """M6: image_count=0 with existing text should truncate all."""
+        texts = {1: SlideText(slide_num=1, full_text="Hello")}
+        result = reconcile_slide_count(texts, 0)
+        assert result.slide_texts == {}
+        assert result.action == "truncated"
+        assert result.alignment_confidence == 0.0
 
     def test_does_not_mutate_input(self):
         """B2 fix: reconcile must not mutate the caller's dict."""

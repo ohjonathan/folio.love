@@ -532,6 +532,7 @@ def analyze_slides_deep(
     model: str = "claude-sonnet-4-20250514",
     cache_dir: Optional[Path] = None,
     density_threshold: float = 2.0,
+    skip_slides: Optional[set[int]] = None,
 ) -> dict[int, SlideAnalysis]:
     """Run selective second pass on high-density slides.
 
@@ -553,6 +554,8 @@ def analyze_slides_deep(
     # Identify high-density slides
     dense_slides = []
     for slide_num, analysis in pass1_results.items():
+        if skip_slides and slide_num in skip_slides:
+            continue
         text = slide_texts.get(slide_num)
         if text:
             score = _compute_density_score(analysis, text)

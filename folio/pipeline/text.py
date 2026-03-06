@@ -12,8 +12,7 @@ class TextExtractionError(Exception):
     """Raised when text extraction fails."""
 
 
-_EXTRACTION_VERSION = "0.1.0"
-# TODO(Track B): Wire into cache invalidation before v1.0
+_EXTRACTION_VERSION = "0.1.0"  # noqa: F841 — Track B: wire into cache invalidation before v1.0
 
 
 @dataclass(frozen=True)
@@ -31,7 +30,7 @@ class ReconciliationResult:
     """Result of reconciling text count with authoritative image count."""
     slide_texts: dict[int, SlideText]
     was_reconciled: bool
-    action: str  # "none" | "padded" | "truncated"
+    action: str  # "none" | "gap_filled" | "padded" | "truncated"
     gaps_filled: int  # count of empty entries inserted for missing keys within range
     original_text_count: int
     image_count: int
@@ -116,7 +115,7 @@ def _looks_like_table(text: str) -> bool:
         return False
     lines = [l for l in text.split("\n") if l.strip()]
     if not lines:
-        return False
+        return False  # Guard: prevents ZeroDivisionError on pipe_lines ratio check
     pipe_lines = [l for l in lines if l.count("|") >= 2]
     return len(pipe_lines) >= 3 and len(pipe_lines) / len(lines) > 0.5
 
@@ -244,6 +243,7 @@ def _extract_pdf(pdf_path: Path) -> dict[int, "SlideText"]:
                         full_text=text,
                         elements=_detect_elements(text),
                     )
+            logger.info("Extracted text for %d pages from %s", len(slides), pdf_path.name)
             return slides
     except TextExtractionError:
         raise
@@ -286,7 +286,15 @@ def _parse_slide_boundaries(raw_text: str) -> dict[int, str]:
     if text_for_hr.startswith("---"):
         frontmatter_end = text_for_hr.find("---", 3)
         if frontmatter_end != -1:
-            text_for_hr = text_for_hr[frontmatter_end + 3:]
+            candidate = text_for_hr[3:frontmatter_end].strip()
+            try:
+                import yaml
+                parsed = yaml.safe_load(candidate)
+                if isinstance(parsed, dict):
+                    # Looks like real YAML frontmatter — strip it
+                    text_for_hr = text_for_hr[frontmatter_end + 3:]
+            except Exception:
+                pass  # Not valid YAML — keep the text intact
     hr_pattern = re.compile(r"^-{3,}$|^={3,}$", re.MULTILINE)
     hr_matches = list(hr_pattern.finditer(text_for_hr))
     if len(hr_matches) >= 2:
@@ -300,7 +308,10 @@ def _parse_slide_boundaries(raw_text: str) -> dict[int, str]:
         if has_content_between:
             return _split_by_hr(text_for_hr, hr_matches)
 
-    # Pattern 3: Numbered sections starting from 1 with sequential numbering
+    # Pattern 3: Numbered sections starting from 1 with sequential numbering.
+    # Known limitation: sequential standalone numbers in body text (e.g., "1\nmillion\n2\nmillion")
+    # can false-positive. Mitigated by requiring sequential from 1 and >= 2 matches.
+    # Track B: consider minimum-content guard similar to Pattern 2.5.
     section_pattern = re.compile(r"^(\d+)\s*$", re.MULTILINE)
     section_matches = list(section_pattern.finditer(raw_text))
     if len(section_matches) >= 2:
@@ -412,7 +423,7 @@ def reconcile_slide_count(
         return ReconciliationResult(
             slide_texts=dict(slide_texts),
             was_reconciled=gaps_filled > 0,
-            action="none",
+            action="gap_filled" if gaps_filled > 0 else "none",
             gaps_filled=gaps_filled,
             original_text_count=original_text_count,
             image_count=image_count,

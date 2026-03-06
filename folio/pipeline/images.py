@@ -15,6 +15,10 @@ class ImageExtractionError(Exception):
     """Raised when image extraction fails."""
 
 
+# Module-level cache for validation metadata (cleared after each extract_with_metadata call)
+_validation_cache: dict[str, dict] = {}
+
+
 @dataclass
 class ImageResult:
     """Result of extracting a single slide image."""
@@ -85,7 +89,8 @@ def extract(
             image.save(str(image_path))
 
             # Validate: non-zero size, reasonable dimensions
-            _validate_image(image_path, image, slide_num=i)
+            meta = _validate_image(image_path, image, slide_num=i)
+            _validation_cache[str(image_path.resolve())] = meta
 
             image_paths.append(image_path)
 
@@ -138,12 +143,19 @@ def extract_with_metadata(
     paths = extract(pdf_path, output_dir, dpi=dpi, fmt=fmt)
     results = []
     for i, path in enumerate(paths, 1):
-        with Image.open(path) as img:
-            width, height = img.size
-            is_blank = _is_mostly_blank(img, threshold=0.95)
-            is_tiny = width < 100 or height < 100
+        cache_key = str(path.resolve())
+        cached = _validation_cache.get(cache_key)
+        if cached:
+            is_blank = cached["is_blank"]
+            is_tiny = cached["is_tiny"]
+            width = cached["width"]
+            height = cached["height"]
+        else:
+            with Image.open(path) as img:
+                width, height = img.size
+                is_blank = _is_mostly_blank(img, threshold=0.95)
+                is_tiny = width < 100 or height < 100
 
-        # S5 fix: suppress duplicate warnings already emitted by _validate_image in extract()
         results.append(ImageResult(
             path=path,
             slide_num=i,
@@ -152,35 +164,41 @@ def extract_with_metadata(
             width=width,
             height=height,
         ))
+    _validation_cache.clear()
     return results
 
 
-def _validate_image(image_path: Path, image: Image.Image, slide_num: int):
-    """Warn on suspicious images (blank, tiny, etc.)."""
-    # Check file size
+def _validate_image(image_path: Path, image: Image.Image, slide_num: int) -> dict:
+    """Validate image and return metadata. Warns on suspicious images."""
     size_bytes = image_path.stat().st_size
+    width, height = image.size
+    is_blank = False
+    is_tiny = False
+
     if size_bytes == 0:
         logger.warning("Slide %d: image file is empty (0 bytes)", slide_num)
-        return
+        return {"is_blank": False, "is_tiny": False, "width": 0, "height": 0}
 
-    # Check dimensions
-    width, height = image.size
     if width < 100 or height < 100:
-        logger.warning(
-            "Slide %d: unusually small (%dx%d)", slide_num, width, height
-        )
+        logger.warning("Slide %d: unusually small (%dx%d)", slide_num, width, height)
+        is_tiny = True
 
-    # Check for mostly-blank (>95% white pixels)
     if _is_mostly_blank(image, threshold=0.95):
         logger.warning("Slide %d: appears mostly blank", slide_num)
+        is_blank = True
+
+    return {"is_blank": is_blank, "is_tiny": is_tiny, "width": width, "height": height}
 
 
 def _is_mostly_blank(image: Image.Image, threshold: float = 0.95) -> bool:
-    """Check if an image is mostly white/blank."""
+    """Check if an image is mostly white/blank using histogram."""
     try:
         grayscale = image.convert("L")
-        pixels = list(grayscale.getdata())
-        white_count = sum(1 for p in pixels if p > 240)
-        return (white_count / len(pixels)) > threshold
+        hist = grayscale.histogram()
+        total = sum(hist)
+        if total == 0:
+            return False
+        white_count = sum(hist[241:])  # pixels with value > 240
+        return (white_count / total) > threshold
     except Exception:
         return False
