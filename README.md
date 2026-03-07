@@ -308,7 +308,7 @@ sources:                             # Optional; organize source directories
 
 llm:
   profiles:
-    default_anthropic:
+    high_quality_anthropic:
       provider: anthropic
       model: claude-sonnet-4-20250514
       api_key_env: ANTHROPIC_API_KEY
@@ -325,10 +325,10 @@ llm:
 
   routing:
     default:
-      primary: default_anthropic
+      primary: high_quality_anthropic
       fallbacks: []
     convert:
-      primary: default_anthropic
+      primary: high_quality_anthropic
       fallbacks: [backup_google]
 
 conversion:

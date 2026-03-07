@@ -32,7 +32,7 @@ This does **not** change the roadmap hierarchy. It does change the current imple
 
 Remaining follow-up after PR #8:
 
-- Pass 2 fallback provenance should be recorded more explicitly in deep-cache metadata and surfaced more cleanly in execution metadata
+- Pass 2 fallback provenance should be surfaced more cleanly in execution metadata/frontmatter
 - Tier 1 quality validation still needs the planned 50-deck real-world run
 
 ---

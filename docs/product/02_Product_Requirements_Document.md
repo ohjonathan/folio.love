@@ -550,6 +550,7 @@ llm:
 conversion:
   image_dpi: 150
   image_format: png
+  libreoffice_timeout: 60
   default_passes: 1
   density_threshold: 2.0
   pptx_renderer: auto
