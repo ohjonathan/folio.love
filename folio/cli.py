@@ -42,9 +42,10 @@ def cli(ctx, verbose: bool, config: Optional[str]):
               default="research", help="Evidence subtype (default: research).")
 @click.option("--industry", default=None, help="Industry tags (comma-separated, e.g. 'retail,ecommerce').")
 @click.option("--tags", default=None, help="Manual tags to merge with auto-generated (comma-separated).")
+@click.option("--llm-profile", default=None, help="Override LLM profile (defined in folio.yaml).")
 @click.pass_context
 def convert(ctx, source: str, note: str, client: str, engagement: str, target: str, passes: int, no_cache: bool,
-            subtype: str, industry: str, tags: str):
+            subtype: str, industry: str, tags: str, llm_profile: str):
     """Convert a single deck to Folio markdown.
 
     SOURCE is the path to a PPTX or PDF file.
@@ -77,6 +78,7 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
             subtype=subtype,
             industry=industry_list,
             extra_tags=tags_list,
+            llm_profile=llm_profile,
         )
         click.echo(f"✓ {Path(source).name}")
         click.echo(f"  {result.slide_count} slides → {result.output_path}")
@@ -119,9 +121,10 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
               default="research", help="Evidence subtype (default: research).")
 @click.option("--industry", default=None, help="Industry tags (comma-separated).")
 @click.option("--tags", default=None, help="Manual tags to merge with auto-generated (comma-separated).")
+@click.option("--llm-profile", default=None, help="Override LLM profile (defined in folio.yaml).")
 @click.pass_context
 def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement: str, passes: int, no_cache: bool,
-          subtype: str, industry: str, tags: str):
+          subtype: str, industry: str, tags: str, llm_profile: str):
     """Batch convert all matching files in a directory.
 
     Examples:
@@ -160,6 +163,7 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
                 subtype=subtype,
                 industry=industry_list,
                 extra_tags=tags_list,
+                llm_profile=llm_profile,
             )
             click.echo(f"✓ {f.name} ({result.slide_count} slides)")
             succeeded += 1

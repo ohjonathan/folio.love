@@ -29,6 +29,10 @@ dev = [
     "pytest-cov>=4.0",
     "python-pptx>=0.6",
 ]
+llm = [
+    "openai>=1.0",
+    "google-genai>=1.0",
+]
 
 [project.scripts]
 folio = "folio.cli:cli"

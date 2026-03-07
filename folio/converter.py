@@ -47,6 +47,7 @@ class FolioConverter:
         subtype: str = "research",
         industry: Optional[list[str]] = None,
         extra_tags: Optional[list[str]] = None,
+        llm_profile: Optional[str] = None,
     ) -> ConversionResult:
         """Convert a single PPTX/PDF to Folio markdown.
 
@@ -123,12 +124,20 @@ class FolioConverter:
 
             # Stage 4: LLM analysis
             logger.info("  Running LLM analysis...")
-            slide_analyses, pass1_stats = analysis.analyze_slides(
+            profile = self.config.llm.resolve_profile(llm_profile, task="convert")
+            fallback_profiles_list = [
+                (fb.provider, fb.model, fb.api_key_env)
+                for fb in self.config.llm.get_fallbacks(override=llm_profile, task="convert")
+            ]
+            slide_analyses, pass1_stats, pass1_meta = analysis.analyze_slides(
                 image_paths,
-                model=self.config.llm.model,
+                model=profile.model,
                 cache_dir=deck_dir,
                 slide_texts=slide_texts,
                 force_miss=no_cache,
+                provider_name=profile.provider,
+                api_key_env=profile.api_key_env,
+                fallback_profiles=fallback_profiles_list,
             )
 
             # Override blank slides with pending() (API call ran but result is unreliable)
@@ -138,17 +147,21 @@ class FolioConverter:
 
             # Stage 4b: Optional depth pass
             effective_passes = passes if passes is not None else self.config.conversion.default_passes
+            pass2_meta = None
             if effective_passes >= 2:
                 logger.info("  Running depth pass (Pass 2)...")
-                slide_analyses, pass2_stats = analysis.analyze_slides_deep(
+                slide_analyses, pass2_stats, pass2_meta = analysis.analyze_slides_deep(
                     pass1_results=slide_analyses,
                     slide_texts=slide_texts,
                     image_paths=image_paths,
-                    model=self.config.llm.model,
+                    model=profile.model,
                     cache_dir=deck_dir,
                     density_threshold=self.config.conversion.density_threshold,
                     skip_slides=blank_slides,
                     force_miss=no_cache,
+                    provider_name=profile.provider,
+                    api_key_env=profile.api_key_env,
+                    fallback_profiles=fallback_profiles_list,
                 )
                 combined_stats = pass1_stats.merge(pass2_stats)
             else:
@@ -185,6 +198,27 @@ class FolioConverter:
             }
 
         # Generate frontmatter
+        # _llm_metadata per spec §7.4 — execution-derived from StageLLMMetadata
+        fallback_used = pass1_meta.fallback_activated if pass1_meta else False
+        actual_provider = pass1_meta.fallback_provider if fallback_used else (pass1_meta.provider if pass1_meta else profile.provider)
+        actual_model = pass1_meta.fallback_model if fallback_used else (pass1_meta.model if pass1_meta else profile.model)
+
+        pass2_ran = effective_passes >= 2 and pass2_meta is not None
+        llm_meta = {
+            "convert": {
+                "requested_profile": llm_profile or profile.name,
+                "profile": profile.name,
+                "provider": actual_provider,
+                "model": actual_model,
+                "fallback_used": fallback_used,
+                "status": "executed",
+                "pass2": {
+                    "status": "executed" if pass2_ran else "skipped",
+                    **({"reason": "pass_disabled"} if not pass2_ran else {}),
+                },
+            },
+        }
+
         fm = frontmatter.generate(
             title=_title_from_name(deck_name),
             deck_id=deck_id,
@@ -200,6 +234,7 @@ class FolioConverter:
             extra_tags=extra_tags,
             existing_frontmatter=existing_fm,
             reconciliation_metadata=reconciliation_meta,
+            llm_metadata=llm_meta,
         )
 
         # Assemble markdown

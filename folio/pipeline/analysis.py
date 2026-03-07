@@ -1,62 +1,48 @@
-"""Stage 4: LLM analysis. Generate structured analysis per slide via Claude API."""
+"""Stage 4: LLM analysis. Generate structured analysis per slide via LLM provider."""
 
-import base64
 import hashlib
 import json
 import logging
-import os
 import re
 import string
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
+from ..llm import get_provider, ProviderInput, ProviderOutput, ErrorDisposition
+from ..llm.types import StageLLMMetadata
 from .text import SlideText, _EXTRACTION_VERSION
+
 
 logger = logging.getLogger(__name__)
 
 # Cache format version. Increment when the cache data shape changes.
 # On mismatch, the cache is fully invalidated (one-time re-analysis).
-_ANALYSIS_CACHE_VERSION = 1
+_ANALYSIS_CACHE_VERSION = 2
 
-ANALYSIS_PROMPT = """Analyze this consulting slide and provide:
+ANALYSIS_PROMPT = """Analyze this consulting slide. Return a single JSON object with exactly this structure (no other text):
 
-1. SLIDE TYPE: One of: title, executive-summary, framework, data, narrative, next-steps, appendix
+{
+  "slide_type": "<one of: title, executive-summary, framework, data, narrative, next-steps, appendix>",
+  "framework": "<one of: 2x2-matrix, scr, mece, waterfall, gantt, timeline, process-flow, org-chart, tam-sam-som, porter-five-forces, value-chain, bcg-matrix, or none>",
+  "visual_description": "<describe what you see that text extraction alone would miss: matrix axes/quadrants, chart types/data points, diagram flows, table structures>",
+  "key_data": "<specific numbers, percentages, dates, or metrics shown>",
+  "main_insight": "<one sentence summarizing the 'so what' of this slide>",
+  "evidence": [
+    {
+      "claim": "<what you are claiming, e.g. 'Framework detection', 'Market sizing'>",
+      "quote": "<exact text from the slide supporting this claim>",
+      "element_type": "<title|body|note>",
+      "confidence": "<high|medium|low>"
+    }
+  ]
+}
 
-2. FRAMEWORK: If a consulting framework is used, identify it: 2x2-matrix, scr, mece, waterfall, gantt, timeline, process-flow, org-chart, tam-sam-som, porter-five-forces, value-chain, bcg-matrix, or "none"
-
-3. VISUAL DESCRIPTION: Describe what you see that wouldn't be captured by text extraction alone. Include:
-   - For matrices: axis labels, quadrant contents, positioning
-   - For charts: chart type, axes, key data points
-   - For diagrams: structure, flow, relationships
-   - For tables: column/row structure if complex
-
-4. KEY DATA: List specific numbers, percentages, dates, or metrics shown
-
-5. MAIN INSIGHT: One sentence summarizing the "so what" of this slide
-
-6. EVIDENCE: For each claim above, cite the exact text from the slide that supports it. For each piece of evidence provide:
-   - Claim: What you are claiming (e.g. "Framework detection", "Market sizing")
-   - Quote: Exact text from the slide supporting this claim
-   - Element: Which part of the slide (title, body, or note)
-   - Confidence: high, medium, or low
-
-Format your response exactly as:
-Slide Type: [type]
-Framework: [framework]
-Visual Description: [description]
-Key Data: [data points]
-Main Insight: [insight]
-Evidence:
-- Claim: [what this evidence supports]
-  Quote: "[exact text from slide]"
-  Element: [title|body|note]
-  Confidence: [high|medium|low]
-- Claim: [next claim]
-  Quote: "[exact text]"
-  Element: [title|body|note]
-  Confidence: [high|medium|low]"""
+Rules:
+- Include at least one evidence item with an exact quote from the slide.
+- Ground every claim in visible slide content.
+- Return ONLY the JSON object, no markdown fences, no prose."""
 
 
 @dataclass
@@ -96,12 +82,18 @@ class SlideAnalysis:
         return cls(**fields)
 
     @classmethod
-    def pending(cls) -> "SlideAnalysis":
-        """Return a placeholder for when analysis is unavailable."""
+    def pending(cls, reason: str = "") -> "SlideAnalysis":
+        """Return a placeholder for when analysis is unavailable.
+
+        Args:
+            reason: Provider-aware actionable message (spec §6.4).
+                If empty, uses a generic message.
+        """
+        msg = reason if reason else "[Analysis pending \u2014 LLM provider unavailable]"
         return cls(
             slide_type="pending",
             framework="pending",
-            visual_description="[Analysis pending - API unavailable]",
+            visual_description=msg,
             key_data="[pending]",
             main_insight="[pending]",
         )
@@ -188,24 +180,147 @@ def _sanitize_for_prompt(value: str, max_length: int = 200) -> str:
     return value
 
 
-def _is_valid_pass1_response(raw_text: str) -> bool:
-    """Check if a pass-1 response contains required structural markers.
+def _extract_json(raw_text: str) -> str | None:
+    """Return a JSON object string or None."""
+    # Attempt 1: direct parse
+    try:
+        json.loads(raw_text)
+        return raw_text
+    except (json.JSONDecodeError, TypeError):
+        pass
 
-    Requires Slide Type, Framework, Evidence header, and at least one Claim.
-    A response with only headers but no grounded evidence is rejected.
+    # Attempt 2: strip one surrounding markdown code fence pair
+    stripped = raw_text.strip()
+    if stripped.startswith("```"):
+        # Remove opening fence (with optional language tag)
+        first_newline = stripped.index("\n")
+        inner = stripped[first_newline + 1:]
+        # Remove closing fence
+        if inner.rstrip().endswith("```"):
+            inner = inner.rstrip()[:-3].rstrip()
+            try:
+                json.loads(inner)
+                return inner
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    return None
+
+
+def _normalize_pass1_json(data: dict) -> SlideAnalysis:
+    """Normalize a pass-1 JSON response to SlideAnalysis.
+
+    Applies: lowercase-hyphenation, element_type/confidence defaults,
+    evidence cap at 10, zero-evidence rejection.
     """
-    has_slide_type = bool(re.search(r"Slide Type:", raw_text, re.IGNORECASE))
-    has_framework = bool(re.search(r"Framework:", raw_text, re.IGNORECASE))
-    has_evidence = bool(re.search(r"Evidence:", raw_text, re.IGNORECASE))
-    has_claim = bool(re.search(r"-\s*Claim:", raw_text, re.IGNORECASE))
-    return has_slide_type and has_framework and has_evidence and has_claim
+    # Required field: reject malformed payloads
+    if "slide_type" not in data or not str(data.get("slide_type", "")).strip():
+        logger.warning("Pass-1 payload missing required 'slide_type' — treating as pending")
+        return SlideAnalysis.pending()
+
+    slide_type = str(data.get("slide_type", "unknown")).strip().lower().replace(" ", "-")
+    framework = str(data.get("framework", "none")).strip().lower().replace(" ", "-")
+    visual_description = str(data.get("visual_description", ""))
+    key_data = str(data.get("key_data", ""))
+    main_insight = str(data.get("main_insight", ""))
+
+    raw_evidence = data.get("evidence", [])
+    if not isinstance(raw_evidence, list):
+        raw_evidence = []
+
+    evidence = []
+    for item in raw_evidence:
+        if not isinstance(item, dict):
+            continue
+        claim = str(item.get("claim", "")).strip()
+        if not claim:
+            continue
+        quote = str(item.get("quote", "")).strip()
+        element_type = str(item.get("element_type", "body")).strip().lower()
+        if element_type not in ("title", "body", "note"):
+            element_type = "body"
+        confidence = str(item.get("confidence", "medium")).strip().lower()
+        if confidence not in ("high", "medium", "low"):
+            confidence = "medium"
+        evidence.append({
+            "claim": claim,
+            "quote": quote,
+            "element_type": element_type,
+            "confidence": confidence,
+            "validated": False,
+            "pass": 1,
+        })
+
+    if not evidence:
+        logger.warning("Pass-1 JSON has zero evidence items — treating as pending")
+        return SlideAnalysis.pending()
+
+    # Cap at 10
+    if len(evidence) > 10:
+        logger.info("Pass-1 evidence capped at 10 (had %d)", len(evidence))
+        evidence = evidence[:10]
+
+    return SlideAnalysis(
+        slide_type=slide_type,
+        framework=framework,
+        visual_description=visual_description,
+        key_data=key_data,
+        main_insight=main_insight,
+        evidence=evidence,
+    )
 
 
-def _is_valid_pass2_response(raw_text: str) -> bool:
-    """Check if a pass-2 response contains required structural markers."""
-    has_evidence = bool(re.search(r"Evidence:", raw_text, re.IGNORECASE))
-    has_claim = bool(re.search(r"-\s*Claim:", raw_text, re.IGNORECASE))
-    return has_evidence and has_claim
+def _normalize_pass2_json(data: dict) -> tuple[list[dict], str | None, str | None]:
+    """Normalize a pass-2 JSON response.
+
+    Returns (evidence_items, reassessed_type, reassessed_framework).
+    Each reassessed value is None if "unchanged" or missing.
+    """
+    # Reassessments
+    raw_type = str(data.get("slide_type_reassessment", "unchanged")).strip().lower().replace(" ", "-")
+    reassessed_type = None if raw_type == "unchanged" else raw_type
+
+    raw_framework = str(data.get("framework_reassessment", "unchanged")).strip().lower().replace(" ", "-")
+    reassessed_framework = None if raw_framework == "unchanged" else raw_framework
+
+    # Evidence
+    raw_evidence = data.get("evidence", [])
+    if not isinstance(raw_evidence, list):
+        raw_evidence = []
+
+    evidence = []
+    for item in raw_evidence:
+        if not isinstance(item, dict):
+            continue
+        claim = str(item.get("claim", "")).strip()
+        if not claim:
+            continue
+        quote = str(item.get("quote", "")).strip()
+        element_type = str(item.get("element_type", "body")).strip().lower()
+        if element_type not in ("title", "body", "note"):
+            element_type = "body"
+        confidence = str(item.get("confidence", "medium")).strip().lower()
+        if confidence not in ("high", "medium", "low"):
+            confidence = "medium"
+        evidence.append({
+            "claim": claim,
+            "quote": quote,
+            "element_type": element_type,
+            "confidence": confidence,
+            "validated": False,
+            "pass": 2,
+        })
+
+    if not evidence:
+        logger.warning("Pass-2 JSON has zero evidence items — discarding")
+        return [], reassessed_type, reassessed_framework
+
+    # Cap at 10
+    if len(evidence) > 10:
+        logger.info("Pass-2 evidence capped at 10 (had %d)", len(evidence))
+        evidence = evidence[:10]
+
+    return evidence, reassessed_type, reassessed_framework
 
 
 def analyze_slides(
@@ -214,36 +329,67 @@ def analyze_slides(
     cache_dir: Optional[Path] = None,
     slide_texts: Optional[dict[int, "SlideText"]] = None,
     force_miss: bool = False,
-) -> tuple[dict[int, SlideAnalysis], CacheStats]:
-    """Analyze slides via Claude API with caching.
+    provider_name: str = "anthropic",
+    api_key_env: str = "",
+    fallback_profiles: Optional[list[tuple[str, str, str]]] = None,
+) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
+    """Analyze slides via LLM provider with caching and fallback.
 
     Args:
         image_paths: Ordered list of slide image paths.
-        model: Claude model to use.
+        model: LLM model to use.
         cache_dir: Directory for analysis cache. If None, no caching.
         slide_texts: Extracted text per slide for evidence validation.
         force_miss: Skip cache reads but still write fresh results (G3).
+        provider_name: Provider adapter to use (default: anthropic).
+        api_key_env: Override env var for API key (from LLMProfile).
+        fallback_profiles: List of (provider_name, model, api_key_env) tuples
+            for transient fallback per spec §6.2.
 
     Returns:
-        Tuple of (results dict, CacheStats).
+        Tuple of (results dict, CacheStats, StageLLMMetadata).
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning(
-            "ANTHROPIC_API_KEY not set. Skipping LLM analysis. "
-            "Set the env var to enable framework detection."
-        )
-        return {i + 1: SlideAnalysis.pending() for i in range(len(image_paths))}, CacheStats()
-
-    # Load cache (skip read when force_miss)
-    cache = _load_cache(cache_dir, model=model) if cache_dir and not force_miss else {}
+    stage_meta = StageLLMMetadata(
+        provider=provider_name, model=model,
+    )
 
     try:
-        from anthropic import Anthropic
-        client = Anthropic()
-    except ImportError:
-        logger.warning("anthropic package not installed. Skipping analysis.")
-        return {i + 1: SlideAnalysis.pending() for i in range(len(image_paths))}, CacheStats()
+        provider = get_provider(provider_name)
+        client = provider.create_client(api_key_env=api_key_env)
+    except ValueError as e:
+        reason = f"Analysis pending \u2014 profile requires {api_key_env or provider_name.upper() + '_API_KEY'}"
+        logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
+        return (
+            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            CacheStats(), stage_meta,
+        )
+    except ImportError as e:
+        reason = f"Analysis pending \u2014 install the {provider_name} SDK"
+        logger.warning("LLM provider '%s' SDK missing: %s. Skipping analysis.", provider_name, e)
+        return (
+            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            CacheStats(), stage_meta,
+        )
+    except Exception as e:
+        reason = f"Analysis pending \u2014 provider '{provider_name}' rejected the request"
+        logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
+        return (
+            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            CacheStats(), stage_meta,
+        )
+
+    # Build fallback chain: [(provider, client, model, provider_name)] for transient fallback
+    fallback_chain = []
+    for fb_provider_name, fb_model, fb_api_key_env in (fallback_profiles or []):
+        try:
+            fb_provider = get_provider(fb_provider_name)
+            fb_client = fb_provider.create_client(api_key_env=fb_api_key_env)
+            fallback_chain.append((fb_provider, fb_client, fb_model, fb_provider_name))
+        except Exception as e:
+            logger.warning("Fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
+
+    # Load cache (skip read when force_miss)
+    cache = _load_cache(cache_dir, model=model, provider=provider_name) if cache_dir and not force_miss else {}
 
     stats = CacheStats(pass_name="pass1")
     results = {}
@@ -267,38 +413,107 @@ def analyze_slides(
                     stats.hits += 1
                     continue
 
-        # Call API
+        # Call API with fallback
         stats.misses += 1
         logger.info("Analyzing slide %d/%d...", i, len(image_paths))
         slide_text = slide_texts.get(i) if slide_texts else None
-        analysis = _analyze_single_slide(client, image_path, model, slide_text=slide_text)
+        analysis, used_provider, used_model = _analyze_with_fallback(
+            provider, client, image_path, model, provider_name,
+            slide_text=slide_text,
+            fallback_chain=fallback_chain,
+        )
         results[i] = analysis
 
-        # Update cache (B1: store _text_hash per entry)
+        # Track fallback activation
+        if used_provider != provider_name and not stage_meta.fallback_activated:
+            stage_meta.fallback_activated = True
+            stage_meta.fallback_provider = used_provider
+            stage_meta.fallback_model = used_model
+
+        # Update cache (B1: store _text_hash + provenance per entry)
         if cache_dir:
             entry = analysis.to_dict()
             entry["_text_hash"] = _text_hash(slide_text)
+            entry["_provider"] = used_provider
+            entry["_model"] = used_model
             cache[image_hash] = entry
 
     # Save cache (always writes, even with force_miss)
     if cache_dir:
-        _save_cache(cache_dir, cache, model=model)
+        _save_cache(cache_dir, cache, model=model, provider=provider_name)
 
     logger.info(
         "Pass 1 cache: %d hits, %d misses (%.0f%% hit rate)",
         stats.hits, stats.misses, stats.hit_rate * 100,
     )
-    return results, stats
+    stage_meta.slide_count = len(image_paths)
+    stage_meta.cache_hits = stats.hits
+    stage_meta.cache_misses = stats.misses
+    return results, stats, stage_meta
+
+
+def _analyze_with_fallback(
+    primary_provider, primary_client, image_path: Path, primary_model: str,
+    primary_name: str,
+    slide_text: Optional["SlideText"] = None,
+    fallback_chain: Optional[list] = None,
+) -> tuple[SlideAnalysis, str, str]:
+    """Try primary provider then fallback chain on transient failures only.
+
+    Per spec §6.2: 1 retry on primary, then try each fallback in order.
+    Fallback is ONLY triggered for transient failures, not permanent errors,
+    truncation, or malformed output.
+
+    Returns:
+        Tuple of (analysis, used_provider_name, used_model).
+    """
+    # Try primary
+    analysis, failure_kind = _analyze_single_slide(
+        primary_provider, primary_client, image_path, primary_model,
+        slide_text=slide_text,
+    )
+    if failure_kind == "success":
+        return analysis, primary_name, primary_model
+
+    # Only fallback on transient exhaustion (spec §6.2)
+    if failure_kind != "transient" or not fallback_chain:
+        return analysis, primary_name, primary_model
+
+    # Primary exhausted transiently — try fallback chain
+    for fb_provider, fb_client, fb_model, fb_name in fallback_chain:
+        logger.info("Falling back to provider '%s' for slide analysis", fb_name)
+        fb_analysis, fb_failure = _analyze_single_slide(
+            fb_provider, fb_client, image_path, fb_model,
+            slide_text=slide_text,
+        )
+        if fb_failure == "success":
+            return fb_analysis, fb_name, fb_model
+
+    # All exhausted — return last-attempted provider for accurate provenance
+    last_fb_name = fallback_chain[-1][3] if fallback_chain else primary_name
+    last_fb_model = fallback_chain[-1][2] if fallback_chain else primary_model
+    route_name = "convert"
+    return (
+        SlideAnalysis.pending(
+            f"Analysis pending — all configured providers for route '{route_name}' failed transiently"
+        ),
+        last_fb_name, last_fb_model,
+    )
 
 
 def _analyze_single_slide(
-    client, image_path: Path, model: str, max_retries: int = 1,
+    provider, client: Any, image_path: Path, model: str, max_retries: int = 1,
     slide_text: Optional["SlideText"] = None,
-) -> SlideAnalysis:
-    """Analyze a single slide image via Claude API."""
-    image_data = base64.b64encode(image_path.read_bytes()).decode("utf-8")
-    media_type = "image/png"
+) -> tuple[SlideAnalysis, str]:
+    """Analyze a single slide image via LLM provider.
 
+    Returns:
+        Tuple of (SlideAnalysis, failure_kind) where failure_kind is one of:
+        - "success": analysis completed normally
+        - "transient": all retries exhausted on transient errors (fallback eligible)
+        - "permanent": permanent provider error (NOT fallback eligible)
+        - "malformed": response parsed but was truncated/invalid (NOT fallback eligible)
+    """
     # Build prompt with text context
     text_context = _build_text_context(slide_text)
     if text_context:
@@ -306,149 +521,64 @@ def _analyze_single_slide(
     else:
         full_prompt = ANALYSIS_PROMPT + "\n\nNOTE: No extracted text available for this slide. Base analysis on visual content only."
 
+    inp = ProviderInput(image_path=image_path, prompt=full_prompt, max_tokens=2048)
+
     for attempt in range(max_retries + 1):
         try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=2048,
-                timeout=120.0,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": image_data,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": full_prompt,
-                        },
-                    ],
-                }],
-            )
-            if getattr(response, 'stop_reason', None) == "max_tokens":
+            output = provider.analyze(client, model, inp)
+
+            if output.truncated:
                 logger.warning("Slide analysis truncated (max_tokens) — treating as pending")
-                return SlideAnalysis.pending()
-            raw_text = response.content[0].text
+                return SlideAnalysis.pending(), "malformed"
 
-            # Validate response structure
-            if not _is_valid_pass1_response(raw_text):
-                logger.warning("Pass-1 response missing required fields — treating as pending")
-                return SlideAnalysis.pending()
+            raw_text = output.raw_text
 
-            analysis = _parse_analysis(raw_text)
+            # Extract and normalize JSON
+            json_str = _extract_json(raw_text)
+            if json_str is None:
+                logger.warning("Pass-1 response is not valid JSON — treating as pending")
+                return SlideAnalysis.pending(), "malformed"
+
+            data = json.loads(json_str)
+            analysis = _normalize_pass1_json(data)
 
             # Validate evidence against extracted text
             if slide_text and analysis.evidence:
                 _validate_evidence(analysis.evidence, slide_text)
 
-            return analysis
+            return analysis, "success"
 
         except Exception as e:
-            if attempt < max_retries:
-                logger.warning("Slide analysis failed (attempt %d), retrying: %s", attempt + 1, e)
+            disposition = provider.classify_error(e)
+            if disposition == ErrorDisposition.TRANSIENT and attempt < max_retries:
+                logger.warning(
+                    "Slide analysis failed (attempt %d, transient), retrying: %s",
+                    attempt + 1, e,
+                )
                 time.sleep(2 ** attempt)
+            elif disposition == ErrorDisposition.PERMANENT:
+                logger.warning(
+                    "Slide analysis failed (permanent) after %d attempt(s): %s",
+                    attempt + 1, e,
+                )
+                reason = (
+                    f"Analysis pending — provider '{provider.provider_name}' "
+                    f"rejected the request"
+                )
+                return SlideAnalysis.pending(reason), "permanent"
             else:
-                logger.warning("Slide analysis failed after %d attempts: %s", max_retries + 1, e)
-                return SlideAnalysis.pending()
+                logger.warning(
+                    "Slide analysis failed (exhausted retries) after %d attempt(s): %s",
+                    attempt + 1, e,
+                )
+                return SlideAnalysis.pending(), "transient"
+
+    # Should not reach here, but guard
+    return SlideAnalysis.pending(), "transient"
 
 
-def _parse_analysis(raw_text: str) -> SlideAnalysis:
-    """Parse structured analysis from LLM response text."""
-    analysis = SlideAnalysis()
-
-    patterns = {
-        "slide_type": r"Slide Type:\s*(.+?)(?:\n|$)",
-        "framework": r"Framework:\s*(.+?)(?:\n|$)",
-        "visual_description": r"Visual Description:\s*(.+?)(?=\nKey Data:|\n\n|$)",
-        "key_data": r"Key Data:\s*(.+?)(?=\nMain Insight:|\n\n|$)",
-        "main_insight": r"Main Insight:\s*(.+?)(?=\nEvidence:|\n\n|$)",
-    }
-
-    for field_name, pattern in patterns.items():
-        match = re.search(pattern, raw_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            value = match.group(1).strip()
-            # Normalize slide_type and framework to lowercase-hyphenated
-            if field_name in ("slide_type", "framework"):
-                value = value.lower().replace(" ", "-")
-            setattr(analysis, field_name, value)
-
-    # Parse evidence blocks
-    analysis.evidence = _parse_evidence(raw_text)
-
-    return analysis
-
-
-def _parse_evidence(raw_text: str) -> list[dict]:
-    """Parse evidence blocks from LLM response.
-
-    Expects format:
-    Evidence:
-    - Claim: ...
-      Quote: "..."
-      Element: title|body|note
-      Confidence: high|medium|low
-    """
-    evidence_items = []
-
-    # Find the Evidence: section
-    evidence_match = re.search(r"Evidence:\s*\n", raw_text, re.IGNORECASE)
-    if not evidence_match:
-        return []
-
-    evidence_text = raw_text[evidence_match.end():]
-
-    # Split into individual evidence items by "- Claim:" pattern
-    item_pattern = re.compile(r"^-\s*Claim:\s*", re.MULTILINE)
-    item_starts = list(item_pattern.finditer(evidence_text))
-
-    for idx, match in enumerate(item_starts):
-        start = match.start()
-        end = item_starts[idx + 1].start() if idx + 1 < len(item_starts) else len(evidence_text)
-        item_text = evidence_text[start:end]
-
-        item = _parse_single_evidence(item_text)
-        if item:
-            evidence_items.append(item)
-
-    return evidence_items
-
-
-def _parse_single_evidence(item_text: str) -> Optional[dict]:
-    """Parse a single evidence item from text block."""
-    claim_match = re.search(r"Claim:\s*(.+?)(?:\n|$)", item_text, re.IGNORECASE)
-    quote_match = re.search(r'Quote:\s*"?([^"]*?)"?\s*(?:\n|$)', item_text, re.IGNORECASE)
-    element_match = re.search(r"Element:\s*(\w+)", item_text, re.IGNORECASE)
-    confidence_match = re.search(r"Confidence:\s*(\w+)", item_text, re.IGNORECASE)
-
-    if not claim_match:
-        return None
-
-    claim = claim_match.group(1).strip()
-    quote = quote_match.group(1).strip() if quote_match else ""
-    element_type = element_match.group(1).strip().lower() if element_match else "body"
-    confidence = confidence_match.group(1).strip().lower() if confidence_match else "medium"
-
-    # Normalize confidence
-    if confidence not in ("high", "medium", "low"):
-        confidence = "medium"
-    # Normalize element type
-    if element_type not in ("title", "body", "note"):
-        element_type = "body"
-
-    return {
-        "claim": claim,
-        "quote": quote,
-        "element_type": element_type,
-        "confidence": confidence,
-        "validated": False,
-        "pass": 1,
-    }
+# Prose parsers (_parse_analysis, _parse_evidence, _parse_single_evidence)
+# deleted in v0.4.0 — replaced by _extract_json + _normalize_pass1_json / _normalize_pass2_json.
 
 
 def _validate_evidence(evidence: list[dict], slide_text: "SlideText") -> None:
@@ -506,19 +636,24 @@ Now extract additional details:
 3. Assumptions implied by the slide
 4. Caveats or limitations mentioned or implied
 
-Slide Type Reassessment: [same type as above, or a corrected type, or "unchanged"]
-Framework Reassessment: [same framework as above, or a corrected framework, or "unchanged"]
+Return a single JSON object with exactly this structure (no other text):
 
-For each finding, cite the exact text from the slide.
+{
+  "slide_type_reassessment": "<corrected type or 'unchanged'>",
+  "framework_reassessment": "<corrected framework or 'unchanged'>",
+  "evidence": [
+    {
+      "claim": "<what this evidence supports>",
+      "quote": "<exact text from the slide>",
+      "element_type": "<title|body|note>",
+      "confidence": "<high|medium|low>"
+    }
+  ]
+}
 
-Format your response exactly as:
-Slide Type Reassessment: [type or "unchanged"]
-Framework Reassessment: [framework or "unchanged"]
-Evidence:
-- Claim: [what this evidence supports]
-  Quote: "[exact text from slide]"
-  Element: [title|body|note]
-  Confidence: [high|medium|low]""")
+Rules:
+- Include at least one evidence item with an exact quote from the slide.
+- Return ONLY the JSON object, no markdown fences, no prose.""")
 
 DATA_HEAVY_TYPES = {"data", "framework"}
 
@@ -603,7 +738,10 @@ def analyze_slides_deep(
     density_threshold: float = 2.0,
     skip_slides: Optional[set[int]] = None,
     force_miss: bool = False,
-) -> tuple[dict[int, SlideAnalysis], CacheStats]:
+    provider_name: str = "anthropic",
+    api_key_env: str = "",
+    fallback_profiles: Optional[list[tuple[str, str, str]]] = None,
+) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
     """Run selective second pass on high-density slides.
 
     Args:
@@ -616,13 +754,15 @@ def analyze_slides_deep(
         skip_slides: Slide numbers to exclude from density scoring
             (e.g., blank slides). These are never sent to Pass 2.
         force_miss: Skip cache reads but still write fresh results (G3).
+        fallback_profiles: List of (provider_name, model, api_key_env) for
+            transient fallback per spec §6.2.
 
     Returns:
-        Tuple of (updated results dict, CacheStats).
+        Tuple of (updated results dict, CacheStats, StageLLMMetadata).
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return pass1_results, CacheStats(pass_name="pass2")
+    stage_meta = StageLLMMetadata(
+        provider=provider_name, model=model,
+    )
 
     # Identify high-density slides
     dense_slides = []
@@ -641,18 +781,29 @@ def analyze_slides_deep(
 
     if not dense_slides:
         logger.info("No slides above density threshold — skipping Pass 2")
-        return pass1_results, CacheStats(pass_name="pass2")
+        return pass1_results, CacheStats(pass_name="pass2"), stage_meta
 
     logger.info("Pass 2: analyzing %d high-density slides", len(dense_slides))
 
     # Load deep cache (skip read when force_miss)
-    deep_cache = _load_cache_deep(cache_dir, model=model) if cache_dir and not force_miss else {}
+    deep_cache = _load_cache_deep(cache_dir, model=model, provider=provider_name) if cache_dir and not force_miss else {}
 
     try:
-        from anthropic import Anthropic
-        client = Anthropic()
-    except ImportError:
-        return pass1_results, CacheStats(pass_name="pass2")
+        provider = get_provider(provider_name)
+        client = provider.create_client(api_key_env=api_key_env)
+    except (ValueError, Exception) as e:
+        logger.warning("LLM provider '%s' unavailable for Pass 2: %s", provider_name, e)
+        return pass1_results, CacheStats(pass_name="pass2"), stage_meta
+
+    # Build fallback chain for pass 2
+    fallback_chain = []
+    for fb_provider_name, fb_model, fb_api_key_env in (fallback_profiles or []):
+        try:
+            fb_provider = get_provider(fb_provider_name)
+            fb_client = fb_provider.create_client(api_key_env=fb_api_key_env)
+            fallback_chain.append((fb_provider, fb_client, fb_model, fb_provider_name))
+        except Exception as e:
+            logger.warning("Pass 2 fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
 
     stats = CacheStats(pass_name="pass2")
     results = dict(pass1_results)  # Copy
@@ -708,7 +859,7 @@ def analyze_slides_deep(
                             results[slide_num].pass2_framework = reassessed_framework
                         continue
 
-        # API call (cache miss)
+        # API call (cache miss) — with fallback
         stats.misses += 1
         analysis = results[slide_num]
         prompt = DEPTH_PROMPT.safe_substitute(
@@ -718,9 +869,10 @@ def analyze_slides_deep(
             main_insight=_sanitize_for_prompt(analysis.main_insight, 200),
         )
 
-        new_evidence, reassessed_type, reassessed_framework = _run_depth_pass(
-            client, image_path, model, prompt,
+        new_evidence, reassessed_type, reassessed_framework = _run_depth_with_fallback(
+            provider, client, image_path, model, prompt,
             slide_text=slide_texts.get(slide_num),
+            fallback_chain=fallback_chain,
         )
 
         # Store in cache (B2: include _text_hash + _pass1_hash)
@@ -731,6 +883,8 @@ def analyze_slides_deep(
                 "pass2_framework": reassessed_framework,
                 "_text_hash": _text_hash(slide_texts.get(slide_num)),
                 "_pass1_hash": _pass1_context_hash(results[slide_num]),
+                "_provider": provider_name,
+                "_model": model,
             }
 
         # Merge evidence
@@ -758,51 +912,32 @@ def analyze_slides_deep(
 
     # Save deep cache (always writes, even with force_miss)
     if cache_dir:
-        _save_cache_deep(cache_dir, deep_cache, model=model)
+        _save_cache_deep(cache_dir, deep_cache, model=model, provider=provider_name)
 
     logger.info(
         "Pass 2 cache: %d hits, %d misses (%.0f%% hit rate)",
         stats.hits, stats.misses, stats.hit_rate * 100,
     )
-    return results, stats
+    stage_meta.slide_count = len(dense_slides)
+    stage_meta.cache_hits = stats.hits
+    stage_meta.cache_misses = stats.misses
+    return results, stats, stage_meta
 
 
-def _parse_depth_reassessment(raw_text: str) -> tuple[Optional[str], Optional[str]]:
-    """Parse slide type and framework reassessment from depth pass response.
-
-    Returns (reassessed_type, reassessed_framework), each None if unchanged or missing.
-    """
-    reassessed_type = None
-    reassessed_framework = None
-
-    type_match = re.search(r"Slide Type Reassessment:\s*(.+?)(?:\n|$)", raw_text, re.IGNORECASE)
-    if type_match:
-        value = type_match.group(1).strip().lower().replace(" ", "-")
-        if value != "unchanged":
-            reassessed_type = value
-
-    fw_match = re.search(r"Framework Reassessment:\s*(.+?)(?:\n|$)", raw_text, re.IGNORECASE)
-    if fw_match:
-        value = fw_match.group(1).strip().lower().replace(" ", "-")
-        if value != "unchanged":
-            reassessed_framework = value
-
-    return reassessed_type, reassessed_framework
+# _parse_depth_reassessment deleted in v0.4.0 — replaced by _normalize_pass2_json.
 
 
 def _run_depth_pass(
-    client, image_path: Path, model: str, prompt: str,
+    provider, client: Any, image_path: Path, model: str, prompt: str,
     slide_text: Optional["SlideText"] = None,
     max_retries: int = 1,
-) -> tuple[list[dict], Optional[str], Optional[str]]:
+) -> tuple[list[dict], Optional[str], Optional[str], str]:
     """Run a depth pass on a single slide.
 
     Returns:
-        Tuple of (evidence_items, reassessed_slide_type, reassessed_framework).
+        Tuple of (evidence_items, reassessed_slide_type, reassessed_framework, failure_kind).
+        failure_kind is "success", "transient", "permanent", or "malformed".
     """
-    image_data = base64.b64encode(image_path.read_bytes()).decode("utf-8")
-    media_type = "image/png"
-
     # Build prompt with text context
     text_context = _build_text_context(slide_text)
     if text_context:
@@ -810,63 +945,92 @@ def _run_depth_pass(
     else:
         full_prompt = prompt
 
+    inp = ProviderInput(image_path=image_path, prompt=full_prompt, max_tokens=1500)
+
     for attempt in range(max_retries + 1):
         try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=1500,
-                timeout=120.0,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": image_data,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": full_prompt,
-                        },
-                    ],
-                }],
-            )
-            if getattr(response, 'stop_reason', None) == "max_tokens":
+            output = provider.analyze(client, model, inp)
+
+            if output.truncated:
                 logger.warning("Depth pass truncated (max_tokens) — discarding")
-                return [], None, None
-            raw_text = response.content[0].text
+                return [], None, None, "malformed"
 
-            # Validate response structure
-            if not _is_valid_pass2_response(raw_text):
-                logger.warning("Pass-2 response missing required fields — discarding")
-                return [], None, None
+            raw_text = output.raw_text
 
-            evidence = _parse_evidence(raw_text)
-            reassessed_type, reassessed_framework = _parse_depth_reassessment(raw_text)
+            # Extract and normalize JSON
+            json_str = _extract_json(raw_text)
+            if json_str is None:
+                logger.warning("Pass-2 response is not valid JSON — discarding")
+                return [], None, None, "malformed"
+
+            data = json.loads(json_str)
+            evidence, reassessed_type, reassessed_framework = _normalize_pass2_json(data)
 
             # Validate against source text
             if slide_text and evidence:
                 _validate_evidence(evidence, slide_text)
 
-            return evidence, reassessed_type, reassessed_framework
+            return evidence, reassessed_type, reassessed_framework, "success"
 
         except Exception as e:
-            if attempt < max_retries:
-                logger.warning("Depth pass failed (attempt %d), retrying: %s", attempt + 1, e)
+            disposition = provider.classify_error(e)
+            if disposition == ErrorDisposition.TRANSIENT and attempt < max_retries:
+                logger.warning(
+                    "Depth pass failed (attempt %d, transient), retrying: %s",
+                    attempt + 1, e,
+                )
                 time.sleep(2 ** attempt)
+            elif disposition == ErrorDisposition.PERMANENT:
+                logger.warning(
+                    "Depth pass failed (permanent) after %d attempt(s): %s",
+                    attempt + 1, e,
+                )
+                return [], None, None, "permanent"
             else:
-                logger.warning("Depth pass failed after %d attempts: %s", max_retries + 1, e)
-                return [], None, None
+                logger.warning(
+                    "Depth pass failed (exhausted retries) after %d attempt(s): %s",
+                    attempt + 1, e,
+                )
+                return [], None, None, "transient"
+
+    return [], None, None, "transient"
 
 
-def _load_cache_deep(cache_dir: Path, model: str | None = None) -> dict:
+def _run_depth_with_fallback(
+    primary_provider, primary_client, image_path: Path, primary_model: str,
+    prompt: str,
+    slide_text: Optional["SlideText"] = None,
+    fallback_chain: Optional[list] = None,
+) -> tuple[list[dict], Optional[str], Optional[str]]:
+    """Run depth pass with transient-only fallback (spec §6.2)."""
+    evidence, rt, rf, failure_kind = _run_depth_pass(
+        primary_provider, primary_client, image_path, primary_model, prompt,
+        slide_text=slide_text,
+    )
+    if failure_kind == "success":
+        return evidence, rt, rf
+
+    # Only fallback on transient
+    if failure_kind != "transient" or not fallback_chain:
+        return evidence, rt, rf
+
+    for fb_provider, fb_client, fb_model, fb_name in fallback_chain:
+        logger.info("Pass 2: falling back to provider '%s'", fb_name)
+        evidence, rt, rf, fb_failure = _run_depth_pass(
+            fb_provider, fb_client, image_path, fb_model, prompt,
+            slide_text=slide_text,
+        )
+        if fb_failure == "success":
+            return evidence, rt, rf
+
+    return [], None, None
+
+
+def _load_cache_deep(cache_dir: Path, model: str | None = None, provider: str | None = None) -> dict:
     """Load deep analysis cache from disk with strict validation.
 
     Invalidates on: format version mismatch (B3), prompt change (S1),
-    model change (G1), or extraction version change (G2).
+    model change (G1), extraction version change (G2), or provider change.
     """
     cache_file = cache_dir / ".analysis_cache_deep.json"
     if cache_file.exists():
@@ -875,20 +1039,20 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None) -> dict:
             if not isinstance(data, dict):
                 logger.warning("Deep cache is not a dict — resetting")
                 return {}
-            # B3: Strict format version check
             if data.get("_cache_version") != _ANALYSIS_CACHE_VERSION:
                 logger.info("Deep cache format version mismatch — invalidating")
                 return {}
-            # S1: Strict prompt version check
             if data.get("_prompt_version") != _prompt_version(DEPTH_PROMPT.template):
                 logger.info("Depth prompt changed — invalidating deep cache")
                 return {}
-            # G1: Model version check
             if data.get("_model_version") != model:
                 logger.info("Model changed (%s -> %s) — invalidating deep cache",
                             data.get("_model_version"), model)
                 return {}
-            # G2: Extraction version check
+            if provider and data.get("_provider_version") != provider:
+                logger.info("Provider changed (%s -> %s) — invalidating deep cache",
+                            data.get("_provider_version"), provider)
+                return {}
             if data.get("_extraction_version") != _EXTRACTION_VERSION:
                 logger.info("Extraction version changed — invalidating deep cache")
                 return {}
@@ -899,7 +1063,7 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None) -> dict:
     return {}
 
 
-def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None):
+def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None, provider: str | None = None):
     """Save deep analysis cache to disk with metadata markers."""
     cache_file = cache_dir / ".analysis_cache_deep.json"
     try:
@@ -907,6 +1071,7 @@ def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None):
         cache["_cache_version"] = _ANALYSIS_CACHE_VERSION
         cache["_prompt_version"] = _prompt_version(DEPTH_PROMPT.template)
         cache["_model_version"] = model
+        cache["_provider_version"] = provider
         cache["_extraction_version"] = _EXTRACTION_VERSION
         tmp_file = cache_file.with_suffix(".tmp")
         tmp_file.write_text(json.dumps(cache, indent=2))
@@ -929,11 +1094,11 @@ def _prompt_version(prompt_text: str) -> str:
     return hashlib.sha256(prompt_text.encode()).hexdigest()[:8]
 
 
-def _load_cache(cache_dir: Path, model: str | None = None) -> dict:
+def _load_cache(cache_dir: Path, model: str | None = None, provider: str | None = None) -> dict:
     """Load analysis cache from disk with strict validation.
 
     Invalidates on: format version mismatch (B3), prompt change (S1),
-    model change (G1), or extraction version change (G2).
+    model change (G1), extraction version change (G2), or provider change.
     """
     cache_file = cache_dir / ".analysis_cache.json"
     if cache_file.exists():
@@ -955,6 +1120,11 @@ def _load_cache(cache_dir: Path, model: str | None = None) -> dict:
                 logger.info("Model changed (%s -> %s) — invalidating cache",
                             data.get("_model_version"), model)
                 return {}
+            # Provider version check
+            if provider and data.get("_provider_version") != provider:
+                logger.info("Provider changed (%s -> %s) — invalidating cache",
+                            data.get("_provider_version"), provider)
+                return {}
             # G2: Extraction version check
             if data.get("_extraction_version") != _EXTRACTION_VERSION:
                 logger.info("Extraction version changed — invalidating cache")
@@ -966,7 +1136,7 @@ def _load_cache(cache_dir: Path, model: str | None = None) -> dict:
     return {}
 
 
-def _save_cache(cache_dir: Path, cache: dict, model: str | None = None):
+def _save_cache(cache_dir: Path, cache: dict, model: str | None = None, provider: str | None = None):
     """Save analysis cache to disk with metadata markers."""
     cache_file = cache_dir / ".analysis_cache.json"
     try:
@@ -974,6 +1144,7 @@ def _save_cache(cache_dir: Path, cache: dict, model: str | None = None):
         cache["_cache_version"] = _ANALYSIS_CACHE_VERSION
         cache["_prompt_version"] = _prompt_version(ANALYSIS_PROMPT)
         cache["_model_version"] = model
+        cache["_provider_version"] = provider
         cache["_extraction_version"] = _EXTRACTION_VERSION
         # Atomic write
         tmp_file = cache_file.with_suffix(".tmp")

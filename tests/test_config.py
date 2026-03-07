@@ -70,3 +70,262 @@ class TestPptxRendererConfig:
         from folio.config import ConversionConfig
         with pytest.raises(ValueError, match="pptx_renderer"):
             FolioConfig(conversion=ConversionConfig(pptx_renderer="invalid"))
+
+
+class TestLLMProfiles:
+    """Test LLM profile configuration and resolution."""
+
+    def test_default_profile_resolution(self):
+        config = FolioConfig()
+        profile = config.llm.resolve_profile()
+        assert profile.name == "default"
+        assert profile.provider == "anthropic"
+        assert profile.model == "claude-sonnet-4-20250514"
+
+    def test_override_profile_resolution(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        llm = LLMConfig(
+            profiles={
+                "default": LLMProfile(name="default"),
+                "fast": LLMProfile(name="fast", provider="openai", model="gpt-4o-mini"),
+            },
+            routing={"default": LLMRoute(primary="default")},
+        )
+        profile = llm.resolve_profile("fast")
+        assert profile.provider == "openai"
+        assert profile.model == "gpt-4o-mini"
+
+    def test_unknown_profile_raises(self):
+        config = FolioConfig()
+        with pytest.raises(ValueError, match="Unknown LLM profile 'bogus'"):
+            config.llm.resolve_profile("bogus")
+
+    def test_legacy_config_creates_synthetic_profile(self):
+        """Legacy config creates default_<provider> per spec §3.4."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("llm:\n  provider: anthropic\n  model: claude-haiku-4-5-20251001\n")
+            f.flush()
+            config = FolioConfig.load(Path(f.name))
+        profile = config.llm.resolve_profile()
+        assert profile.name == "default_anthropic"
+        assert profile.provider == "anthropic"
+        assert profile.model == "claude-haiku-4-5-20251001"
+        # Legacy also creates routing
+        assert "convert" in config.llm.routing
+        assert config.llm.routing["convert"].primary == "default_anthropic"
+
+    def test_profile_based_config_with_routing(self):
+        """Profile + routing config per spec §3.1."""
+        yaml_content = """\
+llm:
+  profiles:
+    claude:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+    openai:
+      provider: openai
+      model: gpt-4o
+  routing:
+    default:
+      primary: claude
+    convert:
+      primary: claude
+      fallbacks: [openai]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = FolioConfig.load(Path(f.name))
+        assert "claude" in config.llm.profiles
+        assert "openai" in config.llm.profiles
+
+        claude = config.llm.resolve_profile("claude")
+        assert claude.provider == "anthropic"
+
+        openai = config.llm.resolve_profile("openai")
+        assert openai.provider == "openai"
+        assert openai.model == "gpt-4o"
+
+        # Route resolution
+        profile = config.llm.resolve_profile(task="convert")
+        assert profile.name == "claude"
+
+        # Fallbacks
+        fallbacks = config.llm.get_fallbacks(task="convert")
+        assert len(fallbacks) == 1
+        assert fallbacks[0].name == "openai"
+
+    def test_cli_override_disables_fallback(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        llm = LLMConfig(
+            profiles={
+                "prod": LLMProfile(name="prod"),
+                "backup": LLMProfile(name="backup", provider="openai"),
+            },
+            routing={"convert": LLMRoute(primary="prod", fallbacks=["backup"])},
+        )
+        # Without override: fallbacks are returned
+        assert len(llm.get_fallbacks(task="convert")) == 1
+        # With override: fallback disabled
+        assert llm.get_fallbacks(override="prod", task="convert") == []
+
+    def test_undefined_route_falls_back_to_default(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        llm = LLMConfig(
+            profiles={
+                "main": LLMProfile(name="main"),
+            },
+            routing={"default": LLMRoute(primary="main")},
+        )
+        # "convert" route not defined → falls back to default
+        profile = llm.resolve_profile(task="convert")
+        assert profile.name == "main"
+
+    def test_api_key_env_auto_generated(self):
+        from folio.config import LLMProfile
+        p = LLMProfile(name="test", provider="openai")
+        assert p.api_key_env == "OPENAI_API_KEY"
+
+        p2 = LLMProfile(name="test", provider="google")
+        assert p2.api_key_env == "GEMINI_API_KEY"  # Not GOOGLE_API_KEY
+
+        p3 = LLMProfile(name="test", provider="anthropic")
+        assert p3.api_key_env == "ANTHROPIC_API_KEY"
+
+    def test_api_key_env_explicit(self):
+        from folio.config import LLMProfile
+        p = LLMProfile(name="test", provider="openai", api_key_env="MY_CUSTOM_KEY")
+        assert p.api_key_env == "MY_CUSTOM_KEY"
+
+    def test_cli_llm_profile_option_accepted(self):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        runner = CliRunner()
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as f:
+            f.write(b"fake")
+            f.flush()
+            result = runner.invoke(cli, ["convert", f.name, "--llm-profile", "default"])
+            # Should NOT fail with "No such option"
+            assert "No such option" not in (result.output or "")
+
+    def test_batch_llm_profile_option_accepted(self):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = runner.invoke(cli, ["batch", tmpdir, "--llm-profile", "default"])
+            assert "No such option" not in (result.output or "")
+
+
+class TestLLMConfigValidation:
+    """Test LLM config validation per spec §3.2."""
+
+    def test_unsupported_provider_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="unsupported provider 'bogus'"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"bad": LLMProfile(name="bad", provider="bogus")},
+                    routing={"default": LLMRoute(primary="bad")},
+                )
+            )
+
+    def test_missing_routing_default_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="routing.default"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"main": LLMProfile(name="main")},
+                    routing={"convert": LLMRoute(primary="main")},
+                )
+            )
+
+    def test_dangling_route_target_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="missing profile 'nonexistent'"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"main": LLMProfile(name="main")},
+                    routing={"default": LLMRoute(primary="nonexistent")},
+                )
+            )
+
+    def test_dangling_fallback_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="fallback references missing profile 'ghost'"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"main": LLMProfile(name="main")},
+                    routing={"default": LLMRoute(primary="main", fallbacks=["ghost"])},
+                )
+            )
+
+    def test_valid_config_passes_validation(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        # Should not raise
+        config = FolioConfig(
+            llm=LLMConfig(
+                profiles={
+                    "main": LLMProfile(name="main", provider="anthropic"),
+                    "backup": LLMProfile(name="backup", provider="google"),
+                },
+                routing={
+                    "default": LLMRoute(primary="main"),
+                    "convert": LLMRoute(primary="main", fallbacks=["backup"]),
+                },
+            )
+        )
+        assert "main" in config.llm.profiles
+
+    def test_invalid_profile_name_rejects(self):
+        """S1: Profile names must match ^[a-z][a-z0-9_]*$."""
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="does not match required pattern"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"My-Profile": LLMProfile(name="My-Profile")},
+                    routing={"default": LLMRoute(primary="My-Profile")},
+                )
+            )
+
+    def test_numeric_start_profile_name_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="does not match required pattern"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"123bad": LLMProfile(name="123bad")},
+                    routing={"default": LLMRoute(primary="123bad")},
+                )
+            )
+
+    def test_fallback_self_reference_rejects(self):
+        """M8: Fallback must not reference same profile as primary."""
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="self-referencing fallback"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"main": LLMProfile(name="main")},
+                    routing={"default": LLMRoute(primary="main", fallbacks=["main"])},
+                )
+            )
+
+    def test_duplicate_fallback_rejects(self):
+        """M8: Duplicate fallback entries must be rejected."""
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="duplicate fallback"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "main": LLMProfile(name="main", provider="anthropic"),
+                        "backup": LLMProfile(name="backup", provider="openai"),
+                    },
+                    routing={
+                        "default": LLMRoute(
+                            primary="main",
+                            fallbacks=["backup", "backup"],
+                        ),
+                    },
+                )
+            )
