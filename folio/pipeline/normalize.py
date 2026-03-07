@@ -55,9 +55,22 @@ def to_pdf(
     expected_pdf = output_dir / f"{source_path.stem}.pdf"
 
     if renderer_name == "libreoffice":
-        _convert_with_libreoffice(
-            renderer_path, source_path, output_dir, effective_timeout, expected_pdf
-        )
+        try:
+            _convert_with_libreoffice(
+                renderer_path, source_path, output_dir, effective_timeout, expected_pdf
+            )
+        except NormalizationError:
+            if renderer != "auto" or not _find_powerpoint():
+                raise
+            # LO found on disk but failed (e.g. MDM launch-blocked).
+            # Fall back to PowerPoint in auto mode.
+            logger.warning(
+                "LibreOffice found but conversion failed; "
+                "falling back to PowerPoint renderer"
+            )
+            _convert_with_powerpoint(
+                source_path, output_dir, effective_timeout, expected_pdf
+            )
     elif renderer_name == "powerpoint":
         _convert_with_powerpoint(
             source_path, output_dir, effective_timeout, expected_pdf
@@ -183,16 +196,23 @@ def _convert_with_libreoffice(
         )
 
 
+def _escape_applescript_string(s: str) -> str:
+    """Escape a string for safe embedding in an AppleScript double-quoted literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _build_powerpoint_applescript(
     source_posix: str, output_posix: str, timeout: int
 ) -> str:
     """Build AppleScript to convert a PPTX to PDF via PowerPoint."""
+    safe_source = _escape_applescript_string(source_posix)
+    safe_output = _escape_applescript_string(output_posix)
     return (
         'tell application "Microsoft PowerPoint"\n'
         "    launch\n"
         f"    with timeout of {timeout} seconds\n"
-        f'        open POSIX file "{source_posix}"\n'
-        f'        save active presentation in POSIX file "{output_posix}" as save as PDF\n'
+        f'        open POSIX file "{safe_source}"\n'
+        f'        save active presentation in POSIX file "{safe_output}" as save as PDF\n'
         "        close active presentation saving no\n"
         "    end timeout\n"
         "end tell"
@@ -221,13 +241,15 @@ def _convert_with_powerpoint(
         if expected_pdf.exists():
             expected_pdf.unlink()
             logger.debug("Cleaned up partial PDF: %s", expected_pdf)
-        # Best-effort: try to close the active presentation
+        # Best-effort: close the specific presentation we opened, not whatever
+        # happens to be active (which could be unrelated user work).
+        safe_name = _escape_applescript_string(source_path.name)
         try:
             subprocess.run(
                 [
                     "osascript", "-e",
                     'tell application "Microsoft PowerPoint" to '
-                    "close active presentation saving no",
+                    f'close presentation "{safe_name}" saving no',
                 ],
                 capture_output=True,
                 timeout=5,
