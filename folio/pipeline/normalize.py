@@ -69,11 +69,11 @@ def to_pdf(
                 "falling back to PowerPoint renderer"
             )
             _convert_with_powerpoint(
-                source_path, output_dir, effective_timeout, expected_pdf
+                source_path, effective_timeout, expected_pdf
             )
     elif renderer_name == "powerpoint":
         _convert_with_powerpoint(
-            source_path, output_dir, effective_timeout, expected_pdf
+            source_path, effective_timeout, expected_pdf
         )
 
     if not expected_pdf.exists():
@@ -197,23 +197,38 @@ def _convert_with_libreoffice(
 
 
 def _escape_applescript_string(s: str) -> str:
-    """Escape a string for safe embedding in an AppleScript double-quoted literal."""
-    return s.replace("\\", "\\\\").replace('"', '\\"')
+    """Escape a string for safe embedding in an AppleScript double-quoted literal.
+
+    Handles backslashes, double quotes, and control characters that AppleScript
+    interprets inside quoted strings.
+    """
+    s = s.replace("\\", "\\\\")
+    s = s.replace('"', '\\"')
+    s = s.replace("\r", "\\r")
+    s = s.replace("\n", "\\n")
+    s = s.replace("\t", "\\t")
+    s = s.replace("\0", "")
+    return s
 
 
 def _build_powerpoint_applescript(
-    source_posix: str, output_posix: str, timeout: int
+    source_posix: str, output_posix: str, timeout: int, source_name: str
 ) -> str:
-    """Build AppleScript to convert a PPTX to PDF via PowerPoint."""
+    """Build AppleScript to convert a PPTX to PDF via PowerPoint.
+
+    Uses the presentation name for save/close to avoid races with other
+    open presentations.
+    """
     safe_source = _escape_applescript_string(source_posix)
     safe_output = _escape_applescript_string(output_posix)
+    safe_name = _escape_applescript_string(source_name)
     return (
         'tell application "Microsoft PowerPoint"\n'
         "    launch\n"
         f"    with timeout of {timeout} seconds\n"
         f'        open POSIX file "{safe_source}"\n'
-        f'        save active presentation in POSIX file "{safe_output}" as save as PDF\n'
-        "        close active presentation saving no\n"
+        f'        save presentation "{safe_name}" in POSIX file "{safe_output}" as save as PDF\n'
+        f'        close presentation "{safe_name}" saving no\n'
         "    end timeout\n"
         "end tell"
     )
@@ -221,13 +236,12 @@ def _build_powerpoint_applescript(
 
 def _convert_with_powerpoint(
     source_path: Path,
-    output_dir: Path,
     timeout: int,
     expected_pdf: Path,
 ) -> None:
     """Convert PPTX to PDF using PowerPoint via AppleScript."""
     script = _build_powerpoint_applescript(
-        str(source_path), str(expected_pdf), timeout
+        str(source_path), str(expected_pdf), timeout, source_path.name
     )
 
     try:

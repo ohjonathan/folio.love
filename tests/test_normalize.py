@@ -3,7 +3,7 @@
 import subprocess
 import zipfile
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -244,19 +244,29 @@ class TestBuildAppleScript:
     """Test AppleScript generation."""
 
     def test_contains_posix_paths(self):
-        script = _build_powerpoint_applescript("/tmp/in.pptx", "/tmp/out.pdf", 60)
+        script = _build_powerpoint_applescript("/tmp/in.pptx", "/tmp/out.pdf", 60, "in.pptx")
         assert 'POSIX file "/tmp/in.pptx"' in script
         assert 'POSIX file "/tmp/out.pdf"' in script
 
     def test_contains_timeout(self):
-        script = _build_powerpoint_applescript("/a.pptx", "/b.pdf", 120)
+        script = _build_powerpoint_applescript("/a.pptx", "/b.pdf", 120, "a.pptx")
         assert "with timeout of 120 seconds" in script
+
+    def test_uses_named_presentation_not_active(self):
+        """A2: save/close must target the specific presentation, not active."""
+        script = _build_powerpoint_applescript(
+            "/tmp/deck.pptx", "/tmp/deck.pdf", 60, "deck.pptx"
+        )
+        assert 'save presentation "deck.pptx"' in script
+        assert 'close presentation "deck.pptx"' in script
+        assert "active presentation" not in script
 
     def test_handles_spaces_in_paths(self):
         script = _build_powerpoint_applescript(
             "/Users/me/My Docs/deck file.pptx",
             "/tmp/output dir/deck file.pdf",
             60,
+            "deck file.pptx",
         )
         assert "My Docs/deck file.pptx" in script
         assert "output dir/deck file.pdf" in script
@@ -266,6 +276,7 @@ class TestBuildAppleScript:
             '/tmp/deck "final".pptx',
             '/tmp/deck "final".pdf',
             60,
+            'deck "final".pptx',
         )
         assert r'deck \"final\".pptx' in script
         assert r'deck \"final\".pdf' in script
@@ -277,6 +288,7 @@ class TestBuildAppleScript:
             "/tmp/path\\with\\backslash.pptx",
             "/tmp/path\\with\\backslash.pdf",
             60,
+            "path\\with\\backslash.pptx",
         )
         assert "path\\\\with\\\\backslash" in script
 
@@ -295,6 +307,18 @@ class TestEscapeAppleScriptString:
 
     def test_both(self):
         assert _escape_applescript_string('"\\') == r'\"\\'
+
+    def test_carriage_return(self):
+        assert _escape_applescript_string("a\rb") == "a\\rb"
+
+    def test_newline(self):
+        assert _escape_applescript_string("a\nb") == "a\\nb"
+
+    def test_tab(self):
+        assert _escape_applescript_string("a\tb") == "a\\tb"
+
+    def test_null_byte_stripped(self):
+        assert _escape_applescript_string("a\0b") == "ab"
 
 
 class TestPowerPointConversion:
@@ -316,7 +340,7 @@ class TestPowerPointConversion:
             return mock_result
 
         with patch("subprocess.run", side_effect=create_pdf):
-            _convert_with_powerpoint(source, output, 60, expected_pdf)
+            _convert_with_powerpoint(source, 60, expected_pdf)
 
         assert expected_pdf.exists()
 
@@ -340,7 +364,7 @@ class TestPowerPointConversion:
 
         with patch("subprocess.run", side_effect=mock_run):
             with pytest.raises(NormalizationError, match="PowerPoint timed out"):
-                _convert_with_powerpoint(source, output, 60, expected_pdf)
+                _convert_with_powerpoint(source, 60, expected_pdf)
 
         assert not expected_pdf.exists()
         assert call_count == 2  # conversion + cleanup attempt
@@ -359,7 +383,7 @@ class TestPowerPointConversion:
 
         with patch("subprocess.run", return_value=mock_result):
             with pytest.raises(NormalizationError, match="something broke"):
-                _convert_with_powerpoint(source, output, 60, expected_pdf)
+                _convert_with_powerpoint(source, 60, expected_pdf)
 
         assert not expected_pdf.exists()
 
@@ -377,7 +401,7 @@ class TestPowerPointConversion:
         with patch("subprocess.run", return_value=mock_result):
             # _convert_with_powerpoint itself doesn't check PDF existence;
             # the caller (to_pdf) does. But stderr is logged on success.
-            _convert_with_powerpoint(source, output, 60, expected_pdf)
+            _convert_with_powerpoint(source, 60, expected_pdf)
 
         # PDF was never created by our mock
         assert not expected_pdf.exists()
@@ -400,7 +424,7 @@ class TestPowerPointConversion:
 
         with patch("subprocess.run", side_effect=mock_run):
             with pytest.raises(NormalizationError):
-                _convert_with_powerpoint(source, output, 60, expected_pdf)
+                _convert_with_powerpoint(source, 60, expected_pdf)
 
         assert len(calls) == 2
         cleanup_script = calls[1][2]
