@@ -7,6 +7,14 @@ from typing import Optional
 import yaml
 
 
+# Default env var names per provider (spec §3.3)
+_DEFAULT_API_KEY_ENV = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "google": "GEMINI_API_KEY",
+}
+
+
 @dataclass
 class SourceConfig:
     """A configured source directory."""
@@ -21,31 +29,49 @@ class LLMProfile:
     name: str
     provider: str = "anthropic"
     model: str = "claude-sonnet-4-20250514"
-    api_key_env: str = ""  # Defaults to {PROVIDER}_API_KEY if empty
+    api_key_env: str = ""  # Defaults via _DEFAULT_API_KEY_ENV
 
     def __post_init__(self):
         if not self.api_key_env:
-            prefix = self.provider.upper().replace("-", "_")
-            self.api_key_env = f"{prefix}_API_KEY"
+            self.api_key_env = _DEFAULT_API_KEY_ENV.get(
+                self.provider, f"{self.provider.upper().replace('-', '_')}_API_KEY"
+            )
+
+
+@dataclass
+class LLMRoute:
+    """A task-to-profile routing entry."""
+    primary: str = ""
+    fallbacks: list[str] = field(default_factory=list)
 
 
 @dataclass
 class LLMConfig:
-    """LLM configuration with profile support."""
-    default_profile: str = "default"
+    """LLM configuration with profile and routing support."""
     profiles: dict[str, LLMProfile] = field(default_factory=lambda: {
         "default": LLMProfile(name="default"),
+    })
+    routing: dict[str, LLMRoute] = field(default_factory=lambda: {
+        "default": LLMRoute(primary="default"),
     })
 
     # Legacy fields for backward compat (used when no profiles section exists)
     provider: str = "anthropic"
     model: str = "claude-sonnet-4-20250514"
 
-    def resolve_profile(self, override: str | None = None) -> LLMProfile:
+    def resolve_profile(self, override: str | None = None,
+                        task: str = "convert") -> LLMProfile:
         """Resolve the active LLM profile.
+
+        Resolution order (spec §3.5, §6.1):
+        1. --llm-profile CLI override (bypasses routing, disables fallback)
+        2. routing.<task>.primary
+        3. routing.default.primary
+        4. first available profile
 
         Args:
             override: CLI --llm-profile override (takes precedence).
+            task: Task name for route lookup (default: "convert").
 
         Returns:
             The resolved LLMProfile.
@@ -53,14 +79,57 @@ class LLMConfig:
         Raises:
             ValueError: if the profile name is not found.
         """
-        name = override if override else self.default_profile
-        profile = self.profiles.get(name)
-        if profile is None:
-            available = ", ".join(sorted(self.profiles.keys()))
-            raise ValueError(
-                f"Unknown LLM profile '{name}'. Available: {available}"
-            )
-        return profile
+        if override:
+            # CLI override: bypass routing entirely
+            profile = self.profiles.get(override)
+            if profile is None:
+                available = ", ".join(sorted(self.profiles.keys()))
+                raise ValueError(
+                    f"Unknown LLM profile '{override}'. Available: {available}"
+                )
+            return profile
+
+        # Route resolution: task route → default route → first profile
+        route = self.routing.get(task) or self.routing.get("default")
+        if route and route.primary:
+            profile = self.profiles.get(route.primary)
+            if profile:
+                return profile
+
+        # Fallback: default route
+        if task != "default":
+            default_route = self.routing.get("default")
+            if default_route and default_route.primary:
+                profile = self.profiles.get(default_route.primary)
+                if profile:
+                    return profile
+
+        # Last resort: return first available profile
+        if self.profiles:
+            first_name = next(iter(self.profiles))
+            return self.profiles[first_name]
+
+        raise ValueError("No LLM profiles configured")
+
+    def get_fallbacks(self, override: str | None = None,
+                      task: str = "convert") -> list[LLMProfile]:
+        """Get the fallback profiles for the resolved route.
+
+        Returns empty list if --llm-profile override is used (spec §3.5).
+        """
+        if override:
+            return []  # CLI override disables fallback
+
+        route = self.routing.get(task) or self.routing.get("default")
+        if not route:
+            return []
+
+        fallbacks = []
+        for fname in route.fallbacks:
+            profile = self.profiles.get(fname)
+            if profile:
+                fallbacks.append(profile)
+        return fallbacks
 
 
 @dataclass
@@ -114,9 +183,10 @@ class FolioConfig:
         ]
         llm_raw = raw.get("llm") or {}
         profiles_raw = llm_raw.get("profiles") or {}
+        routing_raw = llm_raw.get("routing") or {}
 
         if profiles_raw:
-            # New profile-based config
+            # New profile-based config (spec §3.1)
             profiles = {}
             for pname, pdata in profiles_raw.items():
                 if isinstance(pdata, dict):
@@ -128,21 +198,42 @@ class FolioConfig:
                     )
             if not profiles:
                 profiles = {"default": LLMProfile(name="default")}
+
+            # Parse routing (spec §3.1)
+            routing = {}
+            for rname, rdata in routing_raw.items():
+                if isinstance(rdata, dict):
+                    routing[rname] = LLMRoute(
+                        primary=rdata.get("primary", ""),
+                        fallbacks=rdata.get("fallbacks", []),
+                    )
+
+            # Ensure routing.default exists (spec §3.2)
+            if "default" not in routing:
+                # Auto-create default route pointing to first profile
+                first_profile = next(iter(profiles))
+                routing["default"] = LLMRoute(primary=first_profile)
+
             llm = LLMConfig(
-                default_profile=llm_raw.get("default_profile", "default"),
                 profiles=profiles,
+                routing=routing,
                 provider=llm_raw.get("provider", "anthropic"),
                 model=llm_raw.get("model", "claude-sonnet-4-20250514"),
             )
         else:
-            # Legacy flat config: create a single "default" profile
+            # Legacy flat config (spec §3.4): create synthetic profile + routes
             provider = llm_raw.get("provider", "anthropic")
             model = llm_raw.get("model", "claude-sonnet-4-20250514")
+            profile_name = f"default_{provider}"
+            profile = LLMProfile(
+                name=profile_name, provider=provider, model=model,
+            )
             llm = LLMConfig(
-                default_profile="default",
-                profiles={"default": LLMProfile(
-                    name="default", provider=provider, model=model,
-                )},
+                profiles={profile_name: profile},
+                routing={
+                    "default": LLMRoute(primary=profile_name),
+                    "convert": LLMRoute(primary=profile_name),
+                },
                 provider=provider,
                 model=model,
             )

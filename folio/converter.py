@@ -190,12 +190,22 @@ class FolioConverter:
             }
 
         # Generate frontmatter
+        # _llm_metadata per spec §7.4
+        pass2_ran = effective_passes >= 2 and combined_stats and combined_stats.pass_name != "pass1"
         llm_meta = {
-            "provider": profile.provider,
-            "model": profile.model,
+            "convert": {
+                "requested_profile": llm_profile or profile.name,
+                "profile": profile.name,
+                "provider": profile.provider,
+                "model": profile.model,
+                "fallback_used": False,
+                "status": "executed",
+                "pass2": {
+                    "status": "executed" if pass2_ran else "skipped",
+                    **({"reason": "pass_disabled"} if not pass2_ran else {}),
+                },
+            },
         }
-        if combined_stats and combined_stats.total > 0:
-            llm_meta["cache_hit_rate"] = round(combined_stats.hit_rate, 2)
 
         fm = frontmatter.generate(
             title=_title_from_name(deck_name),
