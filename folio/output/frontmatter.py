@@ -67,7 +67,9 @@ def generate(
         "converted": now_str,
         "created": preserved_created,
         "modified": now_str,
-        # Organization
+        # Lifecycle status (e.g. active), NOT staleness.
+        # Staleness (current|stale|missing) is computed dynamically
+        # by sources.check_staleness() and shown via `folio status`.
         "status": "active",
         # Ontology
         "authority": "captured",
