@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from unittest.mock import patch, MagicMock
 
 from folio.converter import _detect_source_type
 from folio.output.frontmatter import (
@@ -30,7 +31,7 @@ def _make_version_info(**overrides):
 
 
 def _parse_frontmatter(fm_str: str) -> dict:
-    content = fm_str.strip("---").strip()
+    content = fm_str.split("---", 2)[1].strip()
     return yaml.safe_load(content)
 
 
@@ -227,3 +228,100 @@ class TestGenerateTags:
         assert "an" not in tags
         assert "ai" not in tags
         assert "ml" not in tags
+
+
+# --- S1: Type guards (string → list coercion) ---
+
+
+class TestTypeGuards:
+    def test_industry_string_coerced_to_list(self):
+        fm = _parse_frontmatter(_generate_simple(industry="retail"))
+        assert fm["industry"] == ["retail"]
+
+    def test_extra_tags_string_coerced_to_list(self):
+        fm = _parse_frontmatter(_generate_simple(extra_tags="custom"))
+        assert "custom" in fm["tags"]
+        # Must not character-explode
+        assert "c" not in fm["tags"]
+
+
+# --- S2: CLI option parsing integration ---
+
+
+class TestCLIOptionParsing:
+    """Test that CLI options are correctly parsed and forwarded to converter."""
+
+    @patch("folio.cli.FolioConverter")
+    def test_industry_comma_split(self, MockConverter):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        mock_instance = MagicMock()
+        MockConverter.return_value = mock_instance
+        mock_instance.convert.return_value = MagicMock(
+            slide_count=1, output_path="out.md", version=1,
+            deck_id="test", changes=MagicMock(has_changes=False),
+            cache_stats=None,
+        )
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("deck.pptx").touch()
+            result = runner.invoke(cli, ["convert", "deck.pptx", "--industry", "retail,ecommerce"])
+
+        assert result.exit_code == 0, result.output
+        call_kwargs = mock_instance.convert.call_args[1]
+        assert sorted(call_kwargs["industry"]) == ["ecommerce", "retail"]
+
+    @patch("folio.cli.FolioConverter")
+    def test_tags_comma_split(self, MockConverter):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        mock_instance = MagicMock()
+        MockConverter.return_value = mock_instance
+        mock_instance.convert.return_value = MagicMock(
+            slide_count=1, output_path="out.md", version=1,
+            deck_id="test", changes=MagicMock(has_changes=False),
+            cache_stats=None,
+        )
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("deck.pptx").touch()
+            result = runner.invoke(cli, ["convert", "deck.pptx", "--tags", "market-sizing,custom"])
+
+        assert result.exit_code == 0, result.output
+        call_kwargs = mock_instance.convert.call_args[1]
+        assert sorted(call_kwargs["extra_tags"]) == ["custom", "market-sizing"]
+
+    @patch("folio.cli.FolioConverter")
+    def test_subtype_choice(self, MockConverter):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        mock_instance = MagicMock()
+        MockConverter.return_value = mock_instance
+        mock_instance.convert.return_value = MagicMock(
+            slide_count=1, output_path="out.md", version=1,
+            deck_id="test", changes=MagicMock(has_changes=False),
+            cache_stats=None,
+        )
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("deck.pptx").touch()
+            result = runner.invoke(cli, ["convert", "deck.pptx", "--subtype", "data_extract"])
+
+        assert result.exit_code == 0, result.output
+        call_kwargs = mock_instance.convert.call_args[1]
+        assert call_kwargs["subtype"] == "data_extract"
+
+
+# --- M3: YAML special-character round-trip ---
+
+
+class TestYAMLRoundTrip:
+    def test_title_with_special_characters(self):
+        fm = _parse_frontmatter(_generate_simple(title="Strategy: Q1 'Report'"))
+        assert fm["title"] == "Strategy: Q1 'Report'"

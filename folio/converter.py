@@ -269,6 +269,8 @@ def _detect_source_type(source_path: Path) -> str:
     ext = source_path.suffix.lower()
     if ext in (".pptx", ".ppt"):
         return "deck"
+    if ext != ".pdf":
+        logger.warning("Unrecognized extension '%s', defaulting source_type to 'pdf'", ext)
     return "pdf"
 
 

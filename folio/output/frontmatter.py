@@ -15,6 +15,7 @@ def generate(
     deck_id: str,
     source_relative_path: str,
     source_hash: str,
+    *,
     source_type: str,
     version_info: VersionInfo,
     analyses: dict[int, SlideAnalysis],
@@ -47,6 +48,12 @@ def generate(
     Returns:
         YAML frontmatter string including --- delimiters.
     """
+    # Coerce string args to lists (S1: prevents silent character-explosion)
+    if isinstance(industry, str):
+        industry = [industry]
+    if isinstance(extra_tags, str):
+        extra_tags = [extra_tags]
+
     # Collect frameworks and slide types from analyses
     frameworks = _collect_unique(analyses, "framework", exclude={"none", "pending"})
     slide_types = _collect_unique(analyses, "slide_type", exclude={"unknown", "pending"})
