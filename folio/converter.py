@@ -131,6 +131,7 @@ class FolioConverter:
                 slide_texts=slide_texts,
                 force_miss=no_cache,
                 provider_name=profile.provider,
+                api_key_env=profile.api_key_env,
             )
 
             # Override blank slides with pending() (API call ran but result is unreliable)
@@ -152,6 +153,7 @@ class FolioConverter:
                     skip_slides=blank_slides,
                     force_miss=no_cache,
                     provider_name=profile.provider,
+                    api_key_env=profile.api_key_env,
                 )
                 combined_stats = pass1_stats.merge(pass2_stats)
             else:
@@ -188,6 +190,13 @@ class FolioConverter:
             }
 
         # Generate frontmatter
+        llm_meta = {
+            "provider": profile.provider,
+            "model": profile.model,
+        }
+        if combined_stats and combined_stats.total > 0:
+            llm_meta["cache_hit_rate"] = round(combined_stats.hit_rate, 2)
+
         fm = frontmatter.generate(
             title=_title_from_name(deck_name),
             deck_id=deck_id,
@@ -203,6 +212,7 @@ class FolioConverter:
             extra_tags=extra_tags,
             existing_frontmatter=existing_fm,
             reconciliation_metadata=reconciliation_meta,
+            llm_metadata=llm_meta,
         )
 
         # Assemble markdown

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from ..llm import get_provider, ProviderInput, ProviderOutput
+from ..llm import get_provider, ProviderInput, ProviderOutput, ErrorDisposition
 from .text import SlideText, _EXTRACTION_VERSION
 
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Cache format version. Increment when the cache data shape changes.
 # On mismatch, the cache is fully invalidated (one-time re-analysis).
-_ANALYSIS_CACHE_VERSION = 1
+_ANALYSIS_CACHE_VERSION = 2
 
 ANALYSIS_PROMPT = """Analyze this consulting slide. Return a single JSON object with exactly this structure (no other text):
 
@@ -88,7 +88,7 @@ class SlideAnalysis:
         return cls(
             slide_type="pending",
             framework="pending",
-            visual_description="[Analysis pending - API unavailable]",
+            visual_description="[Analysis pending — LLM provider unavailable]",
             key_data="[pending]",
             main_insight="[pending]",
         )
@@ -208,6 +208,11 @@ def _normalize_pass1_json(data: dict) -> SlideAnalysis:
     Applies: lowercase-hyphenation, element_type/confidence defaults,
     evidence cap at 10, zero-evidence rejection.
     """
+    # Required field: reject malformed payloads
+    if "slide_type" not in data or not str(data.get("slide_type", "")).strip():
+        logger.warning("Pass-1 payload missing required 'slide_type' — treating as pending")
+        return SlideAnalysis.pending()
+
     slide_type = str(data.get("slide_type", "unknown")).strip().lower().replace(" ", "-")
     framework = str(data.get("framework", "none")).strip().lower().replace(" ", "-")
     visual_description = str(data.get("visual_description", ""))
@@ -320,6 +325,7 @@ def analyze_slides(
     slide_texts: Optional[dict[int, "SlideText"]] = None,
     force_miss: bool = False,
     provider_name: str = "anthropic",
+    api_key_env: str = "",
 ) -> tuple[dict[int, SlideAnalysis], CacheStats]:
     """Analyze slides via LLM provider with caching.
 
@@ -330,13 +336,14 @@ def analyze_slides(
         slide_texts: Extracted text per slide for evidence validation.
         force_miss: Skip cache reads but still write fresh results (G3).
         provider_name: Provider adapter to use (default: anthropic).
+        api_key_env: Override env var for API key (from LLMProfile).
 
     Returns:
         Tuple of (results dict, CacheStats).
     """
     try:
         provider = get_provider(provider_name)
-        client = provider.create_client()
+        client = provider.create_client(api_key_env=api_key_env)
     except (ValueError, Exception) as e:
         logger.warning(
             "LLM provider '%s' unavailable: %s. Skipping analysis.",
@@ -345,7 +352,7 @@ def analyze_slides(
         return {i + 1: SlideAnalysis.pending() for i in range(len(image_paths))}, CacheStats()
 
     # Load cache (skip read when force_miss)
-    cache = _load_cache(cache_dir, model=model) if cache_dir and not force_miss else {}
+    cache = _load_cache(cache_dir, model=model, provider=provider_name) if cache_dir and not force_miss else {}
 
     stats = CacheStats(pass_name="pass1")
     results = {}
@@ -376,15 +383,17 @@ def analyze_slides(
         analysis = _analyze_single_slide(provider, client, image_path, model, slide_text=slide_text)
         results[i] = analysis
 
-        # Update cache (B1: store _text_hash per entry)
+        # Update cache (B1: store _text_hash + provenance per entry)
         if cache_dir:
             entry = analysis.to_dict()
             entry["_text_hash"] = _text_hash(slide_text)
+            entry["_provider"] = provider_name
+            entry["_model"] = model
             cache[image_hash] = entry
 
     # Save cache (always writes, even with force_miss)
     if cache_dir:
-        _save_cache(cache_dir, cache, model=model)
+        _save_cache(cache_dir, cache, model=model, provider=provider_name)
 
     logger.info(
         "Pass 1 cache: %d hits, %d misses (%.0f%% hit rate)",
@@ -433,11 +442,19 @@ def _analyze_single_slide(
             return analysis
 
         except Exception as e:
-            if attempt < max_retries:
-                logger.warning("Slide analysis failed (attempt %d), retrying: %s", attempt + 1, e)
+            disposition = provider.classify_error(e)
+            if disposition == ErrorDisposition.TRANSIENT and attempt < max_retries:
+                logger.warning(
+                    "Slide analysis failed (attempt %d, transient), retrying: %s",
+                    attempt + 1, e,
+                )
                 time.sleep(2 ** attempt)
             else:
-                logger.warning("Slide analysis failed after %d attempts: %s", max_retries + 1, e)
+                label = "permanent" if disposition == ErrorDisposition.PERMANENT else "exhausted retries"
+                logger.warning(
+                    "Slide analysis failed (%s) after %d attempt(s): %s",
+                    label, attempt + 1, e,
+                )
                 return SlideAnalysis.pending()
 
 
@@ -603,6 +620,7 @@ def analyze_slides_deep(
     skip_slides: Optional[set[int]] = None,
     force_miss: bool = False,
     provider_name: str = "anthropic",
+    api_key_env: str = "",
 ) -> tuple[dict[int, SlideAnalysis], CacheStats]:
     """Run selective second pass on high-density slides.
 
@@ -643,11 +661,11 @@ def analyze_slides_deep(
     logger.info("Pass 2: analyzing %d high-density slides", len(dense_slides))
 
     # Load deep cache (skip read when force_miss)
-    deep_cache = _load_cache_deep(cache_dir, model=model) if cache_dir and not force_miss else {}
+    deep_cache = _load_cache_deep(cache_dir, model=model, provider=provider_name) if cache_dir and not force_miss else {}
 
     try:
         provider = get_provider(provider_name)
-        client = provider.create_client()
+        client = provider.create_client(api_key_env=api_key_env)
     except (ValueError, Exception) as e:
         logger.warning("LLM provider '%s' unavailable for Pass 2: %s", provider_name, e)
         return pass1_results, CacheStats(pass_name="pass2")
@@ -756,7 +774,7 @@ def analyze_slides_deep(
 
     # Save deep cache (always writes, even with force_miss)
     if cache_dir:
-        _save_cache_deep(cache_dir, deep_cache, model=model)
+        _save_cache_deep(cache_dir, deep_cache, model=model, provider=provider_name)
 
     logger.info(
         "Pass 2 cache: %d hits, %d misses (%.0f%% hit rate)",
@@ -813,19 +831,27 @@ def _run_depth_pass(
             return evidence, reassessed_type, reassessed_framework
 
         except Exception as e:
-            if attempt < max_retries:
-                logger.warning("Depth pass failed (attempt %d), retrying: %s", attempt + 1, e)
+            disposition = provider.classify_error(e)
+            if disposition == ErrorDisposition.TRANSIENT and attempt < max_retries:
+                logger.warning(
+                    "Depth pass failed (attempt %d, transient), retrying: %s",
+                    attempt + 1, e,
+                )
                 time.sleep(2 ** attempt)
             else:
-                logger.warning("Depth pass failed after %d attempts: %s", max_retries + 1, e)
+                label = "permanent" if disposition == ErrorDisposition.PERMANENT else "exhausted retries"
+                logger.warning(
+                    "Depth pass failed (%s) after %d attempt(s): %s",
+                    label, attempt + 1, e,
+                )
                 return [], None, None
 
 
-def _load_cache_deep(cache_dir: Path, model: str | None = None) -> dict:
+def _load_cache_deep(cache_dir: Path, model: str | None = None, provider: str | None = None) -> dict:
     """Load deep analysis cache from disk with strict validation.
 
     Invalidates on: format version mismatch (B3), prompt change (S1),
-    model change (G1), or extraction version change (G2).
+    model change (G1), extraction version change (G2), or provider change.
     """
     cache_file = cache_dir / ".analysis_cache_deep.json"
     if cache_file.exists():
@@ -834,20 +860,20 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None) -> dict:
             if not isinstance(data, dict):
                 logger.warning("Deep cache is not a dict — resetting")
                 return {}
-            # B3: Strict format version check
             if data.get("_cache_version") != _ANALYSIS_CACHE_VERSION:
                 logger.info("Deep cache format version mismatch — invalidating")
                 return {}
-            # S1: Strict prompt version check
             if data.get("_prompt_version") != _prompt_version(DEPTH_PROMPT.template):
                 logger.info("Depth prompt changed — invalidating deep cache")
                 return {}
-            # G1: Model version check
             if data.get("_model_version") != model:
                 logger.info("Model changed (%s -> %s) — invalidating deep cache",
                             data.get("_model_version"), model)
                 return {}
-            # G2: Extraction version check
+            if provider and data.get("_provider_version") != provider:
+                logger.info("Provider changed (%s -> %s) — invalidating deep cache",
+                            data.get("_provider_version"), provider)
+                return {}
             if data.get("_extraction_version") != _EXTRACTION_VERSION:
                 logger.info("Extraction version changed — invalidating deep cache")
                 return {}
@@ -858,7 +884,7 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None) -> dict:
     return {}
 
 
-def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None):
+def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None, provider: str | None = None):
     """Save deep analysis cache to disk with metadata markers."""
     cache_file = cache_dir / ".analysis_cache_deep.json"
     try:
@@ -866,6 +892,7 @@ def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None):
         cache["_cache_version"] = _ANALYSIS_CACHE_VERSION
         cache["_prompt_version"] = _prompt_version(DEPTH_PROMPT.template)
         cache["_model_version"] = model
+        cache["_provider_version"] = provider
         cache["_extraction_version"] = _EXTRACTION_VERSION
         tmp_file = cache_file.with_suffix(".tmp")
         tmp_file.write_text(json.dumps(cache, indent=2))
@@ -888,11 +915,11 @@ def _prompt_version(prompt_text: str) -> str:
     return hashlib.sha256(prompt_text.encode()).hexdigest()[:8]
 
 
-def _load_cache(cache_dir: Path, model: str | None = None) -> dict:
+def _load_cache(cache_dir: Path, model: str | None = None, provider: str | None = None) -> dict:
     """Load analysis cache from disk with strict validation.
 
     Invalidates on: format version mismatch (B3), prompt change (S1),
-    model change (G1), or extraction version change (G2).
+    model change (G1), extraction version change (G2), or provider change.
     """
     cache_file = cache_dir / ".analysis_cache.json"
     if cache_file.exists():
@@ -914,6 +941,11 @@ def _load_cache(cache_dir: Path, model: str | None = None) -> dict:
                 logger.info("Model changed (%s -> %s) — invalidating cache",
                             data.get("_model_version"), model)
                 return {}
+            # Provider version check
+            if provider and data.get("_provider_version") != provider:
+                logger.info("Provider changed (%s -> %s) — invalidating cache",
+                            data.get("_provider_version"), provider)
+                return {}
             # G2: Extraction version check
             if data.get("_extraction_version") != _EXTRACTION_VERSION:
                 logger.info("Extraction version changed — invalidating cache")
@@ -925,7 +957,7 @@ def _load_cache(cache_dir: Path, model: str | None = None) -> dict:
     return {}
 
 
-def _save_cache(cache_dir: Path, cache: dict, model: str | None = None):
+def _save_cache(cache_dir: Path, cache: dict, model: str | None = None, provider: str | None = None):
     """Save analysis cache to disk with metadata markers."""
     cache_file = cache_dir / ".analysis_cache.json"
     try:
@@ -933,6 +965,7 @@ def _save_cache(cache_dir: Path, cache: dict, model: str | None = None):
         cache["_cache_version"] = _ANALYSIS_CACHE_VERSION
         cache["_prompt_version"] = _prompt_version(ANALYSIS_PROMPT)
         cache["_model_version"] = model
+        cache["_provider_version"] = provider
         cache["_extraction_version"] = _EXTRACTION_VERSION
         # Atomic write
         tmp_file = cache_file.with_suffix(".tmp")

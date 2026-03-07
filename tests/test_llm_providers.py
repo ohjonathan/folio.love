@@ -180,3 +180,102 @@ class TestContractTypes:
         assert route.primary.provider == "anthropic"
         assert len(route.fallbacks) == 1
         assert route.fallbacks[0].provider == "openai"
+
+
+class TestProviderRegistration:
+    """Test that all providers are registered and accessible."""
+
+    def test_openai_registered(self):
+        provider = get_provider("openai")
+        assert provider.provider_name == "openai"
+
+    def test_google_registered(self):
+        provider = get_provider("google")
+        assert provider.provider_name == "google"
+
+    def test_list_includes_all(self):
+        providers = list_providers()
+        assert "anthropic" in providers
+        assert "openai" in providers
+        assert "google" in providers
+
+
+class TestBYOCredentialWiring:
+    """Test BYO api_key_env support across all adapters."""
+
+    @patch.dict(os.environ, {"MY_CUSTOM_KEY": "custom-test-key"})
+    def test_anthropic_custom_env_var(self):
+        provider = get_provider("anthropic")
+        with patch("anthropic.Anthropic") as mock_cls:
+            provider.create_client(api_key_env="MY_CUSTOM_KEY")
+            mock_cls.assert_called_once_with(api_key="custom-test-key", max_retries=0)
+
+    def test_anthropic_custom_env_var_missing_raises(self):
+        provider = get_provider("anthropic")
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("NONEXISTENT_KEY", None)
+            with pytest.raises(ValueError, match="NONEXISTENT_KEY"):
+                provider.create_client(api_key_env="NONEXISTENT_KEY")
+
+    def test_google_default_env_var_is_gemini(self):
+        """Verify Google adapter defaults to GEMINI_API_KEY, not GOOGLE_API_KEY."""
+        provider = get_provider("google")
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("GEMINI_API_KEY", None)
+            try:
+                provider.create_client()
+            except ImportError:
+                pytest.skip("google-genai not installed")
+            except ValueError as e:
+                assert "GEMINI_API_KEY" in str(e)
+
+
+class TestPass1ValidationHardening:
+    """Test that pass-1 normalization rejects malformed payloads."""
+
+    def test_missing_slide_type_returns_pending(self):
+        from folio.pipeline.analysis import _normalize_pass1_json
+        # Missing slide_type entirely
+        result = _normalize_pass1_json({"framework": "none"})
+        assert result.slide_type == "pending"
+
+    def test_empty_slide_type_returns_pending(self):
+        from folio.pipeline.analysis import _normalize_pass1_json
+        result = _normalize_pass1_json({"slide_type": "", "framework": "none"})
+        assert result.slide_type == "pending"
+
+    def test_valid_slide_type_accepted(self):
+        from folio.pipeline.analysis import _normalize_pass1_json
+        result = _normalize_pass1_json({
+            "slide_type": "data", "framework": "none",
+            "evidence": [{"claim": "Test", "quote": "test", "confidence": "high"}],
+        })
+        assert result.slide_type == "data"
+
+
+class TestCacheProviderInvalidation:
+    """Test that provider changes invalidate cache."""
+
+    def test_provider_change_invalidates_pass1_cache(self, tmp_path):
+        from folio.pipeline.analysis import _save_cache, _load_cache
+        cache = {"some_hash": {"slide_type": "data"}}
+        _save_cache(tmp_path, cache, model="test", provider="anthropic")
+
+        # Same provider: should load
+        loaded = _load_cache(tmp_path, model="test", provider="anthropic")
+        assert "some_hash" in loaded
+
+        # Different provider: should invalidate
+        loaded = _load_cache(tmp_path, model="test", provider="openai")
+        assert loaded == {}
+
+    def test_provider_change_invalidates_deep_cache(self, tmp_path):
+        from folio.pipeline.analysis import _save_cache_deep, _load_cache_deep
+        cache = {"some_hash_deep": {"evidence": []}}
+        _save_cache_deep(tmp_path, cache, model="test", provider="anthropic")
+
+        loaded = _load_cache_deep(tmp_path, model="test", provider="anthropic")
+        assert "some_hash_deep" in loaded
+
+        loaded = _load_cache_deep(tmp_path, model="test", provider="openai")
+        assert loaded == {}

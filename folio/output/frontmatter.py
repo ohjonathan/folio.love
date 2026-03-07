@@ -26,6 +26,7 @@ def generate(
     extra_tags: Optional[list[str]] = None,
     existing_frontmatter: Optional[dict] = None,
     reconciliation_metadata: Optional[dict] = None,
+    llm_metadata: Optional[dict] = None,
 ) -> str:
     """Generate YAML frontmatter conforming to Folio Ontology v2 schema.
 
@@ -129,6 +130,10 @@ def generate(
     grounding = _compute_grounding_summary(analyses)
     if grounding["total_claims"] > 0:
         frontmatter["grounding_summary"] = grounding
+
+    # LLM provenance metadata
+    if llm_metadata:
+        frontmatter["_llm_metadata"] = llm_metadata
 
     # Use block style for lists, flow style would be less readable
     yaml_str = yaml.dump(
