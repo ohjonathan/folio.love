@@ -325,3 +325,143 @@ class TestYAMLRoundTrip:
     def test_title_with_special_characters(self):
         fm = _parse_frontmatter(_generate_simple(title="Strategy: Q1 'Report'"))
         assert fm["title"] == "Strategy: Q1 'Report'"
+
+
+# --- B1: Reconversion preservation safety ---
+
+
+class TestPreservationSafety:
+    """Regression tests for reconversion edge cases (Blocking 1)."""
+
+    def test_null_id_falls_back_to_deck_id(self):
+        fm = _parse_frontmatter(_generate_simple(
+            existing_frontmatter={"id": None, "created": "2026-01-01T00:00:00Z"},
+        ))
+        assert fm["id"] == "test_id"  # Falls back to deck_id, not null
+
+    def test_null_created_falls_back_to_now(self):
+        fm = _parse_frontmatter(_generate_simple(
+            existing_frontmatter={"id": "preserved_id", "created": None},
+        ))
+        assert fm["created"] is not None
+        assert isinstance(fm["created"], str)
+
+    def test_non_dict_existing_frontmatter_ignored(self):
+        # Non-dict payload (e.g. a bare string) must not crash
+        fm = _parse_frontmatter(_generate_simple(
+            existing_frontmatter="not a dict",
+        ))
+        assert fm["id"] == "test_id"  # Falls back to deck_id
+
+    def test_empty_string_id_falls_back(self):
+        fm = _parse_frontmatter(_generate_simple(
+            existing_frontmatter={"id": "", "created": "2026-01-01T00:00:00Z"},
+        ))
+        assert fm["id"] == "test_id"  # Empty string rejected
+
+    def test_valid_preservation(self):
+        fm = _parse_frontmatter(_generate_simple(
+            existing_frontmatter={"id": "original_id", "created": "2025-06-01T00:00:00Z"},
+        ))
+        assert fm["id"] == "original_id"
+        assert fm["created"] == "2025-06-01T00:00:00Z"
+
+
+class TestFrontmatterFenceParsing:
+    """Regression tests for _read_existing_frontmatter fence detection."""
+
+    def test_triple_dash_in_scalar_does_not_truncate(self, tmp_path):
+        from folio.converter import _read_existing_frontmatter
+
+        md = tmp_path / "test.md"
+        md.write_text(
+            "---\n"
+            "id: evidence_board_update\n"
+            "source: ../Board --- Update.pptx\n"
+            "created: '2026-01-01T00:00:00Z'\n"
+            "---\n"
+            "# Content\n"
+        )
+        result = _read_existing_frontmatter(md)
+        assert result is not None
+        assert result["id"] == "evidence_board_update"
+        assert result["source"] == "../Board --- Update.pptx"
+
+    def test_no_frontmatter_returns_none(self, tmp_path):
+        from folio.converter import _read_existing_frontmatter
+
+        md = tmp_path / "test.md"
+        md.write_text("# Just a heading\nNo frontmatter here.\n")
+        assert _read_existing_frontmatter(md) is None
+
+    def test_missing_file_returns_none(self, tmp_path):
+        from folio.converter import _read_existing_frontmatter
+
+        assert _read_existing_frontmatter(tmp_path / "nonexistent.md") is None
+
+    def test_non_dict_yaml_returns_none(self, tmp_path):
+        from folio.converter import _read_existing_frontmatter
+
+        md = tmp_path / "test.md"
+        md.write_text("---\n- just\n- a\n- list\n---\n")
+        assert _read_existing_frontmatter(md) is None
+
+
+# --- SF1: Batch CLI forwarding ---
+
+
+class TestBatchCLIForwarding:
+    """Test that batch command forwards --subtype, --industry, --tags."""
+
+    @patch("folio.cli.FolioConverter")
+    def test_batch_forwards_new_options(self, MockConverter):
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        mock_instance = MagicMock()
+        MockConverter.return_value = mock_instance
+        mock_instance.convert.return_value = MagicMock(
+            slide_count=1, output_path="out.md", version=1,
+            deck_id="test", changes=MagicMock(has_changes=False),
+            cache_stats=None,
+        )
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("deck.pptx").touch()
+            result = runner.invoke(cli, [
+                "batch", ".",
+                "--subtype", "data_extract",
+                "--industry", "retail,ecommerce",
+                "--tags", "custom-tag",
+            ])
+
+        assert result.exit_code == 0, result.output
+        call_kwargs = mock_instance.convert.call_args[1]
+        assert call_kwargs["subtype"] == "data_extract"
+        assert sorted(call_kwargs["industry"]) == ["ecommerce", "retail"]
+        assert call_kwargs["extra_tags"] == ["custom-tag"]
+
+
+# --- B2: source_type: report deferral acceptance ---
+
+
+class TestSourceTypeReportDeferral:
+    """Explicit acceptance test: report is a deferred ontology value.
+
+    Per spec Section 7 and Ontology Section 12.4, ``source_type: report``
+    requires semantic classification and cannot be auto-detected from
+    file extension. It is deferred to a future ``--source-type`` CLI
+    override or subtype-based inference.
+    """
+
+    def test_generate_accepts_report_as_passthrough(self):
+        """Proves that generate() can emit report if explicitly provided."""
+        fm = _parse_frontmatter(_generate_simple(source_type="report"))
+        assert fm["source_type"] == "report"
+
+    def test_detect_does_not_emit_report(self):
+        """Auto-detection never produces report — by design."""
+        assert _detect_source_type(Path("report.pdf")) != "report"
+        assert _detect_source_type(Path("report.pptx")) != "report"
+        assert _detect_source_type(Path("report.docx")) != "report"
