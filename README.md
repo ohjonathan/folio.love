@@ -4,13 +4,14 @@ Your consulting portfolio, searchable and AI-ready.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)
-![Tests: 304 passing](https://img.shields.io/badge/tests-304%20passing-brightgreen)
 
 ## What It Does
 
-Folio converts consulting presentations (PPTX, PPT, PDF) into structured Markdown with YAML frontmatter, slide images, and optional LLM-powered analysis. Every conversion preserves three layers: exact verbatim text, slide images at configurable DPI, and per-slide analysis with evidence grounding. Output is Obsidian-compatible and designed for search, retrieval, and AI workflows.
+Turn consulting decks into structured, searchable markdown -- with version tracking and optional AI analysis.
 
-Folio tracks versions automatically -- re-converting an updated deck increments the version, detects per-slide changes, and preserves history.
+Folio converts PPTX, PPT, and PDF presentations into Markdown with YAML frontmatter, slide images, and optional LLM-powered analysis. Every conversion preserves three layers: exact verbatim text, slide images at configurable DPI, and per-slide analysis with evidence grounding.
+
+Folio tracks versions automatically -- re-converting an updated deck increments the version, detects per-slide changes, and preserves history. Open `library/` as an Obsidian vault and frontmatter is indexed automatically.
 
 ## Quick Start
 
@@ -144,6 +145,8 @@ Missing:
   Acme/dd_q1_2026/appendix/appendix.md (source: /materials/appendix.pptx)
 ```
 
+**Stale** means the source file changed since the last conversion -- re-run `folio convert` on it. **Missing** means the source file can no longer be found at the original path.
+
 **Global flags**: `--verbose` / `-v` (debug logging), `--config` / `-c` (path to `folio.yaml`)
 
 ## Output Structure
@@ -226,25 +229,27 @@ tags:
 Folio looks for `folio.yaml` by walking up from the current directory. All fields are optional -- defaults work out of the box.
 
 ```yaml
-# folio.yaml
-library_root: ./library
+# folio.yaml — all values below are the defaults
+library_root: ./library              # Where converted decks are written
 
-sources:
+sources:                             # Optional; organize source directories
   - name: materials
     path: /path/to/source/decks
     target_prefix: ""
 
 llm:
-  provider: anthropic
+  provider: anthropic                # Only supported provider
   model: claude-sonnet-4-20250514    # API key via ANTHROPIC_API_KEY env var
 
 conversion:
-  image_dpi: 150                     # Slide image resolution
+  image_dpi: 150                     # Slide image resolution (px/in)
   image_format: png
-  libreoffice_timeout: 60            # Seconds
+  libreoffice_timeout: 60            # Seconds before conversion times out
   default_passes: 1                  # 1 = standard, 2 = deep
   density_threshold: 2.0             # Pass 2 density trigger
 ```
+
+With no `folio.yaml`, Folio uses these defaults: output goes to `./library`, images render at 150 DPI, and analysis runs a single pass.
 
 | Environment Variable | Purpose |
 |---------------------|---------|
@@ -321,6 +326,10 @@ folio/
     ├── sources.py      # Source file tracking + staleness
     └── versions.py     # Version detection + change sets
 ```
+
+## Roadmap
+
+Search and retrieval (`folio search`) is planned but not yet implemented. Today, converted decks are searchable via Obsidian, grep, or any tool that reads Markdown + YAML frontmatter.
 
 ## License
 
