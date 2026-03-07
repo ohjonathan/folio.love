@@ -44,6 +44,9 @@ class FolioConverter:
         target: Optional[Path] = None,
         passes: Optional[int] = None,
         no_cache: bool = False,
+        subtype: str = "research",
+        industry: Optional[list[str]] = None,
+        extra_tags: Optional[list[str]] = None,
     ) -> ConversionResult:
         """Convert a single PPTX/PDF to Folio markdown.
 
@@ -53,6 +56,9 @@ class FolioConverter:
             client: Client name (for frontmatter and ID).
             engagement: Engagement identifier (for frontmatter and ID).
             target: Override target directory in library.
+            subtype: Evidence subtype (default "research").
+            industry: Industry tags (optional).
+            extra_tags: Manual tags to merge with auto-generated.
 
         Returns:
             ConversionResult with output path and metadata.
@@ -183,10 +189,14 @@ class FolioConverter:
             deck_id=deck_id,
             source_relative_path=source_info.relative_path,
             source_hash=source_info.file_hash,
+            source_type=_detect_source_type(source_path),
             version_info=version_info,
             analyses=slide_analyses,
+            subtype=subtype,
             client=client,
             engagement=engagement,
+            industry=industry,
+            extra_tags=extra_tags,
             existing_frontmatter=existing_fm,
             reconciliation_metadata=reconciliation_meta,
         )
@@ -254,6 +264,23 @@ def _alignment_status(confidence: float) -> str:
     return "untrusted"
 
 
+def _detect_source_type(source_path: Path) -> str:
+    """Detect source type from file extension.
+
+    Returns ``"deck"`` for .pptx/.ppt, ``"pdf"`` for everything else.
+    The ontology also defines ``"report"`` but that requires semantic
+    classification (not file-extension detection) and is deferred to a
+    future ``--source-type`` CLI override or subtype-based inference.
+    See spec Section 7 and Ontology Section 12.4.
+    """
+    ext = source_path.suffix.lower()
+    if ext in (".pptx", ".ppt"):
+        return "deck"
+    if ext != ".pdf":
+        logger.warning("Unrecognized extension '%s', defaulting source_type to 'pdf'", ext)
+    return "pdf"
+
+
 def _sanitize_name(name: str) -> str:
     """Sanitize a name for use in file paths and IDs."""
     # Replace spaces and special chars with underscores
@@ -295,16 +322,33 @@ def _generate_id(
 def _read_existing_frontmatter(markdown_path: Path) -> Optional[dict]:
     """Read existing YAML frontmatter from a markdown file, if it exists.
 
-    Returns the parsed YAML dict, or None if the file doesn't exist
-    or doesn't have valid frontmatter.
+    Uses line-delimited fence detection: the opening ``---`` must be line 1 and
+    the closing ``---`` must appear alone on a subsequent line.  This avoids
+    false matches when a YAML scalar contains the substring ``---``.
+
+    Returns the parsed YAML dict, or None if the file doesn't exist,
+    doesn't have valid frontmatter, or the parsed content is not a dict.
     """
     if not markdown_path.exists():
         return None
     try:
         content = markdown_path.read_text()
-        if not content.startswith("---"):
+        lines = content.split("\n")
+        if not lines or lines[0].strip() != "---":
             return None
-        end = content.index("---", 3)
-        return yaml_lib.safe_load(content[3:end])
-    except (ValueError, yaml_lib.YAMLError, OSError):
+        # Find closing fence (standalone --- on its own line)
+        end_idx = None
+        for i, line in enumerate(lines[1:], start=1):
+            if line.strip() == "---":
+                end_idx = i
+                break
+        if end_idx is None:
+            return None
+        yaml_block = "\n".join(lines[1:end_idx])
+        result = yaml_lib.safe_load(yaml_block)
+        if not isinstance(result, dict):
+            return None
+        return result
+    except (yaml_lib.YAMLError, OSError):
         return None
+

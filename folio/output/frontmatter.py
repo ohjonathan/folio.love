@@ -15,10 +15,15 @@ def generate(
     deck_id: str,
     source_relative_path: str,
     source_hash: str,
+    *,
+    source_type: str,
     version_info: VersionInfo,
     analyses: dict[int, SlideAnalysis],
+    subtype: str = "research",
     client: Optional[str] = None,
     engagement: Optional[str] = None,
+    industry: Optional[list[str]] = None,
+    extra_tags: Optional[list[str]] = None,
     existing_frontmatter: Optional[dict] = None,
     reconciliation_metadata: Optional[dict] = None,
 ) -> str:
@@ -29,60 +34,86 @@ def generate(
         deck_id: Date-based ID following convention.
         source_relative_path: Relative path to source file.
         source_hash: SHA256 hash (12 char prefix).
+        source_type: Source format ("deck" or "pdf"). The ontology also
+            defines "report" but it requires semantic classification and
+            is deferred to a future ``--source-type`` CLI override.
         version_info: Current version metadata.
         analyses: Per-slide LLM analyses.
+        subtype: Evidence subtype (default "research").
         client: Client name (optional at L0).
         engagement: Engagement identifier (optional at L0).
+        industry: Industry tags (optional).
+        extra_tags: Manual tags to merge with auto-generated.
+        existing_frontmatter: Preserved fields from prior conversion.
+        reconciliation_metadata: Text reconciliation diagnostics.
 
     Returns:
         YAML frontmatter string including --- delimiters.
     """
+    # Coerce string args to lists (S1: prevents silent character-explosion)
+    if isinstance(industry, str):
+        industry = [industry]
+    if isinstance(extra_tags, str):
+        extra_tags = [extra_tags]
+
     # Collect frameworks and slide types from analyses
     frameworks = _collect_unique(analyses, "framework", exclude={"none", "pending"})
     slide_types = _collect_unique(analyses, "slide_type", exclude={"unknown", "pending"})
 
-    # Auto-generate tags from frameworks and slide types
+    # Auto-generate tags from frameworks and slide types, merge manual tags
     tags = _generate_tags(frameworks, slide_types, title)
+    if extra_tags:
+        tags = sorted(set(tags) | set(extra_tags))
 
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Preserve id and created from existing frontmatter on reconversion
+    # Preserve id and created from existing frontmatter on reconversion.
+    # Only accept non-empty strings; null/missing/non-string values fall back
+    # to freshly generated values to avoid emitting YAML null in required fields.
     preserved_id = deck_id
     preserved_created = now_str
-    if existing_frontmatter:
-        preserved_id = existing_frontmatter.get("id", deck_id)
-        preserved_created = existing_frontmatter.get("created", now_str)
+    if isinstance(existing_frontmatter, dict):
+        prev_id = existing_frontmatter.get("id")
+        if isinstance(prev_id, str) and prev_id:
+            preserved_id = prev_id
+        prev_created = existing_frontmatter.get("created")
+        if isinstance(prev_created, str) and prev_created:
+            preserved_created = prev_created
 
+    # Build frontmatter in semantic group order:
+    # Identity > Lifecycle > Source > Temporal > Engagement > Content > Extensions
     frontmatter = {
         # Identity
         "id": preserved_id,
         "title": title,
         "type": "evidence",
-        "subtype": "research",
-        # Source tracking
-        "source": source_relative_path,
-        "source_hash": source_hash,
-        "source_type": "deck",
-        "version": version_info.version,
-        "converted": now_str,
-        "created": preserved_created,
-        "modified": now_str,
-        # Lifecycle status (e.g. active), NOT staleness.
-        # Staleness (current|stale|missing) is computed dynamically
-        # by sources.check_staleness() and shown via `folio status`.
+        "subtype": subtype,
+        # Lifecycle
         "status": "active",
-        # Ontology
         "authority": "captured",
         "curation_level": "L0",
+        # Source
+        "source": source_relative_path,
+        "source_hash": source_hash,
+        "source_type": source_type,
+        "version": version_info.version,
+        # Temporal
+        "created": preserved_created,
+        "modified": now_str,
+        "converted": now_str,
         # Content classification
         "slide_count": version_info.slide_count,
     }
 
-    # Optional fields
+    # Engagement (optional)
     if client:
         frontmatter["client"] = client
     if engagement:
         frontmatter["engagement"] = engagement
+    if industry:
+        frontmatter["industry"] = sorted(industry)
+
+    # Content tags
     if frameworks:
         frontmatter["frameworks"] = sorted(frameworks)
     if slide_types:
@@ -192,6 +223,11 @@ def _generate_tags(
     """Auto-generate tags from analysis results and title.
 
     This provides a starting point. Human curation at L1 will refine.
+
+    Args:
+        frameworks: Framework labels extracted from analyses.
+        slide_types: Slide type labels (reserved for future tag extraction).
+        title: Deck title for keyword extraction.
     """
     tags = set()
 

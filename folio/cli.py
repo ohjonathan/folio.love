@@ -38,8 +38,13 @@ def cli(ctx, verbose: bool, config: Optional[str]):
               help="Analysis depth: 1=standard, 2=deep (selective second pass on dense slides).")
 @click.option("--no-cache", is_flag=True, default=False,
               help="Force re-analysis; fresh results replace cached entries.")
+@click.option("--subtype", type=click.Choice(["research", "data_extract", "external_report", "benchmark"]),
+              default="research", help="Evidence subtype (default: research).")
+@click.option("--industry", default=None, help="Industry tags (comma-separated, e.g. 'retail,ecommerce').")
+@click.option("--tags", default=None, help="Manual tags to merge with auto-generated (comma-separated).")
 @click.pass_context
-def convert(ctx, source: str, note: str, client: str, engagement: str, target: str, passes: int, no_cache: bool):
+def convert(ctx, source: str, note: str, client: str, engagement: str, target: str, passes: int, no_cache: bool,
+            subtype: str, industry: str, tags: str):
     """Convert a single deck to Folio markdown.
 
     SOURCE is the path to a PPTX or PDF file.
@@ -51,9 +56,14 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
         folio convert deck.pptx --client ClientA --engagement "DD Q1 2026"
 
         folio convert deck.pptx --note "Updated risk figures"
+
+        folio convert deck.pptx --subtype research --industry "retail,ecommerce" --tags "market-sizing"
     """
     config = ctx.obj["config"]
     converter = FolioConverter(config)
+
+    industry_list = [s.strip() for s in industry.split(",") if s.strip()] if industry else None
+    tags_list = [s.strip() for s in tags.split(",") if s.strip()] if tags else None
 
     try:
         result = converter.convert(
@@ -64,6 +74,9 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
             target=Path(target) if target else None,
             passes=passes,
             no_cache=no_cache,
+            subtype=subtype,
+            industry=industry_list,
+            extra_tags=tags_list,
         )
         click.echo(f"✓ {Path(source).name}")
         click.echo(f"  {result.slide_count} slides → {result.output_path}")
@@ -102,8 +115,13 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
               help="Analysis depth: 1=standard, 2=deep (selective second pass on dense slides).")
 @click.option("--no-cache", is_flag=True, default=False,
               help="Force re-analysis; fresh results replace cached entries.")
+@click.option("--subtype", type=click.Choice(["research", "data_extract", "external_report", "benchmark"]),
+              default="research", help="Evidence subtype (default: research).")
+@click.option("--industry", default=None, help="Industry tags (comma-separated).")
+@click.option("--tags", default=None, help="Manual tags to merge with auto-generated (comma-separated).")
 @click.pass_context
-def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement: str, passes: int, no_cache: bool):
+def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement: str, passes: int, no_cache: bool,
+          subtype: str, industry: str, tags: str):
     """Batch convert all matching files in a directory.
 
     Examples:
@@ -115,6 +133,9 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
     config = ctx.obj["config"]
     converter = FolioConverter(config)
     dir_path = Path(directory)
+
+    industry_list = [s.strip() for s in industry.split(",") if s.strip()] if industry else None
+    tags_list = [s.strip() for s in tags.split(",") if s.strip()] if tags else None
 
     files = sorted(dir_path.glob(pattern))
     if not files:
@@ -136,6 +157,9 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
                 engagement=engagement,
                 passes=passes,
                 no_cache=no_cache,
+                subtype=subtype,
+                industry=industry_list,
+                extra_tags=tags_list,
             )
             click.echo(f"✓ {f.name} ({result.slide_count} slides)")
             succeeded += 1
