@@ -16,11 +16,51 @@ class SourceConfig:
 
 
 @dataclass
-class LLMConfig:
-    """LLM configuration."""
+class LLMProfile:
+    """A named LLM configuration profile."""
+    name: str
     provider: str = "anthropic"
     model: str = "claude-sonnet-4-20250514"
-    # API key read from ANTHROPIC_API_KEY env var
+    api_key_env: str = ""  # Defaults to {PROVIDER}_API_KEY if empty
+
+    def __post_init__(self):
+        if not self.api_key_env:
+            prefix = self.provider.upper().replace("-", "_")
+            self.api_key_env = f"{prefix}_API_KEY"
+
+
+@dataclass
+class LLMConfig:
+    """LLM configuration with profile support."""
+    default_profile: str = "default"
+    profiles: dict[str, LLMProfile] = field(default_factory=lambda: {
+        "default": LLMProfile(name="default"),
+    })
+
+    # Legacy fields for backward compat (used when no profiles section exists)
+    provider: str = "anthropic"
+    model: str = "claude-sonnet-4-20250514"
+
+    def resolve_profile(self, override: str | None = None) -> LLMProfile:
+        """Resolve the active LLM profile.
+
+        Args:
+            override: CLI --llm-profile override (takes precedence).
+
+        Returns:
+            The resolved LLMProfile.
+
+        Raises:
+            ValueError: if the profile name is not found.
+        """
+        name = override if override else self.default_profile
+        profile = self.profiles.get(name)
+        if profile is None:
+            available = ", ".join(sorted(self.profiles.keys()))
+            raise ValueError(
+                f"Unknown LLM profile '{name}'. Available: {available}"
+            )
+        return profile
 
 
 @dataclass
@@ -73,10 +113,39 @@ class FolioConfig:
             SourceConfig(**s) for s in raw.get("sources", [])
         ]
         llm_raw = raw.get("llm") or {}
-        llm = LLMConfig(
-            provider=llm_raw.get("provider", "anthropic"),
-            model=llm_raw.get("model", "claude-sonnet-4-20250514"),
-        )
+        profiles_raw = llm_raw.get("profiles") or {}
+
+        if profiles_raw:
+            # New profile-based config
+            profiles = {}
+            for pname, pdata in profiles_raw.items():
+                if isinstance(pdata, dict):
+                    profiles[pname] = LLMProfile(
+                        name=pname,
+                        provider=pdata.get("provider", "anthropic"),
+                        model=pdata.get("model", "claude-sonnet-4-20250514"),
+                        api_key_env=pdata.get("api_key_env", ""),
+                    )
+            if not profiles:
+                profiles = {"default": LLMProfile(name="default")}
+            llm = LLMConfig(
+                default_profile=llm_raw.get("default_profile", "default"),
+                profiles=profiles,
+                provider=llm_raw.get("provider", "anthropic"),
+                model=llm_raw.get("model", "claude-sonnet-4-20250514"),
+            )
+        else:
+            # Legacy flat config: create a single "default" profile
+            provider = llm_raw.get("provider", "anthropic")
+            model = llm_raw.get("model", "claude-sonnet-4-20250514")
+            llm = LLMConfig(
+                default_profile="default",
+                profiles={"default": LLMProfile(
+                    name="default", provider=provider, model=model,
+                )},
+                provider=provider,
+                model=model,
+            )
         conv_raw = raw.get("conversion") or {}
         conversion = ConversionConfig(
             image_dpi=conv_raw.get("image_dpi", 150),
