@@ -49,3 +49,24 @@ class TestNullYAMLSections:
             config = FolioConfig.load(Path(f.name))
         assert config.llm.model == "claude-haiku-4-5-20251001"
         assert config.conversion.image_dpi == 300
+
+
+class TestPptxRendererConfig:
+    """Test pptx_renderer config validation."""
+
+    def test_default_is_auto(self):
+        config = FolioConfig()
+        assert config.conversion.pptx_renderer == "auto"
+
+    def test_valid_values(self):
+        for value in ("auto", "libreoffice", "powerpoint"):
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+                f.write(f"conversion:\n  pptx_renderer: {value}\n")
+                f.flush()
+                config = FolioConfig.load(Path(f.name))
+            assert config.conversion.pptx_renderer == value
+
+    def test_invalid_value_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="pptx_renderer"):
+            FolioConfig(conversion=ConversionConfig(pptx_renderer="invalid"))

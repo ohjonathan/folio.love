@@ -31,6 +31,7 @@ class ConversionConfig:
     libreoffice_timeout: int = 60
     default_passes: int = 1
     density_threshold: float = 2.0
+    pptx_renderer: str = "auto"
 
 
 @dataclass
@@ -55,6 +56,10 @@ class FolioConfig:
             raise ValueError(f"density_threshold must be a positive number, got {c.density_threshold!r}")
         if not isinstance(c.libreoffice_timeout, (int, float)) or c.libreoffice_timeout <= 0:
             raise ValueError(f"libreoffice_timeout must be a positive number, got {c.libreoffice_timeout!r}")
+        if c.pptx_renderer not in ("auto", "libreoffice", "powerpoint"):
+            raise ValueError(
+                f"pptx_renderer must be 'auto', 'libreoffice', or 'powerpoint', got {c.pptx_renderer!r}"
+            )
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":
@@ -84,6 +89,7 @@ class FolioConfig:
             libreoffice_timeout=conv_raw.get("libreoffice_timeout", 60),
             default_passes=conv_raw.get("default_passes", 1),
             density_threshold=conv_raw.get("density_threshold", 2.0),
+            pptx_renderer=conv_raw.get("pptx_renderer", "auto"),
         )
 
         return cls(

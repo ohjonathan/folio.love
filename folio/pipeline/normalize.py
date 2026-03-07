@@ -1,8 +1,9 @@
-"""Stage 1: Format normalization. PPTX → PDF via LibreOffice headless."""
+"""Stage 1: Format normalization. PPTX -> PDF via LibreOffice or PowerPoint."""
 
 import logging
 import shutil
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -13,15 +14,18 @@ class NormalizationError(Exception):
     """Raised when format normalization fails."""
 
 
-def to_pdf(source_path: Path, output_dir: Path, timeout: int = 60) -> Path:
-    """Convert PPTX to PDF using LibreOffice headless.
+def to_pdf(
+    source_path: Path, output_dir: Path, timeout: int = 60, renderer: str = "auto"
+) -> Path:
+    """Convert PPTX to PDF using LibreOffice or PowerPoint.
 
     If source is already PDF, copies it to output_dir unchanged.
 
     Args:
         source_path: Path to PPTX or PDF file.
         output_dir: Directory for the output PDF.
-        timeout: Max seconds for LibreOffice conversion.
+        timeout: Max seconds for conversion.
+        renderer: Renderer preference: "auto", "libreoffice", or "powerpoint".
 
     Returns:
         Path to the normalized PDF.
@@ -46,20 +50,104 @@ def to_pdf(source_path: Path, output_dir: Path, timeout: int = 60) -> Path:
     if suffix not in (".pptx", ".ppt"):
         raise NormalizationError(f"Unsupported format: {suffix}")
 
-    # Check LibreOffice is available
-    lo_path = _find_libreoffice()
-    if lo_path is None:
-        raise NormalizationError(
-            "LibreOffice not found. Install with: "
-            "brew install --cask libreoffice (macOS) or "
-            "apt install libreoffice (Linux). "
-            "If LibreOffice is blocked on a managed laptop, export the deck "
-            "to PDF in PowerPoint and run folio convert <deck>.pdf instead."
-        )
-
+    renderer_name, renderer_path = _select_renderer(renderer)
     effective_timeout = _compute_timeout(source_path, timeout)
     expected_pdf = output_dir / f"{source_path.stem}.pdf"
 
+    if renderer_name == "libreoffice":
+        _convert_with_libreoffice(
+            renderer_path, source_path, output_dir, effective_timeout, expected_pdf
+        )
+    elif renderer_name == "powerpoint":
+        _convert_with_powerpoint(
+            source_path, output_dir, effective_timeout, expected_pdf
+        )
+
+    if not expected_pdf.exists():
+        raise NormalizationError(
+            f"Conversion completed but PDF not found at {expected_pdf}"
+        )
+
+    logger.info("Normalized to PDF: %s", expected_pdf)
+    return expected_pdf
+
+
+def _select_renderer(preference: str = "auto") -> tuple[str, str | None]:
+    """Select a PPTX-to-PDF renderer based on preference and availability.
+
+    Returns:
+        ("libreoffice", "/path/to/soffice") or ("powerpoint", None).
+
+    Raises:
+        NormalizationError: If no renderer is available.
+    """
+    if preference == "libreoffice":
+        lo_path = _find_libreoffice()
+        if lo_path is None:
+            raise NormalizationError(
+                "LibreOffice not found. Install with: "
+                "brew install --cask libreoffice (macOS) or "
+                "apt install libreoffice (Linux)."
+            )
+        return ("libreoffice", lo_path)
+
+    if preference == "powerpoint":
+        if not _find_powerpoint():
+            raise NormalizationError(
+                "Microsoft PowerPoint not found at "
+                "/Applications/Microsoft PowerPoint.app. "
+                "PowerPoint renderer is only available on macOS."
+            )
+        return ("powerpoint", None)
+
+    # auto: prefer LibreOffice (headless, CI-friendly), fall back to PowerPoint
+    lo_path = _find_libreoffice()
+    if lo_path is not None:
+        return ("libreoffice", lo_path)
+
+    if _find_powerpoint():
+        logger.info("LibreOffice not found; falling back to PowerPoint renderer")
+        return ("powerpoint", None)
+
+    raise NormalizationError(
+        "No PPTX renderer available. Options:\n"
+        "  1. Install LibreOffice: brew install --cask libreoffice (macOS) "
+        "or apt install libreoffice (Linux)\n"
+        "  2. Use PowerPoint on macOS (auto-detected if installed)\n"
+        "  3. Export to PDF manually and run: folio convert <deck>.pdf"
+    )
+
+
+def _find_powerpoint() -> bool:
+    """Check whether Microsoft PowerPoint is installed (macOS only)."""
+    if sys.platform != "darwin":
+        return False
+    return Path("/Applications/Microsoft PowerPoint.app").exists()
+
+
+def _find_libreoffice() -> str | None:
+    """Find LibreOffice binary on the system."""
+    candidates = [
+        "libreoffice",
+        "soffice",
+        "/usr/bin/libreoffice",
+        "/usr/local/bin/libreoffice",
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+    ]
+    for candidate in candidates:
+        if shutil.which(candidate):
+            return candidate
+    return None
+
+
+def _convert_with_libreoffice(
+    lo_path: str,
+    source_path: Path,
+    output_dir: Path,
+    timeout: int,
+    expected_pdf: Path,
+) -> None:
+    """Convert PPTX to PDF using LibreOffice headless."""
     try:
         result = subprocess.run(
             [
@@ -71,14 +159,14 @@ def to_pdf(source_path: Path, output_dir: Path, timeout: int = 60) -> Path:
             ],
             capture_output=True,
             text=True,
-            timeout=effective_timeout,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired:
         if expected_pdf.exists():
             expected_pdf.unlink()
             logger.debug("Cleaned up partial PDF: %s", expected_pdf)
         raise NormalizationError(
-            f"LibreOffice timed out after {effective_timeout}s converting {source_path.name}"
+            f"LibreOffice timed out after {timeout}s converting {source_path.name}"
         )
 
     if result.returncode != 0:
@@ -94,20 +182,78 @@ def to_pdf(source_path: Path, output_dir: Path, timeout: int = 60) -> Path:
             "LibreOffice stderr (non-fatal): %s", result.stderr.strip()[:500]
         )
 
-    if not expected_pdf.exists():
+
+def _build_powerpoint_applescript(
+    source_posix: str, output_posix: str, timeout: int
+) -> str:
+    """Build AppleScript to convert a PPTX to PDF via PowerPoint."""
+    return (
+        'tell application "Microsoft PowerPoint"\n'
+        "    launch\n"
+        f"    with timeout of {timeout} seconds\n"
+        f'        open POSIX file "{source_posix}"\n'
+        f'        save active presentation in POSIX file "{output_posix}" as save as PDF\n'
+        "        close active presentation saving no\n"
+        "    end timeout\n"
+        "end tell"
+    )
+
+
+def _convert_with_powerpoint(
+    source_path: Path,
+    output_dir: Path,
+    timeout: int,
+    expected_pdf: Path,
+) -> None:
+    """Convert PPTX to PDF using PowerPoint via AppleScript."""
+    script = _build_powerpoint_applescript(
+        str(source_path), str(expected_pdf), timeout
+    )
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=timeout + 10,
+        )
+    except subprocess.TimeoutExpired:
+        if expected_pdf.exists():
+            expected_pdf.unlink()
+            logger.debug("Cleaned up partial PDF: %s", expected_pdf)
+        # Best-effort: try to close the active presentation
+        try:
+            subprocess.run(
+                [
+                    "osascript", "-e",
+                    'tell application "Microsoft PowerPoint" to '
+                    "close active presentation saving no",
+                ],
+                capture_output=True,
+                timeout=5,
+            )
+        except Exception:
+            pass
         raise NormalizationError(
-            f"LibreOffice completed but PDF not found at {expected_pdf}"
+            f"PowerPoint timed out after {timeout}s converting {source_path.name}"
         )
 
-    logger.info("Normalized to PDF: %s", expected_pdf)
-    return expected_pdf
+    if result.returncode != 0:
+        if expected_pdf.exists():
+            expected_pdf.unlink()
+            logger.debug("Cleaned up partial PDF: %s", expected_pdf)
+        raise NormalizationError(
+            f"PowerPoint conversion failed: {result.stderr.strip()}"
+        )
+
+    if result.stderr.strip():
+        logger.warning(
+            "PowerPoint stderr (non-fatal): %s", result.stderr.strip()[:500]
+        )
 
 
 def _validate_source(source_path: Path) -> None:
-    """Pre-flight validation before LibreOffice conversion."""
-    # Note: existence check is included for standalone to_pdf() usage.
-    # TOCTOU between exists() and stat() is acceptable for single-threaded pipeline.
-    # If parallelism is added (Track B), consolidate into a single try/stat() call.
+    """Pre-flight validation before conversion."""
     if not source_path.exists():
         raise NormalizationError(f"Source not found: {source_path}")
 
@@ -151,19 +297,3 @@ def _compute_timeout(source_path: Path, base_timeout: int) -> int:
     size_mb = source_path.stat().st_size / (1024 * 1024)
     scaled = max(base_timeout, 10) + int(size_mb)
     return min(scaled, 300)
-
-
-def _find_libreoffice() -> str | None:
-    """Find LibreOffice binary on the system."""
-    # Common locations
-    candidates = [
-        "libreoffice",
-        "soffice",
-        "/usr/bin/libreoffice",
-        "/usr/local/bin/libreoffice",
-        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-    ]
-    for candidate in candidates:
-        if shutil.which(candidate):
-            return candidate
-    return None

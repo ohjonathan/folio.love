@@ -95,6 +95,7 @@ class FolioConverter:
             pdf_path = normalize.to_pdf(
                 source_path, tmpdir,
                 timeout=self.config.conversion.libreoffice_timeout,
+                renderer=self.config.conversion.pptx_renderer,
             )
 
             # Stage 2: Extract images

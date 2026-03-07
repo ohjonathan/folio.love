@@ -18,7 +18,7 @@ Folio tracks versions automatically -- re-converting an updated deck increments 
 **Prerequisites**
 
 - Python 3.10+
-- [LibreOffice](https://www.libreoffice.org/) (only for PPTX/PPT conversion)
+- [LibreOffice](https://www.libreoffice.org/) or Microsoft PowerPoint (for PPTX/PPT conversion)
 - [Poppler](https://poppler.freedesktop.org/) (for PDF image extraction)
 
 ```bash
@@ -30,11 +30,12 @@ brew install poppler
 sudo apt install libreoffice poppler-utils
 ```
 
-If you're on a managed laptop that blocks LibreOffice, export the deck to PDF in
-PowerPoint and run `folio convert deck.pdf`. PDF is a first-class input and
-still exercises image extraction, PDF text extraction, analysis, version
-tracking, and source tracking. The only stage you bypass is PPTX/PPT
-normalization.
+If you're on a managed laptop that blocks LibreOffice, Folio auto-detects
+Microsoft PowerPoint on macOS and uses it as a fallback renderer via AppleScript.
+PowerPoint's GUI will briefly appear during conversion — this is expected.
+You can also force a specific renderer with `pptx_renderer: powerpoint` in
+`folio.yaml`. If neither renderer is available, export the deck to PDF in
+PowerPoint and run `folio convert deck.pdf`.
 
 **Install**
 
@@ -253,6 +254,7 @@ conversion:
   libreoffice_timeout: 60            # Seconds before conversion times out
   default_passes: 1                  # 1 = standard, 2 = deep
   density_threshold: 2.0             # Pass 2 density trigger
+  pptx_renderer: auto                # auto | libreoffice | powerpoint
 ```
 
 With no `folio.yaml`, Folio uses these defaults: output goes to `./library`, images render at 150 DPI, and analysis runs a single pass.
@@ -266,7 +268,7 @@ With no `folio.yaml`, Folio uses these defaults: output goes to `./library`, ima
 ```
 Input (.pptx/.ppt/.pdf)
   │
-  ├─ Normalize ──→ Convert to PDF (LibreOffice for PPT/PPTX, direct copy for PDF)
+  ├─ Normalize ──→ Convert to PDF (LibreOffice or PowerPoint for PPT/PPTX, direct copy for PDF)
   │
   ├─ Images ─────→ Extract slide images, detect blank slides
   │
