@@ -47,6 +47,7 @@ class FolioConverter:
         subtype: str = "research",
         industry: Optional[list[str]] = None,
         extra_tags: Optional[list[str]] = None,
+        llm_profile: Optional[str] = None,
     ) -> ConversionResult:
         """Convert a single PPTX/PDF to Folio markdown.
 
@@ -123,12 +124,14 @@ class FolioConverter:
 
             # Stage 4: LLM analysis
             logger.info("  Running LLM analysis...")
+            profile = self.config.llm.resolve_profile(llm_profile)
             slide_analyses, pass1_stats = analysis.analyze_slides(
                 image_paths,
-                model=self.config.llm.model,
+                model=profile.model,
                 cache_dir=deck_dir,
                 slide_texts=slide_texts,
                 force_miss=no_cache,
+                provider_name=profile.provider,
             )
 
             # Override blank slides with pending() (API call ran but result is unreliable)
@@ -144,11 +147,12 @@ class FolioConverter:
                     pass1_results=slide_analyses,
                     slide_texts=slide_texts,
                     image_paths=image_paths,
-                    model=self.config.llm.model,
+                    model=profile.model,
                     cache_dir=deck_dir,
                     density_threshold=self.config.conversion.density_threshold,
                     skip_slides=blank_slides,
                     force_miss=no_cache,
+                    provider_name=profile.provider,
                 )
                 combined_stats = pass1_stats.merge(pass2_stats)
             else:

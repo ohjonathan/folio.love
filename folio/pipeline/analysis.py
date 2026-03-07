@@ -1,4 +1,4 @@
-"""Stage 4: LLM analysis. Generate structured analysis per slide via Claude API."""
+"""Stage 4: LLM analysis. Generate structured analysis per slide via LLM provider."""
 
 import base64
 import hashlib
@@ -10,9 +10,11 @@ import string
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
+from ..llm import get_provider, ProviderInput, ProviderOutput
 from .text import SlideText, _EXTRACTION_VERSION
+
 
 logger = logging.getLogger(__name__)
 
@@ -20,43 +22,28 @@ logger = logging.getLogger(__name__)
 # On mismatch, the cache is fully invalidated (one-time re-analysis).
 _ANALYSIS_CACHE_VERSION = 1
 
-ANALYSIS_PROMPT = """Analyze this consulting slide and provide:
+ANALYSIS_PROMPT = """Analyze this consulting slide. Return a single JSON object with exactly this structure (no other text):
 
-1. SLIDE TYPE: One of: title, executive-summary, framework, data, narrative, next-steps, appendix
+{
+  "slide_type": "<one of: title, executive-summary, framework, data, narrative, next-steps, appendix>",
+  "framework": "<one of: 2x2-matrix, scr, mece, waterfall, gantt, timeline, process-flow, org-chart, tam-sam-som, porter-five-forces, value-chain, bcg-matrix, or none>",
+  "visual_description": "<describe what you see that text extraction alone would miss: matrix axes/quadrants, chart types/data points, diagram flows, table structures>",
+  "key_data": "<specific numbers, percentages, dates, or metrics shown>",
+  "main_insight": "<one sentence summarizing the 'so what' of this slide>",
+  "evidence": [
+    {
+      "claim": "<what you are claiming, e.g. 'Framework detection', 'Market sizing'>",
+      "quote": "<exact text from the slide supporting this claim>",
+      "element_type": "<title|body|note>",
+      "confidence": "<high|medium|low>"
+    }
+  ]
+}
 
-2. FRAMEWORK: If a consulting framework is used, identify it: 2x2-matrix, scr, mece, waterfall, gantt, timeline, process-flow, org-chart, tam-sam-som, porter-five-forces, value-chain, bcg-matrix, or "none"
-
-3. VISUAL DESCRIPTION: Describe what you see that wouldn't be captured by text extraction alone. Include:
-   - For matrices: axis labels, quadrant contents, positioning
-   - For charts: chart type, axes, key data points
-   - For diagrams: structure, flow, relationships
-   - For tables: column/row structure if complex
-
-4. KEY DATA: List specific numbers, percentages, dates, or metrics shown
-
-5. MAIN INSIGHT: One sentence summarizing the "so what" of this slide
-
-6. EVIDENCE: For each claim above, cite the exact text from the slide that supports it. For each piece of evidence provide:
-   - Claim: What you are claiming (e.g. "Framework detection", "Market sizing")
-   - Quote: Exact text from the slide supporting this claim
-   - Element: Which part of the slide (title, body, or note)
-   - Confidence: high, medium, or low
-
-Format your response exactly as:
-Slide Type: [type]
-Framework: [framework]
-Visual Description: [description]
-Key Data: [data points]
-Main Insight: [insight]
-Evidence:
-- Claim: [what this evidence supports]
-  Quote: "[exact text from slide]"
-  Element: [title|body|note]
-  Confidence: [high|medium|low]
-- Claim: [next claim]
-  Quote: "[exact text]"
-  Element: [title|body|note]
-  Confidence: [high|medium|low]"""
+Rules:
+- Include at least one evidence item with an exact quote from the slide.
+- Ground every claim in visible slide content.
+- Return ONLY the JSON object, no markdown fences, no prose."""
 
 
 @dataclass
@@ -188,24 +175,142 @@ def _sanitize_for_prompt(value: str, max_length: int = 200) -> str:
     return value
 
 
-def _is_valid_pass1_response(raw_text: str) -> bool:
-    """Check if a pass-1 response contains required structural markers.
+def _extract_json(raw_text: str) -> str | None:
+    """Return a JSON object string or None."""
+    # Attempt 1: direct parse
+    try:
+        json.loads(raw_text)
+        return raw_text
+    except (json.JSONDecodeError, TypeError):
+        pass
 
-    Requires Slide Type, Framework, Evidence header, and at least one Claim.
-    A response with only headers but no grounded evidence is rejected.
+    # Attempt 2: strip one surrounding markdown code fence pair
+    stripped = raw_text.strip()
+    if stripped.startswith("```"):
+        # Remove opening fence (with optional language tag)
+        first_newline = stripped.index("\n")
+        inner = stripped[first_newline + 1:]
+        # Remove closing fence
+        if inner.rstrip().endswith("```"):
+            inner = inner.rstrip()[:-3].rstrip()
+            try:
+                json.loads(inner)
+                return inner
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    return None
+
+
+def _normalize_pass1_json(data: dict) -> SlideAnalysis:
+    """Normalize a pass-1 JSON response to SlideAnalysis.
+
+    Applies: lowercase-hyphenation, element_type/confidence defaults,
+    evidence cap at 10, zero-evidence rejection.
     """
-    has_slide_type = bool(re.search(r"Slide Type:", raw_text, re.IGNORECASE))
-    has_framework = bool(re.search(r"Framework:", raw_text, re.IGNORECASE))
-    has_evidence = bool(re.search(r"Evidence:", raw_text, re.IGNORECASE))
-    has_claim = bool(re.search(r"-\s*Claim:", raw_text, re.IGNORECASE))
-    return has_slide_type and has_framework and has_evidence and has_claim
+    slide_type = str(data.get("slide_type", "unknown")).strip().lower().replace(" ", "-")
+    framework = str(data.get("framework", "none")).strip().lower().replace(" ", "-")
+    visual_description = str(data.get("visual_description", ""))
+    key_data = str(data.get("key_data", ""))
+    main_insight = str(data.get("main_insight", ""))
+
+    raw_evidence = data.get("evidence", [])
+    if not isinstance(raw_evidence, list):
+        raw_evidence = []
+
+    evidence = []
+    for item in raw_evidence:
+        if not isinstance(item, dict):
+            continue
+        claim = str(item.get("claim", "")).strip()
+        if not claim:
+            continue
+        quote = str(item.get("quote", "")).strip()
+        element_type = str(item.get("element_type", "body")).strip().lower()
+        if element_type not in ("title", "body", "note"):
+            element_type = "body"
+        confidence = str(item.get("confidence", "medium")).strip().lower()
+        if confidence not in ("high", "medium", "low"):
+            confidence = "medium"
+        evidence.append({
+            "claim": claim,
+            "quote": quote,
+            "element_type": element_type,
+            "confidence": confidence,
+            "validated": False,
+            "pass": 1,
+        })
+
+    if not evidence:
+        logger.warning("Pass-1 JSON has zero evidence items — treating as pending")
+        return SlideAnalysis.pending()
+
+    # Cap at 10
+    if len(evidence) > 10:
+        logger.info("Pass-1 evidence capped at 10 (had %d)", len(evidence))
+        evidence = evidence[:10]
+
+    return SlideAnalysis(
+        slide_type=slide_type,
+        framework=framework,
+        visual_description=visual_description,
+        key_data=key_data,
+        main_insight=main_insight,
+        evidence=evidence,
+    )
 
 
-def _is_valid_pass2_response(raw_text: str) -> bool:
-    """Check if a pass-2 response contains required structural markers."""
-    has_evidence = bool(re.search(r"Evidence:", raw_text, re.IGNORECASE))
-    has_claim = bool(re.search(r"-\s*Claim:", raw_text, re.IGNORECASE))
-    return has_evidence and has_claim
+def _normalize_pass2_json(data: dict) -> tuple[list[dict], str | None, str | None]:
+    """Normalize a pass-2 JSON response.
+
+    Returns (evidence_items, reassessed_type, reassessed_framework).
+    Each reassessed value is None if "unchanged" or missing.
+    """
+    # Reassessments
+    raw_type = str(data.get("slide_type_reassessment", "unchanged")).strip().lower().replace(" ", "-")
+    reassessed_type = None if raw_type == "unchanged" else raw_type
+
+    raw_framework = str(data.get("framework_reassessment", "unchanged")).strip().lower().replace(" ", "-")
+    reassessed_framework = None if raw_framework == "unchanged" else raw_framework
+
+    # Evidence
+    raw_evidence = data.get("evidence", [])
+    if not isinstance(raw_evidence, list):
+        raw_evidence = []
+
+    evidence = []
+    for item in raw_evidence:
+        if not isinstance(item, dict):
+            continue
+        claim = str(item.get("claim", "")).strip()
+        if not claim:
+            continue
+        quote = str(item.get("quote", "")).strip()
+        element_type = str(item.get("element_type", "body")).strip().lower()
+        if element_type not in ("title", "body", "note"):
+            element_type = "body"
+        confidence = str(item.get("confidence", "medium")).strip().lower()
+        if confidence not in ("high", "medium", "low"):
+            confidence = "medium"
+        evidence.append({
+            "claim": claim,
+            "quote": quote,
+            "element_type": element_type,
+            "confidence": confidence,
+            "validated": False,
+            "pass": 2,
+        })
+
+    if not evidence:
+        logger.warning("Pass-2 JSON has zero evidence items — discarding")
+        return [], reassessed_type, reassessed_framework
+
+    # Cap at 10
+    if len(evidence) > 10:
+        logger.info("Pass-2 evidence capped at 10 (had %d)", len(evidence))
+        evidence = evidence[:10]
+
+    return evidence, reassessed_type, reassessed_framework
 
 
 def analyze_slides(
@@ -214,36 +319,33 @@ def analyze_slides(
     cache_dir: Optional[Path] = None,
     slide_texts: Optional[dict[int, "SlideText"]] = None,
     force_miss: bool = False,
+    provider_name: str = "anthropic",
 ) -> tuple[dict[int, SlideAnalysis], CacheStats]:
-    """Analyze slides via Claude API with caching.
+    """Analyze slides via LLM provider with caching.
 
     Args:
         image_paths: Ordered list of slide image paths.
-        model: Claude model to use.
+        model: LLM model to use.
         cache_dir: Directory for analysis cache. If None, no caching.
         slide_texts: Extracted text per slide for evidence validation.
         force_miss: Skip cache reads but still write fresh results (G3).
+        provider_name: Provider adapter to use (default: anthropic).
 
     Returns:
         Tuple of (results dict, CacheStats).
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+    try:
+        provider = get_provider(provider_name)
+        client = provider.create_client()
+    except (ValueError, Exception) as e:
         logger.warning(
-            "ANTHROPIC_API_KEY not set. Skipping LLM analysis. "
-            "Set the env var to enable framework detection."
+            "LLM provider '%s' unavailable: %s. Skipping analysis.",
+            provider_name, e,
         )
         return {i + 1: SlideAnalysis.pending() for i in range(len(image_paths))}, CacheStats()
 
     # Load cache (skip read when force_miss)
     cache = _load_cache(cache_dir, model=model) if cache_dir and not force_miss else {}
-
-    try:
-        from anthropic import Anthropic
-        client = Anthropic()
-    except ImportError:
-        logger.warning("anthropic package not installed. Skipping analysis.")
-        return {i + 1: SlideAnalysis.pending() for i in range(len(image_paths))}, CacheStats()
 
     stats = CacheStats(pass_name="pass1")
     results = {}
@@ -271,7 +373,7 @@ def analyze_slides(
         stats.misses += 1
         logger.info("Analyzing slide %d/%d...", i, len(image_paths))
         slide_text = slide_texts.get(i) if slide_texts else None
-        analysis = _analyze_single_slide(client, image_path, model, slide_text=slide_text)
+        analysis = _analyze_single_slide(provider, client, image_path, model, slide_text=slide_text)
         results[i] = analysis
 
         # Update cache (B1: store _text_hash per entry)
@@ -292,13 +394,10 @@ def analyze_slides(
 
 
 def _analyze_single_slide(
-    client, image_path: Path, model: str, max_retries: int = 1,
+    provider, client: Any, image_path: Path, model: str, max_retries: int = 1,
     slide_text: Optional["SlideText"] = None,
 ) -> SlideAnalysis:
-    """Analyze a single slide image via Claude API."""
-    image_data = base64.b64encode(image_path.read_bytes()).decode("utf-8")
-    media_type = "image/png"
-
+    """Analyze a single slide image via LLM provider."""
     # Build prompt with text context
     text_context = _build_text_context(slide_text)
     if text_context:
@@ -306,41 +405,26 @@ def _analyze_single_slide(
     else:
         full_prompt = ANALYSIS_PROMPT + "\n\nNOTE: No extracted text available for this slide. Base analysis on visual content only."
 
+    inp = ProviderInput(image_path=image_path, prompt=full_prompt, max_tokens=2048)
+
     for attempt in range(max_retries + 1):
         try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=2048,
-                timeout=120.0,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": image_data,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": full_prompt,
-                        },
-                    ],
-                }],
-            )
-            if getattr(response, 'stop_reason', None) == "max_tokens":
+            output = provider.analyze(client, model, inp)
+
+            if output.truncated:
                 logger.warning("Slide analysis truncated (max_tokens) — treating as pending")
                 return SlideAnalysis.pending()
-            raw_text = response.content[0].text
 
-            # Validate response structure
-            if not _is_valid_pass1_response(raw_text):
-                logger.warning("Pass-1 response missing required fields — treating as pending")
+            raw_text = output.raw_text
+
+            # Extract and normalize JSON
+            json_str = _extract_json(raw_text)
+            if json_str is None:
+                logger.warning("Pass-1 response is not valid JSON — treating as pending")
                 return SlideAnalysis.pending()
 
-            analysis = _parse_analysis(raw_text)
+            data = json.loads(json_str)
+            analysis = _normalize_pass1_json(data)
 
             # Validate evidence against extracted text
             if slide_text and analysis.evidence:
@@ -357,98 +441,8 @@ def _analyze_single_slide(
                 return SlideAnalysis.pending()
 
 
-def _parse_analysis(raw_text: str) -> SlideAnalysis:
-    """Parse structured analysis from LLM response text."""
-    analysis = SlideAnalysis()
-
-    patterns = {
-        "slide_type": r"Slide Type:\s*(.+?)(?:\n|$)",
-        "framework": r"Framework:\s*(.+?)(?:\n|$)",
-        "visual_description": r"Visual Description:\s*(.+?)(?=\nKey Data:|\n\n|$)",
-        "key_data": r"Key Data:\s*(.+?)(?=\nMain Insight:|\n\n|$)",
-        "main_insight": r"Main Insight:\s*(.+?)(?=\nEvidence:|\n\n|$)",
-    }
-
-    for field_name, pattern in patterns.items():
-        match = re.search(pattern, raw_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            value = match.group(1).strip()
-            # Normalize slide_type and framework to lowercase-hyphenated
-            if field_name in ("slide_type", "framework"):
-                value = value.lower().replace(" ", "-")
-            setattr(analysis, field_name, value)
-
-    # Parse evidence blocks
-    analysis.evidence = _parse_evidence(raw_text)
-
-    return analysis
-
-
-def _parse_evidence(raw_text: str) -> list[dict]:
-    """Parse evidence blocks from LLM response.
-
-    Expects format:
-    Evidence:
-    - Claim: ...
-      Quote: "..."
-      Element: title|body|note
-      Confidence: high|medium|low
-    """
-    evidence_items = []
-
-    # Find the Evidence: section
-    evidence_match = re.search(r"Evidence:\s*\n", raw_text, re.IGNORECASE)
-    if not evidence_match:
-        return []
-
-    evidence_text = raw_text[evidence_match.end():]
-
-    # Split into individual evidence items by "- Claim:" pattern
-    item_pattern = re.compile(r"^-\s*Claim:\s*", re.MULTILINE)
-    item_starts = list(item_pattern.finditer(evidence_text))
-
-    for idx, match in enumerate(item_starts):
-        start = match.start()
-        end = item_starts[idx + 1].start() if idx + 1 < len(item_starts) else len(evidence_text)
-        item_text = evidence_text[start:end]
-
-        item = _parse_single_evidence(item_text)
-        if item:
-            evidence_items.append(item)
-
-    return evidence_items
-
-
-def _parse_single_evidence(item_text: str) -> Optional[dict]:
-    """Parse a single evidence item from text block."""
-    claim_match = re.search(r"Claim:\s*(.+?)(?:\n|$)", item_text, re.IGNORECASE)
-    quote_match = re.search(r'Quote:\s*"?([^"]*?)"?\s*(?:\n|$)', item_text, re.IGNORECASE)
-    element_match = re.search(r"Element:\s*(\w+)", item_text, re.IGNORECASE)
-    confidence_match = re.search(r"Confidence:\s*(\w+)", item_text, re.IGNORECASE)
-
-    if not claim_match:
-        return None
-
-    claim = claim_match.group(1).strip()
-    quote = quote_match.group(1).strip() if quote_match else ""
-    element_type = element_match.group(1).strip().lower() if element_match else "body"
-    confidence = confidence_match.group(1).strip().lower() if confidence_match else "medium"
-
-    # Normalize confidence
-    if confidence not in ("high", "medium", "low"):
-        confidence = "medium"
-    # Normalize element type
-    if element_type not in ("title", "body", "note"):
-        element_type = "body"
-
-    return {
-        "claim": claim,
-        "quote": quote,
-        "element_type": element_type,
-        "confidence": confidence,
-        "validated": False,
-        "pass": 1,
-    }
+# Prose parsers (_parse_analysis, _parse_evidence, _parse_single_evidence)
+# deleted in v0.4.0 — replaced by _extract_json + _normalize_pass1_json / _normalize_pass2_json.
 
 
 def _validate_evidence(evidence: list[dict], slide_text: "SlideText") -> None:
@@ -506,19 +500,24 @@ Now extract additional details:
 3. Assumptions implied by the slide
 4. Caveats or limitations mentioned or implied
 
-Slide Type Reassessment: [same type as above, or a corrected type, or "unchanged"]
-Framework Reassessment: [same framework as above, or a corrected framework, or "unchanged"]
+Return a single JSON object with exactly this structure (no other text):
 
-For each finding, cite the exact text from the slide.
+{
+  "slide_type_reassessment": "<corrected type or 'unchanged'>",
+  "framework_reassessment": "<corrected framework or 'unchanged'>",
+  "evidence": [
+    {
+      "claim": "<what this evidence supports>",
+      "quote": "<exact text from the slide>",
+      "element_type": "<title|body|note>",
+      "confidence": "<high|medium|low>"
+    }
+  ]
+}
 
-Format your response exactly as:
-Slide Type Reassessment: [type or "unchanged"]
-Framework Reassessment: [framework or "unchanged"]
-Evidence:
-- Claim: [what this evidence supports]
-  Quote: "[exact text from slide]"
-  Element: [title|body|note]
-  Confidence: [high|medium|low]""")
+Rules:
+- Include at least one evidence item with an exact quote from the slide.
+- Return ONLY the JSON object, no markdown fences, no prose.""")
 
 DATA_HEAVY_TYPES = {"data", "framework"}
 
@@ -603,6 +602,7 @@ def analyze_slides_deep(
     density_threshold: float = 2.0,
     skip_slides: Optional[set[int]] = None,
     force_miss: bool = False,
+    provider_name: str = "anthropic",
 ) -> tuple[dict[int, SlideAnalysis], CacheStats]:
     """Run selective second pass on high-density slides.
 
@@ -620,9 +620,6 @@ def analyze_slides_deep(
     Returns:
         Tuple of (updated results dict, CacheStats).
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return pass1_results, CacheStats(pass_name="pass2")
 
     # Identify high-density slides
     dense_slides = []
@@ -649,9 +646,10 @@ def analyze_slides_deep(
     deep_cache = _load_cache_deep(cache_dir, model=model) if cache_dir and not force_miss else {}
 
     try:
-        from anthropic import Anthropic
-        client = Anthropic()
-    except ImportError:
+        provider = get_provider(provider_name)
+        client = provider.create_client()
+    except (ValueError, Exception) as e:
+        logger.warning("LLM provider '%s' unavailable for Pass 2: %s", provider_name, e)
         return pass1_results, CacheStats(pass_name="pass2")
 
     stats = CacheStats(pass_name="pass2")
@@ -719,7 +717,7 @@ def analyze_slides_deep(
         )
 
         new_evidence, reassessed_type, reassessed_framework = _run_depth_pass(
-            client, image_path, model, prompt,
+            provider, client, image_path, model, prompt,
             slide_text=slide_texts.get(slide_num),
         )
 
@@ -767,31 +765,11 @@ def analyze_slides_deep(
     return results, stats
 
 
-def _parse_depth_reassessment(raw_text: str) -> tuple[Optional[str], Optional[str]]:
-    """Parse slide type and framework reassessment from depth pass response.
-
-    Returns (reassessed_type, reassessed_framework), each None if unchanged or missing.
-    """
-    reassessed_type = None
-    reassessed_framework = None
-
-    type_match = re.search(r"Slide Type Reassessment:\s*(.+?)(?:\n|$)", raw_text, re.IGNORECASE)
-    if type_match:
-        value = type_match.group(1).strip().lower().replace(" ", "-")
-        if value != "unchanged":
-            reassessed_type = value
-
-    fw_match = re.search(r"Framework Reassessment:\s*(.+?)(?:\n|$)", raw_text, re.IGNORECASE)
-    if fw_match:
-        value = fw_match.group(1).strip().lower().replace(" ", "-")
-        if value != "unchanged":
-            reassessed_framework = value
-
-    return reassessed_type, reassessed_framework
+# _parse_depth_reassessment deleted in v0.4.0 — replaced by _normalize_pass2_json.
 
 
 def _run_depth_pass(
-    client, image_path: Path, model: str, prompt: str,
+    provider, client: Any, image_path: Path, model: str, prompt: str,
     slide_text: Optional["SlideText"] = None,
     max_retries: int = 1,
 ) -> tuple[list[dict], Optional[str], Optional[str]]:
@@ -800,9 +778,6 @@ def _run_depth_pass(
     Returns:
         Tuple of (evidence_items, reassessed_slide_type, reassessed_framework).
     """
-    image_data = base64.b64encode(image_path.read_bytes()).decode("utf-8")
-    media_type = "image/png"
-
     # Build prompt with text context
     text_context = _build_text_context(slide_text)
     if text_context:
@@ -810,42 +785,26 @@ def _run_depth_pass(
     else:
         full_prompt = prompt
 
+    inp = ProviderInput(image_path=image_path, prompt=full_prompt, max_tokens=1500)
+
     for attempt in range(max_retries + 1):
         try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=1500,
-                timeout=120.0,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": image_data,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": full_prompt,
-                        },
-                    ],
-                }],
-            )
-            if getattr(response, 'stop_reason', None) == "max_tokens":
+            output = provider.analyze(client, model, inp)
+
+            if output.truncated:
                 logger.warning("Depth pass truncated (max_tokens) — discarding")
                 return [], None, None
-            raw_text = response.content[0].text
 
-            # Validate response structure
-            if not _is_valid_pass2_response(raw_text):
-                logger.warning("Pass-2 response missing required fields — discarding")
+            raw_text = output.raw_text
+
+            # Extract and normalize JSON
+            json_str = _extract_json(raw_text)
+            if json_str is None:
+                logger.warning("Pass-2 response is not valid JSON — discarding")
                 return [], None, None
 
-            evidence = _parse_evidence(raw_text)
-            reassessed_type, reassessed_framework = _parse_depth_reassessment(raw_text)
+            data = json.loads(json_str)
+            evidence, reassessed_type, reassessed_framework = _normalize_pass2_json(data)
 
             # Validate against source text
             if slide_text and evidence:

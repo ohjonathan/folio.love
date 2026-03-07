@@ -26,59 +26,57 @@ def _mock_anthropic_response(text: str):
 
 
 MOCK_PASS1_RESPONSES = {
-    1: """Slide Type: title
-Framework: none
-Visual Description: Title slide with company name and quarter indicator.
-Key Data: Q1 2026
-Main Insight: Opening slide for quarterly market review.
-Evidence:
-- Claim: Quarter identification
-  Quote: "Q1 2026 Review"
-  Element: body
-  Confidence: high""",
-    2: """Slide Type: data
-Framework: tam-sam-som
-Visual Description: Revenue metrics with TAM/SAM/SOM breakdown and growth projections.
-Key Data: TAM $4.2B, SAM $1.2B, SOM $300M, CAGR 12%, Revenue $10M
-Main Insight: Strong market opportunity with clear path to 5% market share.
-Evidence:
-- Claim: Market sizing
-  Quote: "TAM $4.2B"
-  Element: body
-  Confidence: high
-- Claim: Growth projection
-  Quote: "CAGR 12% projected through 2028"
-  Element: body
-  Confidence: high
-- Claim: Revenue figure
-  Quote: "Revenue $10M in FY2025"
-  Element: body
-  Confidence: high""",
-    3: """Slide Type: next-steps
-Framework: none
-Visual Description: Simple text slide with action items.
-Key Data: None
-Main Insight: Follow-up actions for client engagement.
-Evidence:
-- Claim: Action item
-  Quote: "Follow up with client on timeline"
-  Element: body
-  Confidence: medium""",
+    1: json.dumps({
+        "slide_type": "title",
+        "framework": "none",
+        "visual_description": "Title slide with company name and quarter indicator.",
+        "key_data": "Q1 2026",
+        "main_insight": "Opening slide for quarterly market review.",
+        "evidence": [
+            {"claim": "Quarter identification", "quote": "Q1 2026 Review",
+             "element_type": "body", "confidence": "high"},
+        ],
+    }),
+    2: json.dumps({
+        "slide_type": "data",
+        "framework": "tam-sam-som",
+        "visual_description": "Revenue metrics with TAM/SAM/SOM breakdown and growth projections.",
+        "key_data": "TAM $4.2B, SAM $1.2B, SOM $300M, CAGR 12%, Revenue $10M",
+        "main_insight": "Strong market opportunity with clear path to 5% market share.",
+        "evidence": [
+            {"claim": "Market sizing", "quote": "TAM $4.2B",
+             "element_type": "body", "confidence": "high"},
+            {"claim": "Growth projection", "quote": "CAGR 12% projected through 2028",
+             "element_type": "body", "confidence": "high"},
+            {"claim": "Revenue figure", "quote": "Revenue $10M in FY2025",
+             "element_type": "body", "confidence": "high"},
+        ],
+    }),
+    3: json.dumps({
+        "slide_type": "next-steps",
+        "framework": "none",
+        "visual_description": "Simple text slide with action items.",
+        "key_data": "",
+        "main_insight": "Follow-up actions for client engagement.",
+        "evidence": [
+            {"claim": "Action item", "quote": "Follow up with client on timeline",
+             "element_type": "body", "confidence": "medium"},
+        ],
+    }),
 }
 
-MOCK_PASS2_RESPONSE = """Evidence:
-- Claim: Revenue growth rate
-  Quote: "projected $15M in FY2026"
-  Element: body
-  Confidence: high
-- Claim: Expansion strategy
-  Quote: "enterprise expansion, product-led growth"
-  Element: body
-  Confidence: medium
-- Claim: International timeline
-  Quote: "international markets opening Q3 2026"
-  Element: body
-  Confidence: high"""
+MOCK_PASS2_RESPONSE = json.dumps({
+    "slide_type_reassessment": "unchanged",
+    "framework_reassessment": "unchanged",
+    "evidence": [
+        {"claim": "Revenue growth rate", "quote": "projected $15M in FY2026",
+         "element_type": "body", "confidence": "high"},
+        {"claim": "Expansion strategy", "quote": "enterprise expansion, product-led growth",
+         "element_type": "body", "confidence": "medium"},
+        {"claim": "International timeline", "quote": "international markets opening Q3 2026",
+         "element_type": "body", "confidence": "high"},
+    ],
+})
 
 
 class TestGroundingSummary:
@@ -735,10 +733,7 @@ class TestEndToEndConverter:
                         if isinstance(content, dict) and content.get("type") == "text":
                             prompt_text = content.get("text", "")
                 if "prior_analysis" in prompt_text.lower():
-                    return _mock_anthropic_response(
-                        "Slide Type Reassessment: unchanged\n"
-                        "Framework Reassessment: unchanged\n" + MOCK_PASS2_RESPONSE
-                    )
+                    return _mock_anthropic_response(MOCK_PASS2_RESPONSE)
                 idx = min(call_idx[0], 3)
                 return _mock_anthropic_response(MOCK_PASS1_RESPONSES[idx])
 

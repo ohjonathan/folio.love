@@ -50,25 +50,27 @@ def _mock_anthropic_response(text: str):
     return mock_response
 
 
-MOCK_PASS1 = """Slide Type: data
-Framework: tam-sam-som
-Visual Description: Revenue chart.
-Key Data: $10M
-Main Insight: Growing revenue.
-Evidence:
-- Claim: Revenue
-  Quote: "$10M"
-  Element: body
-  Confidence: high"""
+MOCK_PASS1 = json.dumps({
+    "slide_type": "data",
+    "framework": "tam-sam-som",
+    "visual_description": "Revenue chart.",
+    "key_data": "$10M",
+    "main_insight": "Growing revenue.",
+    "evidence": [
+        {"claim": "Revenue", "quote": "$10M",
+         "element_type": "body", "confidence": "high"},
+    ],
+})
 
 
-MOCK_PASS2 = """Slide Type Reassessment: unchanged
-Framework Reassessment: unchanged
-Evidence:
-- Claim: Growth rate
-  Quote: "15% YoY"
-  Element: body
-  Confidence: high"""
+MOCK_PASS2 = json.dumps({
+    "slide_type_reassessment": "unchanged",
+    "framework_reassessment": "unchanged",
+    "evidence": [
+        {"claim": "Growth rate", "quote": "15% YoY",
+         "element_type": "body", "confidence": "high"},
+    ],
+})
 
 
 # ---------------------------------------------------------------------------
