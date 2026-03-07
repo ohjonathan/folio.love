@@ -253,11 +253,7 @@ class FolioConfig:
                         fallbacks=rdata.get("fallbacks", []),
                     )
 
-            # Ensure routing.default exists (spec §3.2)
-            if "default" not in routing:
-                # Auto-create default route pointing to first profile
-                first_profile = next(iter(profiles))
-                routing["default"] = LLMRoute(primary=first_profile)
+            # routing.default is required (spec §3.2) — validated by _validate_llm()
 
             llm = LLMConfig(
                 profiles=profiles,

@@ -487,9 +487,8 @@ class TestRuntimeFallbackChain:
                 "anthropic",
                 fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],
             )
-        # Even though fallback is available, permanent error returns pending
-        # The result comes from primary (pending), then fallback IS attempted
-        # because _analyze_with_fallback checks slide_type == "pending" not
-        # the error disposition directly. This is correct: fallback tries.
-        # But the permanent error produces a provider-specific pending message.
+        # Permanent error: fallback must NOT be triggered (spec §6.2)
         assert analysis.slide_type == "pending"
+        assert used_provider == "anthropic"  # stayed on primary
+        assert "rejected the request" in analysis.visual_description
+        fallback.analyze.assert_not_called()

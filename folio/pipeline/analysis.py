@@ -460,48 +460,60 @@ def _analyze_with_fallback(
     slide_text: Optional["SlideText"] = None,
     fallback_chain: Optional[list] = None,
 ) -> tuple[SlideAnalysis, str, str]:
-    """Try primary provider then fallback chain on transient failures.
+    """Try primary provider then fallback chain on transient failures only.
 
     Per spec §6.2: 1 retry on primary, then try each fallback in order.
+    Fallback is ONLY triggered for transient failures, not permanent errors,
+    truncation, or malformed output.
 
     Returns:
         Tuple of (analysis, used_provider_name, used_model).
     """
     # Try primary
-    analysis = _analyze_single_slide(
+    analysis, failure_kind = _analyze_single_slide(
         primary_provider, primary_client, image_path, primary_model,
         slide_text=slide_text,
     )
-    if analysis.slide_type != "pending":
+    if failure_kind == "success":
         return analysis, primary_name, primary_model
 
-    # Primary failed — try fallback chain (transient only)
-    for fb_provider, fb_client, fb_model, fb_name in (fallback_chain or []):
+    # Only fallback on transient exhaustion (spec §6.2)
+    if failure_kind != "transient" or not fallback_chain:
+        return analysis, primary_name, primary_model
+
+    # Primary exhausted transiently — try fallback chain
+    for fb_provider, fb_client, fb_model, fb_name in fallback_chain:
         logger.info("Falling back to provider '%s' for slide analysis", fb_name)
-        analysis = _analyze_single_slide(
+        fb_analysis, fb_failure = _analyze_single_slide(
             fb_provider, fb_client, image_path, fb_model,
             slide_text=slide_text,
         )
-        if analysis.slide_type != "pending":
-            return analysis, fb_name, fb_model
+        if fb_failure == "success":
+            return fb_analysis, fb_name, fb_model
 
     # All exhausted
-    if fallback_chain:
-        route_name = "convert"
-        return (
-            SlideAnalysis.pending(
-                f"Analysis pending — all configured providers for route '{route_name}' failed transiently"
-            ),
-            primary_name, primary_model,
-        )
-    return analysis, primary_name, primary_model
+    route_name = "convert"
+    return (
+        SlideAnalysis.pending(
+            f"Analysis pending — all configured providers for route '{route_name}' failed transiently"
+        ),
+        primary_name, primary_model,
+    )
 
 
 def _analyze_single_slide(
     provider, client: Any, image_path: Path, model: str, max_retries: int = 1,
     slide_text: Optional["SlideText"] = None,
-) -> SlideAnalysis:
-    """Analyze a single slide image via LLM provider."""
+) -> tuple[SlideAnalysis, str]:
+    """Analyze a single slide image via LLM provider.
+
+    Returns:
+        Tuple of (SlideAnalysis, failure_kind) where failure_kind is one of:
+        - "success": analysis completed normally
+        - "transient": all retries exhausted on transient errors (fallback eligible)
+        - "permanent": permanent provider error (NOT fallback eligible)
+        - "malformed": response parsed but was truncated/invalid (NOT fallback eligible)
+    """
     # Build prompt with text context
     text_context = _build_text_context(slide_text)
     if text_context:
@@ -517,7 +529,7 @@ def _analyze_single_slide(
 
             if output.truncated:
                 logger.warning("Slide analysis truncated (max_tokens) — treating as pending")
-                return SlideAnalysis.pending()
+                return SlideAnalysis.pending(), "malformed"
 
             raw_text = output.raw_text
 
@@ -525,7 +537,7 @@ def _analyze_single_slide(
             json_str = _extract_json(raw_text)
             if json_str is None:
                 logger.warning("Pass-1 response is not valid JSON — treating as pending")
-                return SlideAnalysis.pending()
+                return SlideAnalysis.pending(), "malformed"
 
             data = json.loads(json_str)
             analysis = _normalize_pass1_json(data)
@@ -534,7 +546,7 @@ def _analyze_single_slide(
             if slide_text and analysis.evidence:
                 _validate_evidence(analysis.evidence, slide_text)
 
-            return analysis
+            return analysis, "success"
 
         except Exception as e:
             disposition = provider.classify_error(e)
@@ -544,19 +556,25 @@ def _analyze_single_slide(
                     attempt + 1, e,
                 )
                 time.sleep(2 ** attempt)
-            else:
-                label = "permanent" if disposition == ErrorDisposition.PERMANENT else "exhausted retries"
+            elif disposition == ErrorDisposition.PERMANENT:
                 logger.warning(
-                    "Slide analysis failed (%s) after %d attempt(s): %s",
-                    label, attempt + 1, e,
+                    "Slide analysis failed (permanent) after %d attempt(s): %s",
+                    attempt + 1, e,
                 )
                 reason = (
                     f"Analysis pending — provider '{provider.provider_name}' "
                     f"rejected the request"
-                    if disposition == ErrorDisposition.PERMANENT
-                    else ""
                 )
-                return SlideAnalysis.pending(reason)
+                return SlideAnalysis.pending(reason), "permanent"
+            else:
+                logger.warning(
+                    "Slide analysis failed (exhausted retries) after %d attempt(s): %s",
+                    attempt + 1, e,
+                )
+                return SlideAnalysis.pending(), "transient"
+
+    # Should not reach here, but guard
+    return SlideAnalysis.pending(), "transient"
 
 
 # Prose parsers (_parse_analysis, _parse_evidence, _parse_single_evidence)
@@ -777,6 +795,16 @@ def analyze_slides_deep(
         logger.warning("LLM provider '%s' unavailable for Pass 2: %s", provider_name, e)
         return pass1_results, CacheStats(pass_name="pass2"), stage_meta
 
+    # Build fallback chain for pass 2
+    fallback_chain = []
+    for fb_provider_name, fb_model, fb_api_key_env in (fallback_profiles or []):
+        try:
+            fb_provider = get_provider(fb_provider_name)
+            fb_client = fb_provider.create_client(api_key_env=fb_api_key_env)
+            fallback_chain.append((fb_provider, fb_client, fb_model, fb_provider_name))
+        except Exception as e:
+            logger.warning("Pass 2 fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
+
     stats = CacheStats(pass_name="pass2")
     results = dict(pass1_results)  # Copy
 
@@ -831,7 +859,7 @@ def analyze_slides_deep(
                             results[slide_num].pass2_framework = reassessed_framework
                         continue
 
-        # API call (cache miss)
+        # API call (cache miss) — with fallback
         stats.misses += 1
         analysis = results[slide_num]
         prompt = DEPTH_PROMPT.safe_substitute(
@@ -841,9 +869,10 @@ def analyze_slides_deep(
             main_insight=_sanitize_for_prompt(analysis.main_insight, 200),
         )
 
-        new_evidence, reassessed_type, reassessed_framework = _run_depth_pass(
+        new_evidence, reassessed_type, reassessed_framework = _run_depth_with_fallback(
             provider, client, image_path, model, prompt,
             slide_text=slide_texts.get(slide_num),
+            fallback_chain=fallback_chain,
         )
 
         # Store in cache (B2: include _text_hash + _pass1_hash)
@@ -900,11 +929,12 @@ def _run_depth_pass(
     provider, client: Any, image_path: Path, model: str, prompt: str,
     slide_text: Optional["SlideText"] = None,
     max_retries: int = 1,
-) -> tuple[list[dict], Optional[str], Optional[str]]:
+) -> tuple[list[dict], Optional[str], Optional[str], str]:
     """Run a depth pass on a single slide.
 
     Returns:
-        Tuple of (evidence_items, reassessed_slide_type, reassessed_framework).
+        Tuple of (evidence_items, reassessed_slide_type, reassessed_framework, failure_kind).
+        failure_kind is "success", "transient", "permanent", or "malformed".
     """
     # Build prompt with text context
     text_context = _build_text_context(slide_text)
@@ -921,7 +951,7 @@ def _run_depth_pass(
 
             if output.truncated:
                 logger.warning("Depth pass truncated (max_tokens) — discarding")
-                return [], None, None
+                return [], None, None, "malformed"
 
             raw_text = output.raw_text
 
@@ -929,7 +959,7 @@ def _run_depth_pass(
             json_str = _extract_json(raw_text)
             if json_str is None:
                 logger.warning("Pass-2 response is not valid JSON — discarding")
-                return [], None, None
+                return [], None, None, "malformed"
 
             data = json.loads(json_str)
             evidence, reassessed_type, reassessed_framework = _normalize_pass2_json(data)
@@ -938,7 +968,7 @@ def _run_depth_pass(
             if slide_text and evidence:
                 _validate_evidence(evidence, slide_text)
 
-            return evidence, reassessed_type, reassessed_framework
+            return evidence, reassessed_type, reassessed_framework, "success"
 
         except Exception as e:
             disposition = provider.classify_error(e)
@@ -948,13 +978,50 @@ def _run_depth_pass(
                     attempt + 1, e,
                 )
                 time.sleep(2 ** attempt)
-            else:
-                label = "permanent" if disposition == ErrorDisposition.PERMANENT else "exhausted retries"
+            elif disposition == ErrorDisposition.PERMANENT:
                 logger.warning(
-                    "Depth pass failed (%s) after %d attempt(s): %s",
-                    label, attempt + 1, e,
+                    "Depth pass failed (permanent) after %d attempt(s): %s",
+                    attempt + 1, e,
                 )
-                return [], None, None
+                return [], None, None, "permanent"
+            else:
+                logger.warning(
+                    "Depth pass failed (exhausted retries) after %d attempt(s): %s",
+                    attempt + 1, e,
+                )
+                return [], None, None, "transient"
+
+    return [], None, None, "transient"
+
+
+def _run_depth_with_fallback(
+    primary_provider, primary_client, image_path: Path, primary_model: str,
+    prompt: str,
+    slide_text: Optional["SlideText"] = None,
+    fallback_chain: Optional[list] = None,
+) -> tuple[list[dict], Optional[str], Optional[str]]:
+    """Run depth pass with transient-only fallback (spec §6.2)."""
+    evidence, rt, rf, failure_kind = _run_depth_pass(
+        primary_provider, primary_client, image_path, primary_model, prompt,
+        slide_text=slide_text,
+    )
+    if failure_kind == "success":
+        return evidence, rt, rf
+
+    # Only fallback on transient
+    if failure_kind != "transient" or not fallback_chain:
+        return evidence, rt, rf
+
+    for fb_provider, fb_client, fb_model, fb_name in fallback_chain:
+        logger.info("Pass 2: falling back to provider '%s'", fb_name)
+        evidence, rt, rf, fb_failure = _run_depth_pass(
+            fb_provider, fb_client, image_path, fb_model, prompt,
+            slide_text=slide_text,
+        )
+        if fb_failure == "success":
+            return evidence, rt, rf
+
+    return [], None, None
 
 
 def _load_cache_deep(cache_dir: Path, model: str | None = None, provider: str | None = None) -> dict:
