@@ -191,6 +191,10 @@ def _format_version_history(history: list[dict], max_display: int = 10) -> str:
         "",
     ]
 
+    # Guard against nonsensical max_display values (S1, S2)
+    if max_display <= 0:
+        max_display = len(history)
+
     total = len(history)
     if total > max_display:
         lines.append(f"*Showing last {max_display} of {total} versions.*")
@@ -210,7 +214,7 @@ def _format_version_history(history: list[dict], max_display: int = 10) -> str:
         if ch.get("added"):
             count = len(ch["added"])
             changes_parts.append(
-                f"Initial ({count} slides)" if v["version"] == 1
+                f"Initial ({count} slides)" if v.get("version") == 1
                 else f"{count} added"
             )
         if ch.get("modified"):
@@ -220,9 +224,10 @@ def _format_version_history(history: list[dict], max_display: int = 10) -> str:
 
         changes_str = ", ".join(changes_parts) if changes_parts else "No changes"
         note = v.get("note") or "—"
-        date = v["timestamp"][:10]
+        date = v.get("timestamp", "unknown")[:10]
+        version_label = v.get("version", "?")
 
-        lines.append(f"| v{v['version']} | {date} | {changes_str} | {note} |")
+        lines.append(f"| v{version_label} | {date} | {changes_str} | {note} |")
 
     lines.append("")
     return "\n".join(lines)

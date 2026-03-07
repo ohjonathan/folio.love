@@ -382,6 +382,11 @@ class TestVersionHistoryTruncation:
         # Versions 1-5 NOT shown
         for i in range(1, 6):
             assert f"| v{i} |" not in output
+        # S4: Validate row order — first data row should be highest version (newest first)
+        table_rows = [line for line in output.split("\n") if line.startswith("| v")]
+        assert len(table_rows) == 10
+        assert table_rows[0].startswith("| v15 |")  # Newest first
+        assert table_rows[-1].startswith("| v6 |")  # Oldest last
 
     def test_version_history_table_default_limit(self):
         history = _make_history(15)
@@ -391,3 +396,29 @@ class TestVersionHistoryTruncation:
         # Only last 10 shown
         for i in range(6, 16):
             assert f"v{i}" in output
+
+    def test_max_display_zero_shows_all(self):
+        """S1: max_display=0 should show all versions, not zero."""
+        history = _make_history(5)
+        output = _format_version_history(history, max_display=0)
+        assert "Showing last" not in output
+        for i in range(1, 6):
+            assert f"v{i}" in output
+
+    def test_max_display_negative_shows_all(self):
+        """S2: Negative max_display should show all versions."""
+        history = _make_history(5)
+        output = _format_version_history(history, max_display=-1)
+        assert "Showing last" not in output
+        for i in range(1, 6):
+            assert f"v{i}" in output
+
+    def test_malformed_history_entry_no_crash(self):
+        """S3: Malformed history entry (missing timestamp/version) doesn't crash."""
+        history = [
+            {"changes": {"added": [1], "modified": [], "removed": []}, "note": None},
+        ]
+        # Should not raise KeyError
+        output = _format_version_history(history)
+        assert "v?" in output
+        assert "unkno" in output  # "unknown"[:10]

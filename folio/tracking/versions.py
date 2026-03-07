@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -257,7 +258,6 @@ def _normalize_text(text: str) -> str:
     trigger a new version here (correct: semantic content unchanged) but WILL
     cause an analysis cache miss (correct: different API prompt bytes). See D1.
     """
-    import re
     text = text.strip()
     text = re.sub(r"\s+", " ", text)
     return text
