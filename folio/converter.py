@@ -44,6 +44,9 @@ class FolioConverter:
         target: Optional[Path] = None,
         passes: Optional[int] = None,
         no_cache: bool = False,
+        subtype: str = "research",
+        industry: Optional[list[str]] = None,
+        extra_tags: Optional[list[str]] = None,
     ) -> ConversionResult:
         """Convert a single PPTX/PDF to Folio markdown.
 
@@ -53,6 +56,9 @@ class FolioConverter:
             client: Client name (for frontmatter and ID).
             engagement: Engagement identifier (for frontmatter and ID).
             target: Override target directory in library.
+            subtype: Evidence subtype (default "research").
+            industry: Industry tags (optional).
+            extra_tags: Manual tags to merge with auto-generated.
 
         Returns:
             ConversionResult with output path and metadata.
@@ -183,10 +189,14 @@ class FolioConverter:
             deck_id=deck_id,
             source_relative_path=source_info.relative_path,
             source_hash=source_info.file_hash,
+            source_type=_detect_source_type(source_path),
             version_info=version_info,
             analyses=slide_analyses,
+            subtype=subtype,
             client=client,
             engagement=engagement,
+            industry=industry,
+            extra_tags=extra_tags,
             existing_frontmatter=existing_fm,
             reconciliation_metadata=reconciliation_meta,
         )
@@ -252,6 +262,14 @@ def _alignment_status(confidence: float) -> str:
     elif confidence >= 0.3:
         return "degraded"
     return "untrusted"
+
+
+def _detect_source_type(source_path: Path) -> str:
+    """Detect source type from file extension."""
+    ext = source_path.suffix.lower()
+    if ext in (".pptx", ".ppt"):
+        return "deck"
+    return "pdf"
 
 
 def _sanitize_name(name: str) -> str:

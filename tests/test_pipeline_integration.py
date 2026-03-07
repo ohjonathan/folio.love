@@ -355,6 +355,7 @@ class TestPipelineIntegration:
             deck_id="test_id",
             source_relative_path="deck.pptx",
             source_hash="abc123",
+            source_type="deck",
             version_info=version_info,
             analyses=analyses,
         )
@@ -564,6 +565,7 @@ class TestFrontmatterSchemaFix:
         fm = generate(
             title="Test", deck_id="test_id",
             source_relative_path="deck.pptx", source_hash="abc123",
+            source_type="deck",
             version_info=version_info, analyses=analyses,
         )
         parsed = yaml.safe_load(fm.strip("---").strip())
@@ -588,6 +590,7 @@ class TestFrontmatterSchemaFix:
         fm = generate(
             title="Test", deck_id="new_id_456",
             source_relative_path="deck.pptx", source_hash="def456",
+            source_type="deck",
             version_info=version_info, analyses=analyses,
             existing_frontmatter=existing_fm,
         )
@@ -610,6 +613,7 @@ class TestFrontmatterSchemaFix:
         fm = generate(
             title="Test", deck_id="fresh_id",
             source_relative_path="deck.pptx", source_hash="abc123",
+            source_type="deck",
             version_info=version_info, analyses=analyses,
         )
         parsed = yaml.safe_load(fm.strip("---").strip())
