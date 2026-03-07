@@ -45,6 +45,13 @@ cd folio.love
 pip install -e .
 ```
 
+Anthropic support is included in the base install. If you want to use OpenAI or
+Google Gemini, install the optional provider SDKs too:
+
+```bash
+pip install -e ".[llm]"
+```
+
 **First conversion**
 
 ```bash
@@ -64,7 +71,48 @@ export ANTHROPIC_API_KEY=sk-ant-...
 folio convert deck.pptx --passes 2
 ```
 
-Without an API key, analysis is skipped gracefully -- the tool is useful immediately for text extraction, images, and version tracking.
+Folio now supports Anthropic, OpenAI, and Google Gemini for slide analysis.
+Configure named profiles in `folio.yaml`, then either use the default `convert`
+route or override it per run with `--llm-profile`.
+
+```yaml
+llm:
+  profiles:
+    high_quality_anthropic:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+      api_key_env: ANTHROPIC_API_KEY
+
+    fast_openai:
+      provider: openai
+      model: gpt-4o-mini
+      api_key_env: OPENAI_API_KEY
+
+    backup_google:
+      provider: google
+      model: gemini-2.5-pro
+      api_key_env: GEMINI_API_KEY
+
+  routing:
+    default:
+      primary: high_quality_anthropic
+      fallbacks: []
+    convert:
+      primary: high_quality_anthropic
+      fallbacks: [backup_google]
+```
+
+```bash
+# Uses llm.routing.convert
+folio convert deck.pptx --passes 2
+
+# Force a specific profile for this run (disables route fallbacks)
+folio convert deck.pptx --llm-profile fast_openai
+```
+
+Without a valid provider SDK or API key, analysis is skipped gracefully. The
+tool still completes conversion and writes provider-aware pending-analysis
+messages into the markdown output.
 
 ## Commands
 
@@ -108,6 +156,7 @@ folio convert deck.pptx \
 | `--subtype` | Evidence subtype: `research`, `data_extract`, `external_report`, `benchmark` |
 | `--industry` | Industry tags, comma-separated |
 | `--tags` | Manual tags to merge with auto-generated, comma-separated |
+| `--llm-profile` | Override the configured LLM profile for this command |
 
 ### `folio batch`
 
@@ -128,7 +177,7 @@ Converting 3 files...
 Complete: 3 succeeded, 0 failed
 ```
 
-Accepts the same flags as `convert` (`--client`, `--engagement`, `--passes`, etc.). Default pattern is `*.pptx`.
+Accepts the same flags as `convert` (`--client`, `--engagement`, `--passes`, `--llm-profile`, etc.). Default pattern is `*.pptx`.
 
 ### `folio status`
 
@@ -198,6 +247,17 @@ tags:
 - ecommerce
 - market-sizing
 - retail
+_llm_metadata:
+  convert:
+    requested_profile: high_quality_anthropic
+    profile: high_quality_anthropic
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    fallback_used: false
+    status: executed
+    pass2:
+      status: skipped
+      reason: pass_disabled
 ---
 
 # Market Overview
@@ -233,10 +293,12 @@ tags:
 
 ## Configuration
 
-Folio looks for `folio.yaml` by walking up from the current directory. All fields are optional -- defaults work out of the box.
+Folio looks for `folio.yaml` by walking up from the current directory. All
+fields are optional, and the example below shows a multi-provider setup rather
+than the minimal default config.
 
 ```yaml
-# folio.yaml — all values below are the defaults
+# folio.yaml — example multi-provider configuration
 library_root: ./library              # Where converted decks are written
 
 sources:                             # Optional; organize source directories
@@ -245,8 +307,29 @@ sources:                             # Optional; organize source directories
     target_prefix: ""
 
 llm:
-  provider: anthropic                # Only supported provider
-  model: claude-sonnet-4-20250514    # API key via ANTHROPIC_API_KEY env var
+  profiles:
+    high_quality_anthropic:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+      api_key_env: ANTHROPIC_API_KEY
+
+    fast_openai:
+      provider: openai
+      model: gpt-4o-mini
+      api_key_env: OPENAI_API_KEY
+
+    backup_google:
+      provider: google
+      model: gemini-2.5-pro
+      api_key_env: GEMINI_API_KEY
+
+  routing:
+    default:
+      primary: high_quality_anthropic
+      fallbacks: []
+    convert:
+      primary: high_quality_anthropic
+      fallbacks: [backup_google]
 
 conversion:
   image_dpi: 150                     # Slide image resolution (px/in)
@@ -257,11 +340,23 @@ conversion:
   pptx_renderer: auto                # auto | libreoffice | powerpoint
 ```
 
-With no `folio.yaml`, Folio uses these defaults: output goes to `./library`, images render at 150 DPI, and analysis runs a single pass.
+Legacy shorthand is still supported for Anthropic-only setups:
+
+```yaml
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+```
+
+With no `folio.yaml`, Folio uses these defaults: output goes to `./library`,
+images render at 150 DPI, and analysis runs a single Anthropic-backed pass if
+`ANTHROPIC_API_KEY` is present.
 
 | Environment Variable | Purpose |
 |---------------------|---------|
-| `ANTHROPIC_API_KEY` | Enables LLM analysis (optional -- tool works without it) |
+| `ANTHROPIC_API_KEY` | Anthropic profile credentials |
+| `OPENAI_API_KEY` | OpenAI profile credentials (`pip install -e ".[llm]"`) |
+| `GEMINI_API_KEY` | Google Gemini profile credentials (`pip install -e ".[llm]"`) |
 
 ## How It Works
 
@@ -274,7 +369,8 @@ Input (.pptx/.ppt/.pdf)
   │
   ├─ Text ───────→ Extract structured text per slide, reconcile count
   │
-  ├─ Analysis ───→ LLM classification + evidence extraction (cached)
+  ├─ Analysis ───→ Route-based LLM classification + evidence extraction (cached)
+  │                 Optional transient fallback to backup profiles
   │                 Pass 2: selective re-analysis of dense slides
   │
   ├─ Tracking ───→ Version detection, per-slide change diffing

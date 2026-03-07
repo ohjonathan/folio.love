@@ -16,6 +16,27 @@ generated_by: ontos_scaffold
 
 ---
 
+## March 2026 Status Update
+
+Since this roadmap was published, `main` has shipped a significant LLM-analysis expansion in PR #8:
+
+- Multi-provider LLM analysis for `folio convert` with Anthropic, OpenAI, and Google Gemini
+- Bring-your-own credentials via environment variables referenced from `folio.yaml`
+- Named LLM profiles plus route-based selection for `convert`
+- `--llm-profile` CLI override for `convert` and `batch`
+- Transient-only fallback chains for `convert`
+- Provider/model-aware cache invalidation and `_llm_metadata` frontmatter provenance
+- Provider-aware graceful degradation when analysis cannot run
+
+This does **not** change the roadmap hierarchy. It does change the current implementation baseline: multi-provider LLM support is no longer future scope for Tier 1/Tier 2 planning; it is part of the shipped foundation.
+
+Remaining follow-up after PR #8:
+
+- Pass 2 fallback provenance should be surfaced more cleanly in execution metadata/frontmatter
+- Tier 1 quality validation still needs the planned 50-deck real-world run
+
+---
+
 ## The Hierarchy (Still Immutable)
 
 ```
@@ -128,8 +149,13 @@ tags:
 ### Week 3: LLM Analysis
 
 - Prompt engineering for consulting frameworks (2x2, SCR, MECE, waterfall, Gantt, org chart)
+- Multi-provider LLM analysis for `convert` (Anthropic, OpenAI, Google Gemini)
+- Named LLM profiles in `folio.yaml` with route-based selection for `convert`
+- `--llm-profile` override for deterministic single-profile runs
+- Provider-aware graceful degradation and transient-only fallback chains
 - Analysis validation against human judgment on 50 slides
 - Caching by image hash (skip unchanged slides on re-convert)
+- Cache invalidation scoped by provider/model/prompt identity
 - Error handling (graceful degradation, retry with backoff)
 
 **Deliverable:** 90%+ framework detection accuracy. Cached analysis persists across runs.
@@ -176,8 +202,8 @@ tags:
 ### Week 7-8: Package & CLI
 
 - Python package structure (pyproject.toml, pip installable)
-- `folio convert <file>` with --note, --target flags
-- `folio batch <dir>` with --pattern, progress, error-per-file
+- `folio convert <file>` with --note, --target, and `--llm-profile` flags
+- `folio batch <dir>` with --pattern, progress, error-per-file, and `--llm-profile`
 - `folio status [scope]` with client/project scoping
 - `folio scan` to find new/changed sources
 - `folio refresh` to re-convert stale decks
@@ -187,7 +213,7 @@ tags:
 
 ### Week 9-10: Library Organization
 
-- `folio.yaml` configuration (source roots, LLM settings, library root)
+- `folio.yaml` configuration (source roots, named LLM profiles/routing, library root)
 - Client/Project/Deck directory hierarchy
 - Internal and Research as top-level peers
 - Registry (registry.json) with full index, status aggregation
@@ -208,10 +234,12 @@ tags:
 ### Tier 2 Exit Criteria
 
 - [ ] CLI handles full daily workflow (convert, batch, status, scan, refresh, promote)
+- [ ] `folio convert` and `folio batch` support route-based LLM selection plus `--llm-profile` override
 - [ ] Multi-client library organized and navigable
 - [ ] Obsidian opens library with no errors
 - [ ] Dataview queries work for all frontmatter fields
 - [ ] Configuration supports multiple source roots
+- [ ] Configuration supports named LLM profiles and provider-specific credential references
 - [ ] Johnny uses it daily on real engagement for 2+ weeks
 
 ---
