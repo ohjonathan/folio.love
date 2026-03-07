@@ -225,6 +225,13 @@ class FolioConfig:
                         f"LLM route '{rname}' fallback '{fallback}' is the same as "
                         f"its primary profile — self-referencing fallback is not allowed"
                     )
+            # Reject duplicate fallback entries (M8)
+            if len(route.fallbacks) != len(set(route.fallbacks)):
+                dupes = [f for f in route.fallbacks if route.fallbacks.count(f) > 1]
+                raise ValueError(
+                    f"LLM route '{rname}' has duplicate fallback entries: "
+                    f"{', '.join(sorted(set(dupes)))}"
+                )
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":

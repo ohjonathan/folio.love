@@ -310,3 +310,22 @@ class TestLLMConfigValidation:
                     routing={"default": LLMRoute(primary="main", fallbacks=["main"])},
                 )
             )
+
+    def test_duplicate_fallback_rejects(self):
+        """M8: Duplicate fallback entries must be rejected."""
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="duplicate fallback"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "main": LLMProfile(name="main", provider="anthropic"),
+                        "backup": LLMProfile(name="backup", provider="openai"),
+                    },
+                    routing={
+                        "default": LLMRoute(
+                            primary="main",
+                            fallbacks=["backup", "backup"],
+                        ),
+                    },
+                )
+            )
