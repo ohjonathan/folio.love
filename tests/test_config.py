@@ -217,3 +217,64 @@ llm:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = runner.invoke(cli, ["batch", tmpdir, "--llm-profile", "default"])
             assert "No such option" not in (result.output or "")
+
+
+class TestLLMConfigValidation:
+    """Test LLM config validation per spec §3.2."""
+
+    def test_unsupported_provider_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="unsupported provider 'bogus'"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"bad": LLMProfile(name="bad", provider="bogus")},
+                    routing={"default": LLMRoute(primary="bad")},
+                )
+            )
+
+    def test_missing_routing_default_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="routing.default"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"main": LLMProfile(name="main")},
+                    routing={"convert": LLMRoute(primary="main")},
+                )
+            )
+
+    def test_dangling_route_target_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="missing profile 'nonexistent'"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"main": LLMProfile(name="main")},
+                    routing={"default": LLMRoute(primary="nonexistent")},
+                )
+            )
+
+    def test_dangling_fallback_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="fallback references missing profile 'ghost'"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"main": LLMProfile(name="main")},
+                    routing={"default": LLMRoute(primary="main", fallbacks=["ghost"])},
+                )
+            )
+
+    def test_valid_config_passes_validation(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        # Should not raise
+        config = FolioConfig(
+            llm=LLMConfig(
+                profiles={
+                    "main": LLMProfile(name="main", provider="anthropic"),
+                    "backup": LLMProfile(name="backup", provider="google"),
+                },
+                routing={
+                    "default": LLMRoute(primary="main"),
+                    "convert": LLMRoute(primary="main", fallbacks=["backup"]),
+                },
+            )
+        )
+        assert "main" in config.llm.profiles

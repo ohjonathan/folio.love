@@ -89,12 +89,16 @@ class LLMConfig:
                 )
             return profile
 
-        # Route resolution: task route → default route → first profile
+        # Route resolution: task route → default route
         route = self.routing.get(task) or self.routing.get("default")
         if route and route.primary:
             profile = self.profiles.get(route.primary)
             if profile:
                 return profile
+            raise ValueError(
+                f"Route '{task}' references missing profile '{route.primary}'. "
+                f"Available: {', '.join(sorted(self.profiles.keys()))}"
+            )
 
         # Fallback: default route
         if task != "default":
@@ -103,13 +107,14 @@ class LLMConfig:
                 profile = self.profiles.get(default_route.primary)
                 if profile:
                     return profile
+                raise ValueError(
+                    f"Default route references missing profile '{default_route.primary}'. "
+                    f"Available: {', '.join(sorted(self.profiles.keys()))}"
+                )
 
-        # Last resort: return first available profile
-        if self.profiles:
-            first_name = next(iter(self.profiles))
-            return self.profiles[first_name]
-
-        raise ValueError("No LLM profiles configured")
+        raise ValueError(
+            f"No route configured for task '{task}' and no default route found"
+        )
 
     def get_fallbacks(self, override: str | None = None,
                       task: str = "convert") -> list[LLMProfile]:
@@ -169,6 +174,41 @@ class FolioConfig:
             raise ValueError(
                 f"pptx_renderer must be 'auto', 'libreoffice', or 'powerpoint', got {c.pptx_renderer!r}"
             )
+
+        # LLM validation (spec §3.2)
+        self._validate_llm()
+
+    def _validate_llm(self):
+        """Validate LLM profiles and routing per spec §3.2."""
+        _SUPPORTED_PROVIDERS = {"anthropic", "openai", "google"}
+
+        # Validate providers
+        for pname, profile in self.llm.profiles.items():
+            if profile.provider not in _SUPPORTED_PROVIDERS:
+                raise ValueError(
+                    f"LLM profile '{pname}' uses unsupported provider "
+                    f"'{profile.provider}'. Supported: {', '.join(sorted(_SUPPORTED_PROVIDERS))}"
+                )
+
+        # Validate routing.default exists
+        if "default" not in self.llm.routing:
+            raise ValueError(
+                "LLM config requires a 'routing.default' entry (spec §3.2)"
+            )
+
+        # Validate all route targets reference existing profiles
+        for rname, route in self.llm.routing.items():
+            if route.primary and route.primary not in self.llm.profiles:
+                raise ValueError(
+                    f"LLM route '{rname}' references missing profile "
+                    f"'{route.primary}'. Available: {', '.join(sorted(self.llm.profiles.keys()))}"
+                )
+            for fallback in route.fallbacks:
+                if fallback not in self.llm.profiles:
+                    raise ValueError(
+                        f"LLM route '{rname}' fallback references missing profile "
+                        f"'{fallback}'. Available: {', '.join(sorted(self.llm.profiles.keys()))}"
+                    )
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":

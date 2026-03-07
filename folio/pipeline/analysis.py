@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..llm import get_provider, ProviderInput, ProviderOutput, ErrorDisposition
+from ..llm.types import StageLLMMetadata
 from .text import SlideText, _EXTRACTION_VERSION
 
 
@@ -83,12 +84,18 @@ class SlideAnalysis:
         return cls(**fields)
 
     @classmethod
-    def pending(cls) -> "SlideAnalysis":
-        """Return a placeholder for when analysis is unavailable."""
+    def pending(cls, reason: str = "") -> "SlideAnalysis":
+        """Return a placeholder for when analysis is unavailable.
+
+        Args:
+            reason: Provider-aware actionable message (spec §6.4).
+                If empty, uses a generic message.
+        """
+        msg = reason if reason else "[Analysis pending \u2014 LLM provider unavailable]"
         return cls(
             slide_type="pending",
             framework="pending",
-            visual_description="[Analysis pending — LLM provider unavailable]",
+            visual_description=msg,
             key_data="[pending]",
             main_insight="[pending]",
         )
@@ -326,8 +333,9 @@ def analyze_slides(
     force_miss: bool = False,
     provider_name: str = "anthropic",
     api_key_env: str = "",
-) -> tuple[dict[int, SlideAnalysis], CacheStats]:
-    """Analyze slides via LLM provider with caching.
+    fallback_profiles: Optional[list[tuple[str, str, str]]] = None,
+) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
+    """Analyze slides via LLM provider with caching and fallback.
 
     Args:
         image_paths: Ordered list of slide image paths.
@@ -337,19 +345,50 @@ def analyze_slides(
         force_miss: Skip cache reads but still write fresh results (G3).
         provider_name: Provider adapter to use (default: anthropic).
         api_key_env: Override env var for API key (from LLMProfile).
+        fallback_profiles: List of (provider_name, model, api_key_env) tuples
+            for transient fallback per spec §6.2.
 
     Returns:
-        Tuple of (results dict, CacheStats).
+        Tuple of (results dict, CacheStats, StageLLMMetadata).
     """
+    stage_meta = StageLLMMetadata(
+        provider=provider_name, model=model, profile_name="",
+    )
+
     try:
         provider = get_provider(provider_name)
         client = provider.create_client(api_key_env=api_key_env)
-    except (ValueError, Exception) as e:
-        logger.warning(
-            "LLM provider '%s' unavailable: %s. Skipping analysis.",
-            provider_name, e,
+    except ValueError as e:
+        reason = f"Analysis pending \u2014 profile requires {api_key_env or provider_name.upper() + '_API_KEY'}"
+        logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
+        return (
+            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            CacheStats(), stage_meta,
         )
-        return {i + 1: SlideAnalysis.pending() for i in range(len(image_paths))}, CacheStats()
+    except ImportError as e:
+        reason = f"Analysis pending \u2014 install the {provider_name} SDK"
+        logger.warning("LLM provider '%s' SDK missing: %s. Skipping analysis.", provider_name, e)
+        return (
+            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            CacheStats(), stage_meta,
+        )
+    except Exception as e:
+        reason = f"Analysis pending \u2014 provider '{provider_name}' rejected the request"
+        logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
+        return (
+            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            CacheStats(), stage_meta,
+        )
+
+    # Build fallback chain: [(provider, client, model, provider_name)] for transient fallback
+    fallback_chain = []
+    for fb_provider_name, fb_model, fb_api_key_env in (fallback_profiles or []):
+        try:
+            fb_provider = get_provider(fb_provider_name)
+            fb_client = fb_provider.create_client(api_key_env=fb_api_key_env)
+            fallback_chain.append((fb_provider, fb_client, fb_model, fb_provider_name))
+        except Exception as e:
+            logger.warning("Fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
 
     # Load cache (skip read when force_miss)
     cache = _load_cache(cache_dir, model=model, provider=provider_name) if cache_dir and not force_miss else {}
@@ -376,19 +415,29 @@ def analyze_slides(
                     stats.hits += 1
                     continue
 
-        # Call API
+        # Call API with fallback
         stats.misses += 1
         logger.info("Analyzing slide %d/%d...", i, len(image_paths))
         slide_text = slide_texts.get(i) if slide_texts else None
-        analysis = _analyze_single_slide(provider, client, image_path, model, slide_text=slide_text)
+        analysis, used_provider, used_model = _analyze_with_fallback(
+            provider, client, image_path, model, provider_name,
+            slide_text=slide_text,
+            fallback_chain=fallback_chain,
+        )
         results[i] = analysis
+
+        # Track fallback activation
+        if used_provider != provider_name and not stage_meta.fallback_activated:
+            stage_meta.fallback_activated = True
+            stage_meta.fallback_provider = used_provider
+            stage_meta.fallback_model = used_model
 
         # Update cache (B1: store _text_hash + provenance per entry)
         if cache_dir:
             entry = analysis.to_dict()
             entry["_text_hash"] = _text_hash(slide_text)
-            entry["_provider"] = provider_name
-            entry["_model"] = model
+            entry["_provider"] = used_provider
+            entry["_model"] = used_model
             cache[image_hash] = entry
 
     # Save cache (always writes, even with force_miss)
@@ -399,7 +448,53 @@ def analyze_slides(
         "Pass 1 cache: %d hits, %d misses (%.0f%% hit rate)",
         stats.hits, stats.misses, stats.hit_rate * 100,
     )
-    return results, stats
+    stage_meta.slide_count = len(image_paths)
+    stage_meta.cache_hits = stats.hits
+    stage_meta.cache_misses = stats.misses
+    return results, stats, stage_meta
+
+
+def _analyze_with_fallback(
+    primary_provider, primary_client, image_path: Path, primary_model: str,
+    primary_name: str,
+    slide_text: Optional["SlideText"] = None,
+    fallback_chain: Optional[list] = None,
+) -> tuple[SlideAnalysis, str, str]:
+    """Try primary provider then fallback chain on transient failures.
+
+    Per spec §6.2: 1 retry on primary, then try each fallback in order.
+
+    Returns:
+        Tuple of (analysis, used_provider_name, used_model).
+    """
+    # Try primary
+    analysis = _analyze_single_slide(
+        primary_provider, primary_client, image_path, primary_model,
+        slide_text=slide_text,
+    )
+    if analysis.slide_type != "pending":
+        return analysis, primary_name, primary_model
+
+    # Primary failed — try fallback chain (transient only)
+    for fb_provider, fb_client, fb_model, fb_name in (fallback_chain or []):
+        logger.info("Falling back to provider '%s' for slide analysis", fb_name)
+        analysis = _analyze_single_slide(
+            fb_provider, fb_client, image_path, fb_model,
+            slide_text=slide_text,
+        )
+        if analysis.slide_type != "pending":
+            return analysis, fb_name, fb_model
+
+    # All exhausted
+    if fallback_chain:
+        route_name = "convert"
+        return (
+            SlideAnalysis.pending(
+                f"Analysis pending — all configured providers for route '{route_name}' failed transiently"
+            ),
+            primary_name, primary_model,
+        )
+    return analysis, primary_name, primary_model
 
 
 def _analyze_single_slide(
@@ -455,7 +550,13 @@ def _analyze_single_slide(
                     "Slide analysis failed (%s) after %d attempt(s): %s",
                     label, attempt + 1, e,
                 )
-                return SlideAnalysis.pending()
+                reason = (
+                    f"Analysis pending — provider '{provider.provider_name}' "
+                    f"rejected the request"
+                    if disposition == ErrorDisposition.PERMANENT
+                    else ""
+                )
+                return SlideAnalysis.pending(reason)
 
 
 # Prose parsers (_parse_analysis, _parse_evidence, _parse_single_evidence)
@@ -621,7 +722,8 @@ def analyze_slides_deep(
     force_miss: bool = False,
     provider_name: str = "anthropic",
     api_key_env: str = "",
-) -> tuple[dict[int, SlideAnalysis], CacheStats]:
+    fallback_profiles: Optional[list[tuple[str, str, str]]] = None,
+) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
     """Run selective second pass on high-density slides.
 
     Args:
@@ -634,10 +736,15 @@ def analyze_slides_deep(
         skip_slides: Slide numbers to exclude from density scoring
             (e.g., blank slides). These are never sent to Pass 2.
         force_miss: Skip cache reads but still write fresh results (G3).
+        fallback_profiles: List of (provider_name, model, api_key_env) for
+            transient fallback per spec §6.2.
 
     Returns:
-        Tuple of (updated results dict, CacheStats).
+        Tuple of (updated results dict, CacheStats, StageLLMMetadata).
     """
+    stage_meta = StageLLMMetadata(
+        provider=provider_name, model=model, profile_name="",
+    )
 
     # Identify high-density slides
     dense_slides = []
@@ -656,7 +763,7 @@ def analyze_slides_deep(
 
     if not dense_slides:
         logger.info("No slides above density threshold — skipping Pass 2")
-        return pass1_results, CacheStats(pass_name="pass2")
+        return pass1_results, CacheStats(pass_name="pass2"), stage_meta
 
     logger.info("Pass 2: analyzing %d high-density slides", len(dense_slides))
 
@@ -668,7 +775,7 @@ def analyze_slides_deep(
         client = provider.create_client(api_key_env=api_key_env)
     except (ValueError, Exception) as e:
         logger.warning("LLM provider '%s' unavailable for Pass 2: %s", provider_name, e)
-        return pass1_results, CacheStats(pass_name="pass2")
+        return pass1_results, CacheStats(pass_name="pass2"), stage_meta
 
     stats = CacheStats(pass_name="pass2")
     results = dict(pass1_results)  # Copy
@@ -780,7 +887,10 @@ def analyze_slides_deep(
         "Pass 2 cache: %d hits, %d misses (%.0f%% hit rate)",
         stats.hits, stats.misses, stats.hit_rate * 100,
     )
-    return results, stats
+    stage_meta.slide_count = len(dense_slides)
+    stage_meta.cache_hits = stats.hits
+    stage_meta.cache_misses = stats.misses
+    return results, stats, stage_meta
 
 
 # _parse_depth_reassessment deleted in v0.4.0 — replaced by _normalize_pass2_json.

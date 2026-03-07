@@ -157,12 +157,12 @@ class TestTextHashCacheValidation:
 
         with patch("anthropic.Anthropic", return_value=mock_client):
             # First run: both miss
-            _, stats1 = analyze_slides([img1, img2], model="test", cache_dir=tmp_path, slide_texts=texts_v1)
+            _, stats1, _ = analyze_slides([img1, img2], model="test", cache_dir=tmp_path, slide_texts=texts_v1)
             assert stats1.misses == 2
             calls.clear()
 
             # Second run with changed text on slide 2
-            _, stats2 = analyze_slides([img1, img2], model="test", cache_dir=tmp_path, slide_texts=texts_v2)
+            _, stats2, _ = analyze_slides([img1, img2], model="test", cache_dir=tmp_path, slide_texts=texts_v2)
             assert stats2.hits == 1   # slide 1
             assert stats2.misses == 1  # slide 2
             assert len(calls) == 1    # Only 1 API call
@@ -182,7 +182,7 @@ class TestTextHashCacheValidation:
             analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
             mock_client.messages.create.reset_mock()
 
-            results, stats = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
+            results, stats, _ = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
 
         assert stats.hits == 1
         assert stats.misses == 0
@@ -204,7 +204,7 @@ class TestTextHashCacheValidation:
 
             # Second run: text added
             texts = {1: SlideText(slide_num=1, full_text="New text")}
-            _, stats = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
+            _, stats, _ = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
 
         assert stats.misses == 1
         mock_client.messages.create.assert_called_once()
@@ -229,7 +229,7 @@ class TestTextHashCacheValidation:
         mock_client2.messages.create = MagicMock(side_effect=AssertionError("API should not be called"))
 
         with patch("anthropic.Anthropic", return_value=mock_client2):
-            results, stats = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
+            results, stats, _ = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
 
         assert stats.hits == 1
         assert results[1].slide_type == "data"
@@ -282,7 +282,7 @@ class TestDeepCacheContextHash:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides_deep(
+            _, stats, _ = analyze_slides_deep(
                 pass1_results=pass1_v2, slide_texts=texts,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
@@ -327,7 +327,7 @@ class TestDeepCacheContextHash:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides_deep(
+            _, stats, _ = analyze_slides_deep(
                 pass1_results=pass1, slide_texts=new_texts,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
@@ -368,7 +368,7 @@ class TestDeepCacheContextHash:
         mock_client.messages.create = MagicMock(side_effect=AssertionError("Should not call API"))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides_deep(
+            _, stats, _ = analyze_slides_deep(
                 pass1_results={1: analysis}, slide_texts=texts,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
@@ -406,7 +406,7 @@ class TestDeepCacheContextHash:
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
              patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides_deep(
+            _, stats, _ = analyze_slides_deep(
                 pass1_results={1: analysis}, slide_texts=texts,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
@@ -449,8 +449,8 @@ class TestEndToEndCascade:
 
         with patch("anthropic.Anthropic", return_value=mock_client):
             # First run: populate both caches
-            results1, s1 = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts_v1)
-            results1, s2 = analyze_slides_deep(
+            results1, s1, _ = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts_v1)
+            results1, s2, _ = analyze_slides_deep(
                 pass1_results=results1, slide_texts=texts_v1,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
@@ -458,8 +458,8 @@ class TestEndToEndCascade:
             api_calls.clear()
 
             # Second run: same text -> all hits
-            results2, s3 = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts_v1)
-            results2, s4 = analyze_slides_deep(
+            results2, s3, _ = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts_v1)
+            results2, s4, _ = analyze_slides_deep(
                 pass1_results=results2, slide_texts=texts_v1,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
@@ -470,8 +470,8 @@ class TestEndToEndCascade:
 
             # Third run: changed text -> both miss
             api_calls.clear()
-            results3, s5 = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts_v2)
-            results3, s6 = analyze_slides_deep(
+            results3, s5, _ = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts_v2)
+            results3, s6, _ = analyze_slides_deep(
                 pass1_results=results3, slide_texts=texts_v2,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
@@ -566,7 +566,7 @@ class TestNoCacheFlag:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS1))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides([img], model="test", cache_dir=tmp_path,
+            _, stats, _ = analyze_slides([img], model="test", cache_dir=tmp_path,
                                        slide_texts=texts, force_miss=True)
 
         assert stats.misses == 1
@@ -592,7 +592,7 @@ class TestNoCacheFlag:
             call_count_before = mock_client.messages.create.call_count
 
             # Second run: force_miss should re-analyze
-            _, stats = analyze_slides([img], model="test", cache_dir=tmp_path,
+            _, stats, _ = analyze_slides([img], model="test", cache_dir=tmp_path,
                                        slide_texts=texts, force_miss=True)
 
         assert stats.misses == 1  # Forced miss
@@ -641,7 +641,7 @@ class TestCacheStats:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS1))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides(imgs, model="test", cache_dir=tmp_path)
+            _, stats, _ = analyze_slides(imgs, model="test", cache_dir=tmp_path)
 
         assert stats.hits == 0
         assert stats.misses == 3
@@ -659,7 +659,7 @@ class TestCacheStats:
 
         with patch("anthropic.Anthropic", return_value=mock_client):
             analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
-            _, stats = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
+            _, stats, _ = analyze_slides([img], model="test", cache_dir=tmp_path, slide_texts=texts)
 
         assert stats.hits == 1
         assert stats.misses == 0
@@ -684,7 +684,7 @@ class TestCacheStats:
         """No API key -> CacheStats(hits=0, misses=0, total=0)."""
         with patch.dict(os.environ, {}, clear=True):
             os.environ.pop("ANTHROPIC_API_KEY", None)
-            _, stats = analyze_slides(
+            _, stats, _ = analyze_slides(
                 [Path("dummy.png")], model="test",
             )
         assert stats.hits == 0
@@ -735,7 +735,7 @@ class TestDeepCacheForceMiss:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides_deep(
+            _, stats, _ = analyze_slides_deep(
                 pass1_results={1: analysis}, slide_texts=texts,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1, force_miss=True,
@@ -828,7 +828,7 @@ class TestMalformedCachePayloads:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS1))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            results, stats = analyze_slides(
+            results, stats, _ = analyze_slides(
                 [img], model="test", cache_dir=tmp_path,
                 slide_texts={1: SlideText(slide_num=1, full_text="Test")},
             )
@@ -859,7 +859,7 @@ class TestMalformedCachePayloads:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS1))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            results, stats = analyze_slides(
+            results, stats, _ = analyze_slides(
                 [img], model="test", cache_dir=tmp_path,
                 slide_texts={1: SlideText(slide_num=1, full_text="Test")},
             )
@@ -902,7 +902,7 @@ class TestMalformedCachePayloads:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides_deep(
+            _, stats, _ = analyze_slides_deep(
                 pass1_results={1: analysis}, slide_texts=texts,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
@@ -946,7 +946,7 @@ class TestMalformedCachePayloads:
         mock_client.messages.create = MagicMock(return_value=_mock_anthropic_response(MOCK_PASS2))
 
         with patch("anthropic.Anthropic", return_value=mock_client):
-            _, stats = analyze_slides_deep(
+            _, stats, _ = analyze_slides_deep(
                 pass1_results={1: analysis}, slide_texts=texts,
                 image_paths=[img], model="test", cache_dir=tmp_path,
                 density_threshold=0.1,
