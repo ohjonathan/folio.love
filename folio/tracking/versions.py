@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 _TEXTS_CACHE_VERSION = 2  # v2: post-reconciliation texts with gap-filled empties
 
 
+class VersionHistoryError(RuntimeError):
+    """Raised when persisted version history is unreadable or malformed."""
+
+
 def _to_str(val: SlideTextLike) -> str:
     """Convert a slide text value to a plain string.
 
@@ -165,7 +169,7 @@ def compute_version(
     changes = detect_changes(old_texts, new_texts)
 
     # Determine version number
-    history = load_version_history(history_path)
+    history = load_version_history(history_path, strict=True)
     if history:
         version_num = history[-1]["version"] + 1
     else:
@@ -191,30 +195,45 @@ def compute_version(
         changes=changes,
     )
 
-    # Persist: texts cache FIRST, history SECOND.
-    # If texts cache write fails → OSError propagates, history never advances.
-    # If history write fails after texts cache → D4 contract: crash is correct
-    # (provenance loss is worse than a harmless duplicate version on next run).
+    # Persist with rollback: if history write fails after cache write,
+    # restore the previous texts cache before re-raising.
     history.append(version_info.to_dict())
+    had_cache = cache_path.exists()
     save_texts_cache(cache_path, new_texts)
-    save_version_history(history_path, history)
+    try:
+        save_version_history(history_path, history)
+    except OSError as err:
+        try:
+            _restore_texts_cache(cache_path, old_texts, had_cache=had_cache)
+        except OSError as rollback_err:
+            raise OSError(
+                f"{err}; rollback of texts cache also failed: {rollback_err}"
+            ) from rollback_err
+        raise
 
     return version_info
 
 
-def load_version_history(history_path: Path) -> list[dict]:
+def load_version_history(history_path: Path, strict: bool = False) -> list[dict]:
     """Load version history from JSON file.
 
     Schema-validates loaded data: rejects non-list payloads, strips entries
-    missing a valid integer 'version' key. Returns [] for missing/corrupt files.
+    missing a valid integer 'version' key. In strict mode, malformed history
+    raises VersionHistoryError so conversion does not silently reset to v1.
     """
     if not history_path.exists():
         return []
+
+    def _fail(message: str, exc: Exception | None = None) -> list[dict]:
+        if strict:
+            raise VersionHistoryError(message) from exc
+        logger.warning(message)
+        return []
+
     try:
         data = json.loads(history_path.read_text())
     except (json.JSONDecodeError, OSError) as e:
-        logger.warning("Failed to load version history: %s", e)
-        return []
+        return _fail(f"Failed to load version history: {e}", e)
 
     # Extract versions list from wrapper dict or bare list
     if isinstance(data, dict):
@@ -222,22 +241,32 @@ def load_version_history(history_path: Path) -> list[dict]:
     elif isinstance(data, list):
         versions = data
     else:
-        logger.warning("Version history has unexpected shape (%s) — ignoring", type(data).__name__)
-        return []
+        return _fail(
+            f"Version history has unexpected shape ({type(data).__name__})"
+        )
 
     if not isinstance(versions, list):
-        logger.warning("Version history 'versions' is not a list (%s) — ignoring", type(versions).__name__)
-        return []
+        return _fail(
+            f"Version history 'versions' is not a list ({type(versions).__name__})"
+        )
 
     # Validate each entry: must be a dict with an integer 'version' key
     valid = []
     for i, entry in enumerate(versions):
         if not isinstance(entry, dict):
+            if strict:
+                raise VersionHistoryError(f"Version history entry {i} is not a dict")
             logger.warning("Version history entry %d is not a dict — skipping", i)
             continue
         v = entry.get("version")
         if not isinstance(v, int):
-            logger.warning("Version history entry %d has no valid 'version' key — skipping", i)
+            if strict:
+                raise VersionHistoryError(
+                    f"Version history entry {i} has no valid 'version' key"
+                )
+            logger.warning(
+                "Version history entry %d has no valid 'version' key — skipping", i
+            )
             continue
         valid.append(entry)
 
@@ -327,3 +356,16 @@ def _atomic_write_json(path: Path, data: dict):
     tmp_path = path.with_suffix(".tmp")
     tmp_path.write_text(json.dumps(data, indent=2))
     tmp_path.rename(path)
+
+
+def _restore_texts_cache(
+    cache_path: Path,
+    old_texts: dict[int, SlideTextLike],
+    *,
+    had_cache: bool,
+) -> None:
+    """Restore the previous texts cache after a failed history write."""
+    if had_cache:
+        save_texts_cache(cache_path, old_texts)
+    elif cache_path.exists():
+        cache_path.unlink()

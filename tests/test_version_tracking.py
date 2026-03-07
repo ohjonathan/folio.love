@@ -15,6 +15,7 @@ from folio.tracking.versions import (
     _to_str,
     _atomic_write_json,
     _TEXTS_CACHE_VERSION,
+    VersionHistoryError,
     detect_changes,
     compute_version,
     load_texts_cache,
@@ -466,17 +467,15 @@ class TestHistoryLoadingHardening:
         result = load_version_history(path)
         assert len(result) == 2
 
-    def test_compute_version_after_corrupt_history(self, tmp_path):
-        """B2: Corrupt history doesn't crash compute_version(); starts fresh."""
+    def test_compute_version_after_corrupt_history_raises(self, tmp_path):
+        """B2: Corrupt history should block conversion, not reset to v1."""
         # Write corrupt history
         hpath = tmp_path / "version_history.json"
         hpath.write_text('"this is a string not an object"')
 
-        # compute_version should not crash — starts at v1
         texts = {1: "slide one"}
-        vi = compute_version(tmp_path, "h1", "src.pptx", 1, texts)
-        assert vi.version == 1
-        assert vi.changes.added == [1]
+        with pytest.raises(VersionHistoryError, match="unexpected shape"):
+            compute_version(tmp_path, "h1", "src.pptx", 1, texts)
 
 
 # ---------------------------------------------------------------------------
@@ -485,8 +484,8 @@ class TestHistoryLoadingHardening:
 
 
 class TestPersistenceOrder:
-    def test_texts_cache_written_before_history(self, tmp_path):
-        """B3: If history write fails, texts cache should already be updated."""
+    def test_history_write_failure_rolls_back_texts_cache(self, tmp_path):
+        """B3: If history write fails, texts cache should roll back."""
         from unittest.mock import patch
 
         # First version — establish baseline
@@ -506,13 +505,18 @@ class TestPersistenceOrder:
             with pytest.raises(OSError, match="Simulated disk failure"):
                 compute_version(tmp_path, "h2", "src.pptx", 1, {1: "updated"})
 
-        # Texts cache should have the new text (written first, before failure)
+        # Texts cache should be rolled back to the pre-failure state.
         cache = load_texts_cache(tmp_path / ".texts_cache.json")
-        assert cache.get(1) == "updated"
+        assert cache.get(1) == "original"
 
         # History should NOT have been advanced (write failed)
         history = load_version_history(tmp_path / "version_history.json")
         assert len(history) == 1  # Still only v1
+
+        # Next successful run should still record the modification honestly.
+        vi = compute_version(tmp_path, "h2", "src.pptx", 1, {1: "updated"})
+        assert vi.version == 2
+        assert vi.changes.modified == [1]
 
 
 # ---------------------------------------------------------------------------
