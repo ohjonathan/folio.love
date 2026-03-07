@@ -142,6 +142,30 @@ class TestAnthropicProvider:
         provider = AnthropicAnalysisProvider()
         assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
 
+    def test_classify_error_timeout(self):
+        """B1: APITimeoutError must be transient."""
+        provider = AnthropicAnalysisProvider()
+        try:
+            import anthropic
+            exc = anthropic.APITimeoutError(request=MagicMock())
+            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+        except ImportError:
+            pytest.skip("anthropic not installed")
+
+    def test_classify_error_permission_denied(self):
+        """B1: PermissionDeniedError must be permanent."""
+        provider = AnthropicAnalysisProvider()
+        try:
+            import anthropic
+            exc = anthropic.PermissionDeniedError(
+                message="Forbidden",
+                response=MagicMock(status_code=403),
+                body=None,
+            )
+            assert provider.classify_error(exc) == ErrorDisposition.PERMANENT
+        except ImportError:
+            pytest.skip("anthropic not installed")
+
 
 class TestContractTypes:
     """Test data types freeze correctly."""
@@ -328,6 +352,30 @@ class TestOpenAIAdapter:
         provider = OpenAIAnalysisProvider()
         assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
 
+    def test_classify_error_timeout(self):
+        """B2: APITimeoutError must be transient."""
+        provider = OpenAIAnalysisProvider()
+        try:
+            from openai import APITimeoutError
+            exc = APITimeoutError(request=MagicMock())
+            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+        except ImportError:
+            pytest.skip("openai not installed")
+
+    def test_classify_error_internal_server(self):
+        """B2: InternalServerError must be transient."""
+        provider = OpenAIAnalysisProvider()
+        try:
+            from openai import InternalServerError
+            exc = InternalServerError(
+                message="Internal error",
+                response=MagicMock(status_code=500),
+                body=None,
+            )
+            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+        except ImportError:
+            pytest.skip("openai not installed")
+
 
 class TestGoogleAdapter:
     """Test Google Gemini adapter request/response normalization."""
@@ -381,6 +429,25 @@ class TestGoogleAdapter:
     def test_classify_error_generic(self):
         provider = GoogleAnalysisProvider()
         assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
+
+    def test_classify_error_internal_server(self):
+        """B3: InternalServerError must be transient."""
+        provider = GoogleAnalysisProvider()
+        # Simulate Google's InternalServerError exception
+        class InternalServerError(Exception): pass
+        assert provider.classify_error(InternalServerError("internal")) == ErrorDisposition.TRANSIENT
+
+    def test_classify_error_deadline_exceeded(self):
+        """B3: DeadlineExceeded must be transient."""
+        provider = GoogleAnalysisProvider()
+        class DeadlineExceeded(Exception): pass
+        assert provider.classify_error(DeadlineExceeded("timeout")) == ErrorDisposition.TRANSIENT
+
+    def test_classify_error_permission_denied(self):
+        """B3: PermissionDenied must be permanent."""
+        provider = GoogleAnalysisProvider()
+        class PermissionDenied(Exception): pass
+        assert provider.classify_error(PermissionDenied("forbidden")) == ErrorDisposition.PERMANENT
 
 
 class TestRuntimeFallbackChain:

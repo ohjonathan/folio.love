@@ -278,3 +278,35 @@ class TestLLMConfigValidation:
             )
         )
         assert "main" in config.llm.profiles
+
+    def test_invalid_profile_name_rejects(self):
+        """S1: Profile names must match ^[a-z][a-z0-9_]*$."""
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="does not match required pattern"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"My-Profile": LLMProfile(name="My-Profile")},
+                    routing={"default": LLMRoute(primary="My-Profile")},
+                )
+            )
+
+    def test_numeric_start_profile_name_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="does not match required pattern"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"123bad": LLMProfile(name="123bad")},
+                    routing={"default": LLMRoute(primary="123bad")},
+                )
+            )
+
+    def test_fallback_self_reference_rejects(self):
+        """M8: Fallback must not reference same profile as primary."""
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="self-referencing fallback"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={"main": LLMProfile(name="main")},
+                    routing={"default": LLMRoute(primary="main", fallbacks=["main"])},
+                )
+            )

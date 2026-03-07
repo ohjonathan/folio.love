@@ -102,7 +102,6 @@ class StageLLMMetadata:
 
     provider: str = ""
     model: str = ""
-    profile_name: str = ""
     slide_count: int = 0
     cache_hits: int = 0
     cache_misses: int = 0

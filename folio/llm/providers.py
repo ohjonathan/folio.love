@@ -80,25 +80,29 @@ class AnthropicAnalysisProvider:
         )
 
     def classify_error(self, exc: Exception) -> ErrorDisposition:
-        """Classify Anthropic exceptions."""
+        """Classify Anthropic exceptions per spec §6.3."""
         try:
             import anthropic
         except ImportError:
             return ErrorDisposition.PERMANENT
 
-        # Rate limits and overloaded are transient
+        # Transient: retry / fallback eligible
         if isinstance(exc, anthropic.RateLimitError):
             return ErrorDisposition.TRANSIENT
         if isinstance(exc, anthropic.InternalServerError):
             return ErrorDisposition.TRANSIENT
         if isinstance(exc, anthropic.APIConnectionError):
             return ErrorDisposition.TRANSIENT
-        # Auth and bad request are permanent
+        if isinstance(exc, anthropic.APITimeoutError):
+            return ErrorDisposition.TRANSIENT
+        # Permanent: do NOT retry or fall back
         if isinstance(exc, anthropic.AuthenticationError):
+            return ErrorDisposition.PERMANENT
+        if isinstance(exc, anthropic.PermissionDeniedError):
             return ErrorDisposition.PERMANENT
         if isinstance(exc, anthropic.BadRequestError):
             return ErrorDisposition.PERMANENT
-        # Default: treat as permanent
+        # Default: treat unknown as permanent
         return ErrorDisposition.PERMANENT
 
 
@@ -163,20 +167,33 @@ class OpenAIAnalysisProvider:
         )
 
     def classify_error(self, exc: Exception) -> ErrorDisposition:
-        """Classify OpenAI exceptions."""
+        """Classify OpenAI exceptions per spec §6.3."""
         try:
-            from openai import RateLimitError, APIConnectionError, AuthenticationError, BadRequestError
+            from openai import (
+                RateLimitError, APIConnectionError, APITimeoutError,
+                InternalServerError, AuthenticationError,
+                PermissionDeniedError, BadRequestError,
+            )
         except ImportError:
             return ErrorDisposition.PERMANENT
 
+        # Transient: retry / fallback eligible
         if isinstance(exc, RateLimitError):
             return ErrorDisposition.TRANSIENT
         if isinstance(exc, APIConnectionError):
             return ErrorDisposition.TRANSIENT
+        if isinstance(exc, APITimeoutError):
+            return ErrorDisposition.TRANSIENT
+        if isinstance(exc, InternalServerError):
+            return ErrorDisposition.TRANSIENT
+        # Permanent: do NOT retry or fall back
         if isinstance(exc, AuthenticationError):
+            return ErrorDisposition.PERMANENT
+        if isinstance(exc, PermissionDeniedError):
             return ErrorDisposition.PERMANENT
         if isinstance(exc, BadRequestError):
             return ErrorDisposition.PERMANENT
+        # Default: treat unknown as permanent
         return ErrorDisposition.PERMANENT
 
 
@@ -213,6 +230,7 @@ class GoogleAnalysisProvider:
             contents=[image_part, inp.prompt],
             config=types.GenerateContentConfig(
                 max_output_tokens=inp.max_tokens,
+                http_options={"timeout": 120_000},  # 120s, same as Anthropic/OpenAI
             ),
         )
 
@@ -232,11 +250,18 @@ class GoogleAnalysisProvider:
         )
 
     def classify_error(self, exc: Exception) -> ErrorDisposition:
-        """Classify Google GenAI exceptions."""
-        # Rate limits are transient; most others are permanent
+        """Classify Google GenAI exceptions per spec §6.3."""
         exc_name = type(exc).__name__
+        # Transient: retry / fallback eligible
         if "ResourceExhausted" in exc_name or "429" in str(exc):
             return ErrorDisposition.TRANSIENT
         if "ServiceUnavailable" in exc_name:
             return ErrorDisposition.TRANSIENT
+        if "InternalServerError" in exc_name or "InternalError" in exc_name:
+            return ErrorDisposition.TRANSIENT
+        if "DeadlineExceeded" in exc_name:
+            return ErrorDisposition.TRANSIENT
+        # Permanent
+        if "PermissionDenied" in exc_name:
+            return ErrorDisposition.PERMANENT
         return ErrorDisposition.PERMANENT

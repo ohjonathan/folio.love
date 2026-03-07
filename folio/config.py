@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Optional
 
 import yaml
@@ -180,7 +181,16 @@ class FolioConfig:
 
     def _validate_llm(self):
         """Validate LLM profiles and routing per spec §3.2."""
+        _PROFILE_NAME_RE = re.compile(r'^[a-z][a-z0-9_]*$')
         _SUPPORTED_PROVIDERS = {"anthropic", "openai", "google"}
+
+        # Validate profile names (spec §3.2)
+        for pname in self.llm.profiles:
+            if not _PROFILE_NAME_RE.match(pname):
+                raise ValueError(
+                    f"LLM profile name '{pname}' does not match required pattern "
+                    f"'^[a-z][a-z0-9_]*$' (spec §3.2)"
+                )
 
         # Validate providers
         for pname, profile in self.llm.profiles.items():
@@ -208,6 +218,12 @@ class FolioConfig:
                     raise ValueError(
                         f"LLM route '{rname}' fallback references missing profile "
                         f"'{fallback}'. Available: {', '.join(sorted(self.llm.profiles.keys()))}"
+                    )
+                # Fallback must not be the same as primary (M8)
+                if fallback == route.primary:
+                    raise ValueError(
+                        f"LLM route '{rname}' fallback '{fallback}' is the same as "
+                        f"its primary profile — self-referencing fallback is not allowed"
                     )
 
     @classmethod

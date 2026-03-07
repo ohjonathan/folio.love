@@ -1,10 +1,8 @@
 """Stage 4: LLM analysis. Generate structured analysis per slide via LLM provider."""
 
-import base64
 import hashlib
 import json
 import logging
-import os
 import re
 import string
 import time
@@ -352,7 +350,7 @@ def analyze_slides(
         Tuple of (results dict, CacheStats, StageLLMMetadata).
     """
     stage_meta = StageLLMMetadata(
-        provider=provider_name, model=model, profile_name="",
+        provider=provider_name, model=model,
     )
 
     try:
@@ -491,13 +489,15 @@ def _analyze_with_fallback(
         if fb_failure == "success":
             return fb_analysis, fb_name, fb_model
 
-    # All exhausted
+    # All exhausted — return last-attempted provider for accurate provenance
+    last_fb_name = fallback_chain[-1][3] if fallback_chain else primary_name
+    last_fb_model = fallback_chain[-1][2] if fallback_chain else primary_model
     route_name = "convert"
     return (
         SlideAnalysis.pending(
             f"Analysis pending — all configured providers for route '{route_name}' failed transiently"
         ),
-        primary_name, primary_model,
+        last_fb_name, last_fb_model,
     )
 
 
@@ -761,7 +761,7 @@ def analyze_slides_deep(
         Tuple of (updated results dict, CacheStats, StageLLMMetadata).
     """
     stage_meta = StageLLMMetadata(
-        provider=provider_name, model=model, profile_name="",
+        provider=provider_name, model=model,
     )
 
     # Identify high-density slides
@@ -883,6 +883,8 @@ def analyze_slides_deep(
                 "pass2_framework": reassessed_framework,
                 "_text_hash": _text_hash(slide_texts.get(slide_num)),
                 "_pass1_hash": _pass1_context_hash(results[slide_num]),
+                "_provider": provider_name,
+                "_model": model,
             }
 
         # Merge evidence
