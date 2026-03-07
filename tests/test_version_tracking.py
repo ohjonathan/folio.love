@@ -422,3 +422,118 @@ class TestVersionHistoryTruncation:
         output = _format_version_history(history)
         assert "v?" in output
         assert "unkno" in output  # "unknown"[:10]
+
+
+# ---------------------------------------------------------------------------
+# History loading hardening tests (B2)
+# ---------------------------------------------------------------------------
+
+
+class TestHistoryLoadingHardening:
+    def test_load_wrong_shape_string(self, tmp_path):
+        """B2: Valid JSON string instead of object → returns []."""
+        path = tmp_path / "version_history.json"
+        path.write_text('"oops"')
+        assert load_version_history(path) == []
+
+    def test_load_wrong_shape_versions_string(self, tmp_path):
+        """B2: {'versions': 'oops'} → returns []."""
+        path = tmp_path / "version_history.json"
+        path.write_text(json.dumps({"versions": "oops"}))
+        assert load_version_history(path) == []
+
+    def test_load_malformed_entries_stripped(self, tmp_path):
+        """B2: Entries without valid 'version' key are stripped."""
+        path = tmp_path / "version_history.json"
+        data = {"versions": [
+            {"version": 1, "timestamp": "2026-01-01T00:00:00Z"},
+            "not a dict",
+            {"no_version_key": True},
+            {"version": "not_an_int"},
+            {"version": 3, "timestamp": "2026-01-03T00:00:00Z"},
+        ]}
+        path.write_text(json.dumps(data))
+        result = load_version_history(path)
+        assert len(result) == 2
+        assert result[0]["version"] == 1
+        assert result[1]["version"] == 3
+
+    def test_load_bare_list_format(self, tmp_path):
+        """B2: Bare list format (pre-wrapper) still loads correctly."""
+        path = tmp_path / "version_history.json"
+        entries = [{"version": 1}, {"version": 2}]
+        path.write_text(json.dumps(entries))
+        result = load_version_history(path)
+        assert len(result) == 2
+
+    def test_compute_version_after_corrupt_history(self, tmp_path):
+        """B2: Corrupt history doesn't crash compute_version(); starts fresh."""
+        # Write corrupt history
+        hpath = tmp_path / "version_history.json"
+        hpath.write_text('"this is a string not an object"')
+
+        # compute_version should not crash — starts at v1
+        texts = {1: "slide one"}
+        vi = compute_version(tmp_path, "h1", "src.pptx", 1, texts)
+        assert vi.version == 1
+        assert vi.changes.added == [1]
+
+
+# ---------------------------------------------------------------------------
+# Persistence order tests (B3)
+# ---------------------------------------------------------------------------
+
+
+class TestPersistenceOrder:
+    def test_texts_cache_written_before_history(self, tmp_path):
+        """B3: If history write fails, texts cache should already be updated."""
+        from unittest.mock import patch
+
+        # First version — establish baseline
+        compute_version(tmp_path, "h1", "src.pptx", 1, {1: "original"})
+
+        # Patch _atomic_write_json to fail on second call (history)
+        original_write = _atomic_write_json
+        call_count = [0]
+
+        def fail_on_second(path, data):
+            call_count[0] += 1
+            if call_count[0] == 2:
+                raise OSError("Simulated disk failure on history write")
+            return original_write(path, data)
+
+        with patch("folio.tracking.versions._atomic_write_json", side_effect=fail_on_second):
+            with pytest.raises(OSError, match="Simulated disk failure"):
+                compute_version(tmp_path, "h2", "src.pptx", 1, {1: "updated"})
+
+        # Texts cache should have the new text (written first, before failure)
+        cache = load_texts_cache(tmp_path / ".texts_cache.json")
+        assert cache.get(1) == "updated"
+
+        # History should NOT have been advanced (write failed)
+        history = load_version_history(tmp_path / "version_history.json")
+        assert len(history) == 1  # Still only v1
+
+
+# ---------------------------------------------------------------------------
+# Image-only edit contract test (B1)
+# ---------------------------------------------------------------------------
+
+
+class TestImageOnlyContract:
+    def test_image_only_edit_no_version_change(self, tmp_path):
+        """B1: Same text + different source hash → version says 'no changes'.
+
+        Version tracking is text-only. Visual-only edits are correctly
+        invisible to versioning while triggering analysis cache misses.
+        """
+        texts = {1: "same text", 2: "also same"}
+
+        # v1 with hash "aaa"
+        compute_version(tmp_path, "aaa", "deck.pptx", 2, texts)
+
+        # v2 with different hash "bbb" (e.g., image-only edit) but identical text
+        vi = compute_version(tmp_path, "bbb", "deck.pptx", 2, texts)
+        assert vi.version == 2
+        assert not vi.changes.has_changes
+        assert vi.changes.unchanged == [1, 2]

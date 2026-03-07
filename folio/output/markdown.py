@@ -191,7 +191,7 @@ def _format_version_history(history: list[dict], max_display: int = 10) -> str:
         "",
     ]
 
-    # Guard against nonsensical max_display values (S1, S2)
+    # Defensive guard: max_display <= 0 treated as "show all" for robustness.
     if max_display <= 0:
         max_display = len(history)
 

@@ -85,6 +85,12 @@ def detect_changes(
     as multiple "modified" entries (conservative, never misses a change).
     Content-based reorder detection deferred to Tier 2+. See spec D3.
 
+    Note: Version tracking is TEXT-ONLY. Image-only edits (same text, different
+    slide visuals) correctly produce has_changes=False here while triggering an
+    analysis cache miss (image hash changed). This extends the D1 contract:
+    version tracking tracks text content semantics, analysis caching tracks
+    API input fidelity (text + image). Both are correct for their concerns.
+
     Args:
         old_texts: Previous version's slide texts {slide_num: str or SlideText}.
         new_texts: Current version's slide texts {slide_num: str or SlideText}.
@@ -185,24 +191,62 @@ def compute_version(
         changes=changes,
     )
 
-    # Persist
+    # Persist: texts cache FIRST, history SECOND.
+    # If texts cache write fails → OSError propagates, history never advances.
+    # If history write fails after texts cache → D4 contract: crash is correct
+    # (provenance loss is worse than a harmless duplicate version on next run).
     history.append(version_info.to_dict())
-    save_version_history(history_path, history)
     save_texts_cache(cache_path, new_texts)
+    save_version_history(history_path, history)
 
     return version_info
 
 
 def load_version_history(history_path: Path) -> list[dict]:
-    """Load version history from JSON file."""
+    """Load version history from JSON file.
+
+    Schema-validates loaded data: rejects non-list payloads, strips entries
+    missing a valid integer 'version' key. Returns [] for missing/corrupt files.
+    """
     if not history_path.exists():
         return []
     try:
         data = json.loads(history_path.read_text())
-        return data.get("versions", []) if isinstance(data, dict) else data
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("Failed to load version history: %s", e)
         return []
+
+    # Extract versions list from wrapper dict or bare list
+    if isinstance(data, dict):
+        versions = data.get("versions", [])
+    elif isinstance(data, list):
+        versions = data
+    else:
+        logger.warning("Version history has unexpected shape (%s) — ignoring", type(data).__name__)
+        return []
+
+    if not isinstance(versions, list):
+        logger.warning("Version history 'versions' is not a list (%s) — ignoring", type(versions).__name__)
+        return []
+
+    # Validate each entry: must be a dict with an integer 'version' key
+    valid = []
+    for i, entry in enumerate(versions):
+        if not isinstance(entry, dict):
+            logger.warning("Version history entry %d is not a dict — skipping", i)
+            continue
+        v = entry.get("version")
+        if not isinstance(v, int):
+            logger.warning("Version history entry %d has no valid 'version' key — skipping", i)
+            continue
+        valid.append(entry)
+
+    if len(valid) < len(versions):
+        logger.warning(
+            "Stripped %d malformed entries from version history (%d remaining)",
+            len(versions) - len(valid), len(valid),
+        )
+    return valid
 
 
 def save_version_history(history_path: Path, versions: list[dict]):
@@ -233,7 +277,10 @@ def load_texts_cache(cache_path: Path) -> dict[int, str]:
             return {}
         return {int(k): v for k, v in raw.items() if k != "_cache_version"}
     except (json.JSONDecodeError, OSError, ValueError) as e:
-        logger.warning("Failed to load texts cache: %s", e)
+        logger.warning(
+            "Failed to load texts cache (%s). Next conversion will report "
+            "all slides as added/modified (one-time self-correction).", e,
+        )
         return {}
 
 
@@ -257,6 +304,11 @@ def _normalize_text(text: str) -> str:
     raw text for API input reproduction. A whitespace-only change will NOT
     trigger a new version here (correct: semantic content unchanged) but WILL
     cause an analysis cache miss (correct: different API prompt bytes). See D1.
+
+    Similarly, image-only edits are invisible to version tracking (text didn't
+    change) but trigger analysis cache misses (image hash changed). Both
+    disagreements are correct: versioning tracks text semantics, caching
+    tracks full API input fidelity.
     """
     text = text.strip()
     text = re.sub(r"\s+", " ", text)
