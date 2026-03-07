@@ -26,6 +26,7 @@ Folio v1.0 encompasses:
 - Document conversion pipeline (PPTX/PDF to Markdown)
 - Source file tracking with relative paths
 - Version tracking and change detection
+- Optional LLM analysis with bring-your-own provider credentials
 - Knowledge library organization (multi-client, multi-project)
 - Obsidian-compatible output format
 - CLI for all operations
@@ -78,17 +79,23 @@ The system SHALL extract text exactly as it appears in the source:
 
 #### FR-103: LLM Analysis Generation
 
-The system SHALL generate analysis for each slide (when API available):
+The system SHALL generate analysis for each slide using the configured LLM provider when valid credentials are available:
 - **Slide Type:** title, executive-summary, framework, data, narrative, next-steps, appendix
 - **Framework Detection:** 2x2-matrix, scr, mece, waterfall, gantt, timeline, process-flow, org-chart
 - **Visual Description:** Axes labels, quadrant contents, chart types, spatial relationships
 - **Key Data Points:** Numbers, percentages, metrics mentioned
 - **Main Insight:** One-sentence summary of the "so what"
 
+Supported providers in v1.0:
+- Anthropic
+- OpenAI
+- Google Gemini
+
 **Acceptance Criteria:**
 - [ ] Every slide has all five analysis fields populated
 - [ ] Framework detection correctly identifies common consulting frameworks
 - [ ] Visual description captures information lost in text-only extraction
+- [ ] If analysis cannot run, conversion still succeeds with pending-analysis placeholders
 
 #### FR-104: Source File Tracking
 
@@ -275,15 +282,16 @@ The system SHALL maintain a `registry.json` with:
 
 #### FR-501: Convert Command
 ```bash
-folio convert <source_file> [--note "version note"] [--target <library_path>]
+folio convert <source_file> [--note "version note"] [--target <library_path>] [--llm-profile <profile>]
 ```
 - Convert single file to markdown
 - Auto-detect target location from config or create new
-- Generate LLM analysis (if API key configured)
+- Generate LLM analysis using the configured route or explicit LLM profile
+- Preserve deterministic single-profile behavior when `--llm-profile` is used
 
 #### FR-502: Batch Command
 ```bash
-folio batch <source_directory> [--pattern "*.pptx"]
+folio batch <source_directory> [--pattern "*.pptx"] [--llm-profile <profile>]
 ```
 - Convert all matching files
 - Progress indicator
@@ -314,6 +322,44 @@ folio refresh [--scope <path>] [--all]
 - Re-convert all stale decks
 - Optionally scope to specific client/project
 - Update registry
+
+---
+
+### 2.6 LLM Provider Configuration (FR-600) — P1
+
+#### FR-601: Multi-Provider Support
+
+Folio SHALL support Anthropic, OpenAI, and Google Gemini for slide analysis.
+
+#### FR-602: Bring Your Own Credentials
+
+Folio SHALL accept provider credentials through environment variables referenced by configuration, and SHALL NOT require raw secrets in `folio.yaml`.
+
+#### FR-603: Named LLM Profiles
+
+Folio SHALL support named LLM profiles containing:
+- Provider
+- Model
+- Environment variable reference for credentials
+
+#### FR-604: Task Routing
+
+Folio SHALL support route-based selection of LLM profiles by task:
+- `routing.default` defines the fallback route for unspecified tasks
+- `routing.convert` controls the `folio convert` analysis path in v1.0
+- `--llm-profile` overrides route-based selection for a single command invocation
+
+#### FR-605: Optional Transient Fallback
+
+Folio SHALL support configured fallback chains for transient provider failures only.
+
+#### FR-606: Execution Transparency
+
+Folio SHALL record internal LLM execution metadata in output frontmatter, including the requested profile, actual provider/model used, fallback activation, and Pass 2 status.
+
+#### FR-607: Graceful Degradation
+
+Folio SHALL degrade to pending analysis without failing conversion when analysis cannot run because of missing credentials, missing SDKs, provider rejection, or exhausted transient fallbacks.
 
 ---
 
@@ -377,6 +423,17 @@ slide_types:
   - framework
 tags:
   - market-sizing
+_llm_metadata:
+  convert:
+    requested_profile: high_quality_anthropic
+    profile: high_quality_anthropic
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    fallback_used: false
+    status: executed
+    pass2:
+      status: skipped
+      reason: pass_disabled
 ---
 
 # Market Sizing Analysis
@@ -466,13 +523,44 @@ sources:
     target_prefix: Research/
 
 llm:
-  provider: anthropic
-  model: claude-sonnet-4-20250514
-  # API key from environment: ANTHROPIC_API_KEY
+  profiles:
+    high_quality_anthropic:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+      api_key_env: ANTHROPIC_API_KEY
+
+    fast_openai:
+      provider: openai
+      model: gpt-5-mini
+      api_key_env: OPENAI_API_KEY
+
+    backup_google:
+      provider: google
+      model: gemini-2.5-pro
+      api_key_env: GEMINI_API_KEY
+
+  routing:
+    default:
+      primary: high_quality_anthropic
+      fallbacks: []
+    convert:
+      primary: high_quality_anthropic
+      fallbacks: [backup_google]
 
 conversion:
   image_dpi: 150
   image_format: png
+  default_passes: 1
+  density_threshold: 2.0
+  pptx_renderer: auto
+```
+
+Legacy shorthand remains valid for Anthropic-only setups:
+
+```yaml
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
 ```
 
 ---
@@ -484,7 +572,8 @@ conversion:
 - LibreOffice required for PPTX→PDF conversion
 - Poppler required for PDF→image conversion
 - Python 3.10+
-- Anthropic API key for LLM analysis (optional but recommended)
+- Credential and SDK for the selected LLM provider/profile when AI analysis is enabled
+- Supported providers: Anthropic, OpenAI, Google Gemini
 
 ### 5.2 Assumptions
 
@@ -492,6 +581,7 @@ conversion:
 - Source files are not password-protected
 - Sufficient disk space (~100KB per slide for images)
 - Network access for LLM API calls
+- Provider credentials are managed through environment variables, not committed config
 
 ### 5.3 Platform Support
 
