@@ -83,13 +83,13 @@ class TestLLMProfiles:
         assert profile.model == "claude-sonnet-4-20250514"
 
     def test_override_profile_resolution(self):
-        from folio.config import LLMProfile, LLMConfig
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
         llm = LLMConfig(
-            default_profile="default",
             profiles={
                 "default": LLMProfile(name="default"),
                 "fast": LLMProfile(name="fast", provider="openai", model="gpt-4o-mini"),
             },
+            routing={"default": LLMRoute(primary="default")},
         )
         profile = llm.resolve_profile("fast")
         assert profile.provider == "openai"
@@ -100,20 +100,24 @@ class TestLLMProfiles:
         with pytest.raises(ValueError, match="Unknown LLM profile 'bogus'"):
             config.llm.resolve_profile("bogus")
 
-    def test_legacy_config_creates_default_profile(self):
+    def test_legacy_config_creates_synthetic_profile(self):
+        """Legacy config creates default_<provider> per spec §3.4."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("llm:\n  provider: anthropic\n  model: claude-haiku-4-5-20251001\n")
             f.flush()
             config = FolioConfig.load(Path(f.name))
         profile = config.llm.resolve_profile()
-        assert profile.name == "default"
+        assert profile.name == "default_anthropic"
         assert profile.provider == "anthropic"
         assert profile.model == "claude-haiku-4-5-20251001"
+        # Legacy also creates routing
+        assert "convert" in config.llm.routing
+        assert config.llm.routing["convert"].primary == "default_anthropic"
 
-    def test_profile_based_config_loading(self):
-        yaml_content = """
+    def test_profile_based_config_with_routing(self):
+        """Profile + routing config per spec §3.1."""
+        yaml_content = """\
 llm:
-  default_profile: claude
   profiles:
     claude:
       provider: anthropic
@@ -121,12 +125,17 @@ llm:
     openai:
       provider: openai
       model: gpt-4o
+  routing:
+    default:
+      primary: claude
+    convert:
+      primary: claude
+      fallbacks: [openai]
 """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             f.flush()
             config = FolioConfig.load(Path(f.name))
-        assert config.llm.default_profile == "claude"
         assert "claude" in config.llm.profiles
         assert "openai" in config.llm.profiles
 
@@ -137,13 +146,51 @@ llm:
         assert openai.provider == "openai"
         assert openai.model == "gpt-4o"
 
+        # Route resolution
+        profile = config.llm.resolve_profile(task="convert")
+        assert profile.name == "claude"
+
+        # Fallbacks
+        fallbacks = config.llm.get_fallbacks(task="convert")
+        assert len(fallbacks) == 1
+        assert fallbacks[0].name == "openai"
+
+    def test_cli_override_disables_fallback(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        llm = LLMConfig(
+            profiles={
+                "prod": LLMProfile(name="prod"),
+                "backup": LLMProfile(name="backup", provider="openai"),
+            },
+            routing={"convert": LLMRoute(primary="prod", fallbacks=["backup"])},
+        )
+        # Without override: fallbacks are returned
+        assert len(llm.get_fallbacks(task="convert")) == 1
+        # With override: fallback disabled
+        assert llm.get_fallbacks(override="prod", task="convert") == []
+
+    def test_undefined_route_falls_back_to_default(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        llm = LLMConfig(
+            profiles={
+                "main": LLMProfile(name="main"),
+            },
+            routing={"default": LLMRoute(primary="main")},
+        )
+        # "convert" route not defined → falls back to default
+        profile = llm.resolve_profile(task="convert")
+        assert profile.name == "main"
+
     def test_api_key_env_auto_generated(self):
         from folio.config import LLMProfile
         p = LLMProfile(name="test", provider="openai")
         assert p.api_key_env == "OPENAI_API_KEY"
 
         p2 = LLMProfile(name="test", provider="google")
-        assert p2.api_key_env == "GOOGLE_API_KEY"
+        assert p2.api_key_env == "GEMINI_API_KEY"  # Not GOOGLE_API_KEY
+
+        p3 = LLMProfile(name="test", provider="anthropic")
+        assert p3.api_key_env == "ANTHROPIC_API_KEY"
 
     def test_api_key_env_explicit(self):
         from folio.config import LLMProfile

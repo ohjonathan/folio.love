@@ -18,8 +18,11 @@ from folio.llm.types import (
     ResolvedLLMRoute,
     StageLLMMetadata,
 )
-from folio.llm.providers import AnthropicAnalysisProvider
-from tests.llm_mocks import make_anthropic_response, make_pass1_json
+from folio.llm.providers import AnthropicAnalysisProvider, OpenAIAnalysisProvider, GoogleAnalysisProvider
+from tests.llm_mocks import (
+    make_anthropic_response, make_openai_response, make_google_response,
+    make_pass1_json,
+)
 
 
 def _make_unique_png(index: int) -> bytes:
@@ -279,3 +282,102 @@ class TestCacheProviderInvalidation:
 
         loaded = _load_cache_deep(tmp_path, model="test", provider="openai")
         assert loaded == {}
+
+
+class TestOpenAIAdapter:
+    """Test OpenAI adapter request/response normalization."""
+
+    def test_analyze_returns_provider_output(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(10))
+
+            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            output = provider.analyze(mock_client, "gpt-4o", inp)
+
+        assert isinstance(output, ProviderOutput)
+        assert output.provider_name == "openai"
+        assert output.model_name == "gpt-4o"
+        assert not output.truncated
+        data = json.loads(output.raw_text)
+        assert data["slide_type"] == "data"
+
+    def test_analyze_detects_truncation(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response(
+            "partial", finish_reason="length"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(11))
+
+            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            output = provider.analyze(mock_client, "gpt-4o", inp)
+
+        assert output.truncated is True
+
+    def test_classify_error_generic(self):
+        provider = OpenAIAnalysisProvider()
+        assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
+
+
+class TestGoogleAdapter:
+    """Test Google Gemini adapter request/response normalization."""
+
+    def test_analyze_returns_provider_output(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = make_google_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(20))
+
+            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            # Google adapter imports google.genai.types internally; mock it
+            with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}):
+                import google.genai.types as mock_types
+                mock_types.Part.from_bytes.return_value = MagicMock()
+                mock_types.GenerateContentConfig.return_value = MagicMock()
+                output = provider.analyze(mock_client, "gemini-2.5-pro", inp)
+
+        assert isinstance(output, ProviderOutput)
+        assert output.provider_name == "google"
+        assert output.model_name == "gemini-2.5-pro"
+        assert not output.truncated
+        data = json.loads(output.raw_text)
+        assert data["slide_type"] == "data"
+
+    def test_analyze_detects_truncation(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = make_google_response(
+            "partial", finish_reason="MAX_TOKENS"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(21))
+
+            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}):
+                import google.genai.types as mock_types
+                mock_types.Part.from_bytes.return_value = MagicMock()
+                mock_types.GenerateContentConfig.return_value = MagicMock()
+                output = provider.analyze(mock_client, "gemini-2.5-pro", inp)
+
+        assert output.truncated is True
+
+    def test_classify_error_generic(self):
+        provider = GoogleAnalysisProvider()
+        assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT

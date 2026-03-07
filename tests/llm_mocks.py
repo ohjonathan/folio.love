@@ -61,3 +61,35 @@ def make_pass2_json(
         "framework_reassessment": framework_reassessment,
         "evidence": evidence,
     })
+
+
+def make_openai_response(text: str, finish_reason: str = "stop") -> MagicMock:
+    """Create a mock OpenAI ChatCompletion response.
+
+    Simulates the OpenAI SDK response shape:
+        response.choices[0].message.content = text
+        response.choices[0].finish_reason = finish_reason
+    """
+    mock_response = MagicMock()
+    mock_choice = MagicMock()
+    mock_message = MagicMock()
+    mock_message.content = text
+    mock_choice.message = mock_message
+    mock_choice.finish_reason = finish_reason
+    mock_response.choices = [mock_choice]
+    return mock_response
+
+
+def make_google_response(text: str, finish_reason: str = "STOP") -> MagicMock:
+    """Create a mock Google Gemini response.
+
+    Simulates the Google GenAI SDK response shape:
+        response.text = text
+        response.candidates[0].finish_reason = finish_reason
+    """
+    mock_response = MagicMock()
+    mock_response.text = text
+    mock_candidate = MagicMock()
+    mock_candidate.finish_reason = finish_reason
+    mock_response.candidates = [mock_candidate]
+    return mock_response
