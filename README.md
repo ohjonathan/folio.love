@@ -85,7 +85,7 @@ llm:
 
     fast_openai:
       provider: openai
-      model: gpt-5-mini
+      model: gpt-4o-mini
       api_key_env: OPENAI_API_KEY
 
     backup_google:
@@ -315,7 +315,7 @@ llm:
 
     fast_openai:
       provider: openai
-      model: gpt-5-mini
+      model: gpt-4o-mini
       api_key_env: OPENAI_API_KEY
 
     backup_google:
