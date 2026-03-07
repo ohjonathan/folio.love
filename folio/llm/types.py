@@ -47,8 +47,12 @@ class AnalysisProvider(Protocol):
 
     provider_name: str
 
-    def create_client(self) -> Any:
+    def create_client(self, api_key_env: str = "") -> Any:
         """Return a provider-native SDK client instance.
+
+        Args:
+            api_key_env: Environment variable name for the API key.
+                If empty, the provider uses its default env var.
 
         Called once per pass. SDK auto-retry MUST be disabled;
         Folio manages its own retry/fallback policy.

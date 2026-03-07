@@ -22,13 +22,14 @@ class AnthropicAnalysisProvider:
 
     provider_name: str = "anthropic"
 
-    def create_client(self) -> Any:
+    def create_client(self, api_key_env: str = "") -> Any:
         """Create an Anthropic client with SDK auto-retry disabled."""
         import anthropic
 
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        env_var = api_key_env or "ANTHROPIC_API_KEY"
+        api_key = os.environ.get(env_var)
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+            raise ValueError(f"{env_var} environment variable not set")
 
         return anthropic.Anthropic(
             api_key=api_key,
@@ -106,13 +107,14 @@ class OpenAIAnalysisProvider:
 
     provider_name: str = "openai"
 
-    def create_client(self) -> Any:
+    def create_client(self, api_key_env: str = "") -> Any:
         """Create an OpenAI client."""
         from openai import OpenAI
 
-        api_key = os.environ.get("OPENAI_API_KEY")
+        env_var = api_key_env or "OPENAI_API_KEY"
+        api_key = os.environ.get(env_var)
         if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
+            raise ValueError(f"{env_var} environment variable not set")
 
         return OpenAI(
             api_key=api_key,
@@ -183,13 +185,14 @@ class GoogleAnalysisProvider:
 
     provider_name: str = "google"
 
-    def create_client(self) -> Any:
+    def create_client(self, api_key_env: str = "") -> Any:
         """Create a Google GenAI client."""
         from google import genai
 
-        api_key = os.environ.get("GOOGLE_API_KEY")
+        env_var = api_key_env or "GEMINI_API_KEY"
+        api_key = os.environ.get(env_var)
         if not api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
+            raise ValueError(f"{env_var} environment variable not set")
 
         return genai.Client(api_key=api_key)
 

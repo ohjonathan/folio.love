@@ -83,7 +83,7 @@ class TestCacheFormatVersion:
     def test_format_version_mismatch_invalidates(self, tmp_path):
         """Write v0 cache, load with v1 -> full invalidation."""
         cache = {"_cache_version": 0, "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
-                 "_model_version": None, "_extraction_version": _EXTRACTION_VERSION,
+                 "_model_version": None, "_provider_version": "anthropic", "_extraction_version": _EXTRACTION_VERSION,
                  "abc123": {"slide_type": "data"}}
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
         result = _load_cache(tmp_path)
@@ -101,7 +101,7 @@ class TestCacheFormatVersion:
         """Write and load with same version -> data preserved."""
         cache = {"_cache_version": _ANALYSIS_CACHE_VERSION,
                  "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
-                 "_model_version": None,
+                 "_model_version": None, "_provider_version": "anthropic",
                  "_extraction_version": _EXTRACTION_VERSION,
                  "abc123": {"slide_type": "data"}}
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
@@ -113,7 +113,7 @@ class TestCacheFormatVersion:
         from folio.pipeline.analysis import DEPTH_PROMPT
         cache = {"_cache_version": 999,
                  "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-                 "_model_version": None,
+                 "_model_version": None, "_provider_version": "anthropic",
                  "_extraction_version": _EXTRACTION_VERSION}
         (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(cache))
         result = _load_cache_deep(tmp_path)
@@ -261,7 +261,7 @@ class TestDeepCacheContextHash:
         deep_cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             f"{img_hash}_deep": {
                 "evidence": [{"claim": "Old", "quote": "old", "confidence": "high", "pass": 2}],
@@ -307,7 +307,7 @@ class TestDeepCacheContextHash:
         deep_cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             f"{img_hash}_deep": {
                 "evidence": [{"claim": "Cached", "quote": "cached", "confidence": "high", "pass": 2}],
@@ -352,7 +352,7 @@ class TestDeepCacheContextHash:
         deep_cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             f"{img_hash}_deep": {
                 "evidence": [{"claim": "Cached", "quote": "cached", "confidence": "high", "pass": 2}],
@@ -395,7 +395,7 @@ class TestDeepCacheContextHash:
         cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             f"{img_hash}_deep": [{"claim": "old"}],  # list format = legacy
         }
@@ -719,7 +719,7 @@ class TestDeepCacheForceMiss:
         deep_cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             f"{img_hash}_deep": {
                 "evidence": [{"claim": "Stale", "quote": "stale", "confidence": "low", "pass": 2}],
@@ -818,7 +818,7 @@ class TestMalformedCachePayloads:
         cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             img_hash: ["not", "a", "dict"],  # malformed
         }
@@ -849,7 +849,7 @@ class TestMalformedCachePayloads:
         cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             img_hash: "corrupted_string",  # malformed
         }
@@ -886,7 +886,7 @@ class TestMalformedCachePayloads:
         deep_cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             f"{img_hash}_deep": {
                 "evidence": "not_a_list",  # malformed!
@@ -930,7 +930,7 @@ class TestMalformedCachePayloads:
         deep_cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             f"{img_hash}_deep": {
                 "evidence": ["not_a_dict", 42],  # list of non-dict
@@ -968,7 +968,7 @@ class TestPromptVersionInvalidation:
         cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": "wrong_hash",  # Only prompt changed
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             "abc123": {"slide_type": "data"},
         }
@@ -982,7 +982,7 @@ class TestPromptVersionInvalidation:
         cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": "wrong_hash",  # Only prompt changed
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             "abc_deep": {"evidence": []},
         }
@@ -995,7 +995,7 @@ class TestPromptVersionInvalidation:
         cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             "abc123": {"slide_type": "data"},
         }
@@ -1009,7 +1009,7 @@ class TestPromptVersionInvalidation:
         cache = {
             "_cache_version": _ANALYSIS_CACHE_VERSION,
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
-            "_model_version": "test",
+            "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
             "abc_deep": {"evidence": []},
         }

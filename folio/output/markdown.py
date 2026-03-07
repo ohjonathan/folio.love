@@ -165,7 +165,7 @@ def _format_slide(
     elif analysis and analysis.slide_type == "pending":
         lines.append("### Analysis")
         lines.append("")
-        lines.append("*[Analysis pending — set ANTHROPIC_API_KEY to enable]*")
+        lines.append("*[Analysis pending \u2014 LLM provider unavailable]*")
         lines.append("")
 
     lines.append("---")
