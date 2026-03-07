@@ -52,7 +52,9 @@ def to_pdf(source_path: Path, output_dir: Path, timeout: int = 60) -> Path:
         raise NormalizationError(
             "LibreOffice not found. Install with: "
             "brew install --cask libreoffice (macOS) or "
-            "apt install libreoffice (Linux)"
+            "apt install libreoffice (Linux). "
+            "If LibreOffice is blocked on a managed laptop, export the deck "
+            "to PDF in PowerPoint and run folio convert <deck>.pdf instead."
         )
 
     effective_timeout = _compute_timeout(source_path, timeout)

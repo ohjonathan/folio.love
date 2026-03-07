@@ -18,7 +18,7 @@ Folio tracks versions automatically -- re-converting an updated deck increments 
 **Prerequisites**
 
 - Python 3.10+
-- [LibreOffice](https://www.libreoffice.org/) (for PPTX/PPT conversion)
+- [LibreOffice](https://www.libreoffice.org/) (only for PPTX/PPT conversion)
 - [Poppler](https://poppler.freedesktop.org/) (for PDF image extraction)
 
 ```bash
@@ -29,6 +29,12 @@ brew install poppler
 # Ubuntu/Debian
 sudo apt install libreoffice poppler-utils
 ```
+
+If you're on a managed laptop that blocks LibreOffice, export the deck to PDF in
+PowerPoint and run `folio convert deck.pdf`. PDF is a first-class input and
+still exercises image extraction, PDF text extraction, analysis, version
+tracking, and source tracking. The only stage you bypass is PPTX/PPT
+normalization.
 
 **Install**
 
@@ -260,7 +266,7 @@ With no `folio.yaml`, Folio uses these defaults: output goes to `./library`, ima
 ```
 Input (.pptx/.ppt/.pdf)
   │
-  ├─ Normalize ──→ Convert to PDF (LibreOffice for PPT/PPTX)
+  ├─ Normalize ──→ Convert to PDF (LibreOffice for PPT/PPTX, direct copy for PDF)
   │
   ├─ Images ─────→ Extract slide images, detect blank slides
   │

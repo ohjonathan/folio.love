@@ -145,3 +145,20 @@ class TestCleanup:
                 to_pdf(source, output)
 
         assert "font substitution" in caplog.text
+
+
+class TestLibreOfficeFallbackMessage:
+    """Test actionable fallback guidance when LibreOffice is unavailable."""
+
+    def test_missing_libreoffice_mentions_pdf_workaround(self, sample_pptx, tmp_path):
+        output = tmp_path / "output"
+        output.mkdir()
+
+        with patch("folio.pipeline.normalize._find_libreoffice", return_value=None):
+            with pytest.raises(NormalizationError) as exc_info:
+                to_pdf(sample_pptx, output)
+
+        message = str(exc_info.value)
+        assert "LibreOffice not found" in message
+        assert "PowerPoint" in message
+        assert "folio convert <deck>.pdf" in message
