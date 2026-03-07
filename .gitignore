@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Generated output
+library/
+
+# Virtual environments
+.venv/
+venv/
+
+# Testing
+.pytest_cache/
+
+# Build artifacts
+mnt/
+
+# Tool artifacts
+.ontos/
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Backups
+*.bak
