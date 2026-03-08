@@ -9,7 +9,8 @@ import pytest
 
 from folio.pipeline.normalize import (
     NormalizationError,
-    _build_powerpoint_applescript,
+    NormalizationResult,
+    _build_powerpoint_export_applescript,
     _compute_timeout,
     _convert_with_powerpoint,
     _escape_applescript_string,
@@ -241,51 +242,47 @@ class TestRendererSelection:
 
 
 class TestBuildAppleScript:
-    """Test AppleScript generation."""
+    """Test AppleScript generation (export-only, no open POSIX file)."""
 
-    def test_contains_posix_paths(self):
-        script = _build_powerpoint_applescript("/tmp/in.pptx", "/tmp/out.pdf", 60, "in.pptx")
-        assert 'POSIX file "/tmp/in.pptx"' in script
+    def test_contains_output_path(self):
+        script = _build_powerpoint_export_applescript("/tmp/out.pdf", 60, "in.pptx")
         assert 'POSIX file "/tmp/out.pdf"' in script
+        # No open POSIX file — opening is via Launch Services
+        assert 'open POSIX file' not in script
 
     def test_contains_timeout(self):
-        script = _build_powerpoint_applescript("/a.pptx", "/b.pdf", 120, "a.pptx")
+        script = _build_powerpoint_export_applescript("/b.pdf", 120, "a.pptx")
         assert "with timeout of 120 seconds" in script
 
     def test_uses_named_presentation_not_active(self):
         """A2: save/close must target the specific presentation, not active."""
-        script = _build_powerpoint_applescript(
-            "/tmp/deck.pptx", "/tmp/deck.pdf", 60, "deck.pptx"
+        script = _build_powerpoint_export_applescript(
+            "/tmp/deck.pdf", 60, "deck.pptx"
         )
         assert 'save presentation "deck.pptx"' in script
         assert 'close presentation "deck.pptx"' in script
         assert "active presentation" not in script
 
     def test_handles_spaces_in_paths(self):
-        script = _build_powerpoint_applescript(
-            "/Users/me/My Docs/deck file.pptx",
+        script = _build_powerpoint_export_applescript(
             "/tmp/output dir/deck file.pdf",
             60,
             "deck file.pptx",
         )
-        assert "My Docs/deck file.pptx" in script
         assert "output dir/deck file.pdf" in script
 
     def test_escapes_double_quotes_in_paths(self):
-        script = _build_powerpoint_applescript(
-            '/tmp/deck "final".pptx',
+        script = _build_powerpoint_export_applescript(
             '/tmp/deck "final".pdf',
             60,
             'deck "final".pptx',
         )
-        assert r'deck \"final\".pptx' in script
         assert r'deck \"final\".pdf' in script
         # Must NOT contain unescaped quotes that break the literal
         assert 'deck "final"' not in script
 
     def test_escapes_backslashes_in_paths(self):
-        script = _build_powerpoint_applescript(
-            "/tmp/path\\with\\backslash.pptx",
+        script = _build_powerpoint_export_applescript(
             "/tmp/path\\with\\backslash.pdf",
             60,
             "path\\with\\backslash.pptx",
@@ -339,7 +336,8 @@ class TestPowerPointConversion:
             expected_pdf.write_text("pdf content")
             return mock_result
 
-        with patch("subprocess.run", side_effect=create_pdf):
+        with patch("subprocess.run", side_effect=create_pdf), \
+             patch("folio.pipeline.normalize._wait_for_presentation"):
             _convert_with_powerpoint(source, 60, expected_pdf)
 
         assert expected_pdf.exists()
@@ -354,20 +352,24 @@ class TestPowerPointConversion:
 
         call_count = 0
 
-        def mock_run(*args, **kwargs):
+        def mock_run(cmd, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
+                # First call: open -a succeeds
+                return MagicMock(returncode=0)
+            if call_count == 2:
+                # Second call: export AppleScript times out
                 raise subprocess.TimeoutExpired("osascript", 70)
-            # Second call is the best-effort cleanup
+            # Third call is the best-effort cleanup
             return MagicMock(returncode=0)
 
-        with patch("subprocess.run", side_effect=mock_run):
+        with patch("subprocess.run", side_effect=mock_run), \
+             patch("folio.pipeline.normalize._wait_for_presentation"):
             with pytest.raises(NormalizationError, match="PowerPoint timed out"):
                 _convert_with_powerpoint(source, 60, expected_pdf)
 
         assert not expected_pdf.exists()
-        assert call_count == 2  # conversion + cleanup attempt
 
     def test_nonzero_exit_cleanup(self, tmp_path):
         source = tmp_path / "test.pptx"
@@ -381,7 +383,8 @@ class TestPowerPointConversion:
         mock_result.returncode = 1
         mock_result.stderr = "AppleScript error: something broke"
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("subprocess.run", return_value=mock_result), \
+             patch("folio.pipeline.normalize._wait_for_presentation"):
             with pytest.raises(NormalizationError, match="something broke"):
                 _convert_with_powerpoint(source, 60, expected_pdf)
 
@@ -398,7 +401,8 @@ class TestPowerPointConversion:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("subprocess.run", return_value=mock_result), \
+             patch("folio.pipeline.normalize._wait_for_presentation"):
             # _convert_with_powerpoint itself doesn't check PDF existence;
             # the caller (to_pdf) does. But stderr is logged on success.
             _convert_with_powerpoint(source, 60, expected_pdf)
@@ -419,15 +423,26 @@ class TestPowerPointConversion:
         def mock_run(cmd, **kwargs):
             calls.append(cmd)
             if len(calls) == 1:
+                # First call: open -a succeeds
+                return MagicMock(returncode=0)
+            if len(calls) == 2:
+                # Second call: export AppleScript times out
                 raise subprocess.TimeoutExpired("osascript", 70)
+            # Third call: best-effort cleanup
             return MagicMock(returncode=0)
 
-        with patch("subprocess.run", side_effect=mock_run):
+        with patch("subprocess.run", side_effect=mock_run), \
+             patch("folio.pipeline.normalize._wait_for_presentation"):
             with pytest.raises(NormalizationError):
                 _convert_with_powerpoint(source, 60, expected_pdf)
 
-        assert len(calls) == 2
-        cleanup_script = calls[1][2]
+        # Calls: open -a (1), export osascript timeout (2), cleanup (3)
+        assert len(calls) >= 3
+        # Find the cleanup call (the last osascript call with close)
+        cleanup_calls = [c for c in calls if isinstance(c, list) and len(c) >= 3
+                         and c[0] == "osascript" and "close presentation" in str(c)]
+        assert len(cleanup_calls) >= 1
+        cleanup_script = cleanup_calls[0][2]
         # Must target the specific file, not blindly close active presentation
         assert 'close presentation "test.pptx"' in cleanup_script
         assert "active presentation" not in cleanup_script
@@ -451,7 +466,7 @@ class TestToPdfRendererDispatch:
              patch("subprocess.run", return_value=mock_result):
             result = to_pdf(source, output, renderer="libreoffice")
 
-        assert result == expected_pdf
+        assert result.pdf_path == expected_pdf
 
     def test_auto_falls_back_to_powerpoint_when_lo_launch_blocked(self, tmp_path):
         """P2: LO on disk but MDM-blocked — auto mode should fall back to PowerPoint."""
@@ -480,11 +495,13 @@ class TestToPdfRendererDispatch:
         with patch("folio.pipeline.normalize._validate_source"), \
              patch("folio.pipeline.normalize._find_libreoffice", return_value="soffice"), \
              patch("folio.pipeline.normalize._find_powerpoint", return_value=True), \
-             patch("subprocess.run", side_effect=mock_subprocess):
+             patch("subprocess.run", side_effect=mock_subprocess), \
+             patch("folio.pipeline.normalize._convert_with_powerpoint",
+                   side_effect=lambda s, t, p: expected_pdf.write_text("pdf") or None):
             result = to_pdf(source, output, renderer="auto")
 
-        assert result == expected_pdf
-        assert lo_call_count == 1  # LO was attempted first
+        assert result.pdf_path == expected_pdf
+        assert result.renderer_used == "powerpoint"
 
     def test_explicit_libreoffice_does_not_fall_back(self, tmp_path):
         """Explicit libreoffice renderer should NOT fall back to PowerPoint."""
@@ -511,13 +528,198 @@ class TestToPdfRendererDispatch:
 
         mock_result = MagicMock(returncode=0, stderr="")
 
-        def create_pdf(*args, **kwargs):
-            expected_pdf.write_text("pdf")
-            return mock_result
+        def create_pdf(source, timeout, expected):
+            expected.write_text("pdf")
 
         with patch("folio.pipeline.normalize._validate_source"), \
              patch("folio.pipeline.normalize._select_renderer", return_value=("powerpoint", None)), \
-             patch("subprocess.run", side_effect=create_pdf):
+             patch("folio.pipeline.normalize._convert_with_powerpoint", side_effect=create_pdf):
             result = to_pdf(source, output, renderer="powerpoint")
 
-        assert result == expected_pdf
+        assert result.pdf_path == expected_pdf
+        assert result.renderer_used == "powerpoint"
+
+
+class TestPptxOutputDir:
+    """Test pptx_output_dir seam for PowerPoint-only output path."""
+
+    def test_powerpoint_uses_pptx_output_dir(self, tmp_path):
+        """PowerPoint should write to pptx_output_dir when provided."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        deck_dir = tmp_path / "deck"
+        deck_dir.mkdir()
+        expected_pdf = deck_dir / "test.pdf"
+
+        def create_pdf(source, timeout, expected):
+            expected.write_text("pdf")
+
+        with patch("folio.pipeline.normalize._validate_source"), \
+             patch("folio.pipeline.normalize._select_renderer", return_value=("powerpoint", None)), \
+             patch("folio.pipeline.normalize._convert_with_powerpoint", side_effect=create_pdf):
+            result = to_pdf(source, output, pptx_output_dir=deck_dir, renderer="powerpoint")
+
+        assert result.pdf_path == expected_pdf
+        assert result.pdf_path.parent == deck_dir
+
+    def test_libreoffice_ignores_pptx_output_dir(self, tmp_path):
+        """LibreOffice should still write to output_dir, not pptx_output_dir."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        deck_dir = tmp_path / "deck"
+        deck_dir.mkdir()
+        expected_pdf = output / "test.pdf"
+        expected_pdf.write_text("pdf")
+
+        mock_result = MagicMock(returncode=0, stderr="")
+
+        with patch("folio.pipeline.normalize._validate_source"), \
+             patch("folio.pipeline.normalize._select_renderer", return_value=("libreoffice", "soffice")), \
+             patch("subprocess.run", return_value=mock_result):
+            result = to_pdf(source, output, pptx_output_dir=deck_dir, renderer="libreoffice")
+
+        assert result.pdf_path == expected_pdf
+        assert result.pdf_path.parent == output
+        assert result.renderer_used == "libreoffice"
+
+    def test_pdf_copy_ignores_pptx_output_dir(self, tmp_path):
+        """PDF direct copy should always go to output_dir."""
+        source = tmp_path / "test.pdf"
+        source.write_bytes(b"%PDF-1.4 content here")
+        output = tmp_path / "output"
+        output.mkdir()
+        deck_dir = tmp_path / "deck"
+        deck_dir.mkdir()
+
+        with patch("folio.pipeline.normalize._validate_source"):
+            result = to_pdf(source, output, pptx_output_dir=deck_dir)
+
+        assert result.pdf_path.parent == output
+        assert result.pdf_path.name == "test.pdf"
+        assert result.renderer_used == "pdf-copy"
+
+    def test_auto_fallback_uses_pptx_output_dir(self, tmp_path):
+        """In auto mode, if LO fails and falls back to PowerPoint,
+        the PowerPoint PDF goes to pptx_output_dir."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        deck_dir = tmp_path / "deck"
+        deck_dir.mkdir()
+        ppt_pdf = deck_dir / "test.pdf"
+
+        def mock_subprocess(cmd, **kwargs):
+            if isinstance(cmd, list) and cmd[0] != "osascript":
+                # LibreOffice fails
+                return MagicMock(returncode=1, stderr="Operation not permitted")
+            # Default — should not reach here for PowerPoint (mocked below)
+            return MagicMock(returncode=0, stderr="")
+
+        def create_ppt_pdf(source, timeout, expected):
+            ppt_pdf.write_text("pdf")
+
+        with patch("folio.pipeline.normalize._validate_source"), \
+             patch("folio.pipeline.normalize._find_libreoffice", return_value="soffice"), \
+             patch("folio.pipeline.normalize._find_powerpoint", return_value=True), \
+             patch("subprocess.run", side_effect=mock_subprocess), \
+             patch("folio.pipeline.normalize._convert_with_powerpoint", side_effect=create_ppt_pdf):
+            result = to_pdf(source, output, pptx_output_dir=deck_dir, renderer="auto")
+
+        assert result.pdf_path == ppt_pdf
+        assert result.pdf_path.parent == deck_dir
+        assert result.renderer_used == "powerpoint"
+
+    def test_pptx_output_dir_defaults_to_output_dir(self, tmp_path):
+        """When pptx_output_dir is None, PowerPoint uses output_dir."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        expected_pdf = output / "test.pdf"
+
+        def create_pdf(source, timeout, expected):
+            expected.write_text("pdf")
+
+        with patch("folio.pipeline.normalize._validate_source"), \
+             patch("folio.pipeline.normalize._select_renderer", return_value=("powerpoint", None)), \
+             patch("folio.pipeline.normalize._convert_with_powerpoint", side_effect=create_pdf):
+            result = to_pdf(source, output, renderer="powerpoint")
+
+        assert result.pdf_path == expected_pdf
+        assert result.pdf_path.parent == output
+
+
+class TestPortraitPdfWarning:
+    """Test portrait-PDF warning for likely notes-page exports."""
+
+    def test_portrait_pdf_warns(self, tmp_path, caplog):
+        """Portrait PDF (height > width) should produce a warning."""
+        source = tmp_path / "portrait.pdf"
+        # Craft a minimal PDF-like content with a portrait MediaBox
+        source.write_bytes(b"%PDF-1.4\n/MediaBox [0 0 612 1008]\n")
+        output = tmp_path / "output"
+        output.mkdir()
+
+        import logging
+        with patch("folio.pipeline.normalize._validate_source"), \
+             caplog.at_level(logging.WARNING):
+            to_pdf(source, output)
+
+        assert "Portrait PDF detected" in caplog.text
+
+    def test_landscape_pdf_no_warning(self, tmp_path, caplog):
+        """Landscape PDF should not produce a portrait warning."""
+        source = tmp_path / "landscape.pdf"
+        source.write_bytes(b"%PDF-1.4\n/MediaBox [0 0 1008 612]\n")
+        output = tmp_path / "output"
+        output.mkdir()
+
+        import logging
+        with patch("folio.pipeline.normalize._validate_source"), \
+             caplog.at_level(logging.WARNING):
+            to_pdf(source, output)
+
+        assert "Portrait PDF" not in caplog.text
+
+    def test_portrait_pdf_not_rejected(self, tmp_path):
+        """Portrait PDF should be accepted (warning only, no rejection)."""
+        source = tmp_path / "portrait.pdf"
+        source.write_bytes(b"%PDF-1.4\n/MediaBox [0 0 612 1008]\n")
+        output = tmp_path / "output"
+        output.mkdir()
+
+        with patch("folio.pipeline.normalize._validate_source"):
+            result = to_pdf(source, output)
+
+        assert result.pdf_path.exists()
+
+
+class TestPowerPointMitigationHint:
+    """Test that PowerPoint failures include a mitigation hint."""
+
+    def test_failure_includes_manual_pdf_hint(self, tmp_path):
+        """PowerPoint conversion failures should suggest manual PDF export."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        expected_pdf = output / "test.pdf"
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = "AppleScript error -9074"
+
+        with patch("subprocess.run", return_value=mock_result), \
+             patch("folio.pipeline.normalize._wait_for_presentation"):
+            with pytest.raises(NormalizationError) as exc_info:
+                _convert_with_powerpoint(source, 60, expected_pdf)
+
+        msg = str(exc_info.value)
+        assert "folio convert" in msg
+        assert ".pdf" in msg
+

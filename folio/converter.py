@@ -17,6 +17,9 @@ from .output import frontmatter, markdown
 
 logger = logging.getLogger(__name__)
 
+# Shared constant for PPTX/PPT extensions — used by cli.py too.
+PPTX_EXTENSIONS = frozenset({".pptx", ".ppt"})
+
 
 @dataclass
 class ConversionResult:
@@ -26,6 +29,7 @@ class ConversionResult:
     version: int
     changes: versions.ChangeSet
     deck_id: str
+    renderer_used: str = "unknown"
     cache_stats: Optional["analysis.CacheStats"] = None
 
 
@@ -93,18 +97,36 @@ class FolioConverter:
 
             # Stage 1: Normalize to PDF
             logger.info("  Normalizing to PDF...")
-            pdf_path = normalize.to_pdf(
+            norm_result = normalize.to_pdf(
                 source_path, tmpdir,
+                pptx_output_dir=deck_dir,
                 timeout=self.config.conversion.libreoffice_timeout,
                 renderer=self.config.conversion.pptx_renderer,
             )
+            pdf_path = norm_result.pdf_path
+            renderer_used = norm_result.renderer_used
+            logger.info("  Renderer used: %s", renderer_used)
 
             # Stage 2: Extract images
             logger.info("  Extracting images...")
-            image_results = images.extract_with_metadata(
-                pdf_path, deck_dir,
-                dpi=self.config.conversion.image_dpi,
-            )
+            try:
+                image_results = images.extract_with_metadata(
+                    pdf_path, deck_dir,
+                    dpi=self.config.conversion.image_dpi,
+                )
+            finally:
+                # Clean up intermediate PowerPoint PDF written into deck_dir.
+                # Runs whether image extraction succeeds or fails.
+                # Only when: source is PPTX/PPT and the PDF landed in deck_dir.
+                if (
+                    source_path.suffix.lower() in PPTX_EXTENSIONS
+                    and pdf_path.resolve().parent == deck_dir.resolve()
+                    and pdf_path.exists()
+                ):
+                    pdf_path.unlink()
+                    logger.debug(
+                        "Cleaned up intermediate PowerPoint PDF: %s", pdf_path.name
+                    )
             image_paths = [r.path for r in image_results]
             slide_count = len(image_results)
 
@@ -115,6 +137,22 @@ class FolioConverter:
             # Stage 3: Extract text
             logger.info("  Extracting text...")
             slide_texts = text.extract_structured(source_path)
+
+            # Sparse-text warning BEFORE reconciliation (which may pad empty
+            # SlideText entries, artificially lowering the average).
+            if slide_count > 0:
+                total_chars = sum(
+                    len(st.full_text or "") for st in slide_texts.values()
+                )
+                avg_chars = total_chars / slide_count
+                if avg_chars < 10:
+                    is_pdf_source = source_path.suffix.lower() == ".pdf"
+                    kind = "scanned PDF" if is_pdf_source else "very sparse text"
+                    logger.warning(
+                        "Low text density (%.0f chars/page avg): %s may have %s. "
+                        "Extraction quality may be reduced.",
+                        avg_chars, source_path.name, kind,
+                    )
 
             reconciliation = text.reconcile_slide_count(slide_texts, slide_count)
             slide_texts = reconciliation.slide_texts
@@ -265,6 +303,7 @@ class FolioConverter:
             version=version_info.version,
             changes=version_info.changes,
             deck_id=deck_id,
+            renderer_used=renderer_used,
             cache_stats=combined_stats,
         )
 
