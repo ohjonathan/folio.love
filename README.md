@@ -33,9 +33,8 @@ sudo apt install libreoffice poppler-utils
 If you're on a managed macOS laptop that blocks LibreOffice, Folio can use
 Microsoft PowerPoint as the PPTX/PPT renderer. The current PowerPoint path opens
 decks via Launch Services (`open -a "Microsoft PowerPoint" ...`) and then exports
-to PDF, which is more robust than the older AppleScript-only open path. In batch
-mode, Folio can also restart PowerPoint every 15 PPTX conversions when
-`--dedicated-session` is enabled (the default).
+to PDF. In batch mode, Folio can also restart PowerPoint periodically during
+long PPTX runs when `--dedicated-session` is enabled (the default).
 
 For managed-mac usage:
 - Run batch jobs from `Terminal.app`
