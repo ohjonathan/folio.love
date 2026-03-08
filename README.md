@@ -178,7 +178,7 @@ folio batch ./materials --client Acme
 # PDF mitigation workflow (not Tier 1)
 folio batch ./pdfs --pattern "*.pdf" --client Acme
 
-# Disable restart automation if PowerPoint is not dedicated to Folio
+# Skip restart automation if other presentations are open in PowerPoint
 folio batch ./materials --no-dedicated-session
 ```
 
