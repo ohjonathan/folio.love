@@ -383,3 +383,199 @@ class TestNoCacheConverterIntegration:
                 assert r3.cache_stats is not None
                 assert r3.cache_stats.misses == 2
                 assert r3.cache_stats.hits == 0
+
+
+class TestPptxOutputDirPlumbing:
+    """Test that converter wires pptx_output_dir correctly and cleans up."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_passes_pptx_output_dir_to_normalize(self):
+        """converter.convert() must pass pptx_output_dir=deck_dir to normalize.to_pdf()."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            img = target_dir / "slide-001.png"
+            img.write_bytes(self._make_unique_png(1))
+
+            image_results = [
+                ImageResult(path=img, slide_num=1, width=200, height=200),
+            ]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Content", elements=[]),
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            to_pdf_calls = []
+            original_to_pdf = None
+
+            def capture_to_pdf(*args, **kwargs):
+                to_pdf_calls.append(kwargs)
+                return source  # Return a valid path
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", side_effect=capture_to_pdf) as mock_to_pdf, \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            # Verify pptx_output_dir was passed
+            assert len(to_pdf_calls) == 1
+            assert "pptx_output_dir" in to_pdf_calls[0]
+            assert to_pdf_calls[0]["pptx_output_dir"] == target_dir
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_intermediate_powerpoint_pdf_cleaned_up(self):
+        """Intermediate PowerPoint PDF in deck_dir should be deleted after image extraction."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            # Simulate PowerPoint writing PDF to deck_dir
+            ppt_pdf = target_dir / "test.pdf"
+            ppt_pdf.write_text("intermediate pdf")
+
+            img = target_dir / "slide-001.png"
+            img.write_bytes(self._make_unique_png(1))
+
+            image_results = [
+                ImageResult(path=img, slide_num=1, width=200, height=200),
+            ]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Content", elements=[]),
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=ppt_pdf), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            # Intermediate PDF should be cleaned up
+            assert not ppt_pdf.exists()
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pdf_input_no_cleanup(self):
+        """PDF input should NOT trigger intermediate cleanup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pdf"
+            source.write_bytes(b"%PDF-1.4 content")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            # PDF lands in temp dir (not deck_dir)
+            temp_pdf = tmpdir_path / "temp" / "test.pdf"
+            temp_pdf.parent.mkdir()
+            temp_pdf.write_text("temp copy")
+
+            img = target_dir / "slide-001.png"
+            img.write_bytes(self._make_unique_png(1))
+
+            image_results = [
+                ImageResult(path=img, slide_num=1, width=200, height=200),
+            ]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Content", elements=[]),
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=temp_pdf), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            # PDF input: no cleanup (source is .pdf, not .pptx)
+            assert temp_pdf.exists()
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_scanned_pdf_warning(self, caplog):
+        """Low text density should trigger a scanned-PDF warning."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "scanned.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            imgs = []
+            image_results = []
+            for i in range(1, 4):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(self._make_unique_png(i))
+                imgs.append(img)
+                image_results.append(
+                    ImageResult(path=img, slide_num=i, width=200, height=200)
+                )
+
+            # Very low text content (< 50 chars per page)
+            slide_texts = {
+                i: SlideText(slide_num=i, full_text="x", elements=[])
+                for i in range(1, 4)
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            config = FolioConfig()
+
+            import logging
+            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 caplog.at_level(logging.WARNING):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            assert "Low text density" in caplog.text
+            assert "scanned PDF" in caplog.text
+

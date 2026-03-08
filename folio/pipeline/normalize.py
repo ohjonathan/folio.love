@@ -15,7 +15,12 @@ class NormalizationError(Exception):
 
 
 def to_pdf(
-    source_path: Path, output_dir: Path, timeout: int = 60, renderer: str = "auto"
+    source_path: Path,
+    output_dir: Path,
+    *,
+    pptx_output_dir: Path | None = None,
+    timeout: int = 60,
+    renderer: str = "auto",
 ) -> Path:
     """Convert PPTX to PDF using LibreOffice or PowerPoint.
 
@@ -24,6 +29,9 @@ def to_pdf(
     Args:
         source_path: Path to PPTX or PDF file.
         output_dir: Directory for the output PDF.
+        pptx_output_dir: Optional override output dir for PowerPoint renderer.
+            When provided, PowerPoint writes the PDF here instead of output_dir.
+            LibreOffice and PDF-copy paths are unaffected.
         timeout: Max seconds for conversion.
         renderer: Renderer preference: "auto", "libreoffice", or "powerpoint".
 
@@ -36,6 +44,9 @@ def to_pdf(
     source_path = Path(source_path).resolve()
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    if pptx_output_dir is not None:
+        pptx_output_dir = Path(pptx_output_dir)
+        pptx_output_dir.mkdir(parents=True, exist_ok=True)
 
     _validate_source(source_path)
 
@@ -45,6 +56,7 @@ def to_pdf(
         dest = output_dir / source_path.name
         shutil.copy2(source_path, dest)
         logger.info("Source is PDF, copied directly: %s", dest)
+        _warn_portrait_pdf(dest)
         return dest
 
     if suffix not in (".pptx", ".ppt"):
@@ -52,12 +64,21 @@ def to_pdf(
 
     renderer_name, renderer_path = _select_renderer(renderer)
     effective_timeout = _compute_timeout(source_path, timeout)
-    expected_pdf = output_dir / f"{source_path.stem}.pdf"
+
+    # PowerPoint uses pptx_output_dir (if provided) to avoid temp-dir sandbox
+    # issues on managed macOS.  LibreOffice always uses output_dir.
+    ppt_dir = pptx_output_dir or output_dir
+    lo_pdf = output_dir / f"{source_path.stem}.pdf"
+    ppt_pdf = ppt_dir / f"{source_path.stem}.pdf"
+
+    # Track which path the actual renderer wrote to.
+    actual_pdf: Path
 
     if renderer_name == "libreoffice":
+        actual_pdf = lo_pdf
         try:
             _convert_with_libreoffice(
-                renderer_path, source_path, output_dir, effective_timeout, expected_pdf
+                renderer_path, source_path, output_dir, effective_timeout, lo_pdf
             )
         except NormalizationError:
             if renderer != "auto" or not _find_powerpoint():
@@ -68,21 +89,25 @@ def to_pdf(
                 "LibreOffice found but conversion failed; "
                 "falling back to PowerPoint renderer"
             )
+            actual_pdf = ppt_pdf
             _convert_with_powerpoint(
-                source_path, effective_timeout, expected_pdf
+                source_path, effective_timeout, ppt_pdf
             )
     elif renderer_name == "powerpoint":
+        actual_pdf = ppt_pdf
         _convert_with_powerpoint(
-            source_path, effective_timeout, expected_pdf
+            source_path, effective_timeout, ppt_pdf
         )
+    else:
+        actual_pdf = lo_pdf  # defensive fallback
 
-    if not expected_pdf.exists():
+    if not actual_pdf.exists():
         raise NormalizationError(
-            f"Conversion completed but PDF not found at {expected_pdf}"
+            f"Conversion completed but PDF not found at {actual_pdf}"
         )
 
-    logger.info("Normalized to PDF: %s", expected_pdf)
-    return expected_pdf
+    logger.info("Normalized to PDF: %s", actual_pdf)
+    return actual_pdf
 
 
 def _select_renderer(preference: str = "auto") -> tuple[str, str | None]:
@@ -278,8 +303,13 @@ def _convert_with_powerpoint(
         if expected_pdf.exists():
             expected_pdf.unlink()
             logger.debug("Cleaned up partial PDF: %s", expected_pdf)
+        stderr = result.stderr.strip()
+        hint = (
+            "\n\nIf this file consistently fails, export it to PDF manually "
+            "(File → Export → PDF, slides only) and run: folio convert <deck>.pdf"
+        )
         raise NormalizationError(
-            f"PowerPoint conversion failed: {result.stderr.strip()}"
+            f"PowerPoint conversion failed: {stderr}{hint}"
         )
 
     if result.stderr.strip():
@@ -333,3 +363,29 @@ def _compute_timeout(source_path: Path, base_timeout: int) -> int:
     size_mb = source_path.stat().st_size / (1024 * 1024)
     scaled = max(base_timeout, 10) + int(size_mb)
     return min(scaled, 300)
+
+
+def _warn_portrait_pdf(pdf_path: Path) -> None:
+    """Warn if the PDF appears to be portrait (likely notes-page export).
+
+    Uses a lightweight heuristic: reads the first /MediaBox in the file
+    to check width vs height.  This does NOT reject the PDF.
+    """
+    try:
+        with open(pdf_path, "rb") as f:
+            raw = f.read(8192)  # first 8 KB is enough for page 1
+        text_chunk = raw.decode("latin-1", errors="replace")
+        import re
+        match = re.search(r"/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]", text_chunk)
+        if match:
+            x0, y0, x1, y1 = (float(v) for v in match.groups())
+            width = x1 - x0
+            height = y1 - y0
+            if width > 0 and height > width:
+                logger.warning(
+                    "Portrait PDF detected (%s): this may be a notes-page export. "
+                    "For best results, re-export as slides only (landscape).",
+                    pdf_path.name,
+                )
+    except Exception:
+        pass  # Non-critical heuristic; never block on failure

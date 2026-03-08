@@ -95,6 +95,7 @@ class FolioConverter:
             logger.info("  Normalizing to PDF...")
             pdf_path = normalize.to_pdf(
                 source_path, tmpdir,
+                pptx_output_dir=deck_dir,
                 timeout=self.config.conversion.libreoffice_timeout,
                 renderer=self.config.conversion.pptx_renderer,
             )
@@ -108,6 +109,18 @@ class FolioConverter:
             image_paths = [r.path for r in image_results]
             slide_count = len(image_results)
 
+            # Clean up intermediate PowerPoint PDF written into deck_dir.
+            # Only when: source is PPTX/PPT and the PDF landed in deck_dir.
+            if (
+                source_path.suffix.lower() in (".pptx", ".ppt")
+                and pdf_path.parent == deck_dir
+                and pdf_path.exists()
+            ):
+                pdf_path.unlink()
+                logger.debug(
+                    "Cleaned up intermediate PowerPoint PDF: %s", pdf_path.name
+                )
+
             blank_slides = {r.slide_num for r in image_results if r.is_blank}
             if blank_slides:
                 logger.info("Blank slides detected: %s", sorted(blank_slides))
@@ -118,6 +131,19 @@ class FolioConverter:
 
             reconciliation = text.reconcile_slide_count(slide_texts, slide_count)
             slide_texts = reconciliation.slide_texts
+
+            # Scanned-PDF warning: low text density suggests a scanned document.
+            if slide_count > 0:
+                total_chars = sum(
+                    len(st.full_text or "") for st in slide_texts.values()
+                )
+                avg_chars = total_chars / slide_count
+                if avg_chars < 50:
+                    logger.warning(
+                        "Low text density (%.0f chars/page avg): %s may be a "
+                        "scanned PDF. Extraction quality may be reduced.",
+                        avg_chars, source_path.name,
+                    )
 
             # Blank override MUST occur before Pass 2 density scoring
             # to prevent hallucinated evidence accumulation on blank slides.

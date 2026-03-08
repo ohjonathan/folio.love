@@ -1,7 +1,10 @@
 """CLI interface for Folio."""
 
 import logging
+import subprocess
 import sys
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -9,6 +12,53 @@ import click
 
 from .config import FolioConfig
 from .converter import FolioConverter
+
+logger = logging.getLogger(__name__)
+
+# Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
+_RESTART_CADENCE = 15
+
+
+@dataclass
+class BatchOutcome:
+    """Per-file batch outcome record."""
+    file_name: str
+    renderer: str
+    duration: float
+    outcome: str  # success | applescript_<code> | timeout | unknown
+    slide_count: int = 0
+
+
+def _classify_outcome(exc: Exception) -> str:
+    """Classify an exception into an allowed outcome bucket."""
+    msg = str(exc)
+    if "timed out" in msg.lower():
+        return "timeout"
+    # Parse AppleScript error codes like -9074, -1712, -1728
+    import re
+    match = re.search(r"(-\d{4,})", msg)
+    if match:
+        return f"applescript_{match.group(1)}"
+    return "unknown"
+
+
+def _restart_powerpoint() -> None:
+    """Quit and relaunch PowerPoint for fatigue resilience."""
+    try:
+        subprocess.run(
+            ["osascript", "-e", 'tell application "Microsoft PowerPoint" to quit'],
+            capture_output=True, timeout=10,
+        )
+    except Exception:
+        pass
+    time.sleep(5)
+    try:
+        subprocess.run(
+            ["open", "-a", "Microsoft PowerPoint"],
+            capture_output=True, timeout=10,
+        )
+    except Exception:
+        pass
 
 
 @click.group()
@@ -122,16 +172,26 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
 @click.option("--industry", default=None, help="Industry tags (comma-separated).")
 @click.option("--tags", default=None, help="Manual tags to merge with auto-generated (comma-separated).")
 @click.option("--llm-profile", default=None, help="Override LLM profile (defined in folio.yaml).")
+@click.option("--dedicated-session/--no-dedicated-session", default=True,
+              help="Assume dedicated PowerPoint session (enables restart automation).")
 @click.pass_context
 def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement: str, passes: int, no_cache: bool,
-          subtype: str, industry: str, tags: str, llm_profile: str):
+          subtype: str, industry: str, tags: str, llm_profile: str, dedicated_session: bool):
     """Batch convert all matching files in a directory.
 
-    Examples:
+    Automated PPTX conversion (Tier 1):
 
         folio batch ./materials
 
-        folio batch ./materials --pattern "*.pdf" --client ClientA
+        folio batch ./materials --client ClientA
+
+    PDF mitigation for unconvertible files (NOT Tier 1):
+
+        folio batch ./pdfs --pattern "*.pdf" --client ClientA
+
+    \b
+    Note: Operator-exported PDFs are mitigation-only and do NOT count
+    toward the Tier 1 automated conversion gate.
     """
     config = ctx.obj["config"]
     converter = FolioConverter(config)
@@ -145,13 +205,33 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
         click.echo(f"No files matching '{pattern}' in {directory}")
         return
 
+    # Classify files into automated PPTX vs PDF mitigation
+    pptx_exts = {".pptx", ".ppt"}
+    is_pdf_batch = all(f.suffix.lower() == ".pdf" for f in files)
+
     click.echo(f"Converting {len(files)} files...")
+    if is_pdf_batch:
+        click.echo("  Mode: PDF mitigation (not Tier 1)")
     click.echo("")
 
-    succeeded = 0
-    failed = 0
+    outcomes: list[BatchOutcome] = []
+    pptx_conversion_count = 0  # Track PPTX conversions for restart cadence
 
     for f in files:
+        is_pptx = f.suffix.lower() in pptx_exts
+        renderer_label = config.conversion.pptx_renderer if is_pptx else "pdf-copy"
+
+        # Preemptive restart before PowerPoint fatigue
+        if (
+            is_pptx
+            and dedicated_session
+            and pptx_conversion_count > 0
+            and pptx_conversion_count % _RESTART_CADENCE == 0
+        ):
+            click.echo(f"  ↻ Restarting PowerPoint (after {pptx_conversion_count} conversions)")
+            _restart_powerpoint()
+
+        start = time.monotonic()
         try:
             result = converter.convert(
                 source_path=f,
@@ -165,14 +245,101 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
                 extra_tags=tags_list,
                 llm_profile=llm_profile,
             )
-            click.echo(f"✓ {f.name} ({result.slide_count} slides)")
-            succeeded += 1
+            duration = time.monotonic() - start
+            click.echo(f"✓ {f.name} ({result.slide_count} slides, {duration:.1f}s)")
+            outcomes.append(BatchOutcome(
+                file_name=f.name, renderer=renderer_label,
+                duration=duration, outcome="success",
+                slide_count=result.slide_count,
+            ))
+            if is_pptx:
+                pptx_conversion_count += 1
         except Exception as e:
-            click.echo(f"✗ {f.name} ({e})")
-            failed += 1
+            duration = time.monotonic() - start
+            outcome = _classify_outcome(e)
 
+            # Retry-once for unexpected -9074 in dedicated session
+            if (
+                outcome == "applescript_-9074"
+                and is_pptx
+                and dedicated_session
+            ):
+                click.echo(f"  ⚠ {f.name}: -9074, restarting and retrying...")
+                _restart_powerpoint()
+                retry_start = time.monotonic()
+                try:
+                    result = converter.convert(
+                        source_path=f,
+                        note=note,
+                        client=client,
+                        engagement=engagement,
+                        passes=passes,
+                        no_cache=no_cache,
+                        subtype=subtype,
+                        industry=industry_list,
+                        extra_tags=tags_list,
+                        llm_profile=llm_profile,
+                    )
+                    retry_duration = time.monotonic() - retry_start
+                    click.echo(f"✓ {f.name} (retry succeeded, {retry_duration:.1f}s)")
+                    outcomes.append(BatchOutcome(
+                        file_name=f.name, renderer=renderer_label,
+                        duration=retry_duration, outcome="success",
+                        slide_count=result.slide_count,
+                    ))
+                    pptx_conversion_count += 1
+                    continue
+                except Exception as retry_e:
+                    retry_duration = time.monotonic() - retry_start
+                    outcome = _classify_outcome(retry_e)
+                    click.echo(f"✗ {f.name} (retry failed: {outcome}, {retry_duration:.1f}s)")
+                    outcomes.append(BatchOutcome(
+                        file_name=f.name, renderer=renderer_label,
+                        duration=retry_duration, outcome=outcome,
+                    ))
+                    if is_pptx:
+                        pptx_conversion_count += 1
+                    continue
+
+            click.echo(f"✗ {f.name} ({outcome}, {duration:.1f}s)")
+            outcomes.append(BatchOutcome(
+                file_name=f.name, renderer=renderer_label,
+                duration=duration, outcome=outcome,
+            ))
+            if is_pptx:
+                pptx_conversion_count += 1
+
+    # Summary
     click.echo("")
-    click.echo(f"Complete: {succeeded} succeeded, {failed} failed")
+    pptx_outcomes = [o for o in outcomes if o.renderer != "pdf-copy"]
+    pdf_outcomes = [o for o in outcomes if o.renderer == "pdf-copy"]
+
+    pptx_ok = sum(1 for o in pptx_outcomes if o.outcome == "success")
+    pptx_fail = len(pptx_outcomes) - pptx_ok
+    pdf_ok = sum(1 for o in pdf_outcomes if o.outcome == "success")
+    pdf_fail = len(pdf_outcomes) - pdf_ok
+
+    if pptx_outcomes:
+        click.echo(f"Automated PPTX: {pptx_ok} succeeded, {pptx_fail} failed")
+    if pdf_outcomes:
+        click.echo(f"PDF mitigation (not Tier 1): {pdf_ok} succeeded, {pdf_fail} failed")
+    if not pptx_outcomes and not pdf_outcomes:
+        click.echo("No files processed.")
+
+    # Detail failures
+    failures = [o for o in outcomes if o.outcome != "success"]
+    if failures:
+        click.echo("")
+        click.echo("Failures:")
+        for o in failures:
+            click.echo(f"  ✗ {o.file_name}: {o.outcome} ({o.duration:.1f}s)")
+        if any(o.renderer != "pdf-copy" for o in failures):
+            click.echo("")
+            click.echo(
+                "Tip: For files that fail automated conversion, export to PDF manually\n"
+                "     (File → Export → PDF, slides only) and run:\n"
+                '     folio batch <dir> --pattern "*.pdf"'
+            )
 
 
 @cli.command()

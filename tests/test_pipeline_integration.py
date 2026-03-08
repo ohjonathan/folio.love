@@ -894,3 +894,197 @@ class TestTruncatedResponseIntegration:
         # Pass-2 evidence should NOT have been merged (max_tokens rejected)
         slide1_passes = set(ev.get("pass", 1) for ev in results[1].evidence)
         assert 2 not in slide1_passes
+
+
+class TestBatchBehavior:
+    """Test batch observability, restart resilience, and PDF mitigation path."""
+
+    def test_preemptive_restart_at_cadence(self, tmp_path):
+        """PowerPoint should be restarted after every N=15 PPTX conversions."""
+        from click.testing import CliRunner
+        from folio.cli import cli, _RESTART_CADENCE
+
+        # Create 16 fake PPTX files
+        for i in range(16):
+            (tmp_path / f"deck_{i:02d}.pptx").write_bytes(b"fake")
+
+        restart_calls = []
+
+        def mock_restart():
+            restart_calls.append(1)
+
+        mock_result = MagicMock()
+        mock_result.slide_count = 1
+        mock_result.version = 1
+        mock_result.changes = MagicMock(has_changes=False)
+        mock_result.output_path = tmp_path / "out.md"
+        mock_result.deck_id = "test"
+        mock_result.cache_stats = None
+
+        with patch("folio.cli._restart_powerpoint", side_effect=mock_restart), \
+             patch("folio.converter.FolioConverter.convert", return_value=mock_result):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pptx"])
+
+        # Restart should have been called once (after 15th conversion)
+        assert len(restart_calls) == 1
+
+    def test_retry_once_on_9074(self, tmp_path):
+        """Unexpected -9074 should trigger restart + retry once."""
+        from click.testing import CliRunner
+        from folio.cli import cli
+        from folio.pipeline.normalize import NormalizationError
+
+        (tmp_path / "deck.pptx").write_bytes(b"fake")
+
+        restart_calls = []
+        call_count = [0]
+
+        def mock_restart():
+            restart_calls.append(1)
+
+        mock_result = MagicMock()
+        mock_result.slide_count = 1
+        mock_result.version = 1
+        mock_result.changes = MagicMock(has_changes=False)
+        mock_result.output_path = tmp_path / "out.md"
+        mock_result.deck_id = "test"
+        mock_result.cache_stats = None
+
+        def mock_convert(**kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise NormalizationError("PowerPoint conversion failed: error number -9074")
+            return mock_result
+
+        with patch("folio.cli._restart_powerpoint", side_effect=mock_restart), \
+             patch("folio.converter.FolioConverter.convert", side_effect=mock_convert):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pptx"])
+
+        assert len(restart_calls) == 1  # One restart for retry
+        assert call_count[0] == 2  # First call + retry
+        assert "retry succeeded" in result.output
+
+    def test_retry_failure_records_as_failed(self, tmp_path):
+        """If retry also fails, the file should be recorded as failed."""
+        from click.testing import CliRunner
+        from folio.cli import cli
+        from folio.pipeline.normalize import NormalizationError
+
+        (tmp_path / "deck.pptx").write_bytes(b"fake")
+
+        def mock_convert(**kwargs):
+            raise NormalizationError("PowerPoint conversion failed: error number -9074")
+
+        with patch("folio.cli._restart_powerpoint"), \
+             patch("folio.converter.FolioConverter.convert", side_effect=mock_convert):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pptx"])
+
+        assert "retry failed" in result.output
+        assert "1 failed" in result.output
+
+    def test_no_restart_for_pdf_batch(self, tmp_path):
+        """PDF-only batches should NOT trigger PowerPoint restart."""
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        for i in range(20):
+            (tmp_path / f"doc_{i:02d}.pdf").write_bytes(b"fake")
+
+        restart_calls = []
+
+        def mock_restart():
+            restart_calls.append(1)
+
+        mock_result = MagicMock()
+        mock_result.slide_count = 1
+        mock_result.version = 1
+        mock_result.changes = MagicMock(has_changes=False)
+        mock_result.output_path = tmp_path / "out.md"
+        mock_result.deck_id = "test"
+        mock_result.cache_stats = None
+
+        with patch("folio.cli._restart_powerpoint", side_effect=mock_restart), \
+             patch("folio.converter.FolioConverter.convert", return_value=mock_result):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pdf"])
+
+        assert len(restart_calls) == 0  # No restarts for PDF
+        assert "PDF mitigation" in result.output
+
+    def test_outcome_summary_buckets(self, tmp_path):
+        """Outcome summary should only use allowed buckets."""
+        from click.testing import CliRunner
+        from folio.cli import cli, _classify_outcome
+        from folio.pipeline.normalize import NormalizationError
+
+        # Test outcome classification
+        assert _classify_outcome(NormalizationError("timed out after 60s")) == "timeout"
+        assert _classify_outcome(NormalizationError("error -9074")) == "applescript_-9074"
+        assert _classify_outcome(NormalizationError("error -1712")) == "applescript_-1712"
+        assert _classify_outcome(NormalizationError("error -1728")) == "applescript_-1728"
+        assert _classify_outcome(NormalizationError("something unknown")) == "unknown"
+
+    def test_no_dedicated_session_skips_restart(self, tmp_path):
+        """--no-dedicated-session disables restart automation."""
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        for i in range(20):
+            (tmp_path / f"deck_{i:02d}.pptx").write_bytes(b"fake")
+
+        restart_calls = []
+
+        def mock_restart():
+            restart_calls.append(1)
+
+        mock_result = MagicMock()
+        mock_result.slide_count = 1
+        mock_result.version = 1
+        mock_result.changes = MagicMock(has_changes=False)
+        mock_result.output_path = tmp_path / "out.md"
+        mock_result.deck_id = "test"
+        mock_result.cache_stats = None
+
+        with patch("folio.cli._restart_powerpoint", side_effect=mock_restart), \
+             patch("folio.converter.FolioConverter.convert", return_value=mock_result):
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "batch", str(tmp_path), "--pattern", "*.pptx",
+                "--no-dedicated-session"
+            ])
+
+        assert len(restart_calls) == 0  # No restarts when disabled
+
+    def test_pdf_mitigation_help_text(self, tmp_path):
+        """Batch help should mention PDF mitigation path."""
+        from click.testing import CliRunner
+        from folio.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["batch", "--help"])
+
+        assert "*.pdf" in result.output
+        assert "NOT Tier 1" in result.output or "not Tier 1" in result.output
+
+    def test_failure_tip_mentions_pdf_export(self, tmp_path):
+        """When PPTX conversions fail, the tip should mention manual PDF export."""
+        from click.testing import CliRunner
+        from folio.cli import cli
+        from folio.pipeline.normalize import NormalizationError
+
+        (tmp_path / "deck.pptx").write_bytes(b"fake")
+
+        def mock_convert(**kwargs):
+            raise NormalizationError("unknown error")
+
+        with patch("folio.cli._restart_powerpoint"), \
+             patch("folio.converter.FolioConverter.convert", side_effect=mock_convert):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pptx"])
+
+        assert "folio batch" in result.output
+        assert "*.pdf" in result.output
+

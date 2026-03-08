@@ -521,3 +521,189 @@ class TestToPdfRendererDispatch:
             result = to_pdf(source, output, renderer="powerpoint")
 
         assert result == expected_pdf
+
+
+class TestPptxOutputDir:
+    """Test pptx_output_dir seam for PowerPoint-only output path."""
+
+    def test_powerpoint_uses_pptx_output_dir(self, tmp_path):
+        """PowerPoint should write to pptx_output_dir when provided."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        deck_dir = tmp_path / "deck"
+        deck_dir.mkdir()
+        expected_pdf = deck_dir / "test.pdf"
+
+        mock_result = MagicMock(returncode=0, stderr="")
+
+        def create_pdf(cmd, **kwargs):
+            # The AppleScript should reference the deck_dir path
+            expected_pdf.write_text("pdf")
+            return mock_result
+
+        with patch("folio.pipeline.normalize._validate_source"), \
+             patch("folio.pipeline.normalize._select_renderer", return_value=("powerpoint", None)), \
+             patch("subprocess.run", side_effect=create_pdf):
+            result = to_pdf(source, output, pptx_output_dir=deck_dir, renderer="powerpoint")
+
+        assert result == expected_pdf
+        assert result.parent == deck_dir
+
+    def test_libreoffice_ignores_pptx_output_dir(self, tmp_path):
+        """LibreOffice should still write to output_dir, not pptx_output_dir."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        deck_dir = tmp_path / "deck"
+        deck_dir.mkdir()
+        expected_pdf = output / "test.pdf"
+        expected_pdf.write_text("pdf")
+
+        mock_result = MagicMock(returncode=0, stderr="")
+
+        with patch("folio.pipeline.normalize._validate_source"), \
+             patch("folio.pipeline.normalize._select_renderer", return_value=("libreoffice", "soffice")), \
+             patch("subprocess.run", return_value=mock_result):
+            result = to_pdf(source, output, pptx_output_dir=deck_dir, renderer="libreoffice")
+
+        assert result == expected_pdf
+        assert result.parent == output
+
+    def test_pdf_copy_ignores_pptx_output_dir(self, tmp_path):
+        """PDF direct copy should always go to output_dir."""
+        source = tmp_path / "test.pdf"
+        source.write_bytes(b"%PDF-1.4 content here")
+        output = tmp_path / "output"
+        output.mkdir()
+        deck_dir = tmp_path / "deck"
+        deck_dir.mkdir()
+
+        with patch("folio.pipeline.normalize._validate_source"):
+            result = to_pdf(source, output, pptx_output_dir=deck_dir)
+
+        assert result.parent == output
+        assert result.name == "test.pdf"
+
+    def test_auto_fallback_uses_pptx_output_dir(self, tmp_path):
+        """In auto mode, if LO fails and falls back to PowerPoint,
+        the PowerPoint PDF goes to pptx_output_dir."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        deck_dir = tmp_path / "deck"
+        deck_dir.mkdir()
+        ppt_pdf = deck_dir / "test.pdf"
+
+        def mock_subprocess(cmd, **kwargs):
+            if isinstance(cmd, list) and cmd[0] != "osascript":
+                # LibreOffice fails
+                return MagicMock(returncode=1, stderr="Operation not permitted")
+            # PowerPoint succeeds
+            ppt_pdf.write_text("pdf")
+            return MagicMock(returncode=0, stderr="")
+
+        with patch("folio.pipeline.normalize._validate_source"), \
+             patch("folio.pipeline.normalize._find_libreoffice", return_value="soffice"), \
+             patch("folio.pipeline.normalize._find_powerpoint", return_value=True), \
+             patch("subprocess.run", side_effect=mock_subprocess):
+            result = to_pdf(source, output, pptx_output_dir=deck_dir, renderer="auto")
+
+        assert result == ppt_pdf
+        assert result.parent == deck_dir
+
+    def test_pptx_output_dir_defaults_to_output_dir(self, tmp_path):
+        """When pptx_output_dir is None, PowerPoint uses output_dir."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        expected_pdf = output / "test.pdf"
+
+        mock_result = MagicMock(returncode=0, stderr="")
+
+        def create_pdf(*args, **kwargs):
+            expected_pdf.write_text("pdf")
+            return mock_result
+
+        with patch("folio.pipeline.normalize._validate_source"), \
+             patch("folio.pipeline.normalize._select_renderer", return_value=("powerpoint", None)), \
+             patch("subprocess.run", side_effect=create_pdf):
+            result = to_pdf(source, output, renderer="powerpoint")
+
+        assert result == expected_pdf
+        assert result.parent == output
+
+
+class TestPortraitPdfWarning:
+    """Test portrait-PDF warning for likely notes-page exports."""
+
+    def test_portrait_pdf_warns(self, tmp_path, caplog):
+        """Portrait PDF (height > width) should produce a warning."""
+        source = tmp_path / "portrait.pdf"
+        # Craft a minimal PDF-like content with a portrait MediaBox
+        source.write_bytes(b"%PDF-1.4\n/MediaBox [0 0 612 1008]\n")
+        output = tmp_path / "output"
+        output.mkdir()
+
+        import logging
+        with patch("folio.pipeline.normalize._validate_source"), \
+             caplog.at_level(logging.WARNING):
+            to_pdf(source, output)
+
+        assert "Portrait PDF detected" in caplog.text
+
+    def test_landscape_pdf_no_warning(self, tmp_path, caplog):
+        """Landscape PDF should not produce a portrait warning."""
+        source = tmp_path / "landscape.pdf"
+        source.write_bytes(b"%PDF-1.4\n/MediaBox [0 0 1008 612]\n")
+        output = tmp_path / "output"
+        output.mkdir()
+
+        import logging
+        with patch("folio.pipeline.normalize._validate_source"), \
+             caplog.at_level(logging.WARNING):
+            to_pdf(source, output)
+
+        assert "Portrait PDF" not in caplog.text
+
+    def test_portrait_pdf_not_rejected(self, tmp_path):
+        """Portrait PDF should be accepted (warning only, no rejection)."""
+        source = tmp_path / "portrait.pdf"
+        source.write_bytes(b"%PDF-1.4\n/MediaBox [0 0 612 1008]\n")
+        output = tmp_path / "output"
+        output.mkdir()
+
+        with patch("folio.pipeline.normalize._validate_source"):
+            result = to_pdf(source, output)
+
+        assert result.exists()
+
+
+class TestPowerPointMitigationHint:
+    """Test that PowerPoint failures include a mitigation hint."""
+
+    def test_failure_includes_manual_pdf_hint(self, tmp_path):
+        """PowerPoint conversion failures should suggest manual PDF export."""
+        source = tmp_path / "test.pptx"
+        source.write_bytes(b"x" * 100)
+        output = tmp_path / "output"
+        output.mkdir()
+        expected_pdf = output / "test.pdf"
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = "AppleScript error -9074"
+
+        with patch("subprocess.run", return_value=mock_result):
+            with pytest.raises(NormalizationError) as exc_info:
+                from folio.pipeline.normalize import _convert_with_powerpoint
+                _convert_with_powerpoint(source, 60, expected_pdf)
+
+        msg = str(exc_info.value)
+        assert "folio convert" in msg
+        assert ".pdf" in msg
+
