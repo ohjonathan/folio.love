@@ -30,10 +30,19 @@ brew install poppler
 sudo apt install libreoffice poppler-utils
 ```
 
-If you're on a managed laptop that blocks LibreOffice, Folio auto-detects
-Microsoft PowerPoint on macOS and uses it as a fallback renderer via AppleScript.
-PowerPoint's GUI will briefly appear during conversion — this is expected.
-You can also force a specific renderer with `pptx_renderer: powerpoint` in
+If you're on a managed macOS laptop that blocks LibreOffice, Folio can use
+Microsoft PowerPoint as the PPTX/PPT renderer. The current PowerPoint path opens
+decks via Launch Services (`open -a "Microsoft PowerPoint" ...`) and then exports
+to PDF. In batch mode, Folio can also restart PowerPoint periodically during
+long PPTX runs when `--dedicated-session` is enabled (the default).
+
+For managed-mac usage:
+- Run batch jobs from `Terminal.app`
+- Use a dedicated PowerPoint session with no unrelated presentations open
+- See [docs/guides/managed_mac_workflow.md](docs/guides/managed_mac_workflow.md)
+  for the full workflow and PDF fallback guidance
+
+You can force a specific renderer with `pptx_renderer: powerpoint` in
 `folio.yaml`. If neither renderer is available, export the deck to PDF in
 PowerPoint and run `folio convert deck.pdf`.
 
@@ -163,21 +172,32 @@ folio convert deck.pptx \
 Batch convert all matching files in a directory.
 
 ```bash
-folio batch ./materials
-folio batch ./materials --pattern "*.pdf" --client Acme
+# Automated PPTX conversion
+folio batch ./materials --client Acme
+
+# PDF mitigation workflow (not Tier 1)
+folio batch ./pdfs --pattern "*.pdf" --client Acme
+
+# Skip restart automation if other presentations are open in PowerPoint
+folio batch ./materials --no-dedicated-session
 ```
 
 ```
 Converting 3 files...
 
-✓ overview.pptx (18 slides)
-✓ financials.pptx (32 slides)
-✓ appendix.pptx (12 slides)
+✓ overview.pptx (18 slides, 4.1s)
+✓ financials.pptx (32 slides, 7.8s)
+✓ appendix.pptx (12 slides, 2.9s)
 
-Complete: 3 succeeded, 0 failed
+Automated PPTX: 3 succeeded, 0 failed
 ```
 
 Accepts the same flags as `convert` (`--client`, `--engagement`, `--passes`, `--llm-profile`, etc.). Default pattern is `*.pptx`.
+
+`batch` also supports `--dedicated-session/--no-dedicated-session` for the
+PowerPoint restart workflow on managed macOS. Operator-exported PDF batches are
+supported, but they are mitigation-only and do not count toward Tier 1 automated
+conversion goals.
 
 ### `folio status`
 
@@ -363,7 +383,10 @@ images render at 150 DPI, and analysis runs a single Anthropic-backed pass if
 ```
 Input (.pptx/.ppt/.pdf)
   │
-  ├─ Normalize ──→ Convert to PDF (LibreOffice or PowerPoint for PPT/PPTX, direct copy for PDF)
+  ├─ Normalize ──→ Convert to PDF
+  │                 LibreOffice (headless) or PowerPoint on macOS
+  │                 PowerPoint path: Launch Services open + AppleScript export
+  │                 PDF input: direct copy + warning heuristics
   │
   ├─ Images ─────→ Extract slide images, detect blank slides
   │

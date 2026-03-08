@@ -8,6 +8,9 @@
 
 ## Automated PPTX Conversion (Tier 1)
 
+Folio opens PPTX files in PowerPoint via Launch Services and then exports them
+to PDF. During batch runs, PowerPoint may briefly come to the foreground.
+
 ```bash
 # Convert all PPTX files in a directory
 folio batch ./materials --client ClientA
@@ -55,7 +58,7 @@ the file may be a notes-page export. Re-export as **slides only** for best resul
 
 ### Scanned PDF Warning
 
-If extracted text density is very low (< 50 characters per page on average),
+If extracted text density is very low (< 10 characters per page on average),
 Folio will warn that the file may be a scanned document. Analysis accuracy
 may be reduced for scanned content.
 
