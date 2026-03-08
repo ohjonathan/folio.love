@@ -325,7 +325,7 @@ def _convert_with_powerpoint(
     try:
         subprocess.run(
             ["open", "-a", "Microsoft PowerPoint", str(source_path)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=timeout,
         )
     except subprocess.TimeoutExpired:
         raise NormalizationError(
@@ -334,7 +334,7 @@ def _convert_with_powerpoint(
 
     # Wait for PowerPoint to register the presentation.
     try:
-        _wait_for_presentation(source_path.name, min(timeout, 30))
+        _wait_for_presentation(source_path.name, timeout)
     except NormalizationError:
         # Best-effort cleanup if the file never appeared.
         _best_effort_close(source_path.name)

@@ -232,7 +232,8 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
 
     for f in files:
         is_pptx = f.suffix.lower() in PPTX_EXTENSIONS
-        # Best-guess label for failures (actual renderer known only on success)
+        # For failures, actual renderer is unknown (auto may cascade LO → PPT).
+        # Success paths use result.renderer_used instead.
         renderer_label = config.conversion.pptx_renderer if is_pptx else "pdf-copy"
 
         # Preemptive restart before PowerPoint fatigue
