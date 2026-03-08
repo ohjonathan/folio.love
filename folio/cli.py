@@ -1,22 +1,28 @@
 """CLI interface for Folio."""
 
 import logging
+import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import click
 
 from .config import FolioConfig
-from .converter import FolioConverter
+from .converter import FolioConverter, PPTX_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
 # Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
 _RESTART_CADENCE = 15
+
+# AppleScript error codes are 4-digit negative numbers following "error number"
+# or "error (" patterns.  We anchor to these patterns to avoid false matches
+# on arbitrary negative numbers in unrelated error messages.
+_APPLESCRIPT_ERROR_RE = re.compile(r"error\s+(?:number\s+)?(-\d{4,})")
 
 
 @dataclass
@@ -34,9 +40,8 @@ def _classify_outcome(exc: Exception) -> str:
     msg = str(exc)
     if "timed out" in msg.lower():
         return "timeout"
-    # Parse AppleScript error codes like -9074, -1712, -1728
-    import re
-    match = re.search(r"(-\d{4,})", msg)
+    # Match AppleScript-style error codes (e.g., "error number -9074")
+    match = _APPLESCRIPT_ERROR_RE.search(msg)
     if match:
         return f"applescript_{match.group(1)}"
     return "unknown"
@@ -50,7 +55,7 @@ def _restart_powerpoint() -> None:
             capture_output=True, timeout=10,
         )
     except Exception:
-        pass
+        logger.debug("PowerPoint quit failed (non-fatal)", exc_info=True)
     time.sleep(5)
     try:
         subprocess.run(
@@ -58,7 +63,16 @@ def _restart_powerpoint() -> None:
             capture_output=True, timeout=10,
         )
     except Exception:
-        pass
+        logger.debug("PowerPoint relaunch failed (non-fatal)", exc_info=True)
+    # Wait-for-ready: lightweight AppleScript probe to confirm PowerPoint is responsive.
+    try:
+        subprocess.run(
+            ["osascript", "-e",
+             'tell application "Microsoft PowerPoint" to return name'],
+            capture_output=True, timeout=10,
+        )
+    except Exception:
+        logger.debug("PowerPoint ready-check timed out (non-fatal)", exc_info=True)
 
 
 @click.group()
@@ -206,7 +220,6 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
         return
 
     # Classify files into automated PPTX vs PDF mitigation
-    pptx_exts = {".pptx", ".ppt"}
     is_pdf_batch = all(f.suffix.lower() == ".pdf" for f in files)
 
     click.echo(f"Converting {len(files)} files...")
@@ -218,7 +231,7 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
     pptx_conversion_count = 0  # Track PPTX conversions for restart cadence
 
     for f in files:
-        is_pptx = f.suffix.lower() in pptx_exts
+        is_pptx = f.suffix.lower() in PPTX_EXTENSIONS
         renderer_label = config.conversion.pptx_renderer if is_pptx else "pdf-copy"
 
         # Preemptive restart before PowerPoint fatigue

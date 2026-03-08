@@ -17,6 +17,9 @@ from .output import frontmatter, markdown
 
 logger = logging.getLogger(__name__)
 
+# Shared constant for PPTX/PPT extensions — used by cli.py too.
+PPTX_EXTENSIONS = frozenset({".pptx", ".ppt"})
+
 
 @dataclass
 class ConversionResult:
@@ -102,24 +105,26 @@ class FolioConverter:
 
             # Stage 2: Extract images
             logger.info("  Extracting images...")
-            image_results = images.extract_with_metadata(
-                pdf_path, deck_dir,
-                dpi=self.config.conversion.image_dpi,
-            )
+            try:
+                image_results = images.extract_with_metadata(
+                    pdf_path, deck_dir,
+                    dpi=self.config.conversion.image_dpi,
+                )
+            finally:
+                # Clean up intermediate PowerPoint PDF written into deck_dir.
+                # Runs whether image extraction succeeds or fails.
+                # Only when: source is PPTX/PPT and the PDF landed in deck_dir.
+                if (
+                    source_path.suffix.lower() in PPTX_EXTENSIONS
+                    and pdf_path.resolve().parent == deck_dir.resolve()
+                    and pdf_path.exists()
+                ):
+                    pdf_path.unlink()
+                    logger.debug(
+                        "Cleaned up intermediate PowerPoint PDF: %s", pdf_path.name
+                    )
             image_paths = [r.path for r in image_results]
             slide_count = len(image_results)
-
-            # Clean up intermediate PowerPoint PDF written into deck_dir.
-            # Only when: source is PPTX/PPT and the PDF landed in deck_dir.
-            if (
-                source_path.suffix.lower() in (".pptx", ".ppt")
-                and pdf_path.parent == deck_dir
-                and pdf_path.exists()
-            ):
-                pdf_path.unlink()
-                logger.debug(
-                    "Cleaned up intermediate PowerPoint PDF: %s", pdf_path.name
-                )
 
             blank_slides = {r.slide_num for r in image_results if r.is_blank}
             if blank_slides:
@@ -129,21 +134,24 @@ class FolioConverter:
             logger.info("  Extracting text...")
             slide_texts = text.extract_structured(source_path)
 
-            reconciliation = text.reconcile_slide_count(slide_texts, slide_count)
-            slide_texts = reconciliation.slide_texts
-
-            # Scanned-PDF warning: low text density suggests a scanned document.
+            # Sparse-text warning BEFORE reconciliation (which may pad empty
+            # SlideText entries, artificially lowering the average).
             if slide_count > 0:
                 total_chars = sum(
                     len(st.full_text or "") for st in slide_texts.values()
                 )
                 avg_chars = total_chars / slide_count
-                if avg_chars < 50:
+                if avg_chars < 10:
+                    is_pdf_source = source_path.suffix.lower() == ".pdf"
+                    kind = "scanned PDF" if is_pdf_source else "very sparse text"
                     logger.warning(
-                        "Low text density (%.0f chars/page avg): %s may be a "
-                        "scanned PDF. Extraction quality may be reduced.",
-                        avg_chars, source_path.name,
+                        "Low text density (%.0f chars/page avg): %s may have %s. "
+                        "Extraction quality may be reduced.",
+                        avg_chars, source_path.name, kind,
                     )
+
+            reconciliation = text.reconcile_slide_count(slide_texts, slide_count)
+            slide_texts = reconciliation.slide_texts
 
             # Blank override MUST occur before Pass 2 density scoring
             # to prevent hallucinated evidence accumulation on blank slides.

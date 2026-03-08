@@ -1020,12 +1020,23 @@ class TestBatchBehavior:
         from folio.cli import cli, _classify_outcome
         from folio.pipeline.normalize import NormalizationError
 
-        # Test outcome classification
+        # Timeout branch
         assert _classify_outcome(NormalizationError("timed out after 60s")) == "timeout"
+        assert _classify_outcome(NormalizationError("PowerPoint Timed Out")) == "timeout"
+
+        # AppleScript error codes (require "error" prefix per M4 fix)
         assert _classify_outcome(NormalizationError("error -9074")) == "applescript_-9074"
-        assert _classify_outcome(NormalizationError("error -1712")) == "applescript_-1712"
+        assert _classify_outcome(NormalizationError("error number -1712")) == "applescript_-1712"
         assert _classify_outcome(NormalizationError("error -1728")) == "applescript_-1728"
+        assert _classify_outcome(NormalizationError("AppleScript error -9074 blah")) == "applescript_-9074"
+
+        # Non-AppleScript negative numbers should NOT match (M4 tightening)
+        assert _classify_outcome(NormalizationError("exit code -1 failed")) == "unknown"
+        assert _classify_outcome(NormalizationError("offset -5000 bytes")) == "unknown"
+
+        # Unknown fallback
         assert _classify_outcome(NormalizationError("something unknown")) == "unknown"
+        assert _classify_outcome(RuntimeError("generic error")) == "unknown"
 
     def test_no_dedicated_session_skips_restart(self, tmp_path):
         """--no-dedicated-session disables restart automation."""

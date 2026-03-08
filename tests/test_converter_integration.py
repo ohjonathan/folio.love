@@ -534,7 +534,7 @@ class TestPptxOutputDirPlumbing:
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_scanned_pdf_warning(self, caplog):
-        """Low text density should trigger a scanned-PDF warning."""
+        """Low text density should trigger a sparse-text warning."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             source = tmpdir_path / "scanned.pptx"
@@ -553,7 +553,7 @@ class TestPptxOutputDirPlumbing:
                     ImageResult(path=img, slide_num=i, width=200, height=200)
                 )
 
-            # Very low text content (< 50 chars per page)
+            # Very low text content (< 10 chars per page)
             slide_texts = {
                 i: SlideText(slide_num=i, full_text="x", elements=[])
                 for i in range(1, 4)
@@ -577,5 +577,76 @@ class TestPptxOutputDirPlumbing:
                 result = converter.convert(source_path=source, target=target_dir, passes=1)
 
             assert "Low text density" in caplog.text
-            assert "scanned PDF" in caplog.text
+            # PPTX source → "very sparse text", not "scanned PDF"
+            assert "very sparse text" in caplog.text
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_scanned_pdf_no_warning_above_threshold(self, caplog):
+        """Text density >= 10 chars/page should NOT trigger warning."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "ok.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            img = target_dir / "slide-001.png"
+            img.write_bytes(self._make_unique_png(1))
+            image_results = [
+                ImageResult(path=img, slide_num=1, width=200, height=200),
+            ]
+
+            # 15 chars per page — above threshold
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Fifteen chars!!", elements=[]),
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            config = FolioConfig()
+
+            import logging
+            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 caplog.at_level(logging.WARNING):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            assert "Low text density" not in caplog.text
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_intermediate_pdf_cleaned_up_on_extraction_failure(self):
+        """Intermediate PowerPoint PDF should be cleaned up even if image extraction fails."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            # Simulate PowerPoint writing PDF to deck_dir
+            ppt_pdf = target_dir / "test.pdf"
+            ppt_pdf.write_text("intermediate pdf")
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=ppt_pdf), \
+                 patch("folio.pipeline.images.extract_with_metadata",
+                       side_effect=RuntimeError("extraction failed")):
+
+                converter = FolioConverter(config)
+                with pytest.raises(RuntimeError, match="extraction failed"):
+                    converter.convert(source_path=source, target=target_dir, passes=1)
+
+            # Intermediate PDF should STILL be cleaned up (try/finally)
+            assert not ppt_pdf.exists()
+
 

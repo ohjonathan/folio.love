@@ -1,6 +1,7 @@
 """Stage 1: Format normalization. PPTX -> PDF via LibreOffice or PowerPoint."""
 
 import logging
+import re
 import shutil
 import subprocess
 import sys
@@ -99,7 +100,10 @@ def to_pdf(
             source_path, effective_timeout, ppt_pdf
         )
     else:
-        actual_pdf = lo_pdf  # defensive fallback
+        # Defensive fallback: _select_renderer() currently only returns
+        # "libreoffice" or "powerpoint", so this branch is unreachable.
+        # Kept as a safety net for future renderer additions.
+        actual_pdf = lo_pdf
 
     if not actual_pdf.exists():
         raise NormalizationError(
@@ -368,14 +372,17 @@ def _compute_timeout(source_path: Path, base_timeout: int) -> int:
 def _warn_portrait_pdf(pdf_path: Path) -> None:
     """Warn if the PDF appears to be portrait (likely notes-page export).
 
-    Uses a lightweight heuristic: reads the first /MediaBox in the file
-    to check width vs height.  This does NOT reject the PDF.
+    Uses a lightweight heuristic: reads the first /MediaBox in the first
+    8 KB of the file to check width vs height.  This does NOT reject the PDF.
+
+    Limitation: For compressed or encrypted PDFs the /MediaBox may not
+    appear in the first 8 KB, resulting in a false negative.  This is
+    acceptable under the L3 (non-critical heuristic) policy.
     """
     try:
         with open(pdf_path, "rb") as f:
             raw = f.read(8192)  # first 8 KB is enough for page 1
         text_chunk = raw.decode("latin-1", errors="replace")
-        import re
         match = re.search(r"/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]", text_chunk)
         if match:
             x0, y0, x1, y1 = (float(v) for v in match.groups())
@@ -389,3 +396,4 @@ def _warn_portrait_pdf(pdf_path: Path) -> None:
                 )
     except Exception:
         pass  # Non-critical heuristic; never block on failure
+
