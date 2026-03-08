@@ -232,8 +232,8 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
 
     for f in files:
         is_pptx = f.suffix.lower() in PPTX_EXTENSIONS
-        # For failures, actual renderer is unknown (auto may cascade LO → PPT).
-        # Success paths use result.renderer_used instead.
+        # Config-based fallback for non-NormalizationError failures.
+        # NormalizationError carries .renderer_used for accurate reporting.
         renderer_label = config.conversion.pptx_renderer if is_pptx else "pdf-copy"
 
         # Preemptive restart before PowerPoint fatigue
@@ -272,6 +272,8 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
         except Exception as e:
             duration = time.monotonic() - start
             outcome = _classify_outcome(e)
+            # Use actual renderer from NormalizationError if available
+            fail_renderer = getattr(e, 'renderer_used', None) or renderer_label
 
             # Retry-once for unexpected -9074 in dedicated session
             if (
@@ -307,9 +309,10 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
                 except Exception as retry_e:
                     retry_duration = time.monotonic() - retry_start
                     outcome = _classify_outcome(retry_e)
+                    retry_renderer = getattr(retry_e, 'renderer_used', None) or renderer_label
                     click.echo(f"✗ {f.name} (retry failed: {outcome}, {retry_duration:.1f}s)")
                     outcomes.append(BatchOutcome(
-                        file_name=f.name, renderer=renderer_label,
+                        file_name=f.name, renderer=retry_renderer,
                         duration=retry_duration, outcome=outcome,
                     ))
                     if is_pptx:
@@ -318,7 +321,7 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
 
             click.echo(f"✗ {f.name} ({outcome}, {duration:.1f}s)")
             outcomes.append(BatchOutcome(
-                file_name=f.name, renderer=renderer_label,
+                file_name=f.name, renderer=fail_renderer,
                 duration=duration, outcome=outcome,
             ))
             if is_pptx:

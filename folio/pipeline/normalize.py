@@ -14,7 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 class NormalizationError(Exception):
-    """Raised when format normalization fails."""
+    """Raised when format normalization fails.
+
+    Attributes:
+        renderer_used: The renderer that was active when the error occurred.
+            Set by ``to_pdf()`` before the error propagates to callers.
+    """
+    renderer_used: str = "unknown"
 
 
 @dataclass
@@ -92,8 +98,9 @@ def to_pdf(
             _convert_with_libreoffice(
                 renderer_path, source_path, output_dir, effective_timeout, lo_pdf
             )
-        except NormalizationError:
+        except NormalizationError as lo_err:
             if renderer != "auto" or not _find_powerpoint():
+                lo_err.renderer_used = "libreoffice"
                 raise
             # LO found on disk but failed (e.g. MDM launch-blocked).
             # Fall back to PowerPoint in auto mode.
@@ -103,15 +110,23 @@ def to_pdf(
             )
             actual_pdf = ppt_pdf
             actual_renderer = "powerpoint"
-            _convert_with_powerpoint(
-                source_path, effective_timeout, ppt_pdf
-            )
+            try:
+                _convert_with_powerpoint(
+                    source_path, effective_timeout, ppt_pdf
+                )
+            except NormalizationError as ppt_err:
+                ppt_err.renderer_used = "powerpoint"
+                raise
     elif renderer_name == "powerpoint":
         actual_pdf = ppt_pdf
         actual_renderer = "powerpoint"
-        _convert_with_powerpoint(
-            source_path, effective_timeout, ppt_pdf
-        )
+        try:
+            _convert_with_powerpoint(
+                source_path, effective_timeout, ppt_pdf
+            )
+        except NormalizationError as ppt_err:
+            ppt_err.renderer_used = "powerpoint"
+            raise
     else:
         # Defensive fallback: _select_renderer() currently only returns
         # "libreoffice" or "powerpoint", so this branch is unreachable.
