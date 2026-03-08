@@ -232,6 +232,7 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
 
     for f in files:
         is_pptx = f.suffix.lower() in PPTX_EXTENSIONS
+        # Best-guess label for failures (actual renderer known only on success)
         renderer_label = config.conversion.pptx_renderer if is_pptx else "pdf-copy"
 
         # Preemptive restart before PowerPoint fatigue
@@ -261,7 +262,7 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
             duration = time.monotonic() - start
             click.echo(f"✓ {f.name} ({result.slide_count} slides, {duration:.1f}s)")
             outcomes.append(BatchOutcome(
-                file_name=f.name, renderer=renderer_label,
+                file_name=f.name, renderer=result.renderer_used,
                 duration=duration, outcome="success",
                 slide_count=result.slide_count,
             ))
@@ -296,7 +297,7 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
                     retry_duration = time.monotonic() - retry_start
                     click.echo(f"✓ {f.name} (retry succeeded, {retry_duration:.1f}s)")
                     outcomes.append(BatchOutcome(
-                        file_name=f.name, renderer=renderer_label,
+                        file_name=f.name, renderer=result.renderer_used,
                         duration=retry_duration, outcome="success",
                         slide_count=result.slide_count,
                     ))

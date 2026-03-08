@@ -12,6 +12,7 @@ from folio.config import FolioConfig
 from folio.converter import FolioConverter
 from folio.pipeline.analysis import SlideAnalysis
 from folio.pipeline.images import ImageResult
+from folio.pipeline.normalize import NormalizationResult
 from folio.pipeline.text import SlideText
 from folio.output.frontmatter import _compute_grounding_summary
 
@@ -681,7 +682,7 @@ class TestEndToEndConverter:
 
             config = FolioConfig()
 
-            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):
@@ -741,7 +742,7 @@ class TestEndToEndConverter:
 
             config = FolioConfig()
 
-            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):

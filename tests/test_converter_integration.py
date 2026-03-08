@@ -13,6 +13,7 @@ from folio.config import FolioConfig
 from folio.converter import FolioConverter, _alignment_status
 from folio.pipeline.analysis import SlideAnalysis
 from folio.pipeline.images import ImageResult
+from folio.pipeline.normalize import NormalizationResult
 from folio.pipeline.text import SlideText, reconcile_slide_count
 from folio.tracking.versions import (
     _TEXTS_CACHE_VERSION,
@@ -108,7 +109,7 @@ class TestBlankOverridePath:
 
             config = FolioConfig()
 
-            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):
@@ -170,7 +171,7 @@ class TestReconciliationMetadataInFrontmatter:
 
             config = FolioConfig()
 
-            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):
@@ -356,7 +357,7 @@ class TestNoCacheConverterIntegration:
 
             config = FolioConfig()
 
-            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):
@@ -428,7 +429,7 @@ class TestPptxOutputDirPlumbing:
 
             def capture_to_pdf(*args, **kwargs):
                 to_pdf_calls.append(kwargs)
-                return source  # Return a valid path
+                return NormalizationResult(pdf_path=source, renderer_used="powerpoint")  # Return a valid result
 
             config = FolioConfig()
 
@@ -477,7 +478,7 @@ class TestPptxOutputDirPlumbing:
 
             config = FolioConfig()
 
-            with patch("folio.pipeline.normalize.to_pdf", return_value=ppt_pdf), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=ppt_pdf, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):
@@ -521,7 +522,7 @@ class TestPptxOutputDirPlumbing:
 
             config = FolioConfig()
 
-            with patch("folio.pipeline.normalize.to_pdf", return_value=temp_pdf), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=temp_pdf, renderer_used="pdf-copy")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):
@@ -567,7 +568,7 @@ class TestPptxOutputDirPlumbing:
             config = FolioConfig()
 
             import logging
-            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client), \
@@ -610,7 +611,7 @@ class TestPptxOutputDirPlumbing:
             config = FolioConfig()
 
             import logging
-            with patch("folio.pipeline.normalize.to_pdf", return_value=source), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client), \
@@ -638,7 +639,7 @@ class TestPptxOutputDirPlumbing:
 
             config = FolioConfig()
 
-            with patch("folio.pipeline.normalize.to_pdf", return_value=ppt_pdf), \
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=ppt_pdf, renderer_used="powerpoint")), \
                  patch("folio.pipeline.images.extract_with_metadata",
                        side_effect=RuntimeError("extraction failed")):
 

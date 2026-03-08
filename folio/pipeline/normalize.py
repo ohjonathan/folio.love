@@ -5,7 +5,9 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -13,6 +15,13 @@ logger = logging.getLogger(__name__)
 
 class NormalizationError(Exception):
     """Raised when format normalization fails."""
+
+
+@dataclass
+class NormalizationResult:
+    """Result of a normalization operation."""
+    pdf_path: Path
+    renderer_used: str  # "libreoffice", "powerpoint", "pdf-copy"
 
 
 def to_pdf(
@@ -37,7 +46,7 @@ def to_pdf(
         renderer: Renderer preference: "auto", "libreoffice", or "powerpoint".
 
     Returns:
-        Path to the normalized PDF.
+        NormalizationResult with pdf_path and renderer_used.
 
     Raises:
         NormalizationError: If conversion fails.
@@ -58,7 +67,7 @@ def to_pdf(
         shutil.copy2(source_path, dest)
         logger.info("Source is PDF, copied directly: %s", dest)
         _warn_portrait_pdf(dest)
-        return dest
+        return NormalizationResult(pdf_path=dest, renderer_used="pdf-copy")
 
     if suffix not in (".pptx", ".ppt"):
         raise NormalizationError(f"Unsupported format: {suffix}")
@@ -72,11 +81,13 @@ def to_pdf(
     lo_pdf = output_dir / f"{source_path.stem}.pdf"
     ppt_pdf = ppt_dir / f"{source_path.stem}.pdf"
 
-    # Track which path the actual renderer wrote to.
+    # Track which path and renderer were actually used.
     actual_pdf: Path
+    actual_renderer: str
 
     if renderer_name == "libreoffice":
         actual_pdf = lo_pdf
+        actual_renderer = "libreoffice"
         try:
             _convert_with_libreoffice(
                 renderer_path, source_path, output_dir, effective_timeout, lo_pdf
@@ -91,11 +102,13 @@ def to_pdf(
                 "falling back to PowerPoint renderer"
             )
             actual_pdf = ppt_pdf
+            actual_renderer = "powerpoint"
             _convert_with_powerpoint(
                 source_path, effective_timeout, ppt_pdf
             )
     elif renderer_name == "powerpoint":
         actual_pdf = ppt_pdf
+        actual_renderer = "powerpoint"
         _convert_with_powerpoint(
             source_path, effective_timeout, ppt_pdf
         )
@@ -104,14 +117,15 @@ def to_pdf(
         # "libreoffice" or "powerpoint", so this branch is unreachable.
         # Kept as a safety net for future renderer additions.
         actual_pdf = lo_pdf
+        actual_renderer = "libreoffice"
 
     if not actual_pdf.exists():
         raise NormalizationError(
             f"Conversion completed but PDF not found at {actual_pdf}"
         )
 
-    logger.info("Normalized to PDF: %s", actual_pdf)
-    return actual_pdf
+    logger.info("Normalized to PDF via %s: %s", actual_renderer, actual_pdf)
+    return NormalizationResult(pdf_path=actual_pdf, renderer_used=actual_renderer)
 
 
 def _select_renderer(preference: str = "auto") -> tuple[str, str | None]:
@@ -240,26 +254,56 @@ def _escape_applescript_string(s: str) -> str:
     return s
 
 
-def _build_powerpoint_applescript(
-    source_posix: str, output_posix: str, timeout: int, source_name: str
+def _build_powerpoint_export_applescript(
+    output_posix: str, timeout: int, source_name: str
 ) -> str:
-    """Build AppleScript to convert a PPTX to PDF via PowerPoint.
+    """Build AppleScript to save an already-open presentation as PDF.
+
+    The file is opened via Launch Services (`open -a`), not AppleScript's
+    `open POSIX file`, which avoids the -9074 errors observed with 17
+    specific PPTX files.
 
     Uses the presentation name for save/close to avoid races with other
     open presentations.
     """
-    safe_source = _escape_applescript_string(source_posix)
     safe_output = _escape_applescript_string(output_posix)
     safe_name = _escape_applescript_string(source_name)
     return (
         'tell application "Microsoft PowerPoint"\n'
-        "    launch\n"
         f"    with timeout of {timeout} seconds\n"
-        f'        open POSIX file "{safe_source}"\n'
         f'        save presentation "{safe_name}" in POSIX file "{safe_output}" as save as PDF\n'
         f'        close presentation "{safe_name}" saving no\n'
         "    end timeout\n"
         "end tell"
+    )
+
+
+def _wait_for_presentation(source_name: str, timeout: int) -> None:
+    """Wait for PowerPoint to register a presentation opened via Launch Services.
+
+    Polls up to `timeout` seconds for the presentation name to appear in
+    PowerPoint's presentation list.
+    """
+    safe_name = _escape_applescript_string(source_name)
+    check_script = (
+        'tell application "Microsoft PowerPoint"\n'
+        f'    return name of presentation "{safe_name}"\n'
+        'end tell'
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", check_script],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0 and source_name in result.stdout:
+                return
+        except Exception:
+            pass
+        time.sleep(0.5)
+    raise NormalizationError(
+        f"PowerPoint did not open {source_name} within {timeout}s"
     )
 
 
@@ -268,9 +312,37 @@ def _convert_with_powerpoint(
     timeout: int,
     expected_pdf: Path,
 ) -> None:
-    """Convert PPTX to PDF using PowerPoint via AppleScript."""
-    script = _build_powerpoint_applescript(
-        str(source_path), str(expected_pdf), timeout, source_path.name
+    """Convert PPTX to PDF using PowerPoint.
+
+    Two-step approach:
+      1. Open the file via Launch Services (``open -a``), which avoids the
+         AppleScript ``open POSIX file`` interface that triggers -9074 on
+         certain PPTX files.
+      2. Export to PDF + close via AppleScript (save/close still work fine
+         on all tested files).
+    """
+    # Step 1: Open via Launch Services.
+    try:
+        subprocess.run(
+            ["open", "-a", "Microsoft PowerPoint", str(source_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        raise NormalizationError(
+            f"Launch Services timed out opening {source_path.name}"
+        )
+
+    # Wait for PowerPoint to register the presentation.
+    try:
+        _wait_for_presentation(source_path.name, min(timeout, 30))
+    except NormalizationError:
+        # Best-effort cleanup if the file never appeared.
+        _best_effort_close(source_path.name)
+        raise
+
+    # Step 2: Export via AppleScript (no `open POSIX file`).
+    script = _build_powerpoint_export_applescript(
+        str(expected_pdf), timeout, source_path.name
     )
 
     try:
@@ -284,21 +356,7 @@ def _convert_with_powerpoint(
         if expected_pdf.exists():
             expected_pdf.unlink()
             logger.debug("Cleaned up partial PDF: %s", expected_pdf)
-        # Best-effort: close the specific presentation we opened, not whatever
-        # happens to be active (which could be unrelated user work).
-        safe_name = _escape_applescript_string(source_path.name)
-        try:
-            subprocess.run(
-                [
-                    "osascript", "-e",
-                    'tell application "Microsoft PowerPoint" to '
-                    f'close presentation "{safe_name}" saving no',
-                ],
-                capture_output=True,
-                timeout=5,
-            )
-        except Exception:
-            pass
+        _best_effort_close(source_path.name)
         raise NormalizationError(
             f"PowerPoint timed out after {timeout}s converting {source_path.name}"
         )
@@ -312,6 +370,7 @@ def _convert_with_powerpoint(
             "\n\nIf this file consistently fails, export it to PDF manually "
             "(File → Export → PDF, slides only) and run: folio convert <deck>.pdf"
         )
+        _best_effort_close(source_path.name)
         raise NormalizationError(
             f"PowerPoint conversion failed: {stderr}{hint}"
         )
@@ -320,6 +379,23 @@ def _convert_with_powerpoint(
         logger.warning(
             "PowerPoint stderr (non-fatal): %s", result.stderr.strip()[:500]
         )
+
+
+def _best_effort_close(source_name: str) -> None:
+    """Best-effort close of a specific presentation."""
+    safe_name = _escape_applescript_string(source_name)
+    try:
+        subprocess.run(
+            [
+                "osascript", "-e",
+                'tell application "Microsoft PowerPoint" to '
+                f'close presentation "{safe_name}" saving no',
+            ],
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception:
+        pass
 
 
 def _validate_source(source_path: Path) -> None:

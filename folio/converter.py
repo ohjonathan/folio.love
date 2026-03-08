@@ -29,6 +29,7 @@ class ConversionResult:
     version: int
     changes: versions.ChangeSet
     deck_id: str
+    renderer_used: str = "unknown"
     cache_stats: Optional["analysis.CacheStats"] = None
 
 
@@ -96,12 +97,15 @@ class FolioConverter:
 
             # Stage 1: Normalize to PDF
             logger.info("  Normalizing to PDF...")
-            pdf_path = normalize.to_pdf(
+            norm_result = normalize.to_pdf(
                 source_path, tmpdir,
                 pptx_output_dir=deck_dir,
                 timeout=self.config.conversion.libreoffice_timeout,
                 renderer=self.config.conversion.pptx_renderer,
             )
+            pdf_path = norm_result.pdf_path
+            renderer_used = norm_result.renderer_used
+            logger.info("  Renderer used: %s", renderer_used)
 
             # Stage 2: Extract images
             logger.info("  Extracting images...")
@@ -299,6 +303,7 @@ class FolioConverter:
             version=version_info.version,
             changes=version_info.changes,
             deck_id=deck_id,
+            renderer_used=renderer_used,
             cache_stats=combined_stats,
         )
 
