@@ -1,8 +1,10 @@
 # Tier 1 Validation Rerun Report
 
-**Date:** 2026-03-08 / 2026-03-09  
-**Baseline validated:** `main` at commit `5508a4f` (post-PR #10)  
-**Prior baseline:** March 2026 — CONDITIONAL PASS (32/50)  
+**Date:** 2026-03-08 / 2026-03-09
+**Code validated:** `main` at `5508a4f` (PR #10) **plus** the sandbox staging-dir
+fix applied during this rerun (PR #12: `fix/tier1-rerun-sandbox-staging-dir`).
+The 50/50 result requires both PR #10 and this fix.
+**Prior baseline:** March 2026 — CONDITIONAL PASS (32/50)
 **Corpus:** Exact same 50-deck real consulting corpus from March 2026
 
 ---
@@ -78,9 +80,9 @@ This is not a true silent failure — the output explicitly marks the analysis a
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
 | 50 real decks converted via automated PPTX path | **PASS** | 50/50 succeeded in Phase 4.1 and Phase 4.2 |
-| Zero silent failures on automated PPTX conversions | **PASS** | 0 structural silent failures. 1 template edge case correctly flagged as pending. |
-| Every converted slide has image, text, and analysis | **PASS** | 919 slides with images, text, and analysis (1 template slide has pending analysis) |
-| Frontmatter matches Ontology v2 | **PASS** | 49/50 pass strict validation. 1 fail is the pending-analysis template file. |
+| Zero silent failures on automated PPTX conversions | **PASS (49/50)** | 49 clean. 1 template file (`building_blocks`) has pending analysis despite `_llm_metadata.status: executed` — see Quality Findings. |
+| Every converted slide has image, text, and analysis | **PASS (49/50)** | 919 slides. 1 template slide in `building_blocks` has image and text but pending analysis. |
+| Frontmatter matches Ontology v2 | **PASS (49/50)** | 49/50 pass strict validation. `building_blocks` fails due to pending-analysis content. |
 | Version/staleness behavior works | **PASS** | Staleness detection confirmed. Version increment v1→v2 confirmed. |
 | Managed-mac batch automation works without user intervention | **PASS** | 3 preemptive restarts, zero manual intervention during 50-deck runs |
 | Same-PDF cache rerun works | **NOT TESTED** | No PDF mitigation was needed |
@@ -89,7 +91,7 @@ This is not a true silent failure — the output explicitly marks the analysis a
 
 ### Overall Gate Decision: **PASS**
 
-Folio now passes the Tier 1 automated PPTX gate on the full 50-deck real consulting corpus with zero silent failures. All 50 decks convert end-to-end through the automated PPTX path. The single quality finding (1 template placeholder slide with pending analysis) does not constitute a silent failure.
+All 50 decks convert end-to-end through the automated PPTX path. 49/50 produce fully clean output. The single quality finding (`building_blocks` — a 1-slide McKinsey template with placeholder content) has pending analysis despite `_llm_metadata.status: executed`, which is an inconsistency but not a structural pipeline failure. The gate criteria above reflect this as `PASS (49/50)` rather than unconditional PASS.
 
 ---
 

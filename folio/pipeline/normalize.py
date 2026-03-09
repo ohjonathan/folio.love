@@ -45,9 +45,10 @@ def to_pdf(
     Args:
         source_path: Path to PPTX or PDF file.
         output_dir: Directory for the output PDF.
-        pptx_output_dir: Optional override output dir for PowerPoint renderer.
-            When provided, PowerPoint writes the PDF here instead of output_dir.
-            LibreOffice and PDF-copy paths are unaffected.
+        pptx_output_dir: Optional override staging dir for PowerPoint renderer.
+            Defaults to ~/Documents/.folio_pdf_staging/ to avoid per-file
+            macOS sandbox dialogs.  The PDF is moved to output_dir after
+            export.  LibreOffice and PDF-copy paths are unaffected.
         timeout: Max seconds for conversion.
         renderer: Renderer preference: "auto", "libreoffice", or "powerpoint".
 
@@ -84,10 +85,10 @@ def to_pdf(
     # PowerPoint saves the PDF to a fixed staging directory to avoid per-file
     # sandbox "Grant File Access" dialogs.  A single staging dir means at most
     # one dialog for the entire batch.  ~/Documents/ is typically sandbox-
-    # exempt for Office apps; fall back to pptx_output_dir or output_dir.
-    _ppt_staging = Path.home() / "Documents" / ".folio_pdf_staging"
-    _ppt_staging.mkdir(parents=True, exist_ok=True)
-    ppt_dir = _ppt_staging
+    # exempt for Office apps.  Callers may override via pptx_output_dir.
+    _PPT_STAGING = Path.home() / "Documents" / ".folio_pdf_staging"
+    ppt_dir = pptx_output_dir if pptx_output_dir is not None else _PPT_STAGING
+    ppt_dir.mkdir(parents=True, exist_ok=True)
     lo_pdf = output_dir / f"{source_path.stem}.pdf"
     ppt_pdf = ppt_dir / f"{source_path.stem}.pdf"
 

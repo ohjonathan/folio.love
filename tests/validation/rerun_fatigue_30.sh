@@ -3,7 +3,7 @@
 # Must be run from Terminal.app for PowerPoint automation permissions
 set -euo pipefail
 
-cd /Users/Jonathan_Oh/dev/folio.love
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 source .venv/bin/activate
 [ -f tests/validation/.env ] && source tests/validation/.env
 

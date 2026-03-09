@@ -457,7 +457,8 @@ folio/
 ## Validation
 
 Folio has been validated against a 50-deck corpus of real consulting presentations
-(Tier 1 gate: 50/50 automated PPTX conversion, zero silent failures). Full
+(Tier 1 gate: 50/50 automated PPTX conversion, zero silent failures). The
+successful run requires the sandbox staging-dir fix in PR #12. Full
 documentation lives in `docs/validation/`:
 
 | Document | Purpose |
