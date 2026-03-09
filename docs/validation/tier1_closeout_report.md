@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-09
 **Executed by:** AI assistant (Tier 1 Closeout Validation prompt)
-**Code baseline:** `main` after PR #12 and PR #13
+**Code baseline:** `main` at `e930c3e` (after PR #12 and PR #13)
 **Prior validation:** Tier 1 Rerun Report (2026-03-08/09) — 50/50 automated PPTX, 49/50 clean
 
 ---
@@ -15,6 +15,7 @@
 | Same-PDF cache validation | **PASS** | Close for Tier 1 |
 | `building_blocks` | **ACCEPT + DOCUMENT** | Template-only edge case; not a product bug |
 | `Approach J` | **DEFER TO POST-TIER-2** | Low urgency given validated same-PDF cache |
+| Pass 2 fallback provenance | **DEFER TO TIER 2** | Cosmetic metadata gap; does not affect conversion quality |
 
 **Tier 2 Go/No-Go:** **GO TO TIER 2 WITH EXPLICIT KNOWN LIMITATIONS**
 
@@ -23,6 +24,7 @@ Known limitations carried forward:
 2. `building_blocks` template edge case documented but not fixed
 3. PowerPoint automation requires Terminal.app (TCC constraint)
 4. One-time staging-dir grant required per batch session
+5. Pass 2 fallback provenance not surfaced in frontmatter (deferred to Tier 2)
 
 ---
 
@@ -239,11 +241,19 @@ folio convert <pdf> -t tests/validation/pdf_cache_output -p 1
 
 ### Cache Behavior Detail
 
-The cache key is `image_hash` (SHA256[:16] of the PNG image bytes). Because the
-same PDF always produces the same PNGs via `pdf2image`, the image hashes are
-stable across runs. Per-entry `_text_hash` validation also passes because
-`pdfplumber` text extraction is deterministic on the same PDF. Both the primary
-lookup key (image hash) and the secondary validation hash (text hash) are stable.
+The cache key is `image_hash` (SHA256[:16] of the PNG image bytes). Both
+stability properties below are validated assumptions confirmed empirically by
+this test, not runtime-enforced constraints:
+
+1. **Image stability:** The same PDF produces the same PNGs via `pdf2image`
+   (deterministic rasterization), so `image_hash` is stable across runs.
+2. **Text stability:** `pdfplumber` text extraction is deterministic on the same
+   PDF, so per-entry `_text_hash` validation passes on unchanged reruns.
+
+The cache also invalidates on config changes (`_cache_version`,
+`_model_version`, `_provider_version`, `_prompt_version`,
+`_extraction_version`), so the "same-PDF cache works" conclusion is conditional
+on config stability — which is the expected same-PDF rerun scenario.
 
 ### Final: **PASS**
 
@@ -317,8 +327,10 @@ No engagement-specific data, no analysis, no business content.
    automated-PPTX reconversion, not just this template. Fixing `building_blocks`
    specifically would not improve the product.
 
-5. **Gate table remains honest.** The rerun report already records this as
-   `PASS (49/50)` with the edge case explicitly documented. No softening needed.
+5. **Gate table remains honest.** The rerun report records three separate
+   criteria as `PASS (49/50)` due to `building_blocks` (silent failures,
+   slide completeness, frontmatter validation). The edge case is explicitly
+   documented in each. No softening needed.
 
 ---
 
@@ -422,8 +434,12 @@ These are **documented, accepted, non-blocking** limitations:
 | Change detection correctly identifies modifications | **PASS** | Rerun report + this report (modification test) |
 | Staleness detection flags outdated conversions | **PASS** | Rerun report + this report (OneDrive stale test) |
 | Frontmatter v2 schema complete | **PASS** (49/50) | Rerun report: strict validation |
+| IDs follow date-based convention | **PASS** | Verified during rerun: all 50 outputs use `{type}_{date}_{descriptor}` IDs |
+| Authority defaults to `captured`, curation_level to `L0` | **PASS** | Verified during rerun: all 50 outputs default to `authority: captured`, `curation_level: L0` |
+| Tags populated from LLM analysis | **PASS** | Verified during rerun: LLM-generated tags present in 49/50 outputs; soft vocabulary validation not separately re-verified |
 | Same-PDF cache rerun works | **PASS** | This report: 23/23 cache hits |
 | Automated-PPTX rerun cache persistence | **DEFERRED** | Known limitation; Approach J deferred to post-Tier-2 |
+| Pass 2 fallback provenance surfacing | **DEFERRED** | Cosmetic metadata gap; deferred to Tier 2 |
 
 ### Blocking Items
 
