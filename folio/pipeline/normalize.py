@@ -144,7 +144,7 @@ def to_pdf(
             f"Conversion completed but PDF not found at {actual_pdf}"
         )
 
-    # PowerPoint writes the PDF next to the source file to avoid sandbox
+    # PowerPoint writes the PDF to a staging directory to avoid sandbox
     # dialogs.  Move it into the output directory for downstream stages.
     if actual_renderer == "powerpoint" and actual_pdf.parent != output_dir:
         dest = output_dir / actual_pdf.name

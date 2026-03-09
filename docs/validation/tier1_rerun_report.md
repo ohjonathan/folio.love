@@ -39,7 +39,7 @@ The 50/50 result requires both PR #10 and this fix.
 - Duration: 7,026s (~117 min)
 - Exit code: 0
 - Preemptive restarts: 3 (at files #15, #30, #45) — all seamless
-- Manual intervention: 0 (one-time staging directory grant at batch start)
+- Manual intervention: 0 during the main run (after initial one-time staging-dir grant)
 - Sandbox dialogs during run: 0
 
 All 50 files converted through the fully automated PPTX path, including all 17 files that consistently failed with -9074 in March.
