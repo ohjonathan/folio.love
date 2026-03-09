@@ -72,7 +72,33 @@ If you just regained context after compaction, re-read this file (AGENTS.md). If
 # USER CUSTOM
 
 <!-- USER CUSTOM -->
-<!-- Add your project-specific notes below. This section is preserved during auto-sync. -->
+
+## Validation Run Documentation Standard
+
+Every validation run (Tier 1, Tier 2, etc.) MUST produce four artifacts in
+`docs/validation/`:
+
+1. **Validation Report** (`tier<N>_<label>_report.md`) — structured metrics,
+   gate decision, comparison to baseline, code changes made during validation.
+2. **Session Log** (`tier<N>_<label>_session_log.md`) — chronological log of
+   every action taken, issue encountered, and decision made. Includes exact
+   commands, exit codes, and error messages.
+3. **Chat Log** (`tier<N>_<label>_chat_log.md`) — raw human–AI interaction
+   transcript. Keep it unedited: include dead ends, wrong guesses, user
+   frustration, real-time debugging. This is the ground truth that session
+   logs and reports summarize.
+4. **Prompt** (`tier<N>_<label>_prompt.md`) — the task specification that
+   drove the run (may already exist before the run starts).
+
+**Why the chat log matters:** PowerPoint sandbox issues required 5 attempts
+to solve. The structured session log documents the final answer; the chat log
+preserves the *journey* — which wrong hypotheses were tested, what the user
+saw on screen, and why each fix was tried. Future contributors debugging
+similar macOS issues can trace every step.
+
+**API key handling:** Never commit API keys. Use `tests/validation/.env`
+(gitignored) during runs and delete it immediately after.
+
 <!-- /USER CUSTOM -->
 
 ## Staleness

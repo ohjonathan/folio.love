@@ -12,6 +12,12 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Fixed staging directory for PowerPoint PDF export.  PowerPoint's macOS App
+# Sandbox triggers a "Grant File Access" dialog per *directory*.  Using a single
+# fixed location means at most one dialog for the entire batch session.
+# ~/Documents/ is typically sandbox-exempt for Office apps.
+_PPT_STAGING = Path.home() / "Documents" / ".folio_pdf_staging"
+
 
 class NormalizationError(Exception):
     """Raised when format normalization fails.
@@ -45,9 +51,10 @@ def to_pdf(
     Args:
         source_path: Path to PPTX or PDF file.
         output_dir: Directory for the output PDF.
-        pptx_output_dir: Optional override output dir for PowerPoint renderer.
-            When provided, PowerPoint writes the PDF here instead of output_dir.
-            LibreOffice and PDF-copy paths are unaffected.
+        pptx_output_dir: Optional override staging dir for PowerPoint renderer.
+            Defaults to ~/Documents/.folio_pdf_staging/ to avoid per-file
+            macOS sandbox dialogs.  The PDF is moved to output_dir after
+            export.  LibreOffice and PDF-copy paths are unaffected.
         timeout: Max seconds for conversion.
         renderer: Renderer preference: "auto", "libreoffice", or "powerpoint".
 
@@ -62,7 +69,6 @@ def to_pdf(
     output_dir.mkdir(parents=True, exist_ok=True)
     if pptx_output_dir is not None:
         pptx_output_dir = Path(pptx_output_dir)
-        pptx_output_dir.mkdir(parents=True, exist_ok=True)
 
     _validate_source(source_path)
 
@@ -81,9 +87,8 @@ def to_pdf(
     renderer_name, renderer_path = _select_renderer(renderer)
     effective_timeout = _compute_timeout(source_path, timeout)
 
-    # PowerPoint uses pptx_output_dir (if provided) to avoid temp-dir sandbox
-    # issues on managed macOS.  LibreOffice always uses output_dir.
-    ppt_dir = pptx_output_dir or output_dir
+    ppt_dir = pptx_output_dir if pptx_output_dir is not None else _PPT_STAGING
+    ppt_dir.mkdir(parents=True, exist_ok=True)
     lo_pdf = output_dir / f"{source_path.stem}.pdf"
     ppt_pdf = ppt_dir / f"{source_path.stem}.pdf"
 
@@ -138,6 +143,14 @@ def to_pdf(
         raise NormalizationError(
             f"Conversion completed but PDF not found at {actual_pdf}"
         )
+
+    # PowerPoint writes the PDF to a staging directory to avoid sandbox
+    # dialogs.  Move it into the output directory for downstream stages.
+    if actual_renderer == "powerpoint" and actual_pdf.parent != output_dir:
+        dest = output_dir / actual_pdf.name
+        shutil.move(str(actual_pdf), str(dest))
+        actual_pdf = dest
+        logger.debug("Moved PowerPoint PDF to output dir: %s", dest)
 
     logger.info("Normalized to PDF via %s: %s", actual_renderer, actual_pdf)
     return NormalizationResult(pdf_path=actual_pdf, renderer_used=actual_renderer)

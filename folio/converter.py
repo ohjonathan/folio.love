@@ -99,7 +99,6 @@ class FolioConverter:
             logger.info("  Normalizing to PDF...")
             norm_result = normalize.to_pdf(
                 source_path, tmpdir,
-                pptx_output_dir=deck_dir,
                 timeout=self.config.conversion.libreoffice_timeout,
                 renderer=self.config.conversion.pptx_renderer,
             )
@@ -118,6 +117,10 @@ class FolioConverter:
                 # Clean up intermediate PowerPoint PDF written into deck_dir.
                 # Runs whether image extraction succeeds or fails.
                 # Only when: source is PPTX/PPT and the PDF landed in deck_dir.
+                # NOTE: Since PR #12, PowerPoint writes to a staging dir and
+                # normalize.to_pdf() moves the PDF to tmpdir, so this condition
+                # is normally false for PPTX.  Kept as a safety net for callers
+                # that override pptx_output_dir to deck_dir.
                 if (
                     source_path.suffix.lower() in PPTX_EXTENSIONS
                     and pdf_path.resolve().parent == deck_dir.resolve()

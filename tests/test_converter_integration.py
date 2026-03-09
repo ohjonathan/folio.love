@@ -387,7 +387,11 @@ class TestNoCacheConverterIntegration:
 
 
 class TestPptxOutputDirPlumbing:
-    """Test that converter wires pptx_output_dir correctly and cleans up."""
+    """Test that converter delegates to normalize without pptx_output_dir.
+
+    Since PR #12, the converter no longer passes pptx_output_dir — the staging
+    directory is managed inside normalize.to_pdf() itself.
+    """
 
     @staticmethod
     def _make_unique_png(index: int) -> bytes:
@@ -399,8 +403,8 @@ class TestPptxOutputDirPlumbing:
         )
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
-    def test_passes_pptx_output_dir_to_normalize(self):
-        """converter.convert() must pass pptx_output_dir=deck_dir to normalize.to_pdf()."""
+    def test_normalize_called_without_pptx_output_dir(self):
+        """converter.convert() must NOT pass pptx_output_dir (staging is internal)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             source = tmpdir_path / "test.pptx"
@@ -425,11 +429,10 @@ class TestPptxOutputDirPlumbing:
             )
 
             to_pdf_calls = []
-            original_to_pdf = None
 
             def capture_to_pdf(*args, **kwargs):
                 to_pdf_calls.append(kwargs)
-                return NormalizationResult(pdf_path=source, renderer_used="powerpoint")  # Return a valid result
+                return NormalizationResult(pdf_path=source, renderer_used="powerpoint")
 
             config = FolioConfig()
 
@@ -441,10 +444,8 @@ class TestPptxOutputDirPlumbing:
                 converter = FolioConverter(config)
                 result = converter.convert(source_path=source, target=target_dir, passes=1)
 
-            # Verify pptx_output_dir was passed
             assert len(to_pdf_calls) == 1
-            assert "pptx_output_dir" in to_pdf_calls[0]
-            assert to_pdf_calls[0]["pptx_output_dir"] == target_dir
+            assert to_pdf_calls[0].get("pptx_output_dir") is None
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_intermediate_powerpoint_pdf_cleaned_up(self):

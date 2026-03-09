@@ -469,27 +469,22 @@ class TestToPdfRendererDispatch:
         assert result.pdf_path == expected_pdf
 
     def test_auto_falls_back_to_powerpoint_when_lo_launch_blocked(self, tmp_path):
-        """P2: LO on disk but MDM-blocked — auto mode should fall back to PowerPoint."""
+        """P2: LO on disk but MDM-blocked — auto mode should fall back to PowerPoint.
+        PDF is staged then moved to output_dir."""
         source = tmp_path / "test.pptx"
         source.write_bytes(b"x" * 100)
         output = tmp_path / "output"
         output.mkdir()
-        expected_pdf = output / "test.pdf"
-
-        lo_call_count = 0
+        staging = tmp_path / "staging"
+        staging.mkdir()
 
         def mock_subprocess(*args, **kwargs):
-            nonlocal lo_call_count
             cmd = args[0] if args else kwargs.get("args", [])
             if cmd and cmd[0] == "soffice":
-                lo_call_count += 1
-                # Simulate MDM blocking LibreOffice
                 result = MagicMock()
                 result.returncode = 1
                 result.stderr = "Operation not permitted"
                 return result
-            # PowerPoint osascript call succeeds
-            expected_pdf.write_text("pdf")
             return MagicMock(returncode=0, stderr="")
 
         with patch("folio.pipeline.normalize._validate_source"), \
@@ -497,10 +492,10 @@ class TestToPdfRendererDispatch:
              patch("folio.pipeline.normalize._find_powerpoint", return_value=True), \
              patch("subprocess.run", side_effect=mock_subprocess), \
              patch("folio.pipeline.normalize._convert_with_powerpoint",
-                   side_effect=lambda s, t, p: expected_pdf.write_text("pdf") or None):
-            result = to_pdf(source, output, renderer="auto")
+                   side_effect=lambda s, t, p: p.write_text("pdf") or None):
+            result = to_pdf(source, output, pptx_output_dir=staging, renderer="auto")
 
-        assert result.pdf_path == expected_pdf
+        assert result.pdf_path == output / "test.pdf"
         assert result.renderer_used == "powerpoint"
 
     def test_explicit_libreoffice_does_not_fall_back(self, tmp_path):
@@ -541,17 +536,20 @@ class TestToPdfRendererDispatch:
 
 
 class TestPptxOutputDir:
-    """Test pptx_output_dir seam for PowerPoint-only output path."""
+    """Test pptx_output_dir staging seam for PowerPoint renderer.
 
-    def test_powerpoint_uses_pptx_output_dir(self, tmp_path):
-        """PowerPoint should write to pptx_output_dir when provided."""
+    PowerPoint writes the PDF to pptx_output_dir (or a default staging dir),
+    then the PDF is moved to output_dir for downstream stages.
+    """
+
+    def test_powerpoint_stages_then_moves_to_output_dir(self, tmp_path):
+        """PowerPoint writes to pptx_output_dir but result lands in output_dir."""
         source = tmp_path / "test.pptx"
         source.write_bytes(b"x" * 100)
         output = tmp_path / "output"
         output.mkdir()
-        deck_dir = tmp_path / "deck"
-        deck_dir.mkdir()
-        expected_pdf = deck_dir / "test.pdf"
+        staging = tmp_path / "staging"
+        staging.mkdir()
 
         def create_pdf(source, timeout, expected):
             expected.write_text("pdf")
@@ -559,10 +557,10 @@ class TestPptxOutputDir:
         with patch("folio.pipeline.normalize._validate_source"), \
              patch("folio.pipeline.normalize._select_renderer", return_value=("powerpoint", None)), \
              patch("folio.pipeline.normalize._convert_with_powerpoint", side_effect=create_pdf):
-            result = to_pdf(source, output, pptx_output_dir=deck_dir, renderer="powerpoint")
+            result = to_pdf(source, output, pptx_output_dir=staging, renderer="powerpoint")
 
-        assert result.pdf_path == expected_pdf
-        assert result.pdf_path.parent == deck_dir
+        assert result.pdf_path == output / "test.pdf"
+        assert result.pdf_path.parent == output
 
     def test_libreoffice_ignores_pptx_output_dir(self, tmp_path):
         """LibreOffice should still write to output_dir, not pptx_output_dir."""
@@ -602,36 +600,33 @@ class TestPptxOutputDir:
         assert result.pdf_path.name == "test.pdf"
         assert result.renderer_used == "pdf-copy"
 
-    def test_auto_fallback_uses_pptx_output_dir(self, tmp_path):
+    def test_auto_fallback_stages_then_moves(self, tmp_path):
         """In auto mode, if LO fails and falls back to PowerPoint,
-        the PowerPoint PDF goes to pptx_output_dir."""
+        the PDF is staged in pptx_output_dir then moved to output_dir."""
         source = tmp_path / "test.pptx"
         source.write_bytes(b"x" * 100)
         output = tmp_path / "output"
         output.mkdir()
-        deck_dir = tmp_path / "deck"
-        deck_dir.mkdir()
-        ppt_pdf = deck_dir / "test.pdf"
+        staging = tmp_path / "staging"
+        staging.mkdir()
 
         def mock_subprocess(cmd, **kwargs):
             if isinstance(cmd, list) and cmd[0] != "osascript":
-                # LibreOffice fails
                 return MagicMock(returncode=1, stderr="Operation not permitted")
-            # Default — should not reach here for PowerPoint (mocked below)
             return MagicMock(returncode=0, stderr="")
 
         def create_ppt_pdf(source, timeout, expected):
-            ppt_pdf.write_text("pdf")
+            expected.write_text("pdf")
 
         with patch("folio.pipeline.normalize._validate_source"), \
              patch("folio.pipeline.normalize._find_libreoffice", return_value="soffice"), \
              patch("folio.pipeline.normalize._find_powerpoint", return_value=True), \
              patch("subprocess.run", side_effect=mock_subprocess), \
              patch("folio.pipeline.normalize._convert_with_powerpoint", side_effect=create_ppt_pdf):
-            result = to_pdf(source, output, pptx_output_dir=deck_dir, renderer="auto")
+            result = to_pdf(source, output, pptx_output_dir=staging, renderer="auto")
 
-        assert result.pdf_path == ppt_pdf
-        assert result.pdf_path.parent == deck_dir
+        assert result.pdf_path == output / "test.pdf"
+        assert result.pdf_path.parent == output
         assert result.renderer_used == "powerpoint"
 
     def test_pptx_output_dir_defaults_to_output_dir(self, tmp_path):
