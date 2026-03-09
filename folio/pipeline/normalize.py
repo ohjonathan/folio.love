@@ -12,6 +12,12 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Fixed staging directory for PowerPoint PDF export.  PowerPoint's macOS App
+# Sandbox triggers a "Grant File Access" dialog per *directory*.  Using a single
+# fixed location means at most one dialog for the entire batch session.
+# ~/Documents/ is typically sandbox-exempt for Office apps.
+_PPT_STAGING = Path.home() / "Documents" / ".folio_pdf_staging"
+
 
 class NormalizationError(Exception):
     """Raised when format normalization fails.
@@ -63,7 +69,6 @@ def to_pdf(
     output_dir.mkdir(parents=True, exist_ok=True)
     if pptx_output_dir is not None:
         pptx_output_dir = Path(pptx_output_dir)
-        pptx_output_dir.mkdir(parents=True, exist_ok=True)
 
     _validate_source(source_path)
 
@@ -82,11 +87,6 @@ def to_pdf(
     renderer_name, renderer_path = _select_renderer(renderer)
     effective_timeout = _compute_timeout(source_path, timeout)
 
-    # PowerPoint saves the PDF to a fixed staging directory to avoid per-file
-    # sandbox "Grant File Access" dialogs.  A single staging dir means at most
-    # one dialog for the entire batch.  ~/Documents/ is typically sandbox-
-    # exempt for Office apps.  Callers may override via pptx_output_dir.
-    _PPT_STAGING = Path.home() / "Documents" / ".folio_pdf_staging"
     ppt_dir = pptx_output_dir if pptx_output_dir is not None else _PPT_STAGING
     ppt_dir.mkdir(parents=True, exist_ok=True)
     lo_pdf = output_dir / f"{source_path.stem}.pdf"
