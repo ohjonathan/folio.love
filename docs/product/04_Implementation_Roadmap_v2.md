@@ -18,22 +18,43 @@ generated_by: ontos_scaffold
 
 ## March 2026 Status Update
 
-Since this roadmap was published, `main` has shipped a significant LLM-analysis expansion in PR #8:
+Since this roadmap was published, `main` has shipped three important baseline
+changes:
 
-- Multi-provider LLM analysis for `folio convert` with Anthropic, OpenAI, and Google Gemini
-- Bring-your-own credentials via environment variables referenced from `folio.yaml`
-- Named LLM profiles plus route-based selection for `convert`
-- `--llm-profile` CLI override for `convert` and `batch`
-- Transient-only fallback chains for `convert`
-- Provider/model-aware cache invalidation and `_llm_metadata` frontmatter provenance
-- Provider-aware graceful degradation when analysis cannot run
+- PR #8: multi-provider LLM analysis for `folio convert` / `folio batch`
+  (Anthropic, OpenAI, Google Gemini), bring-your-own credentials via
+  environment variables, named profiles, route-based selection,
+  provider/model-aware cache invalidation, and `_llm_metadata` provenance
+- PR #10: managed-mac PowerPoint reliability work (`open -a`, dedicated-session
+  batch orchestration, automatic restart cadence, and retry-once on `-9074`)
+- PR #12: fixed PowerPoint sandbox staging-dir export path
+  (`~/Documents/.folio_pdf_staging/`) plus a full Tier 1 rerun on the same
+  50-deck real consulting corpus used in the March baseline
 
-This does **not** change the roadmap hierarchy. It does change the current implementation baseline: multi-provider LLM support is no longer future scope for Tier 1/Tier 2 planning; it is part of the shipped foundation.
+This does **not** change the roadmap hierarchy. It does change the current
+implementation baseline: multi-provider LLM support is now shipped foundation,
+and the managed-mac automated PPTX conversion path has been rerun successfully
+on the real Tier 1 corpus.
 
-Remaining follow-up after PR #8:
+Current Tier 1 reality after PR #12:
 
-- Pass 2 fallback provenance should be surfaced more cleanly in execution metadata/frontmatter
-- Tier 1 quality validation still needs the planned 50-deck real-world run
+- Managed-mac automated PPTX rerun: **50/50 succeeded** on the March 2026 real
+  corpus, with zero conversion failures during the main run
+- Batch fatigue mitigation: 3 automatic PowerPoint restarts, zero operator
+  intervention during the main run after the one-time staging-dir grant
+- Output quality: one documented template-only edge case in `building_blocks`;
+  no structural silent failures in the rerun report
+- Same-PDF cache rerun behavior was **not re-tested**
+- Automated-PPTX rerun cache persistence remains a **known deferred
+  limitation** because PowerPoint PDF output is non-deterministic
+- Cross-machine portability (OneDrive sync test) remains **not yet tested**
+
+Remaining follow-up after PR #12:
+
+- Pass 2 fallback provenance should be surfaced more cleanly in execution
+  metadata/frontmatter
+- Same-PDF cache rerun should still be explicitly re-validated
+- Cross-machine portability still needs the planned OneDrive sync test
 
 ---
 
@@ -158,7 +179,9 @@ tags:
 - Cache invalidation scoped by provider/model/prompt identity
 - Error handling (graceful degradation, retry with backoff)
 
-**Deliverable:** 90%+ framework detection accuracy. Cached analysis persists across runs.
+**Deliverable:** 90%+ framework detection accuracy. Cache invalidation is
+provider/model-aware and stable for same-PDF reruns; automated-PPTX rerun cache
+persistence remains deferred.
 
 ### Week 4: Version Tracking
 
@@ -191,6 +214,17 @@ tags:
 - [ ] Authority defaults to `captured`, curation_level to `L0` for converted decks
 - [ ] Tags populated from LLM analysis with soft vocabulary validation
 
+### Current Status Against Tier 1 Exit Criteria
+
+| Checkpoint | Current Status | Evidence / Notes |
+|-----------|----------------|------------------|
+| 50 real decks converted with zero silent failures | Achieved on managed-mac rerun | `docs/validation/tier1_rerun_report.md` records 50/50 automated PPTX success on the March corpus |
+| Every slide has image, verbatim text, and analysis | Mostly achieved; 1 documented template edge case | `building_blocks` is recorded as a non-structural quality edge case in the rerun report |
+| Change detection and staleness | Achieved on sampled rerun checks | `folio status` and version increment behavior were verified during the rerun |
+| Frontmatter / ontology-v2 completeness | Achieved for 49/50 in strict validation | One template edge case remains documented in the rerun report |
+| Cross-machine portability (OneDrive sync) | Not yet tested | Still open follow-up after PR #12 |
+| Automated-PPTX rerun cache persistence | Deferred known limitation | Same-PDF rerun should work; automated-PPTX rerun cache persistence remains out of scope until the follow-on cache work lands |
+
 ---
 
 ## Tier 2: Daily Driver (Weeks 7-12)
@@ -204,7 +238,7 @@ tags:
 - Python package structure (pyproject.toml, pip installable)
 - `folio convert <file>` with --note, --target, and `--llm-profile` flags
 - `folio batch <dir>` with --pattern, progress, error-per-file, and `--llm-profile`
-- `folio status [scope]` with client/project scoping
+- `folio status [scope]` with client/engagement or library-relative scoping
 - `folio scan` to find new/changed sources
 - `folio refresh` to re-convert stale decks
 - `folio promote <id> <level>` to update curation level
