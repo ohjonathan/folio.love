@@ -1,7 +1,7 @@
 # Tier 1 Validation Rerun — Session Log
 
-**Session date:** 2026-03-08  
-**Baseline being validated:** `main` at commit `5508a4f` (post-PR #10 renderer reliability fix)  
+**Session date:** 2026-03-08
+**Baseline being validated:** `main` at commit `5508a4f` (post-PR #10 renderer reliability fix)
 **Prior baseline:** [March 2026 session log](tier1_session_log.md) — 32/50 succeeded, 17 -9074, 1 timeout
 
 ---

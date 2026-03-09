@@ -166,12 +166,28 @@ One infrastructure change was required to unblock the validation run. This chang
 
 ## 9. Artifacts
 
+### Checked into the repo
+
 | File | Purpose |
 |------|---------|
 | `docs/validation/tier1_rerun_report.md` | This report |
 | `docs/validation/tier1_rerun_session_log.md` | Detailed session log |
+| `docs/validation/tier1_chat_log.md` | Raw human-AI interaction transcript from the rerun |
+| `tests/validation/validate_frontmatter.py` | Updated validator with `_llm_metadata` checks |
+| `tests/validation/rerun_preflight_9074.sh` | Phase 3.1 preflight script |
+| `tests/validation/rerun_full_single_pass.sh` | Phase 4.1 single-pass script |
+| `tests/validation/rerun_full_two_pass.sh` | Phase 4.2 two-pass script |
+| `tests/validation/rerun_fatigue_30.sh` | Fatigue / restart validation script |
+
+### Generated locally during the rerun (not checked in)
+
+These artifacts were produced on the validating machine and informed this
+report, but they are not committed because they are run-specific outputs rather
+than reusable repo assets:
+
+| File | Purpose |
+|------|---------|
 | `tests/validation/rerun_preflight_9074.log` | Phase 3.1 preflight log |
 | `tests/validation/rerun_phase41_single_pass.log` | Phase 4.1 single-pass log |
 | `tests/validation/rerun_phase42_two_pass.log` | Phase 4.2 two-pass log |
 | `tests/validation/validation_results.json` | Machine-readable validation results |
-| `tests/validation/validate_frontmatter.py` | Updated validator with `_llm_metadata` checks |
