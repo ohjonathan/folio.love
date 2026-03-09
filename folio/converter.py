@@ -99,7 +99,6 @@ class FolioConverter:
             logger.info("  Normalizing to PDF...")
             norm_result = normalize.to_pdf(
                 source_path, tmpdir,
-                pptx_output_dir=deck_dir,
                 timeout=self.config.conversion.libreoffice_timeout,
                 renderer=self.config.conversion.pptx_renderer,
             )

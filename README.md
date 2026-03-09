@@ -454,6 +454,25 @@ folio/
     └── versions.py     # Version detection + change sets
 ```
 
+## Validation
+
+Folio has been validated against a 50-deck corpus of real consulting presentations
+(Tier 1 gate: 50/50 automated PPTX conversion, zero silent failures). Full
+documentation lives in `docs/validation/`:
+
+| Document | Purpose |
+|----------|---------|
+| [Validation Report](docs/validation/tier1_rerun_report.md) | Final metrics, gate decision, code changes |
+| [Session Log](docs/validation/tier1_rerun_session_log.md) | Chronological log of actions, findings, issues |
+| [Chat Log](docs/validation/tier1_chat_log.md) | Raw human–AI interaction transcript |
+| [Rerun Prompt](docs/validation/tier1_validation_rerun_prompt.md) | Task specification that drove the rerun |
+
+**Best practice:** Every validation run should produce all four artifacts. The
+chat log preserves the raw back-and-forth (including dead ends and real-time
+troubleshooting) so future contributors can trace decisions to their source.
+Session logs and reports are structured summaries; the chat log is the
+unfiltered ground truth.
+
 ## Roadmap
 
 Search and retrieval (`folio search`) is planned but not yet implemented. Today, converted decks are searchable via Obsidian, grep, or any tool that reads Markdown + YAML frontmatter.

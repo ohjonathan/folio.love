@@ -81,9 +81,13 @@ def to_pdf(
     renderer_name, renderer_path = _select_renderer(renderer)
     effective_timeout = _compute_timeout(source_path, timeout)
 
-    # PowerPoint uses pptx_output_dir (if provided) to avoid temp-dir sandbox
-    # issues on managed macOS.  LibreOffice always uses output_dir.
-    ppt_dir = pptx_output_dir or output_dir
+    # PowerPoint saves the PDF to a fixed staging directory to avoid per-file
+    # sandbox "Grant File Access" dialogs.  A single staging dir means at most
+    # one dialog for the entire batch.  ~/Documents/ is typically sandbox-
+    # exempt for Office apps; fall back to pptx_output_dir or output_dir.
+    _ppt_staging = Path.home() / "Documents" / ".folio_pdf_staging"
+    _ppt_staging.mkdir(parents=True, exist_ok=True)
+    ppt_dir = _ppt_staging
     lo_pdf = output_dir / f"{source_path.stem}.pdf"
     ppt_pdf = ppt_dir / f"{source_path.stem}.pdf"
 
@@ -138,6 +142,14 @@ def to_pdf(
         raise NormalizationError(
             f"Conversion completed but PDF not found at {actual_pdf}"
         )
+
+    # PowerPoint writes the PDF next to the source file to avoid sandbox
+    # dialogs.  Move it into the output directory for downstream stages.
+    if actual_renderer == "powerpoint" and actual_pdf.parent != output_dir:
+        dest = output_dir / actual_pdf.name
+        shutil.move(str(actual_pdf), str(dest))
+        actual_pdf = dest
+        logger.debug("Moved PowerPoint PDF to output dir: %s", dest)
 
     logger.info("Normalized to PDF via %s: %s", actual_renderer, actual_pdf)
     return NormalizationResult(pdf_path=actual_pdf, renderer_used=actual_renderer)
