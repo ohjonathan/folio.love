@@ -274,6 +274,10 @@ tags:
 ---
 ```
 
+Here, `engagement` replaces `project` as the metadata field. Example source
+paths and directory structures may still use project-style folder names without
+changing the frontmatter contract.
+
 #### FR-403: Registry
 
 The system SHALL maintain a `registry.json` with:
@@ -311,7 +315,8 @@ folio status [<scope>]
 - Show all decks and their status
 - Flag stale conversions
 - Flag missing source files
-- Scope to client/engagement or any library-relative path if specified
+- Scope to client/engagement or any library-relative path (any path relative to
+  `library_root`) if specified
 
 #### FR-504: Scan Command
 ```bash
@@ -327,6 +332,7 @@ folio refresh [--scope <path>] [--all]
 ```
 - Re-convert all stale decks
 - Optionally scope to a specific client/engagement or library-relative path
+  (any path relative to `library_root`)
 - Update registry
 
 ---
@@ -581,8 +587,8 @@ llm:
 
 ### 5.1 Technical Constraints
 
-- PPTX→PDF conversion requires either LibreOffice or Microsoft PowerPoint,
-  depending on platform and environment
+- PPTX→PDF conversion uses LibreOffice (Linux, unmanaged macOS) or Microsoft
+  PowerPoint (managed macOS with `pptx_renderer: powerpoint`)
 - Poppler required for PDF→image conversion
 - Python 3.10+
 - Credential and SDK for the selected LLM provider/profile when AI analysis is enabled

@@ -216,12 +216,18 @@ persistence remains deferred.
 
 ### Current Status Against Tier 1 Exit Criteria
 
+The table below tracks current progress against the exit criteria above; the
+unchecked boxes remain the canonical gate list.
+
 | Checkpoint | Current Status | Evidence / Notes |
 |-----------|----------------|------------------|
-| 50 real decks converted with zero silent failures | Achieved on managed-mac rerun | `docs/validation/tier1_rerun_report.md` records 50/50 automated PPTX success on the March corpus |
+| 50 real decks converted with zero silent failures | Qualified pass on managed-mac rerun (49/50 clean; 1 template edge case) | `docs/validation/tier1_rerun_report.md` records 50/50 automated PPTX success on the March corpus, with one documented `building_blocks` quality edge case |
 | Every slide has image, verbatim text, and analysis | Mostly achieved; 1 documented template edge case | `building_blocks` is recorded as a non-structural quality edge case in the rerun report |
 | Change detection and staleness | Achieved on sampled rerun checks | `folio status` and version increment behavior were verified during the rerun |
 | Frontmatter / ontology-v2 completeness | Achieved for 49/50 in strict validation | One template edge case remains documented in the rerun report |
+| IDs follow date-based convention | Achieved | Ontology-v2 schema and current product docs standardize on `{client}_{engagement}_{type}_{date}_{descriptor}` IDs |
+| Authority defaults to `captured`, curation_level to `L0` | Achieved | This is the documented default for converted decks in the ontology-v2-aligned baseline |
+| Tags populated from LLM analysis with soft vocabulary validation | Not explicitly re-verified in the Tier 1 rerun | Expected behavior remains documented, but the rerun report did not call this out as a separate verification line item |
 | Cross-machine portability (OneDrive sync) | Not yet tested | Still open follow-up after PR #12 |
 | Automated-PPTX rerun cache persistence | Deferred known limitation | Same-PDF rerun should work; automated-PPTX rerun cache persistence remains out of scope until the follow-on cache work lands |
 
@@ -484,6 +490,7 @@ folio vocab
 - `engagement` requirement: **Required at L1+** for engagement-scoped types. Optional for context, N/A for reference.
 - ID convention: **Date-based.** `{client}_{engagement-short}_{type-short}_{date}_{descriptor}`.
 - Impact on Hypotheses at L0: **Empty stub.** Human fills at L1, enrichment refines at L2.
+- `project` vs `engagement`: **Resolved in docs/schema.** `engagement` is the metadata field; filesystem paths may still use project-like folder names.
 
 **Still open:**
 
@@ -497,7 +504,6 @@ folio vocab
 | 6 | OneNote → Markdown pathway | 3 | Copy-paste for v1. Research better paths as side task. |
 | 7 | PyPI package name availability (`folio`) | 2 | Check before Tier 2 packaging work. |
 | 8 | LLM cost management at scale | 2 | Estimate per-deck cost. Consider capping batch operations. |
-| 9 | `project` vs `engagement` field migration | 1 | Original docs used `project`. Ontology v2 uses `engagement`. Need to confirm these are interchangeable or define the mapping. |
 
 ---
 
