@@ -146,7 +146,8 @@ def resolve_entry_source(library_root: Path, entry: RegistryEntry) -> Path:
 def refresh_entry_status(library_root: Path, entry: RegistryEntry) -> RegistryEntry:
     """Recompute staleness_status for a registry entry.
 
-    Returns a new RegistryEntry with updated staleness_status.
+    Mutates ``entry.staleness_status`` in-place and returns the
+    same entry for convenience.
     """
     library_root = Path(library_root).resolve()
     md_path = library_root / entry.markdown_path

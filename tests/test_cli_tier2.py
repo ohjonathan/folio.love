@@ -625,3 +625,97 @@ class TestStatusRefreshFlag:
         result = runner.invoke(cli, ["--config", str(config_path), "status"])
         assert result.exit_code == 0
         assert "Stale: 1" in result.output
+
+
+# ---------------------------------------------------------------------------
+# S6/Observation 3: End-to-end Tier 2 workflow test
+# ---------------------------------------------------------------------------
+
+class TestE2EWorkflow:
+    """Full workflow: bootstrap → scan → modify → scan stale → promote."""
+
+    def test_full_tier2_lifecycle(self, tmp_path):
+        """End-to-end: status bootstrap, scan, stale detection, promote."""
+        library = tmp_path / "library"
+        sources_dir = tmp_path / "sources"
+
+        # Step 1: Create a source file and a converted markdown
+        source = sources_dir / "ClientA" / "Project1" / "deck.pptx"
+        _make_source(source, "original content")
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        md_path = library / "ClientA" / "project1" / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "clienta_project1_evidence_20260310_deck",
+            "title": "Deck",
+            "type": "evidence",
+            "curation_level": "L0",
+            "client": "ClientA",
+            "engagement": "Project1",
+            "tags": ["analysis"],
+            "source": "../../../../sources/ClientA/Project1/deck.pptx",
+            "source_hash": h,
+            "source_type": "deck",
+            "version": 1,
+            "converted": "2026-03-10T15:00:00Z",
+            "authority": "captured",
+        })
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {
+            "library_root": str(library),
+            "sources": [{"name": "client-src", "path": str(sources_dir), "target_prefix": ""}],
+        })
+
+        runner = CliRunner()
+
+        # Step 2: Status should bootstrap and show 1 current deck
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "Bootstrapping" in result.output
+        assert "Library: 1 decks" in result.output
+        assert (library / "registry.json").exists()
+
+        # Step 3: Scan should show 0 new (already converted)
+        result = runner.invoke(cli, ["--config", str(config_path), "scan"])
+        assert result.exit_code == 0
+        assert "Stale: 0" in result.output
+
+        # Step 4: Modify source to make it stale
+        _make_source(source, "MODIFIED content")
+
+        # Step 5: Scan should detect staleness
+        result = runner.invoke(cli, ["--config", str(config_path), "scan"])
+        assert result.exit_code == 0
+        assert "Stale: 1" in result.output
+
+        # Step 6: Status --refresh should show stale
+        result = runner.invoke(cli, ["--config", str(config_path), "status", "--refresh"])
+        assert result.exit_code == 0
+        assert "Stale: 1" in result.output
+
+        # Step 7: Promote the deck L0 → L1
+        deck_id = "clienta_project1_evidence_20260310_deck"
+        result = runner.invoke(cli, ["--config", str(config_path), "promote", deck_id, "L1"])
+        assert result.exit_code == 0
+        assert "Promoted" in result.output
+        assert "L0 → L1" in result.output
+
+        # Verify promotion persisted in markdown
+        content = md_path.read_text()
+        assert "curation_level: L1" in content
+
+        # Verify promotion event in version_history
+        deck_dir = md_path.parent
+        history_path = deck_dir / "version_history.json"
+        assert history_path.exists()
+        history = json.loads(history_path.read_text())
+        assert history["events"][0]["kind"] == "promotion"
+        assert history["events"][0]["to_level"] == "L1"
+
+        # Step 8: Status should reflect updated curation in registry
+        data = load_registry(library / "registry.json")
+        assert data["decks"][deck_id]["curation_level"] == "L1"
+

@@ -628,6 +628,7 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
     click.echo("")
 
     converter = FolioConverter(config)
+    from .converter import _read_existing_frontmatter
     success = 0
     failed = 0
 
@@ -640,7 +641,6 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
 
         try:
             # Read existing frontmatter to preserve metadata across refresh
-            from .converter import _read_existing_frontmatter
             existing_fm = _read_existing_frontmatter(library_root / entry.markdown_path)
 
             result = converter.convert(

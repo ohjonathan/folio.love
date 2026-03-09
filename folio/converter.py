@@ -474,7 +474,7 @@ def _generate_id(
 
     Pattern: {client}_{engagement-short}_{type}_{date}_{descriptor}
     """
-    date_str = datetime.now().strftime("%Y%m%d")
+    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
     parts = []
 
     if client:
