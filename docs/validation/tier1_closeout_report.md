@@ -31,12 +31,17 @@ Known limitations carried forward:
 ### Setup
 
 - **OneDrive location:** `~/Library/CloudStorage/OneDrive-McKinsey&Company/`
+- **Symlink:** `~/OneDrive - McKinsey & Company` → CloudStorage path
 - **Test root:** `OneDrive-McKinsey&Company/.folio_portability_test/`
-- **Method:** Copied 5 converted deck outputs and their source PPTX files to
+- **Method:** Copied converted deck outputs and their source PPTX files to
   OneDrive, preserving the relative directory structure
-  (`tests/validation/output/<deck>/` and `sample_powerpoint/<name>.pptx`)
+  (`tests/validation/output/<deck>/` and `sample_powerpoint/<name>.pptx`).
+  Created a `folio.yaml` on OneDrive with absolute paths to the synced library.
 
 ### Test Corpus
+
+File resolution tests (Tests 1-5) used 5 decks; CLI tests (Tests 6-8) used a
+3-deck subset with a PDF source for re-conversion.
 
 | # | Deck | Slides | Selection Criteria |
 |---|------|--------|--------------------|
@@ -108,18 +113,66 @@ markdown path. Verified:
 
 Result: **PASS**
 
-### Re-conversion Note
+### Test 6: `folio status` from OneDrive Synced Library
 
-Full PPTX-to-PDF re-conversion from OneDrive was not tested because PowerPoint
-automation requires Terminal.app (TCC constraint unrelated to OneDrive). The
-pipeline's file I/O, path resolution, and source tracking all work correctly
-from OneDrive paths. The PowerPoint automation path is identical regardless of
-source location — the TCC constraint is per-terminal, not per-directory.
+Created a `folio.yaml` on OneDrive pointing to the synced library root. Ran
+`folio -c <onedrive>/folio.yaml status` from the repo working directory.
+
+```
+Library: 3 decks
+  ✓ Current: 3
+```
+
+Result: **PASS** — `folio status` correctly reads and reports all 3 decks from
+the OneDrive-synced library.
+
+### Test 7: Stale Detection via `folio status` from OneDrive
+
+Modified the source PPTX for `kickoff` on OneDrive (appended data), then ran
+`folio status` again.
+
+| Step | `folio status` output | Result |
+|------|----------------------|--------|
+| Before modification | `3 decks, ✓ Current: 3` | **PASS** |
+| After modification | `3 decks, ✓ Current: 2, ⚠ Stale: 1` — `kickoff` flagged stale | **PASS** |
+| After restoring original | `3 decks, ✓ Current: 3` | **PASS** |
+
+Result: **PASS** — `folio status` correctly detects stale/current state
+transitions from OneDrive paths.
+
+### Test 8: Re-conversion from OneDrive Synced Environment
+
+Ran `folio convert` on a PDF source file hosted on OneDrive, with the output
+target also on OneDrive.
+
+```bash
+folio -c <onedrive>/folio.yaml convert \
+  "<onedrive>/sample_powerpoint/20240424 Kickoff - Engagement Team Charter.pdf" \
+  -t "<onedrive>/tests/validation/output" -p 1
+```
+
+Result:
+- Conversion succeeded (exit 0)
+- Output written to OneDrive: `20240424_kickoff_-_engagement_team_charter.md`
+  (v1, 3 slides)
+- Text extracted (3 pages via `pdfplumber`)
+- LLM analysis executed (3 API calls)
+- `folio status` after re-conversion: `4 decks, ✓ Current: 4`
+
+Result: **PASS** — full pipeline (normalize → images → text → LLM analysis →
+markdown → version tracking) works end-to-end from OneDrive-synced paths.
+
+**PPTX re-conversion note:** PPTX-to-PDF re-conversion via PowerPoint
+automation was not separately tested from OneDrive because the PowerPoint
+automation path is identical regardless of source location — the TCC constraint
+is per-terminal, not per-directory. The PDF-based re-conversion validates all
+pipeline I/O, path resolution, and output writing from OneDrive. The PowerPoint
+renderer is tested separately in the Tier 1 rerun (50/50 on local paths).
 
 ### Failures
 
 None. No path-related, permission-related, or sync-latency-related failures
-observed.
+observed across all 8 tests.
 
 ### Final: **PASS**
 
@@ -127,8 +180,9 @@ The relative path model is fully portable across locations. Moving the entire
 library (markdown outputs + source files) to OneDrive preserves:
 - Source path resolution
 - Image link rendering
-- Staleness detection (including modification detection)
+- Staleness detection (including modification detection via `folio status`)
 - Version history integrity
+- Full pipeline re-conversion from synced paths
 
 ---
 
@@ -136,14 +190,19 @@ library (markdown outputs + source files) to OneDrive preserves:
 
 ### Corpus
 
-3 PDFs created from existing slide PNGs (from real converted decks) using
-Pillow:
+3 PDFs exported from real PPTX decks via PowerPoint (File → Export → PDF,
+slides-only layout). Each PDF has a real text layer verified via `pdfplumber`:
 
-| # | Deck | Pages | PDF Size |
-|---|------|-------|----------|
-| 1 | `20240424_kickoff_-_engagement_team_charter` | 3 | 619 KB |
-| 2 | `20240903_krish_ps` | 13 | 2,734 KB |
-| 3 | `20250709_eclipse_1.0_breakdown_v1` | 7 | 1,398 KB |
+| # | Deck | Pages | PDF Size | Text (chars/page avg) |
+|---|------|-------|----------|-----------------------|
+| 1 | `20240424 Kickoff - Engagement Team Charter` | 3 | 1,864 KB | 834 |
+| 2 | `20240903 Krish PS` | 13 | 269 KB | 1,219 |
+| 3 | `20250709 Eclipse 1.0 breakdown v1` | 7 | 118 KB | 1,334 |
+
+PDFs were exported using `osascript` + `open -a "Microsoft PowerPoint"` +
+`save as PDF`. Text extraction was verified before testing:
+`pdfplumber` extracted 834-1,334 chars/page on average — confirming these are
+real slides-only PDFs with text layers, not image-only or scanned PDFs.
 
 ### Commands Run
 
@@ -159,18 +218,22 @@ folio convert <pdf> -t tests/validation/pdf_cache_output -p 1
 
 | Deck | Slides | Run 1 hits | Run 1 misses | Run 1 time | Run 2 hits | Run 2 misses | Run 2 time |
 |------|--------|-----------|-------------|------------|-----------|-------------|------------|
-| kickoff | 3 | 0 | 3 | 38s | 3 | 0 | 7s |
-| krish_ps | 13 | 0 | 13 | 138s | 13 | 0 | 26s |
-| eclipse_1.0 | 7 | 0 | 7 | 77s | 7 | 0 | 12s |
-| **Total** | **23** | **0** | **23** | **253s** | **23** | **0** | **45s** |
+| kickoff | 3 | 0 | 3 | 25s | 3 | 0 | 3s |
+| krish_ps | 13 | 0 | 13 | 105s | 13 | 0 | 3s |
+| eclipse_1.0 | 7 | 0 | 7 | 55s | 7 | 0 | 3s |
+| **Total** | **23** | **0** | **23** | **185s** | **23** | **0** | **9s** |
 
 ### Cache Evidence
 
-- **Run 1:** 0% cache hit rate (all misses) — correct for first conversion
-- **Run 2:** 100% cache hit rate (23/23 hits, 0 misses) — correct for unchanged rerun
-- **Speedup:** 5.6× faster on second run (253s → 45s)
-- **No silent reanalysis:** Zero LLM API calls on the second run (all results
-  served from `.analysis_cache.json`)
+- **Run 1:** 0% cache hit rate (all misses) — correct for first conversion.
+  Text extracted for all pages (3, 13, 7 pages respectively via `pdfplumber`).
+- **Run 2:** 100% cache hit rate (23/23 hits, 0 misses) — correct for
+  unchanged rerun. Zero LLM API calls.
+- **Speedup:** ~20× faster on second run (185s → 9s)
+- **No silent reanalysis:** All results served from `.analysis_cache.json` on
+  the second run
+- **Text hash validation:** Per-entry `_text_hash` validation passed on all 23
+  slides — confirming the text layer (not just the image) is stable across runs
 - **Outputs unchanged:** Markdown content identical between runs except for
   expected version/timestamp metadata increments
 
@@ -179,12 +242,14 @@ folio convert <pdf> -t tests/validation/pdf_cache_output -p 1
 The cache key is `image_hash` (SHA256[:16] of the PNG image bytes). Because the
 same PDF always produces the same PNGs via `pdf2image`, the image hashes are
 stable across runs. Per-entry `_text_hash` validation also passes because
-extracted text is unchanged.
+`pdfplumber` text extraction is deterministic on the same PDF. Both the primary
+lookup key (image hash) and the secondary validation hash (text hash) are stable.
 
 ### Final: **PASS**
 
-Same-PDF cache works as designed. Unchanged PDFs produce 100% cache hits with
-material runtime improvement and no silent reanalysis.
+Same-PDF cache works as designed on real PowerPoint-exported PDFs with text
+layers. Unchanged PDFs produce 100% cache hits with material runtime
+improvement and no silent reanalysis.
 
 ---
 
@@ -321,8 +386,8 @@ All four closeout items are resolved:
 
 | Item | Resolution | Blocker? |
 |------|-----------|----------|
-| OneDrive portability | Validated: PASS (5 decks, 5 tests) | No |
-| Same-PDF cache | Validated: PASS (23/23 cache hits, 5.6× speedup) | No |
+| OneDrive portability | Validated: PASS (5 decks, 8 tests incl. `folio status` + re-conversion) | No |
+| Same-PDF cache | Validated: PASS (23/23 cache hits, ~20× speedup, real PDFs with text layers) | No |
 | `building_blocks` | ACCEPT + DOCUMENT (template-only edge case) | No |
 | Approach J | DEFER TO POST-TIER-2 (low urgency, ~$2-5/batch) | No |
 
@@ -353,7 +418,7 @@ These are **documented, accepted, non-blocking** limitations:
 |-----------|--------|----------|
 | 50 real decks converted with zero silent failures | **PASS** (49/50 clean) | Rerun report: 50/50 automated PPTX, 1 template edge case |
 | Every slide has image, verbatim text, and analysis | **PASS** (49/50) | 919 slides; 1 template slide pending |
-| Source tracking works across machines (OneDrive) | **PASS** | This report: 5 decks validated |
+| Source tracking works across machines (OneDrive) | **PASS** | This report: 5 decks, 8 tests incl. `folio status` + re-conversion |
 | Change detection correctly identifies modifications | **PASS** | Rerun report + this report (modification test) |
 | Staleness detection flags outdated conversions | **PASS** | Rerun report + this report (OneDrive stale test) |
 | Frontmatter v2 schema complete | **PASS** (49/50) | Rerun report: strict validation |
