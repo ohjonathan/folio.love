@@ -27,7 +27,7 @@ Folio v1.0 encompasses:
 - Source file tracking with relative paths
 - Version tracking and change detection
 - Optional LLM analysis with bring-your-own provider credentials
-- Knowledge library organization (multi-client, multi-project)
+- Knowledge library organization (multi-client, multi-engagement)
 - Obsidian-compatible output format
 - CLI for all operations
 

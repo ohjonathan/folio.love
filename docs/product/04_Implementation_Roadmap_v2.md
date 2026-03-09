@@ -39,12 +39,14 @@ on the real Tier 1 corpus.
 Current Tier 1 reality after PR #12:
 
 - Managed-mac automated PPTX rerun: **50/50 succeeded** on the March 2026 real
-  corpus, with zero conversion failures during the main run
+  corpus (**49/50 clean output**), with zero conversion failures during the
+  main run; see `docs/validation/tier1_rerun_report.md`
 - Batch fatigue mitigation: 3 automatic PowerPoint restarts, zero operator
   intervention during the main run after the one-time staging-dir grant
 - Output quality: one documented template-only edge case in `building_blocks`;
   no structural silent failures in the rerun report
-- Same-PDF cache rerun behavior was **not re-tested**
+- Same-PDF cache rerun behavior on an identical PDF with no content change was
+  **not re-tested**
 - Automated-PPTX rerun cache persistence remains a **known deferred
   limitation** because PowerPoint PDF output is non-deterministic
 - Cross-machine portability (OneDrive sync test) remains **not yet tested**
@@ -227,7 +229,7 @@ unchecked boxes remain the canonical gate list.
 | Frontmatter / ontology-v2 completeness | Achieved for 49/50 in strict validation | One template edge case remains documented in the rerun report |
 | IDs follow date-based convention | Achieved | Ontology-v2 schema and current product docs standardize on `{client}_{engagement}_{type}_{date}_{descriptor}` IDs |
 | Authority defaults to `captured`, curation_level to `L0` | Achieved | This is the documented default for converted decks in the ontology-v2-aligned baseline |
-| Tags populated from LLM analysis with soft vocabulary validation | Not explicitly re-verified in the Tier 1 rerun | Expected behavior remains documented, but the rerun report did not call this out as a separate verification line item |
+| Tags populated from LLM analysis with soft vocabulary validation | Tags are populated by LLM analysis; vocabulary validation was not separately re-verified | The rerun exercised LLM analysis broadly, but soft vocabulary validation was not called out as a separate verification line item |
 | Cross-machine portability (OneDrive sync) | Not yet tested | Still open follow-up after PR #12 |
 | Automated-PPTX rerun cache persistence | Deferred known limitation | Same-PDF rerun should work; automated-PPTX rerun cache persistence remains out of scope until the follow-on cache work lands |
 
@@ -235,7 +237,7 @@ unchecked boxes remain the canonical gate list.
 
 ## Tier 2: Daily Driver (Weeks 7-12)
 
-**Goal:** Folio is a tool Johnny uses every day, not a script he runs occasionally. Proper CLI, multi-project organization, Obsidian compatibility.
+**Goal:** Folio is a tool Johnny uses every day, not a script he runs occasionally. Proper CLI, multi-engagement organization, Obsidian compatibility.
 
 **This is the original Phase 2 scope with minor additions.**
 
