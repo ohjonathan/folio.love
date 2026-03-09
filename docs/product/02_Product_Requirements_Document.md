@@ -27,7 +27,7 @@ Folio v1.0 encompasses:
 - Source file tracking with relative paths
 - Version tracking and change detection
 - Optional LLM analysis with bring-your-own provider credentials
-- Knowledge library organization (multi-client, multi-project)
+- Knowledge library organization (multi-client, multi-engagement)
 - Obsidian-compatible output format
 - CLI for all operations
 
@@ -243,18 +243,24 @@ folio_library/
 
 #### FR-402: Obsidian Frontmatter
 
-Every markdown file SHALL include YAML frontmatter:
+Every markdown file SHALL include Obsidian-compatible YAML frontmatter aligned
+to the Folio Ontology v2 baseline:
 ```yaml
 ---
+id: clienta_ddq126_evidence_20260210_market-sizing
 title: Market Sizing Analysis
 source: ../../../sources/ClientA/Project1/market_sizing.pptx
 source_hash: abc123def456
+source_type: deck
 version: 2
-converted: 2026-01-10
+converted: 2026-01-10T14:30:00Z
 client: ClientA
-project: Project1
-type: deck
+engagement: Due Diligence Q1 2026
+type: evidence
+subtype: research
 status: current  # or "stale" if source changed
+authority: captured
+curation_level: L0
 frameworks:
   - 2x2-matrix
   - scr
@@ -267,6 +273,10 @@ tags:
   - competitive-analysis
 ---
 ```
+
+Here, `engagement` replaces `project` as the metadata field. Example source
+paths and directory structures may still use project-style folder names without
+changing the frontmatter contract.
 
 #### FR-403: Registry
 
@@ -305,7 +315,8 @@ folio status [<scope>]
 - Show all decks and their status
 - Flag stale conversions
 - Flag missing source files
-- Scope to client/project if specified
+- Scope to client/engagement or any library-relative path (any path relative to
+  `library_root`) if specified
 
 #### FR-504: Scan Command
 ```bash
@@ -320,7 +331,8 @@ folio scan
 folio refresh [--scope <path>] [--all]
 ```
 - Re-convert all stale decks
-- Optionally scope to specific client/project
+- Optionally scope to a specific client/engagement or library-relative path
+  (any path relative to `library_root`)
 - Update registry
 
 ---
@@ -407,15 +419,20 @@ Folio SHALL degrade to pending analysis without failing conversion when analysis
 
 ```markdown
 ---
+id: clienta_ddq126_evidence_20260210_market-sizing
 title: Market Sizing Analysis
 source: ../../../sources/ClientA/Project1/market_sizing.pptx
 source_hash: abc123def456
+source_type: deck
 version: 2
 converted: 2026-01-10T14:30:00Z
 client: ClientA
-project: Project1
-type: deck
+engagement: Due Diligence Q1 2026
+type: evidence
+subtype: research
 status: current
+authority: captured
+curation_level: L0
 frameworks:
   - 2x2-matrix
 slide_types:
@@ -570,7 +587,8 @@ llm:
 
 ### 5.1 Technical Constraints
 
-- LibreOffice required for PPTX→PDF conversion
+- PPTX→PDF conversion uses LibreOffice (Linux, unmanaged macOS) or Microsoft
+  PowerPoint (managed macOS with `pptx_renderer: powerpoint`)
 - Poppler required for PDF→image conversion
 - Python 3.10+
 - Credential and SDK for the selected LLM provider/profile when AI analysis is enabled
