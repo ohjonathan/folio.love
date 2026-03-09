@@ -372,3 +372,256 @@ class TestVersionEventsPreservation:
         data = json.loads(history_path.read_text())
         assert len(data["versions"]) == 1  # No new version created
         assert len(data["events"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# B1: Promote preserves frontmatter formatting (no YAML round-trip)
+# ---------------------------------------------------------------------------
+
+class TestPromotePreservesFormatting:
+    def test_promote_preserves_timestamps(self, tmp_path):
+        """Promote must not reformat timestamps or strip comments."""
+        library = tmp_path / "library"
+        deck_dir = library / "Client" / "deck"
+        md_path = deck_dir / "deck.md"
+
+        # Write frontmatter with precise ISO timestamps that PyYAML would mangle
+        raw_frontmatter = (
+            "---\n"
+            "id: ts_deck\n"
+            "title: Timestamp Deck\n"
+            "type: evidence\n"
+            "curation_level: L0\n"
+            "client: ClientA\n"
+            "engagement: Q1 2026\n"
+            "tags:\n"
+            "- market-sizing\n"
+            "source: ../../../sources/deck.pptx\n"
+            "source_hash: abc123\n"
+            "created: 2026-03-10T14:30:00Z\n"
+            "modified: 2026-03-10T15:00:00Z\n"
+            "converted: 2026-03-10T15:00:00Z\n"
+            "# Human comment here\n"
+            "---\n"
+            "\n# Content body\n"
+        )
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        md_path.write_text(raw_frontmatter)
+
+        entry = _sample_registry_entry(
+            id="ts_deck",
+            markdown_path="Client/deck/deck.md",
+            deck_dir="Client/deck",
+            curation_level="L0",
+            client="ClientA",
+        )
+        reg_data = {"_schema_version": 1, "decks": {"ts_deck": entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "promote", "ts_deck", "L1"])
+        assert result.exit_code == 0
+
+        content = md_path.read_text()
+
+        # Verify curation_level was updated
+        assert "curation_level: L1" in content
+
+        # Verify timestamps preserved exactly (PyYAML would convert to datetime objects)
+        assert "2026-03-10T14:30:00Z" in content
+        assert "2026-03-10T15:00:00Z" in content
+
+        # Verify comment preserved
+        assert "# Human comment here" in content
+
+        # Verify body preserved
+        assert "# Content body" in content
+
+    def test_promote_only_changes_curation_level_line(self, tmp_path):
+        """All non-curation_level lines should be byte-identical before/after."""
+        library = tmp_path / "library"
+        deck_dir = library / "Client" / "deck"
+        md_path = deck_dir / "deck.md"
+
+        raw_frontmatter = (
+            "---\n"
+            "id: byte_deck\n"
+            "title: Byte Check Deck\n"
+            "type: evidence\n"
+            "curation_level: L0\n"
+            "client: ClientA\n"
+            "engagement: Q1 2026\n"
+            "tags:\n"
+            "- analysis\n"
+            "source: ../../../sources/deck.pptx\n"
+            "source_hash: def456\n"
+            "---\n"
+            "\n# Body content\n"
+        )
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        md_path.write_text(raw_frontmatter)
+
+        entry = _sample_registry_entry(
+            id="byte_deck",
+            markdown_path="Client/deck/deck.md",
+            deck_dir="Client/deck",
+            curation_level="L0",
+            client="ClientA",
+        )
+        reg_data = {"_schema_version": 1, "decks": {"byte_deck": entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        before_lines = raw_frontmatter.split("\n")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "promote", "byte_deck", "L1"])
+        assert result.exit_code == 0
+
+        after_lines = md_path.read_text().split("\n")
+
+        # Compare line by line; only the curation_level line should differ
+        assert len(before_lines) == len(after_lines)
+        for before, after in zip(before_lines, after_lines):
+            if before.startswith("curation_level:"):
+                assert after == "curation_level: L1"
+            else:
+                assert before == after
+
+
+# ---------------------------------------------------------------------------
+# B2: Reconversion preserves curation_level
+# ---------------------------------------------------------------------------
+
+class TestReconversionPreservesCuration:
+    def test_frontmatter_generate_preserves_curation_level(self):
+        """frontmatter.generate() should preserve curation_level from existing."""
+        from folio.output.frontmatter import generate
+        from folio.tracking.versions import VersionInfo, ChangeSet
+
+        version_info = VersionInfo(
+            version=2,
+            timestamp="2026-03-10T15:00:00Z",
+            source_hash="abc123",
+            source_path="deck.pptx",
+            note=None,
+            slide_count=1,
+            changes=ChangeSet(),
+        )
+
+        fm_str = generate(
+            title="Test Deck",
+            deck_id="test_deck",
+            source_relative_path="deck.pptx",
+            source_hash="abc123",
+            source_type="deck",
+            version_info=version_info,
+            analyses={},
+            existing_frontmatter={
+                "id": "test_deck",
+                "created": "2026-03-10T14:00:00Z",
+                "authority": "analyzed",
+                "curation_level": "L1",
+            },
+        )
+
+        assert "curation_level: L1" in fm_str
+        assert "authority: analyzed" in fm_str
+
+    def test_frontmatter_generate_defaults_without_existing(self):
+        """Without existing frontmatter, defaults to L0/captured."""
+        from folio.output.frontmatter import generate
+        from folio.tracking.versions import VersionInfo, ChangeSet
+
+        version_info = VersionInfo(
+            version=1,
+            timestamp="2026-03-10T15:00:00Z",
+            source_hash="abc123",
+            source_path="deck.pptx",
+            note=None,
+            slide_count=1,
+            changes=ChangeSet(),
+        )
+
+        fm_str = generate(
+            title="Test Deck",
+            deck_id="test_deck",
+            source_relative_path="deck.pptx",
+            source_hash="abc123",
+            source_type="deck",
+            version_info=version_info,
+            analyses={},
+        )
+
+        assert "curation_level: L0" in fm_str
+        assert "authority: captured" in fm_str
+
+
+# ---------------------------------------------------------------------------
+# S3: append_promotion_event backs up corrupt file
+# ---------------------------------------------------------------------------
+
+class TestAppendPromotionEventCorruptFile:
+    def test_corrupt_json_backed_up(self, tmp_path):
+        """Corrupt version_history.json should be backed up, not silently reset."""
+        from folio.tracking.versions import append_promotion_event
+
+        history_path = tmp_path / "version_history.json"
+        history_path.write_text("not valid json{{{")
+
+        append_promotion_event(history_path, {
+            "kind": "promotion",
+            "from_level": "L0",
+            "to_level": "L1",
+        })
+
+        # Backup should exist
+        backup = history_path.with_suffix(".json.bak")
+        assert backup.exists()
+        assert "not valid json" in backup.read_text()
+
+        # New file should have the event
+        data = json.loads(history_path.read_text())
+        assert len(data["events"]) == 1
+
+    def test_non_dict_backed_up(self, tmp_path):
+        from folio.tracking.versions import append_promotion_event
+
+        history_path = tmp_path / "version_history.json"
+        history_path.write_text(json.dumps([1, 2, 3]))
+
+        append_promotion_event(history_path, {
+            "kind": "promotion",
+            "from_level": "L0",
+            "to_level": "L1",
+        })
+
+        backup = history_path.with_suffix(".json.bak")
+        assert backup.exists()
+
+
+# ---------------------------------------------------------------------------
+# S7: status --refresh flag
+# ---------------------------------------------------------------------------
+
+class TestStatusRefreshFlag:
+    def test_status_without_refresh_uses_cached_staleness(self, tmp_path):
+        """Without --refresh, status should use cached staleness_status."""
+        library = tmp_path / "library"
+        library.mkdir(parents=True)
+
+        entry = _sample_registry_entry(staleness_status="stale")
+        reg_data = {"_schema_version": 1, "decks": {entry["id"]: entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "Stale: 1" in result.output

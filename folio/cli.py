@@ -362,8 +362,10 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
 
 @cli.command()
 @click.argument("scope", required=False, default=None)
+@click.option("--refresh", "do_refresh", is_flag=True, default=False,
+              help="Re-check source hashes to update staleness (slower).")
 @click.pass_context
-def status(ctx, scope: Optional[str]):
+def status(ctx, scope: Optional[str], do_refresh: bool):
     """Show library status.
 
     Optionally scope to a client or engagement:
@@ -371,6 +373,8 @@ def status(ctx, scope: Optional[str]):
         folio status
 
         folio status ClientA
+
+        folio status --refresh
     """
     config = ctx.obj["config"]
     library_root = config.library_root.resolve()
@@ -390,7 +394,7 @@ def status(ctx, scope: Optional[str]):
         data = registry.rebuild_registry(library_root)
         registry.save_registry(registry_path, data)
 
-    # Refresh staleness and optionally scope
+    # Tally staleness counts; only re-hash sources when --refresh is passed
     current = 0
     stale = 0
     missing = 0
@@ -406,9 +410,9 @@ def status(ctx, scope: Optional[str]):
                     entry.deck_dir.startswith(scope)):
                 continue
 
-        entry = registry.refresh_entry_status(library_root, entry)
-        # Update registry data with refreshed status
-        data["decks"][deck_id] = entry.to_dict()
+        if do_refresh:
+            entry = registry.refresh_entry_status(library_root, entry)
+            data["decks"][deck_id] = entry.to_dict()
 
         if entry.staleness_status == "current":
             current += 1
@@ -419,8 +423,8 @@ def status(ctx, scope: Optional[str]):
             missing += 1
             missing_decks.append(entry)
 
-    # Persist refreshed statuses
-    registry.save_registry(registry_path, data)
+    if do_refresh:
+        registry.save_registry(registry_path, data)
 
     total = current + stale + missing
     click.echo(f"Library: {total} decks")
@@ -487,7 +491,7 @@ def scan(ctx, scope: Optional[str]):
             abs_source = registry.resolve_entry_source(library_root, entry)
             source_to_entry[str(abs_source)] = entry
         except Exception:
-            pass
+            logger.debug("Could not resolve source for %s", entry.id, exc_info=True)
 
     # Walk source roots
     new_sources = []
@@ -540,7 +544,7 @@ def scan(ctx, scope: Optional[str]):
                     continue
                 missing_sources.append(entry)
         except Exception:
-            pass
+            logger.debug("Could not resolve source for %s", entry.markdown_path, exc_info=True)
 
     click.echo(f"Sources scanned: {scanned}")
     click.echo(f"  New: {len(new_sources)}")
@@ -635,10 +639,18 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
             continue
 
         try:
+            # Read existing frontmatter to preserve metadata across refresh
+            from .converter import _read_existing_frontmatter
+            existing_fm = _read_existing_frontmatter(library_root / entry.markdown_path)
+
             result = converter.convert(
                 source_path=source_path,
                 client=entry.client,
                 engagement=entry.engagement,
+                target=library_root / entry.deck_dir,
+                subtype=existing_fm.get("subtype", "research") if existing_fm else "research",
+                industry=existing_fm.get("industry") if existing_fm else None,
+                extra_tags=existing_fm.get("tags") if existing_fm else None,
             )
             click.echo(f"✓ {entry.id} (v{result.version}, {result.slide_count} slides)")
             success += 1
@@ -736,26 +748,18 @@ def promote(ctx, deck_id: str, level: str):
                 "Consider adding relationships before promoting to L2."
             )
 
-    # Update frontmatter in markdown file
+    # Update curation_level in markdown file via targeted string replacement.
+    # Avoids full YAML round-trip which corrupts timestamps and strips comments.
     content = md_path.read_text()
-    import yaml as yaml_lib
-    lines = content.split("\n")
-    end_idx = None
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            end_idx = i
-            break
-
-    if end_idx is None:
-        click.echo("✗ Cannot find frontmatter boundary in markdown file.")
-        sys.exit(1)
-
-    fm["curation_level"] = level
-    yaml_str = yaml_lib.dump(
-        fm, default_flow_style=False, sort_keys=False, allow_unicode=True,
+    new_content, count = re.subn(
+        r"(?m)^curation_level:\s*L\d",
+        f"curation_level: {level}",
+        content,
+        count=1,
     )
-    body = "\n".join(lines[end_idx + 1:])
-    new_content = f"---\n{yaml_str}---{body}"
+    if count == 0:
+        click.echo("✗ Cannot find 'curation_level' field in frontmatter.")
+        sys.exit(1)
 
     # Atomic write
     tmp_md = md_path.with_suffix(".md.tmp")

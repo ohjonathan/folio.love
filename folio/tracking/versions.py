@@ -384,8 +384,22 @@ def append_promotion_event(
         try:
             data = json.loads(history_path.read_text())
             if not isinstance(data, dict):
+                backup = history_path.with_suffix(".json.bak")
+                history_path.rename(backup)
+                logger.warning(
+                    "Corrupt version_history.json (not a dict) backed up to %s",
+                    backup,
+                )
                 data = {"versions": []}
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as exc:
+            backup = history_path.with_suffix(".json.bak")
+            try:
+                history_path.rename(backup)
+            except OSError:
+                pass  # Best effort backup
+            logger.warning(
+                "Corrupt version_history.json backed up to %s: %s", backup, exc,
+            )
             data = {"versions": []}
     else:
         data = {"versions": []}

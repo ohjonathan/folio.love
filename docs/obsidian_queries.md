@@ -57,8 +57,8 @@ GROUP BY authority
 SORT authority ASC
 ```
 
-Authority values: `captured` (machine-generated), `reviewed` (human-verified),
-`curated` (human-edited).
+Authority values: `captured` (machine-generated), `analyzed` (LLM-processed),
+`aligned` (human-verified), `decided` (human-curated).
 
 ---
 

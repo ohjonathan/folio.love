@@ -4,7 +4,7 @@ import logging
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -312,7 +312,19 @@ class FolioConverter:
             md_rel = str(markdown_path)
             deck_dir_rel = str(deck_dir)
 
-        now_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Preserve authority/curation_level from existing frontmatter
+        reg_authority = "captured"
+        reg_curation = "L0"
+        if isinstance(existing_fm, dict):
+            prev_auth = existing_fm.get("authority")
+            if isinstance(prev_auth, str) and prev_auth:
+                reg_authority = prev_auth
+            prev_curation = existing_fm.get("curation_level")
+            if isinstance(prev_curation, str) and prev_curation:
+                reg_curation = prev_curation
+
         reg_entry = registry.RegistryEntry(
             id=deck_id,
             title=_title_from_name(deck_name),
@@ -326,8 +338,8 @@ class FolioConverter:
             modified=now_str,
             client=effective_client,
             engagement=effective_engagement,
-            authority="captured",
-            curation_level="L0",
+            authority=reg_authority,
+            curation_level=reg_curation,
             staleness_status="current",
         )
         registry_path = library_root / "registry.json"

@@ -277,8 +277,13 @@ class FolioConfig:
 
         Strips trailing slashes so ``""``, ``"Internal"``, and
         ``"Internal/"`` all behave consistently.
+
+        Raises ValueError if any path component is ``..`` (path traversal).
         """
-        return prefix.strip("/").strip()
+        cleaned = prefix.strip("/").strip()
+        if ".." in cleaned.split("/"):
+            raise ValueError(f"target_prefix must not contain '..': {prefix!r}")
+        return cleaned
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":

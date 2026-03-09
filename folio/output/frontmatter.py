@@ -81,6 +81,17 @@ def generate(
         if isinstance(prev_created, str) and prev_created:
             preserved_created = prev_created
 
+    # Preserve authority and curation_level from existing frontmatter on reconversion.
+    preserved_authority = "captured"
+    preserved_curation = "L0"
+    if isinstance(existing_frontmatter, dict):
+        prev_auth = existing_frontmatter.get("authority")
+        if isinstance(prev_auth, str) and prev_auth:
+            preserved_authority = prev_auth
+        prev_curation = existing_frontmatter.get("curation_level")
+        if isinstance(prev_curation, str) and prev_curation:
+            preserved_curation = prev_curation
+
     # Build frontmatter in semantic group order:
     # Identity > Lifecycle > Source > Temporal > Engagement > Content > Extensions
     frontmatter = {
@@ -91,8 +102,8 @@ def generate(
         "subtype": subtype,
         # Lifecycle
         "status": "active",
-        "authority": "captured",
-        "curation_level": "L0",
+        "authority": preserved_authority,
+        "curation_level": preserved_curation,
         # Source
         "source": source_relative_path,
         "source_hash": source_hash,
