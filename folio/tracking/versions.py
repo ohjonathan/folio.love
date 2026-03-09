@@ -279,9 +279,22 @@ def load_version_history(history_path: Path, strict: bool = False) -> list[dict]
 
 
 def save_version_history(history_path: Path, versions: list[dict]):
-    """Save version history with atomic write."""
-    data = {"versions": versions}
-    _atomic_write_json(history_path, data)
+    """Save version history with atomic write.
+
+    Preserves existing top-level keys (e.g. ``events``) so that
+    promotion history is not dropped by conversion writes.
+    """
+    # Read existing data to preserve non-versions keys
+    existing = {}
+    if history_path.exists():
+        try:
+            existing = json.loads(history_path.read_text())
+            if not isinstance(existing, dict):
+                existing = {}
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+    existing["versions"] = versions
+    _atomic_write_json(history_path, existing)
 
 
 def load_texts_cache(cache_path: Path) -> dict[int, str]:
@@ -356,6 +369,33 @@ def _atomic_write_json(path: Path, data: dict):
     tmp_path = path.with_suffix(".tmp")
     tmp_path.write_text(json.dumps(data, indent=2))
     tmp_path.rename(path)
+
+
+def append_promotion_event(
+    history_path: Path,
+    event: dict,
+) -> None:
+    """Append a promotion event to version_history.json.
+
+    Creates the file if it does not exist.  Preserves existing
+    ``versions`` and ``events`` lists.
+    """
+    if history_path.exists():
+        try:
+            data = json.loads(history_path.read_text())
+            if not isinstance(data, dict):
+                data = {"versions": []}
+        except (json.JSONDecodeError, OSError):
+            data = {"versions": []}
+    else:
+        data = {"versions": []}
+
+    events = data.get("events", [])
+    if not isinstance(events, list):
+        events = []
+    events.append(event)
+    data["events"] = events
+    _atomic_write_json(history_path, data)
 
 
 def _restore_texts_cache(

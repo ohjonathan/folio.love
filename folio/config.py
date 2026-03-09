@@ -233,6 +233,53 @@ class FolioConfig:
                     f"{', '.join(sorted(set(dupes)))}"
                 )
 
+    def resolve_source_roots(self, base_path: Optional[Path] = None) -> list[tuple["SourceConfig", Path]]:
+        """Resolve configured source roots to absolute paths.
+
+        Args:
+            base_path: Base directory for resolving relative paths.
+                       Defaults to cwd.
+
+        Returns:
+            List of (SourceConfig, resolved_absolute_path) tuples.
+        """
+        base = Path(base_path) if base_path else Path.cwd()
+        result = []
+        for src in self.sources:
+            resolved = (base / src.path).resolve()
+            result.append((src, resolved))
+        return result
+
+    def match_source_root(
+        self, source_path: Path, base_path: Optional[Path] = None
+    ) -> Optional[tuple["SourceConfig", Path]]:
+        """Match a source file to a configured source root.
+
+        Args:
+            source_path: Absolute path to the source file.
+            base_path: Base directory for resolving source root paths.
+
+        Returns:
+            (SourceConfig, relative_path_from_root) or None if no match.
+        """
+        source_path = Path(source_path).resolve()
+        for src_config, resolved_root in self.resolve_source_roots(base_path):
+            try:
+                rel = source_path.relative_to(resolved_root)
+                return (src_config, rel)
+            except ValueError:
+                continue
+        return None
+
+    @staticmethod
+    def normalize_target_prefix(prefix: str) -> str:
+        """Normalize a target_prefix for consistent path construction.
+
+        Strips trailing slashes so ``""``, ``"Internal"``, and
+        ``"Internal/"`` all behave consistently.
+        """
+        return prefix.strip("/").strip()
+
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":
         """Load config from folio.yaml, falling back to defaults."""

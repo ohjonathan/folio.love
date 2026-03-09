@@ -380,42 +380,47 @@ def status(ctx, scope: Optional[str]):
         click.echo("Run 'folio convert' to create your first conversion.")
         return
 
-    # Find all markdown files in the library
-    from .tracking.sources import check_staleness
-    import yaml as yaml_lib
+    from .tracking import registry
 
-    search_path = library_root / scope if scope else library_root
-    md_files = sorted(search_path.rglob("*.md"))
+    registry_path = library_root / "registry.json"
+    if registry_path.exists():
+        data = registry.load_registry(registry_path)
+    else:
+        click.echo("Bootstrapping registry from existing library...")
+        data = registry.rebuild_registry(library_root)
+        registry.save_registry(registry_path, data)
 
+    # Refresh staleness and optionally scope
     current = 0
     stale = 0
     missing = 0
     stale_decks = []
     missing_decks = []
 
-    for md_file in md_files:
-        # Skip non-folio markdown (no frontmatter)
-        try:
-            content = md_file.read_text()
-            if not content.startswith("---"):
-                continue
-            end = content.index("---", 3)
-            fm = yaml_lib.safe_load(content[3:end])
-            if not fm or "source" not in fm or "source_hash" not in fm:
-                continue
-        except (ValueError, yaml_lib.YAMLError):
-            continue
+    for deck_id, entry_data in data.get("decks", {}).items():
+        entry = registry.entry_from_dict(entry_data)
 
-        result = check_staleness(md_file, fm["source"], fm["source_hash"])
+        # Scope filter
+        if scope:
+            if not (entry.markdown_path.startswith(scope) or
+                    entry.deck_dir.startswith(scope)):
+                continue
 
-        if result["status"] == "current":
+        entry = registry.refresh_entry_status(library_root, entry)
+        # Update registry data with refreshed status
+        data["decks"][deck_id] = entry.to_dict()
+
+        if entry.staleness_status == "current":
             current += 1
-        elif result["status"] == "stale":
+        elif entry.staleness_status == "stale":
             stale += 1
-            stale_decks.append((md_file.relative_to(library_root), result))
-        elif result["status"] == "missing":
+            stale_decks.append(entry)
+        elif entry.staleness_status == "missing":
             missing += 1
-            missing_decks.append((md_file.relative_to(library_root), result))
+            missing_decks.append(entry)
+
+    # Persist refreshed statuses
+    registry.save_registry(registry_path, data)
 
     total = current + stale + missing
     click.echo(f"Library: {total} decks")
@@ -428,16 +433,359 @@ def status(ctx, scope: Optional[str]):
     if stale_decks:
         click.echo("")
         click.echo("Stale:")
-        for path, _ in stale_decks:
-            click.echo(f"  {path}")
+        for entry in stale_decks:
+            click.echo(f"  {entry.markdown_path}")
 
     if missing_decks:
         click.echo("")
         click.echo("Missing:")
-        for path, info in missing_decks:
-            click.echo(f"  {path} (source: {info.get('source_path', 'unknown')})")
+        for entry in missing_decks:
+            click.echo(f"  {entry.markdown_path} (source: {entry.source_relative_path})")
+
+
+@cli.command()
+@click.option("--scope", default=None, help="Limit to sources matching a path prefix.")
+@click.pass_context
+def scan(ctx, scope: Optional[str]):
+    """Scan configured source roots for new, stale, or missing files.
+
+    Examples:
+
+        folio scan
+
+        folio scan --scope ClientA
+    """
+    config = ctx.obj["config"]
+
+    if not config.sources:
+        click.echo("No source roots configured in folio.yaml.")
+        click.echo("")
+        click.echo("Add sources to folio.yaml:")
+        click.echo("  sources:")
+        click.echo("    - name: client-materials")
+        click.echo("      path: ../client_materials")
+        click.echo("      target_prefix: \"\"")
+        return
+
+    library_root = config.library_root.resolve()
+
+    from .tracking import registry
+    from .tracking.sources import compute_file_hash
+
+    registry_path = library_root / "registry.json"
+    if registry_path.exists():
+        data = registry.load_registry(registry_path)
+    else:
+        data = registry.rebuild_registry(library_root)
+        registry.save_registry(registry_path, data)
+
+    # Build lookup: resolved_source_path -> registry entry
+    source_to_entry = {}
+    for entry_data in data.get("decks", {}).values():
+        entry = registry.entry_from_dict(entry_data)
+        try:
+            abs_source = registry.resolve_entry_source(library_root, entry)
+            source_to_entry[str(abs_source)] = entry
+        except Exception:
+            pass
+
+    # Walk source roots
+    new_sources = []
+    stale_sources = []
+    missing_sources = []
+    scanned = 0
+
+    from .converter import PPTX_EXTENSIONS
+    scan_extensions = PPTX_EXTENSIONS | {".pdf"}
+
+    for src_config, resolved_root in config.resolve_source_roots():
+        if not resolved_root.exists():
+            click.echo(f"  ⚠ Source root not found: {src_config.name} ({resolved_root})")
+            continue
+
+        for source_file in sorted(resolved_root.rglob("*")):
+            if not source_file.is_file():
+                continue
+            if source_file.suffix.lower() not in scan_extensions:
+                continue
+
+            # Scope filter
+            if scope:
+                try:
+                    rel = source_file.relative_to(resolved_root)
+                    if not str(rel).startswith(scope):
+                        continue
+                except ValueError:
+                    continue
+
+            scanned += 1
+            abs_str = str(source_file.resolve())
+
+            if abs_str not in source_to_entry:
+                new_sources.append(source_file)
+            else:
+                entry = source_to_entry[abs_str]
+                current_hash = compute_file_hash(source_file)
+                if current_hash != entry.source_hash:
+                    stale_sources.append((source_file, entry))
+
+    # Check for missing: registry entries whose sources no longer exist
+    for entry_data in data.get("decks", {}).values():
+        entry = registry.entry_from_dict(entry_data)
+        try:
+            abs_source = registry.resolve_entry_source(library_root, entry)
+            if not abs_source.exists():
+                # Scope filter
+                if scope and not entry.markdown_path.startswith(scope):
+                    continue
+                missing_sources.append(entry)
+        except Exception:
+            pass
+
+    click.echo(f"Sources scanned: {scanned}")
+    click.echo(f"  New: {len(new_sources)}")
+    click.echo(f"  Stale: {len(stale_sources)}")
+    click.echo(f"  Missing: {len(missing_sources)}")
+
+    if new_sources:
+        click.echo("")
+        click.echo("New (not yet converted):")
+        for f in new_sources:
+            click.echo(f"  {f}")
+
+    if stale_sources:
+        click.echo("")
+        click.echo("Stale (source changed since last conversion):")
+        for f, entry in stale_sources:
+            click.echo(f"  {f} → {entry.markdown_path}")
+
+    if missing_sources:
+        click.echo("")
+        click.echo("Missing (source file not found):")
+        for entry in missing_sources:
+            click.echo(f"  {entry.markdown_path} (source: {entry.source_relative_path})")
+
+
+@cli.command()
+@click.option("--scope", default=None, help="Limit to entries under a library-relative path.")
+@click.option("--all", "convert_all", is_flag=True, default=False,
+              help="Re-convert all entries in scope, not just stale ones.")
+@click.pass_context
+def refresh(ctx, scope: Optional[str], convert_all: bool):
+    """Re-convert stale decks in the library.
+
+    Examples:
+
+        folio refresh
+
+        folio refresh --scope ClientA/DD_Q1_2026
+
+        folio refresh --all
+    """
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+
+    if not library_root.exists():
+        click.echo(f"Library not found at {library_root}")
+        return
+
+    from .tracking import registry
+
+    registry_path = library_root / "registry.json"
+    if registry_path.exists():
+        data = registry.load_registry(registry_path)
+    else:
+        click.echo("Bootstrapping registry from existing library...")
+        data = registry.rebuild_registry(library_root)
+        registry.save_registry(registry_path, data)
+
+    # Select entries to refresh
+    entries_to_refresh = []
+    for deck_id, entry_data in data.get("decks", {}).items():
+        entry = registry.entry_from_dict(entry_data)
+
+        # Scope filter
+        if scope:
+            if not (entry.markdown_path.startswith(scope) or
+                    entry.deck_dir.startswith(scope)):
+                continue
+
+        # Refresh staleness
+        entry = registry.refresh_entry_status(library_root, entry)
+
+        if convert_all or entry.staleness_status == "stale":
+            entries_to_refresh.append(entry)
+
+    if not entries_to_refresh:
+        click.echo("Nothing to refresh.")
+        return
+
+    click.echo(f"Refreshing {len(entries_to_refresh)} deck(s)...")
+    click.echo("")
+
+    converter = FolioConverter(config)
+    success = 0
+    failed = 0
+
+    for entry in entries_to_refresh:
+        source_path = registry.resolve_entry_source(library_root, entry)
+        if not source_path.exists():
+            click.echo(f"✗ {entry.id}: source missing ({entry.source_relative_path})")
+            failed += 1
+            continue
+
+        try:
+            result = converter.convert(
+                source_path=source_path,
+                client=entry.client,
+                engagement=entry.engagement,
+            )
+            click.echo(f"✓ {entry.id} (v{result.version}, {result.slide_count} slides)")
+            success += 1
+        except Exception as e:
+            click.echo(f"✗ {entry.id}: {e}")
+            failed += 1
+
+    click.echo("")
+    click.echo(f"Refresh complete: {success} succeeded, {failed} failed")
+
+
+@cli.command()
+@click.argument("deck_id")
+@click.argument("level", type=click.Choice(["L1", "L2", "L3"]))
+@click.pass_context
+def promote(ctx, deck_id: str, level: str):
+    """Promote a deck's curation level.
+
+    DECK_ID is the document ID from the registry.
+    LEVEL is the target curation level (L1, L2, or L3).
+
+    Examples:
+
+        folio promote clienta_ddq126_evidence_20260310_market-sizing L1
+    """
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+
+    from .tracking import registry
+    from .tracking.versions import append_promotion_event
+
+    registry_path = library_root / "registry.json"
+    if not registry_path.exists():
+        click.echo("No registry found. Run 'folio status' first to bootstrap.")
+        sys.exit(1)
+
+    data = registry.load_registry(registry_path)
+    if deck_id not in data.get("decks", {}):
+        click.echo(f"✗ Deck '{deck_id}' not found in registry.")
+        click.echo("")
+        click.echo("Available IDs:")
+        for did in sorted(data.get("decks", {}).keys()):
+            click.echo(f"  {did}")
+        sys.exit(1)
+
+    entry = registry.entry_from_dict(data["decks"][deck_id])
+    current_level = entry.curation_level or "L0"
+
+    # Validate transition direction
+    level_order = {"L0": 0, "L1": 1, "L2": 2, "L3": 3}
+    if level_order.get(level, 0) <= level_order.get(current_level, 0):
+        click.echo(f"✗ Cannot promote from {current_level} to {level} (must go upward).")
+        sys.exit(1)
+
+    # Read existing markdown frontmatter for validation
+    md_path = library_root / entry.markdown_path
+    if not md_path.exists():
+        click.echo(f"✗ Markdown file not found: {entry.markdown_path}")
+        sys.exit(1)
+
+    from .converter import _read_existing_frontmatter
+    fm = _read_existing_frontmatter(md_path)
+    if fm is None:
+        click.echo(f"✗ Cannot read frontmatter from {entry.markdown_path}")
+        sys.exit(1)
+
+    warnings = []
+
+    # L0 -> L1 validation
+    if current_level == "L0" and level in ("L1", "L2", "L3"):
+        if not fm.get("client"):
+            click.echo(f"✗ L0 → L1 requires 'client' to be populated.")
+            sys.exit(1)
+        if not fm.get("tags"):
+            click.echo(f"✗ L0 → L1 requires 'tags' to be populated.")
+            sys.exit(1)
+        doc_type = fm.get("type", "")
+        engagement_types = {"analysis", "evidence", "deliverable", "interaction"}
+        if doc_type in engagement_types and not fm.get("engagement"):
+            click.echo(f"✗ L0 → L1 requires 'engagement' for {doc_type}-type documents.")
+            sys.exit(1)
+
+    # L1 -> L2 validation (warning only)
+    if current_level == "L1" and level in ("L2", "L3"):
+        relationship_fields = [
+            "depends_on", "draws_from", "relates_to",
+            "supersedes", "instantiates", "impacts",
+        ]
+        has_relationships = any(
+            fm.get(f) for f in relationship_fields
+        )
+        if not has_relationships:
+            warnings.append(
+                "No relationship fields found (depends_on, draws_from, etc.). "
+                "Consider adding relationships before promoting to L2."
+            )
+
+    # Update frontmatter in markdown file
+    content = md_path.read_text()
+    import yaml as yaml_lib
+    lines = content.split("\n")
+    end_idx = None
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            end_idx = i
+            break
+
+    if end_idx is None:
+        click.echo("✗ Cannot find frontmatter boundary in markdown file.")
+        sys.exit(1)
+
+    fm["curation_level"] = level
+    yaml_str = yaml_lib.dump(
+        fm, default_flow_style=False, sort_keys=False, allow_unicode=True,
+    )
+    body = "\n".join(lines[end_idx + 1:])
+    new_content = f"---\n{yaml_str}---{body}"
+
+    # Atomic write
+    tmp_md = md_path.with_suffix(".md.tmp")
+    tmp_md.write_text(new_content)
+    tmp_md.rename(md_path)
+
+    # Update registry
+    entry.curation_level = level
+    data["decks"][deck_id] = entry.to_dict()
+    registry.save_registry(registry_path, data)
+
+    # Append promotion event to version_history.json
+    deck_dir = library_root / entry.deck_dir
+    history_path = deck_dir / "version_history.json"
+    from datetime import datetime, timezone
+    event = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "kind": "promotion",
+        "from_level": current_level,
+        "to_level": level,
+        "warnings": warnings,
+    }
+    append_promotion_event(history_path, event)
+
+    click.echo(f"✓ Promoted {deck_id}: {current_level} → {level}")
+    for w in warnings:
+        click.echo(f"  ⚠ {w}")
 
 
 def main():
     """Entry point."""
     cli()
+
