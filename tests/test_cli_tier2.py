@@ -851,6 +851,40 @@ class TestCorruptRegistryRecovery:
         assert after["decks"]["deck_alpha"]["version"] == 2
         assert after["decks"]["deck_alpha"]["source_hash"] == "xyz789"
 
+    def test_status_recovers_from_malformed_decks_shape(self, tmp_path):
+        """Registry with decks as a list (not dict) must rebuild, not crash."""
+        library = tmp_path / "library"
+        source = tmp_path / "sources" / "deck.pptx"
+        _make_source(source)
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        md_path = library / "Client" / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "shape_deck",
+            "title": "Deck",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": h,
+            "version": 1,
+        })
+
+        # Write a parseable but malformed registry (decks is a list)
+        reg_path = library / "registry.json"
+        reg_path.parent.mkdir(parents=True, exist_ok=True)
+        reg_path.write_text(json.dumps({
+            "_schema_version": 1,
+            "decks": [],
+        }))
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "Library: 1 decks" in result.output
+
 
 # ---------------------------------------------------------------------------
 # B2: Frontmatter-authoritative reconciliation

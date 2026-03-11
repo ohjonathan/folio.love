@@ -54,9 +54,12 @@ def load_registry(registry_path: Path) -> dict:
         if not isinstance(data, dict):
             logger.warning("Registry is not a dict — marking corrupt")
             return _empty_registry(_corrupt=True)
-        # Ensure decks key exists
+        # Ensure decks key exists and is a dict
         if "decks" not in data:
             data["decks"] = {}
+        if not isinstance(data["decks"], dict):
+            logger.warning("Registry 'decks' is not a dict — marking corrupt")
+            return _empty_registry(_corrupt=True)
         return data
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("Failed to load registry: %s — marking corrupt", e)
