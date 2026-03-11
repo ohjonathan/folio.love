@@ -389,6 +389,11 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
     registry_path = library_root / "registry.json"
     if registry_path.exists():
         data = registry.load_registry(registry_path)
+        # B2: detect corrupt registries and rebuild
+        if data.get("_corrupt"):
+            click.echo("⚠ Registry corrupt — rebuilding from library...")
+            data = registry.rebuild_registry(library_root)
+            registry.save_registry(registry_path, data)
     else:
         click.echo("Bootstrapping registry from existing library...")
         data = registry.rebuild_registry(library_root)
@@ -424,6 +429,8 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
             missing_decks.append(entry)
 
     if do_refresh:
+        # Reconcile frontmatter-authoritative fields (B2)
+        data = registry.reconcile_from_frontmatter(library_root, data)
         registry.save_registry(registry_path, data)
 
     total = current + stale + missing
@@ -479,6 +486,10 @@ def scan(ctx, scope: Optional[str]):
     registry_path = library_root / "registry.json"
     if registry_path.exists():
         data = registry.load_registry(registry_path)
+        if data.get("_corrupt"):
+            click.echo("⚠ Registry corrupt — rebuilding from library...")
+            data = registry.rebuild_registry(library_root)
+            registry.save_registry(registry_path, data)
     else:
         data = registry.rebuild_registry(library_root)
         registry.save_registry(registry_path, data)
@@ -598,6 +609,10 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
     registry_path = library_root / "registry.json"
     if registry_path.exists():
         data = registry.load_registry(registry_path)
+        if data.get("_corrupt"):
+            click.echo("⚠ Registry corrupt — rebuilding from library...")
+            data = registry.rebuild_registry(library_root)
+            registry.save_registry(registry_path, data)
     else:
         click.echo("Bootstrapping registry from existing library...")
         data = registry.rebuild_registry(library_root)
@@ -684,10 +699,16 @@ def promote(ctx, deck_id: str, level: str):
 
     registry_path = library_root / "registry.json"
     if not registry_path.exists():
-        click.echo("No registry found. Run 'folio status' first to bootstrap.")
-        sys.exit(1)
-
-    data = registry.load_registry(registry_path)
+        click.echo("Bootstrapping registry from existing library...")
+        data = registry.rebuild_registry(library_root)
+        registry.save_registry(registry_path, data)
+    else:
+        data = registry.load_registry(registry_path)
+        # B2: detect corrupt registries and rebuild
+        if data.get("_corrupt"):
+            click.echo("⚠ Registry corrupt — rebuilding from library...")
+            data = registry.rebuild_registry(library_root)
+            registry.save_registry(registry_path, data)
     if deck_id not in data.get("decks", {}):
         click.echo(f"✗ Deck '{deck_id}' not found in registry.")
         click.echo("")

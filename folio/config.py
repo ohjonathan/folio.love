@@ -156,6 +156,7 @@ class FolioConfig:
     sources: list[SourceConfig] = field(default_factory=list)
     llm: LLMConfig = field(default_factory=LLMConfig)
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
+    config_dir: Optional[Path] = None  # directory containing folio.yaml
 
     def __post_init__(self):
         self._validate()
@@ -243,7 +244,7 @@ class FolioConfig:
         Returns:
             List of (SourceConfig, resolved_absolute_path) tuples.
         """
-        base = Path(base_path) if base_path else Path.cwd()
+        base = Path(base_path) if base_path else (self.config_dir or Path.cwd())
         result = []
         for src in self.sources:
             resolved = (base / src.path).resolve()
@@ -363,11 +364,14 @@ class FolioConfig:
             pptx_renderer=conv_raw.get("pptx_renderer", "auto"),
         )
 
+        config_dir = config_path.resolve().parent
+
         return cls(
             library_root=Path(raw.get("library_root", "./library")),
             sources=sources,
             llm=llm,
             conversion=conversion,
+            config_dir=config_dir,
         )
 
 

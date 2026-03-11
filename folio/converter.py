@@ -93,12 +93,18 @@ class FolioConverter:
         deck_dir.mkdir(parents=True, exist_ok=True)
         markdown_path = deck_dir / f"{deck_name}.md"
 
-        # Generate ID
-        deck_id = _generate_id(
-            client=effective_client,
-            engagement=effective_engagement,
-            deck_name=deck_name,
-        )
+        # Read existing frontmatter early for ID stability on reconversion (B1)
+        existing_fm = _read_existing_frontmatter(markdown_path)
+
+        # Use existing ID on reconversion to prevent registry drift (B1)
+        if isinstance(existing_fm, dict) and existing_fm.get("id"):
+            deck_id = existing_fm["id"]
+        else:
+            deck_id = _generate_id(
+                client=effective_client,
+                engagement=effective_engagement,
+                deck_name=deck_name,
+            )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -233,8 +239,7 @@ class FolioConverter:
         history_path = deck_dir / "version_history.json"
         version_history = versions.load_version_history(history_path)
 
-        # Read existing frontmatter for reconversion preservation
-        existing_fm = _read_existing_frontmatter(markdown_path)
+        # existing_fm already loaded at method start for ID stability (B1)
 
         # Build reconciliation metadata for frontmatter
         reconciliation_meta = None
@@ -303,47 +308,53 @@ class FolioConverter:
         tmp_md.write_text(md_content)
         tmp_md.rename(markdown_path)
 
-        # Upsert registry entry
+        # Upsert registry entry — only for in-library targets (S2)
         library_root = self.config.library_root.resolve()
+        in_library = True
         try:
             md_rel = str(markdown_path.relative_to(library_root)).replace("\\", "/")
             deck_dir_rel = str(deck_dir.relative_to(library_root)).replace("\\", "/")
         except ValueError:
-            md_rel = str(markdown_path)
-            deck_dir_rel = str(deck_dir)
+            # Target is outside library_root — skip registry upsert
+            logger.debug(
+                "Output %s is outside library_root %s — skipping registry upsert",
+                deck_dir, library_root,
+            )
+            in_library = False
 
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if in_library:
+            now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Preserve authority/curation_level from existing frontmatter
-        reg_authority = "captured"
-        reg_curation = "L0"
-        if isinstance(existing_fm, dict):
-            prev_auth = existing_fm.get("authority")
-            if isinstance(prev_auth, str) and prev_auth:
-                reg_authority = prev_auth
-            prev_curation = existing_fm.get("curation_level")
-            if isinstance(prev_curation, str) and prev_curation:
-                reg_curation = prev_curation
+            # Preserve authority/curation_level from existing frontmatter
+            reg_authority = "captured"
+            reg_curation = "L0"
+            if isinstance(existing_fm, dict):
+                prev_auth = existing_fm.get("authority")
+                if isinstance(prev_auth, str) and prev_auth:
+                    reg_authority = prev_auth
+                prev_curation = existing_fm.get("curation_level")
+                if isinstance(prev_curation, str) and prev_curation:
+                    reg_curation = prev_curation
 
-        reg_entry = registry.RegistryEntry(
-            id=deck_id,
-            title=_title_from_name(deck_name),
-            markdown_path=md_rel,
-            deck_dir=deck_dir_rel,
-            source_relative_path=source_info.relative_path,
-            source_hash=source_info.file_hash,
-            source_type=_detect_source_type(source_path),
-            version=version_info.version,
-            converted=now_str,
-            modified=now_str,
-            client=effective_client,
-            engagement=effective_engagement,
-            authority=reg_authority,
-            curation_level=reg_curation,
-            staleness_status="current",
-        )
-        registry_path = library_root / "registry.json"
-        registry.upsert_entry(registry_path, reg_entry)
+            reg_entry = registry.RegistryEntry(
+                id=deck_id,
+                title=_title_from_name(deck_name),
+                markdown_path=md_rel,
+                deck_dir=deck_dir_rel,
+                source_relative_path=source_info.relative_path,
+                source_hash=source_info.file_hash,
+                source_type=_detect_source_type(source_path),
+                version=version_info.version,
+                converted=now_str,
+                modified=now_str,
+                client=effective_client,
+                engagement=effective_engagement,
+                authority=reg_authority,
+                curation_level=reg_curation,
+                staleness_status="current",
+            )
+            registry_path = library_root / "registry.json"
+            registry.upsert_entry(registry_path, reg_entry)
 
         logger.info(
             "  ✓ Converted: %s (v%d, %d slides)",

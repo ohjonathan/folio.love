@@ -52,19 +52,20 @@ def load_registry(registry_path: Path) -> dict:
     try:
         data = json.loads(registry_path.read_text())
         if not isinstance(data, dict):
-            logger.warning("Registry is not a dict — returning empty")
-            return _empty_registry()
+            logger.warning("Registry is not a dict — marking corrupt")
+            return _empty_registry(_corrupt=True)
         # Ensure decks key exists
         if "decks" not in data:
             data["decks"] = {}
         return data
     except (json.JSONDecodeError, OSError) as e:
-        logger.warning("Failed to load registry: %s — returning empty", e)
-        return _empty_registry()
+        logger.warning("Failed to load registry: %s — marking corrupt", e)
+        return _empty_registry(_corrupt=True)
 
 
 def save_registry(registry_path: Path, data: dict) -> None:
     """Write registry atomically."""
+    data.pop("_corrupt", None)  # internal flag, not persisted
     data["updated_at"] = datetime.now(timezone.utc).isoformat()
     data.setdefault("_schema_version", _SCHEMA_VERSION)
     _atomic_write_json(registry_path, data)
@@ -135,6 +136,45 @@ def rebuild_registry(library_root: Path) -> dict:
     return data
 
 
+def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
+    """Reconcile registry entries against their actual markdown frontmatter.
+
+    Updates registry fields that are frontmatter-authoritative
+    (title, client, engagement, authority, curation_level) so the
+    registry stays consistent after manual edits.
+    """
+    library_root = Path(library_root).resolve()
+    changed = 0
+    for deck_id, entry_data in list(data.get("decks", {}).items()):
+        md_rel = entry_data.get("markdown_path", "")
+        md_path = library_root / md_rel
+        if not md_path.exists():
+            continue
+        fm = _read_frontmatter(md_path)
+        if fm is None:
+            continue
+        # Reconcile frontmatter-authoritative fields
+        authoritative = [
+            "title", "client", "engagement", "authority", "curation_level",
+        ]
+        for field_name in authoritative:
+            fm_val = fm.get(field_name)
+            reg_val = entry_data.get(field_name)
+            if fm_val is not None and fm_val != reg_val:
+                entry_data[field_name] = fm_val
+                changed += 1
+        # Also reconcile the ID if frontmatter has one
+        fm_id = fm.get("id")
+        if fm_id and fm_id != deck_id:
+            data["decks"][fm_id] = entry_data
+            entry_data["id"] = fm_id
+            del data["decks"][deck_id]
+            changed += 1
+    if changed:
+        logger.info("Registry reconciled: %d field(s) updated from frontmatter", changed)
+    return data
+
+
 def resolve_entry_source(library_root: Path, entry: RegistryEntry) -> Path:
     """Resolve the absolute source path for a registry entry."""
     library_root = Path(library_root).resolve()
@@ -170,12 +210,15 @@ def entry_from_dict(d: dict) -> RegistryEntry:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _empty_registry() -> dict:
-    return {
+def _empty_registry(_corrupt: bool = False) -> dict:
+    d = {
         "_schema_version": _SCHEMA_VERSION,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "decks": {},
     }
+    if _corrupt:
+        d["_corrupt"] = True
+    return d
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:

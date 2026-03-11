@@ -16,10 +16,10 @@ library folder is inside your Obsidian vault (or symlinked into it).
 
 ---
 
-## 1. All Stale Decks
+## 1. Tracked Decks by Oldest Conversion
 
-Show documents whose source file has changed since last conversion.
-Requires running `folio status` first so `registry.json` is current.
+Show all converted documents sorted by oldest conversion first — a useful
+proxy for spotting decks that may need a refresh.
 
 ```dataview
 TABLE source AS "Source", version AS "Version", converted AS "Last Converted"
@@ -28,9 +28,10 @@ WHERE source AND source_hash
 SORT converted ASC
 ```
 
-> **Note:** Dataview reads frontmatter only. For live staleness, use `folio status`
-> or `folio scan` from the CLI. This query shows all tracked documents sorted by
-> oldest conversion first — useful for spotting decks that may need a refresh.
+> **Note:** Dataview reads frontmatter only and cannot query live
+> staleness (which requires comparing source hashes). For real-time
+> stale detection, use `folio status --refresh` or `folio scan`
+> from the CLI.
 
 ---
 

@@ -719,3 +719,191 @@ class TestE2EWorkflow:
         data = load_registry(library / "registry.json")
         assert data["decks"][deck_id]["curation_level"] == "L1"
 
+
+# ---------------------------------------------------------------------------
+# B2: Corrupt registry recovery
+# ---------------------------------------------------------------------------
+
+class TestCorruptRegistryRecovery:
+    def test_status_rebuilds_corrupt_registry(self, tmp_path):
+        """Status should rebuild when registry.json is corrupt."""
+        library = tmp_path / "library"
+        source = tmp_path / "sources" / "deck.pptx"
+        _make_source(source)
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        md_path = library / "Client" / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "client_evidence_deck",
+            "title": "Deck",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": h,
+            "source_type": "deck",
+            "version": 1,
+        })
+
+        # Write corrupt registry
+        reg_path = library / "registry.json"
+        reg_path.parent.mkdir(parents=True, exist_ok=True)
+        reg_path.write_text("not valid json{{{")
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "corrupt" in result.output.lower()
+        assert "Library: 1 decks" in result.output
+
+    def test_status_never_reports_zero_on_populated_library(self, tmp_path):
+        """Corrupt registry must not report Library: 0 decks when library has files."""
+        library = tmp_path / "library"
+        source = tmp_path / "sources" / "deck.pptx"
+        _make_source(source)
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        md_path = library / "Client" / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "deck_id",
+            "title": "Deck",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": h,
+            "version": 1,
+        })
+
+        reg_path = library / "registry.json"
+        reg_path.parent.mkdir(parents=True, exist_ok=True)
+        reg_path.write_text("[1, 2, 3]")  # valid JSON but wrong shape
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "Library: 1 decks" in result.output
+
+
+# ---------------------------------------------------------------------------
+# B2: Frontmatter-authoritative reconciliation
+# ---------------------------------------------------------------------------
+
+class TestFrontmatterReconciliation:
+    def test_manual_curation_edit_reconciled(self, tmp_path):
+        """Manual frontmatter curation_level edit syncs to registry on --refresh."""
+        library = tmp_path / "library"
+        source = tmp_path / "sources" / "deck.pptx"
+        _make_source(source)
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        md_path = library / "Client" / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "reconcile_deck",
+            "title": "Updated Title",
+            "curation_level": "L1",
+            "client": "NewClient",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": h,
+        })
+
+        # Registry has stale values
+        entry = _sample_registry_entry(
+            id="reconcile_deck",
+            markdown_path="Client/deck/deck.md",
+            deck_dir="Client/deck",
+            source_relative_path="../../../sources/deck.pptx",
+            source_hash=h,
+            title="Old Title",
+            curation_level="L0",
+            client="OldClient",
+        )
+        reg_data = {"_schema_version": 1, "decks": {"reconcile_deck": entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status", "--refresh"])
+        assert result.exit_code == 0
+
+        data = load_registry(library / "registry.json")
+        reconciled = data["decks"]["reconcile_deck"]
+        assert reconciled["title"] == "Updated Title"
+        assert reconciled["curation_level"] == "L1"
+        assert reconciled["client"] == "NewClient"
+
+
+# ---------------------------------------------------------------------------
+# B3: Config-relative source root resolution
+# ---------------------------------------------------------------------------
+
+class TestConfigRelativeSourceRoots:
+    def test_source_roots_resolve_from_config_dir(self):
+        """Source roots should resolve relative to config file, not cwd."""
+        from folio.config import FolioConfig, SourceConfig
+
+        config = FolioConfig(
+            sources=[SourceConfig(name="materials", path="../materials", target_prefix="")],
+            config_dir=Path("/project/config"),
+        )
+
+        roots = config.resolve_source_roots()
+        assert len(roots) == 1
+        _, resolved = roots[0]
+        assert resolved == Path("/project/materials")
+
+    def test_source_roots_fallback_to_cwd_without_config_dir(self):
+        """Without config_dir, should fall back to cwd."""
+        from folio.config import FolioConfig, SourceConfig
+
+        config = FolioConfig(
+            sources=[SourceConfig(name="materials", path="./materials", target_prefix="")],
+        )
+        roots = config.resolve_source_roots()
+        _, resolved = roots[0]
+        assert resolved == (Path.cwd() / "materials").resolve()
+
+
+# ---------------------------------------------------------------------------
+# S1: Promote bootstraps registry
+# ---------------------------------------------------------------------------
+
+class TestPromoteBootstraps:
+    def test_promote_bootstraps_when_registry_missing(self, tmp_path):
+        """Promote should bootstrap registry when registry.json doesn't exist."""
+        library = tmp_path / "library"
+        deck_dir = library / "Client" / "deck"
+        md_path = deck_dir / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "bootstrap_deck",
+            "title": "Deck",
+            "type": "evidence",
+            "curation_level": "L0",
+            "client": "ClientA",
+            "engagement": "Q1",
+            "tags": ["tag"],
+            "source": "../../../../sources/deck.pptx",
+            "source_hash": "abc123",
+        })
+
+        assert not (library / "registry.json").exists()
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "promote", "bootstrap_deck", "L1"])
+        assert result.exit_code == 0
+        assert "Bootstrapping" in result.output
+        assert "Promoted" in result.output
+        assert (library / "registry.json").exists()
+
+
