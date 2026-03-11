@@ -74,6 +74,10 @@ def save_registry(registry_path: Path, data: dict) -> None:
 def upsert_entry(registry_path: Path, entry: RegistryEntry) -> None:
     """Add or update a registry entry."""
     data = load_registry(registry_path)
+    # M1: rebuild on corrupt to avoid clobbering the full index
+    if data.get("_corrupt"):
+        library_root = registry_path.parent
+        data = rebuild_registry(library_root)
     data["decks"][entry.id] = entry.to_dict()
     save_registry(registry_path, data)
 
@@ -158,11 +162,17 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
             "title", "client", "engagement", "authority", "curation_level",
         ]
         for field_name in authoritative:
-            fm_val = fm.get(field_name)
-            reg_val = entry_data.get(field_name)
-            if fm_val is not None and fm_val != reg_val:
-                entry_data[field_name] = fm_val
-                changed += 1
+            if field_name in fm:
+                fm_val = fm[field_name]
+                reg_val = entry_data.get(field_name)
+                if fm_val != reg_val:
+                    entry_data[field_name] = fm_val
+                    changed += 1
+            else:
+                # Key absent from frontmatter = explicit deletion
+                if entry_data.get(field_name) is not None:
+                    entry_data[field_name] = None
+                    changed += 1
         # Also reconcile the ID if frontmatter has one
         fm_id = fm.get("id")
         if fm_id and fm_id != deck_id:

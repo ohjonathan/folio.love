@@ -16,6 +16,16 @@ from .converter import FolioConverter, PPTX_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
+
+def _matches_scope(path: str, scope: str) -> bool:
+    """Check if a path falls under a scope prefix using segment boundaries.
+
+    Normalizes with trailing '/' to prevent prefix collisions:
+    'ClientA' must not match 'ClientA2/deck'.
+    """
+    norm_scope = scope.rstrip("/") + "/"
+    return path == scope or path.startswith(norm_scope)
+
 # Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
 _RESTART_CADENCE = 15
 
@@ -411,8 +421,8 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
 
         # Scope filter
         if scope:
-            if not (entry.markdown_path.startswith(scope) or
-                    entry.deck_dir.startswith(scope)):
+            if not (_matches_scope(entry.markdown_path, scope) or
+                    _matches_scope(entry.deck_dir, scope)):
                 continue
 
         if do_refresh:
@@ -528,7 +538,7 @@ def scan(ctx, scope: Optional[str]):
             if scope:
                 try:
                     rel = source_file.relative_to(resolved_root)
-                    if not str(rel).startswith(scope):
+                    if not _matches_scope(str(rel), scope):
                         continue
                 except ValueError:
                     continue
@@ -551,7 +561,7 @@ def scan(ctx, scope: Optional[str]):
             abs_source = registry.resolve_entry_source(library_root, entry)
             if not abs_source.exists():
                 # Scope filter
-                if scope and not entry.markdown_path.startswith(scope):
+                if scope and not _matches_scope(entry.markdown_path, scope):
                     continue
                 missing_sources.append(entry)
         except Exception:
@@ -625,8 +635,8 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
 
         # Scope filter
         if scope:
-            if not (entry.markdown_path.startswith(scope) or
-                    entry.deck_dir.startswith(scope)):
+            if not (_matches_scope(entry.markdown_path, scope) or
+                    _matches_scope(entry.deck_dir, scope)):
                 continue
 
         # Refresh staleness
@@ -813,4 +823,3 @@ def promote(ctx, deck_id: str, level: str):
 def main():
     """Entry point."""
     cli()
-

@@ -905,5 +905,3 @@ class TestPromoteBootstraps:
         assert "Bootstrapping" in result.output
         assert "Promoted" in result.output
         assert (library / "registry.json").exists()
-
-
