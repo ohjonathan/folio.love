@@ -788,6 +788,69 @@ class TestCorruptRegistryRecovery:
         assert result.exit_code == 0
         assert "Library: 1 decks" in result.output
 
+    def test_upsert_entry_rebuilds_on_corrupt_not_clobber(self, tmp_path):
+        """upsert_entry on corrupt registry must rebuild, not clobber the index.
+
+        Reproduces: 2-deck library, corrupt registry.json, then a convert
+        (upsert_entry) should preserve both existing decks, not replace the
+        entire index with just the newly converted deck.
+        """
+        from folio.tracking.registry import (
+            RegistryEntry, rebuild_registry, save_registry, upsert_entry,
+        )
+
+        library = tmp_path / "library"
+
+        # Create two folio markdown files
+        for name in ["deck_alpha", "deck_beta"]:
+            md_dir = library / "Client" / name
+            md_dir.mkdir(parents=True, exist_ok=True)
+            md = md_dir / f"{name}.md"
+            fm = {
+                "id": name,
+                "title": name.replace("_", " ").title(),
+                "source": f"../../../../sources/{name}.pptx",
+                "source_hash": "abc123",
+                "source_type": "deck",
+                "version": 1,
+            }
+            _make_folio_markdown(md, fm)
+
+        # Bootstrap a healthy registry with 2 entries
+        data = rebuild_registry(library)
+        save_registry(library / "registry.json", data)
+        assert len(data["decks"]) == 2
+
+        # Corrupt the registry file
+        (library / "registry.json").write_text("NOT VALID JSON{{{")
+
+        # Simulate what converter.py does after a successful conversion:
+        # call upsert_entry with one of the existing decks (updated version)
+        entry = RegistryEntry(
+            id="deck_alpha",
+            title="Deck Alpha Updated",
+            markdown_path="Client/deck_alpha/deck_alpha.md",
+            deck_dir="Client/deck_alpha",
+            source_relative_path="../../../../sources/deck_alpha.pptx",
+            source_hash="xyz789",
+            source_type="deck",
+            version=2,
+            converted="2026-03-11T00:00:00Z",
+            staleness_status="current",
+        )
+        upsert_entry(library / "registry.json", entry)
+
+        # The critical assertion: both decks must be in the registry
+        import json
+        after = json.loads((library / "registry.json").read_text())
+        assert "deck_alpha" in after["decks"], "Upserted deck missing"
+        assert "deck_beta" in after["decks"], "Pre-existing deck was clobbered!"
+        assert len(after["decks"]) == 2
+
+        # Also verify the upserted deck has updated fields
+        assert after["decks"]["deck_alpha"]["version"] == 2
+        assert after["decks"]["deck_alpha"]["source_hash"] == "xyz789"
+
 
 # ---------------------------------------------------------------------------
 # B2: Frontmatter-authoritative reconciliation
