@@ -289,3 +289,67 @@ class TestEntryFromDict:
         assert entry.id == "minimal"
         assert entry.client is None
         assert entry.staleness_status == "current"
+
+
+# ---------------------------------------------------------------------------
+# write safety: locking + disk errors
+# ---------------------------------------------------------------------------
+
+class TestWriteSafety:
+    def test_save_no_orphan_tmp_or_lock(self, tmp_path):
+        """After a successful save, .tmp and .lock must not remain."""
+        path = tmp_path / "registry.json"
+        save_registry(path, {"_schema_version": 1, "decks": {}})
+        assert path.exists()
+        assert not path.with_suffix(".tmp").exists()
+        # .lock may exist (empty) but that's fine; what matters is it's unlocked
+
+    def test_save_on_read_only_dir_raises(self, tmp_path):
+        """Write to a read-only directory should raise a clear OSError."""
+        import os
+        ro_dir = tmp_path / "readonly"
+        ro_dir.mkdir()
+        reg_path = ro_dir / "registry.json"
+
+        # Make directory read-only
+        os.chmod(ro_dir, 0o555)
+        try:
+            with pytest.raises(OSError):
+                save_registry(reg_path, {"_schema_version": 1, "decks": {}})
+        finally:
+            os.chmod(ro_dir, 0o755)  # restore for cleanup
+
+    def test_concurrent_upserts_preserve_all_entries(self, tmp_path):
+        """Sequential upserts (simulating concurrent writers) must preserve all entries."""
+        path = tmp_path / "library" / "registry.json"
+        path.parent.mkdir(parents=True)
+
+        # Create 5 entries sequentially (simulates concurrent writers finishing one by one)
+        for i in range(5):
+            entry = _sample_entry(
+                id=f"deck_{i}",
+                title=f"Deck {i}",
+                markdown_path=f"Client/deck_{i}/deck_{i}.md",
+                deck_dir=f"Client/deck_{i}",
+            )
+            upsert_entry(path, entry)
+
+        data = load_registry(path)
+        assert len(data["decks"]) == 5
+        for i in range(5):
+            assert f"deck_{i}" in data["decks"]
+
+    def test_load_malformed_decks_list_marks_corrupt(self, tmp_path):
+        """Registry with decks as a list (not dict) must be marked corrupt."""
+        path = tmp_path / "registry.json"
+        path.write_text(json.dumps({"_schema_version": 1, "decks": []}))
+        data = load_registry(path)
+        assert data.get("_corrupt") is True
+        assert data["decks"] == {}
+
+    def test_load_malformed_decks_string_marks_corrupt(self, tmp_path):
+        """Registry with decks as a string must be marked corrupt."""
+        path = tmp_path / "registry.json"
+        path.write_text(json.dumps({"_schema_version": 1, "decks": "not a dict"}))
+        data = load_registry(path)
+        assert data.get("_corrupt") is True

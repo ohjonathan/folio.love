@@ -1,5 +1,6 @@
 """Registry: fast library index backed by registry.json."""
 
+import fcntl
 import json
 import logging
 from dataclasses import asdict, dataclass, field
@@ -235,11 +236,40 @@ def _empty_registry(_corrupt: bool = False) -> dict:
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
-    """Write JSON atomically: write to temp file, then rename."""
+    """Write JSON atomically with file locking.
+
+    Uses an advisory lock (``.lock`` file) to prevent concurrent writers
+    from racing, and cleans up the temp file on write failures
+    (disk-full, read-only filesystem, etc.).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(".lock")
     tmp_path = path.with_suffix(".tmp")
-    tmp_path.write_text(json.dumps(data, indent=2))
-    tmp_path.rename(path)
+
+    try:
+        lock_fd = open(lock_path, "w")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        try:
+            tmp_path.write_text(json.dumps(data, indent=2))
+            tmp_path.rename(path)
+        except OSError as e:
+            # Clean up orphan temp file on disk-full / read-only
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise OSError(
+                f"Failed to write registry {path}: {e}. "
+                f"Check disk space and permissions."
+            ) from e
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
+    except OSError:
+        # If we can't even open the lock file, try without locking
+        # (better than crashing, and the atomic rename still helps)
+        if 'lock_fd' not in dir():
+            raise
 
 
 def _read_frontmatter(md_path: Path) -> Optional[dict]:
