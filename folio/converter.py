@@ -4,7 +4,7 @@ import logging
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +13,7 @@ import yaml as yaml_lib
 from .config import FolioConfig
 from .pipeline import normalize, images, text, analysis
 from .tracking import sources, versions
+from .tracking import registry
 from .output import frontmatter, markdown
 
 logger = logging.getLogger(__name__)
@@ -78,19 +79,32 @@ class FolioConverter:
         deck_name = _sanitize_name(source_path.stem)
         logger.info("Converting: %s", source_path.name)
 
+        # Infer client/engagement from source-root mapping if not explicit
+        inferred_client, inferred_engagement = self._infer_from_source_root(
+            source_path, client, engagement
+        )
+        effective_client = client if client is not None else inferred_client
+        effective_engagement = engagement if engagement is not None else inferred_engagement
+
         # Determine output location
         deck_dir = self._resolve_target(
-            source_path, deck_name, client, engagement, target
+            source_path, deck_name, effective_client, effective_engagement, target
         )
         deck_dir.mkdir(parents=True, exist_ok=True)
         markdown_path = deck_dir / f"{deck_name}.md"
 
-        # Generate ID
-        deck_id = _generate_id(
-            client=client,
-            engagement=engagement,
-            deck_name=deck_name,
-        )
+        # Read existing frontmatter early for ID stability on reconversion (B1)
+        existing_fm = _read_existing_frontmatter(markdown_path)
+
+        # Use existing ID on reconversion to prevent registry drift (B1)
+        if isinstance(existing_fm, dict) and existing_fm.get("id"):
+            deck_id = existing_fm["id"]
+        else:
+            deck_id = _generate_id(
+                client=effective_client,
+                engagement=effective_engagement,
+                deck_name=deck_name,
+            )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -225,8 +239,7 @@ class FolioConverter:
         history_path = deck_dir / "version_history.json"
         version_history = versions.load_version_history(history_path)
 
-        # Read existing frontmatter for reconversion preservation
-        existing_fm = _read_existing_frontmatter(markdown_path)
+        # existing_fm already loaded at method start for ID stability (B1)
 
         # Build reconciliation metadata for frontmatter
         reconciliation_meta = None
@@ -269,8 +282,8 @@ class FolioConverter:
             version_info=version_info,
             analyses=slide_analyses,
             subtype=subtype,
-            client=client,
-            engagement=engagement,
+            client=effective_client,
+            engagement=effective_engagement,
             industry=industry,
             extra_tags=extra_tags,
             existing_frontmatter=existing_fm,
@@ -294,6 +307,54 @@ class FolioConverter:
         tmp_md = markdown_path.with_suffix(".md.tmp")
         tmp_md.write_text(md_content)
         tmp_md.rename(markdown_path)
+
+        # Upsert registry entry — only for in-library targets (S2)
+        library_root = self.config.library_root.resolve()
+        in_library = True
+        try:
+            md_rel = str(markdown_path.relative_to(library_root)).replace("\\", "/")
+            deck_dir_rel = str(deck_dir.relative_to(library_root)).replace("\\", "/")
+        except ValueError:
+            # Target is outside library_root — skip registry upsert
+            logger.debug(
+                "Output %s is outside library_root %s — skipping registry upsert",
+                deck_dir, library_root,
+            )
+            in_library = False
+
+        if in_library:
+            now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            # Preserve authority/curation_level from existing frontmatter
+            reg_authority = "captured"
+            reg_curation = "L0"
+            if isinstance(existing_fm, dict):
+                prev_auth = existing_fm.get("authority")
+                if isinstance(prev_auth, str) and prev_auth:
+                    reg_authority = prev_auth
+                prev_curation = existing_fm.get("curation_level")
+                if isinstance(prev_curation, str) and prev_curation:
+                    reg_curation = prev_curation
+
+            reg_entry = registry.RegistryEntry(
+                id=deck_id,
+                title=_title_from_name(deck_name),
+                markdown_path=md_rel,
+                deck_dir=deck_dir_rel,
+                source_relative_path=source_info.relative_path,
+                source_hash=source_info.file_hash,
+                source_type=_detect_source_type(source_path),
+                version=version_info.version,
+                converted=now_str,
+                modified=now_str,
+                client=effective_client,
+                engagement=effective_engagement,
+                authority=reg_authority,
+                curation_level=reg_curation,
+                staleness_status="current",
+            )
+            registry_path = library_root / "registry.json"
+            registry.upsert_entry(registry_path, reg_entry)
 
         logger.info(
             "  ✓ Converted: %s (v%d, %d slides)",
@@ -324,6 +385,18 @@ class FolioConverter:
 
         library_root = self.config.library_root.resolve()
 
+        # Source-root-aware routing
+        match = self.config.match_source_root(source_path)
+        if match:
+            src_config, rel_path = match
+            prefix = FolioConfig.normalize_target_prefix(src_config.target_prefix)
+            relative_parent = rel_path.parent
+            if prefix:
+                return library_root / prefix / relative_parent / deck_name
+            else:
+                return library_root / relative_parent / deck_name
+
+        # Fallback: original client/engagement routing
         if client and engagement:
             engagement_short = _sanitize_name(engagement)
             return library_root / client / engagement_short / deck_name
@@ -331,6 +404,36 @@ class FolioConverter:
             return library_root / client / deck_name
         else:
             return library_root / deck_name
+
+    def _infer_from_source_root(
+        self,
+        source_path: Path,
+        explicit_client: Optional[str],
+        explicit_engagement: Optional[str],
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Infer client/engagement from source-root-relative path.
+
+        Only infers when target_prefix is empty and CLI flags are not set.
+        Returns (client, engagement) — either or both may be None.
+        """
+        match = self.config.match_source_root(source_path)
+        if not match:
+            return (None, None)
+
+        src_config, rel_path = match
+        prefix = FolioConfig.normalize_target_prefix(src_config.target_prefix)
+
+        # Only infer client/engagement when target_prefix is empty
+        if prefix:
+            return (None, None)
+
+        parts = rel_path.parent.parts
+        if len(parts) >= 2:
+            return (parts[0], parts[1])
+        elif len(parts) == 1:
+            return (parts[0], None)
+        else:
+            return (None, None)
 
 
 def _alignment_status(confidence: float) -> str:
@@ -382,7 +485,7 @@ def _generate_id(
 
     Pattern: {client}_{engagement-short}_{type}_{date}_{descriptor}
     """
-    date_str = datetime.now().strftime("%Y%m%d")
+    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
     parts = []
 
     if client:

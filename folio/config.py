@@ -156,6 +156,7 @@ class FolioConfig:
     sources: list[SourceConfig] = field(default_factory=list)
     llm: LLMConfig = field(default_factory=LLMConfig)
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
+    config_dir: Optional[Path] = None  # directory containing folio.yaml
 
     def __post_init__(self):
         self._validate()
@@ -232,6 +233,58 @@ class FolioConfig:
                     f"LLM route '{rname}' has duplicate fallback entries: "
                     f"{', '.join(sorted(set(dupes)))}"
                 )
+
+    def resolve_source_roots(self, base_path: Optional[Path] = None) -> list[tuple["SourceConfig", Path]]:
+        """Resolve configured source roots to absolute paths.
+
+        Args:
+            base_path: Base directory for resolving relative paths.
+                       Defaults to cwd.
+
+        Returns:
+            List of (SourceConfig, resolved_absolute_path) tuples.
+        """
+        base = Path(base_path) if base_path else (self.config_dir or Path.cwd())
+        result = []
+        for src in self.sources:
+            resolved = (base / src.path).resolve()
+            result.append((src, resolved))
+        return result
+
+    def match_source_root(
+        self, source_path: Path, base_path: Optional[Path] = None
+    ) -> Optional[tuple["SourceConfig", Path]]:
+        """Match a source file to a configured source root.
+
+        Args:
+            source_path: Absolute path to the source file.
+            base_path: Base directory for resolving source root paths.
+
+        Returns:
+            (SourceConfig, relative_path_from_root) or None if no match.
+        """
+        source_path = Path(source_path).resolve()
+        for src_config, resolved_root in self.resolve_source_roots(base_path):
+            try:
+                rel = source_path.relative_to(resolved_root)
+                return (src_config, rel)
+            except ValueError:
+                continue
+        return None
+
+    @staticmethod
+    def normalize_target_prefix(prefix: str) -> str:
+        """Normalize a target_prefix for consistent path construction.
+
+        Strips trailing slashes so ``""``, ``"Internal"``, and
+        ``"Internal/"`` all behave consistently.
+
+        Raises ValueError if any path component is ``..`` (path traversal).
+        """
+        cleaned = prefix.strip("/").strip()
+        if ".." in cleaned.split("/"):
+            raise ValueError(f"target_prefix must not contain '..': {prefix!r}")
+        return cleaned
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":
@@ -311,11 +364,14 @@ class FolioConfig:
             pptx_renderer=conv_raw.get("pptx_renderer", "auto"),
         )
 
+        config_dir = config_path.resolve().parent
+
         return cls(
             library_root=Path(raw.get("library_root", "./library")),
             sources=sources,
             llm=llm,
             conversion=conversion,
+            config_dir=config_dir,
         )
 
 
