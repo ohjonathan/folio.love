@@ -15,9 +15,9 @@ This checklist is the operational gate between **Tier 2: Daily Driver** and
 **Tier 3: Engagement Intelligence**.
 
 It translates the current Tier 2 exit criteria in
-[04_Implementation_Roadmap_v2.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap_v2.md)
+[04_Implementation_Roadmap_v2.md](../product/04_Implementation_Roadmap_v2.md)
 and the supporting PRD requirements in
-[02_Product_Requirements_Document.md](/Users/jonathanoh/Dev/folio.love/docs/product/02_Product_Requirements_Document.md)
+[02_Product_Requirements_Document.md](../product/02_Product_Requirements_Document.md)
 into a concrete pass/fail tracker.
 
 Tier 3 should not start until this checklist is complete and the result is
@@ -55,7 +55,7 @@ workflow, not about building more Tier 2 code by default.
 |---|-----------|--------|------------|-------------------|----------------|
 | 1 | CLI handles full daily workflow (`convert`, `batch`, `status`, `scan`, `refresh`, `promote`) | Roadmap Tier 2 exit criteria | All six commands are used successfully in a real workflow without manual registry repair or ad hoc file surgery | Dated usage log covering at least one real `scan -> refresh -> status` loop, one `promote`, one direct `convert`, and one `batch` run | Not started |
 | 2 | Route-based LLM selection plus `--llm-profile` override work in normal use | Roadmap Tier 2 exit criteria, PRD FR-501/502/604 | Route-based selection works by default and explicit `--llm-profile` override changes the execution path as expected | At least one routed run and one override run with output or metadata evidence (`_llm_metadata` or CLI output) | Not started |
-| 3 | Multi-client library is organized and navigable | Roadmap Tier 2 weeks 9-10 | Library structure is understandable and usable across real clients/engagements; no silent misrouting | Snapshot of actual library tree, count of decks, count of clients/engagements, and spot-check of mapped output routing | Not started |
+| 3 | Multi-client library is organized and navigable | Roadmap Tier 2 weeks 9-10 and Tier 2 Gate | Library includes at least 100 decks and is understandable and usable across real clients/engagements with no silent misrouting | Snapshot of actual library tree, count of decks, count of clients/engagements, and spot-check of mapped output routing | Not started |
 | 4 | Obsidian opens the library with no errors | Roadmap Tier 2 exit criteria, PRD FR-402, NFR-300 | Real vault opens cleanly, frontmatter parses, images render, no systematic broken links | Obsidian validation note with screenshots or direct observations from a real vault open | Not started |
 | 5 | Dataview queries work for all important frontmatter fields | Roadmap Tier 2 exit criteria | Query cookbook works against the real vault for the operational fields that drive discovery and triage | Query results for at least: `type`, `subtype`, `client`, `engagement`, `authority`, `curation_level`, `tags`, `frameworks`, `slide_types`, `source_type`, `version` | Not started |
 | 6 | Configuration supports multiple source roots | Roadmap Tier 2 exit criteria, PRD FR-202 | At least two source roots work correctly, including one empty `target_prefix` and one non-empty `target_prefix` | `folio.yaml`, commands, and output paths demonstrating both routing modes | Not started |
@@ -136,6 +136,8 @@ Before calling Tier 2 complete, produce all of these:
 
 - `docs/validation/tier2_closeout_report.md`
 - `docs/validation/tier2_closeout_session_log.md`
+- `docs/validation/tier2_closeout_chat_log.md`
+- `docs/validation/tier2_closeout_prompt.md`
 - updated checklist statuses in this file
 - any supporting screenshots or sample query outputs referenced by the report
 
