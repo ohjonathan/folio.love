@@ -19,7 +19,7 @@ Pre-implementation housekeeping: cleaned up the project documentation folder, de
 - Fixed git remote URL (`ohjona` → `ohjonathan`) and restored deleted working-tree files
 - Ran `ontos init --force`: scaffolded 12 markdown files with YAML frontmatter, generated context map, installed git hooks
 - Fixed `.ontos.toml`: set `docs_dir = "."` (files at root, not `docs/`), corrected `default_scope`
-- Fixed duplicate Ontos ID in `Folio_Ontology_Architecture_v2.md`
+- Fixed duplicate Ontos ID in `Folio_Ontology_Architecture.md`
 - **Deleted 5 obsolete files**: `HANDOFF.md`, `SESSION_STATE.md`, `Folio_Ontology_Architecture.md` (v1), `04_Implementation_Roadmap.md` (v1), `README.md` (stale POC-era README)
 - **Archived 1 file**: `03_Technical_Architecture.md` → `docs/archive/03_Technical_Architecture_v1_reference.md`
 - **Reorganized 8 current docs** from root into `docs/` sub-folders:

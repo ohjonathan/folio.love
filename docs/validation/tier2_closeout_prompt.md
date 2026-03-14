@@ -54,7 +54,7 @@ Do **not** weaken the criteria during the run.
 
 Work from the current `main` branch baseline reflected in these docs:
 
-- [04_Implementation_Roadmap_v2.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap_v2.md)
+- [04_Implementation_Roadmap.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap.md)
 - [02_Product_Requirements_Document.md](/Users/jonathanoh/Dev/folio.love/docs/product/02_Product_Requirements_Document.md)
 - [tier2_closeout_checklist.md](/Users/jonathanoh/Dev/folio.love/docs/validation/tier2_closeout_checklist.md)
 - [tier1_closeout_report.md](/Users/jonathanoh/Dev/folio.love/docs/validation/tier1_closeout_report.md)
@@ -78,7 +78,7 @@ Read these in order:
    - required artifacts
    - go / no-go rules
 
-2. [04_Implementation_Roadmap_v2.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap_v2.md)
+2. [04_Implementation_Roadmap.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap.md)
    Focus on:
    - Tier 2 scope
    - Tier 2 exit criteria

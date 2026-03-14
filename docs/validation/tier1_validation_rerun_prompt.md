@@ -61,12 +61,12 @@ Those are useful observations, but they are not full Tier 1 closure.
 
 Read these in order before running anything:
 
-1. [docs/product/04_Implementation_Roadmap_v2.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap_v2.md)
+1. [docs/product/04_Implementation_Roadmap.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap.md)
    Focus on:
    - Tier 1 exit criteria
    - current March 2026 shipped baseline note
 
-2. [docs/architecture/Folio_Ontology_Architecture_v2.md](/Users/jonathanoh/Dev/folio.love/docs/architecture/Folio_Ontology_Architecture_v2.md)
+2. [docs/architecture/Folio_Ontology_Architecture.md](/Users/jonathanoh/Dev/folio.love/docs/architecture/Folio_Ontology_Architecture.md)
    This is the schema you will validate output against.
 
 3. Historical baseline:

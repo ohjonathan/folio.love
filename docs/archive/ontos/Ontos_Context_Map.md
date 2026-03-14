@@ -45,11 +45,11 @@ This document provides a tiered index of the knowledge graph for AI orientation.
 | Path | ID | Type | Status |
 |------|-----|------|--------|
 | AGENTS.md | `AGENTS` | unknown | unknown |
-| docs/architecture/Folio_Ontology_Architecture_v2.md | `folio_ontology_architecture_v2` | unknown | active |
+| docs/architecture/Folio_Ontology_Architecture.md | `folio_ontology_architecture_v2` | unknown | active |
 | docs/logs/2026-03-02_doc-cleanup-and-ontos-init-for-folio-love.md | `log_20260302_doc-cleanup-and-ontos-init-for-folio-love` | log | active |
 | docs/logs/2026-03-02_source-grounding-multi-pass-extraction-pipeline.md | `log_20260302_source-grounding-multi-pass-extraction-pipeline` | log | active |
 | docs/product/02_Product_Requirements_Document.md | `doc_02_product_requirements_document` | atom | scaffold |
-| docs/product/04_Implementation_Roadmap_v2.md | `doc_04_implementation_roadmap_v2` | atom | scaffold |
+| docs/product/04_Implementation_Roadmap.md | `doc_04_implementation_roadmap_v2` | atom | scaffold |
 | docs/product/05_User_Stories.md | `doc_05_user_stories` | product | scaffold |
 | docs/product/06_Prioritization_Matrix.md | `doc_06_prioritization_matrix` | product | scaffold |
 | docs/product/Folio_Feature_Handoff_Brief.md | `folio_feature_handoff_brief` | product | scaffold |

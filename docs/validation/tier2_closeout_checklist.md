@@ -15,7 +15,7 @@ This checklist is the operational gate between **Tier 2: Daily Driver** and
 **Tier 3: Engagement Intelligence**.
 
 It translates the current Tier 2 exit criteria in
-[04_Implementation_Roadmap_v2.md](../product/04_Implementation_Roadmap_v2.md)
+[04_Implementation_Roadmap.md](../product/04_Implementation_Roadmap.md)
 and the supporting PRD requirements in
 [02_Product_Requirements_Document.md](../product/02_Product_Requirements_Document.md)
 into a concrete pass/fail tracker.

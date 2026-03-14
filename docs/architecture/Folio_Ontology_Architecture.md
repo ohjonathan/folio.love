@@ -1,5 +1,5 @@
 ---
-id: folio_ontology_architecture_v2
+id: folio_ontology_architecture
 status: active
 version: 2
 date: 2026-02-20

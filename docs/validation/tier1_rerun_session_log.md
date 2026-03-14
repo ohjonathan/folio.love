@@ -9,8 +9,8 @@
 ## Phase 1: Read & Understand (completed)
 
 ### Documents Read
-1. `docs/product/04_Implementation_Roadmap_v2.md` — Tier 1 exit criteria
-2. `docs/architecture/Folio_Ontology_Architecture_v2.md` — frontmatter schema
+1. `docs/product/04_Implementation_Roadmap.md` — Tier 1 exit criteria
+2. `docs/architecture/Folio_Ontology_Architecture.md` — frontmatter schema
 3. `docs/validation/tier1_validation_report.md` — March 2026 baseline (32/50, CONDITIONAL PASS)
 4. `docs/validation/tier1_session_log.md` — March 2026 session log
 5. `docs/validation/tier1_rerun_guide.md` — rerun guidance

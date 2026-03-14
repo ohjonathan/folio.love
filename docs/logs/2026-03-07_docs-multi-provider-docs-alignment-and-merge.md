@@ -22,7 +22,7 @@ Update the PRD, roadmap, and README so product documentation matches the shipped
 
 - Updated `README.md` for Anthropic/OpenAI/Gemini support, optional `.[llm]` install, named profiles, route-based selection, `--llm-profile`, and `_llm_metadata`.
 - Updated `docs/product/02_Product_Requirements_Document.md` with FR-601 through FR-607, provider-aware FR-103 wording, config schema changes, and LLM metadata examples.
-- Updated `docs/product/04_Implementation_Roadmap_v2.md` to mark multi-provider support as shipped foundation and capture the remaining execution-metadata follow-up.
+- Updated `docs/product/04_Implementation_Roadmap.md` to mark multi-provider support as shipped foundation and capture the remaining execution-metadata follow-up.
 - Addressed review follow-ups by adding `libreoffice_timeout: 60` to the PRD example, narrowing the roadmap follow-up wording, and aligning README profile names.
 - Opened PR #9 (`docs(product): align docs with multi-provider LLM support`) and merged it into `main` with a merge commit.
 

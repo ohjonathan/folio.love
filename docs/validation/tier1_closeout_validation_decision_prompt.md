@@ -28,7 +28,7 @@ two. The output of this prompt is a decision package for the Chief Architect.
 
 Work from the current `main` branch baseline reflected in these docs:
 
-- [docs/product/04_Implementation_Roadmap_v2.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap_v2.md)
+- [docs/product/04_Implementation_Roadmap.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap.md)
 - [docs/validation/tier1_rerun_report.md](/Users/jonathanoh/Dev/folio.love/docs/validation/tier1_rerun_report.md)
 - [docs/validation/tier1_rerun_session_log.md](/Users/jonathanoh/Dev/folio.love/docs/validation/tier1_rerun_session_log.md)
 - [docs/proposals/renderer_and_cache_fix_proposal.md](/Users/jonathanoh/Dev/folio.love/docs/proposals/renderer_and_cache_fix_proposal.md)
@@ -49,7 +49,7 @@ Important current truths:
 
 Read these in order:
 
-1. [docs/product/04_Implementation_Roadmap_v2.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap_v2.md)
+1. [docs/product/04_Implementation_Roadmap.md](/Users/jonathanoh/Dev/folio.love/docs/product/04_Implementation_Roadmap.md)
    Focus on:
    - March 2026 status update
    - Tier 1 exit criteria

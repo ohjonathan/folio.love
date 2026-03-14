@@ -16,8 +16,8 @@
    - `folio/pipeline/` — normalize, images, text, analysis stages
    - `folio/output/` — frontmatter.py, markdown.py
    - `folio/tracking/` — sources.py, versions.py
-   - `docs/product/04_Implementation_Roadmap_v2.md` — Tier 1 exit criteria
-   - `docs/architecture/Folio_Ontology_Architecture_v2.md` — frontmatter schema
+   - `docs/product/04_Implementation_Roadmap.md` — Tier 1 exit criteria
+   - `docs/architecture/Folio_Ontology_Architecture.md` — frontmatter schema
 4. Read `folio/config.py` — understood FolioConfig, LLM profiles, routing
 5. Read `folio/pipeline/analysis.py` — understood LLM analysis, caching, fallback chain
 

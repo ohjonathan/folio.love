@@ -69,7 +69,7 @@ explicitly waives the official 2-week criterion in writing.
 
 Work from the current `main` branch baseline reflected in these docs:
 
-- [04_Implementation_Roadmap_v2.md](../product/04_Implementation_Roadmap_v2.md)
+- [04_Implementation_Roadmap.md](../product/04_Implementation_Roadmap.md)
 - [02_Product_Requirements_Document.md](../product/02_Product_Requirements_Document.md)
 - [tier2_closeout_checklist.md](./tier2_closeout_checklist.md)
 - [obsidian_queries.md](../obsidian_queries.md)
@@ -87,7 +87,7 @@ Important current truths:
 Read these in order:
 
 1. [tier2_closeout_checklist.md](./tier2_closeout_checklist.md)
-2. [04_Implementation_Roadmap_v2.md](../product/04_Implementation_Roadmap_v2.md)
+2. [04_Implementation_Roadmap.md](../product/04_Implementation_Roadmap.md)
 3. [02_Product_Requirements_Document.md](../product/02_Product_Requirements_Document.md)
 4. [obsidian_queries.md](../obsidian_queries.md)
 5. Current runtime/code surface:
