@@ -491,20 +491,22 @@ class TestReviewFields:
         fm = _parse_frontmatter(_generate_simple(extraction_confidence=0.85))
         assert fm["extraction_confidence"] == 0.85
 
-    def test_extraction_confidence_absent_when_none(self):
+    def test_extraction_confidence_null_when_none(self):
         fm = _parse_frontmatter(_generate_simple())
-        assert "extraction_confidence" not in fm
+        assert fm["extraction_confidence"] is None
 
     def test_review_status_ordering(self):
-        """review_status and review_flags must appear after curation_level."""
+        """review_status, review_flags, extraction_confidence must appear after curation_level."""
         fm = _parse_frontmatter(_generate_simple(
             review_status="clean",
             review_flags=[],
+            extraction_confidence=0.85,
         ))
         keys = list(fm.keys())
         assert keys.index("curation_level") < keys.index("review_status")
         assert keys.index("review_status") < keys.index("review_flags")
-        assert keys.index("review_flags") < keys.index("source")
+        assert keys.index("review_flags") < keys.index("extraction_confidence")
+        assert keys.index("extraction_confidence") < keys.index("source")
 
     def test_required_fields_include_review(self):
         fm = _parse_frontmatter(_generate_simple())

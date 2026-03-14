@@ -42,7 +42,14 @@ class RegistryEntry:
     grounding_summary: Optional[dict] = field(default=None)
 
     def to_dict(self) -> dict:
-        """Serialize to a dict suitable for JSON storage."""
+        """Serialize to a dict suitable for JSON storage.
+
+        Review field semantics:
+        - ``None`` means the field has not been computed (legacy doc or LLM failure).
+        - ``[]`` / ``{}`` means the field was computed and is clean (no issues).
+        We preserve empty list/dict so downstream consumers can distinguish
+        "not computed" from "computed, clean".
+        """
         d = {k: v for k, v in asdict(self).items() if v is not None}
         # Preserve empty list / dict for review fields (FR-700)
         if self.review_flags is not None:
@@ -177,9 +184,14 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
         if fm is None:
             continue
         # Reconcile frontmatter-authoritative fields
+        # review_status and review_flags are frontmatter-authoritative so
+        # manual edits (e.g. setting review_status: reviewed) are respected.
+        # extraction_confidence is NOT authoritative — it is recomputed by
+        # assess_review_state() on every conversion and should not be
+        # manually overridden.
         authoritative = [
             "title", "client", "engagement", "authority", "curation_level",
-            "review_status", "review_flags", "extraction_confidence",
+            "review_status", "review_flags",
         ]
         for field_name in authoritative:
             if field_name in fm:

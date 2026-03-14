@@ -103,7 +103,18 @@ class SlideAnalysis:
 # FR-700: Reviewability helpers
 # ---------------------------------------------------------------------------
 
+# Base confidence scores per evidence confidence level.
+# Calibrated so that a document of all-high evidence scores 0.90 (well above
+# the 0.6 default threshold), mixed high/medium lands ~0.78, and all-low
+# scores 0.40 (well below threshold, triggering review).
 _CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
+
+# Valid flag prefixes emitted by assess_review_state().
+# - analysis_unavailable: all slides pending (LLM failure / no analysis)
+# - low_confidence_slide_{n}: slide n has low-confidence evidence
+# - unvalidated_claim_slide_{n}: slide n has unvalidated evidence
+# - high_density_unanalyzed: dense slides exist but pass 2 was not run
+# - confidence_below_threshold: document-level confidence < threshold
 
 
 def _compute_extraction_confidence(analyses: dict[int, SlideAnalysis]) -> float | None:
@@ -123,6 +134,12 @@ def _compute_extraction_confidence(analyses: dict[int, SlideAnalysis]) -> float 
     score = sum(_CONFIDENCE_BASE.get(ev.get("confidence", "medium"), 0.65) for ev in evidence)
     score = score / len(evidence)
 
+    # Cap at 0.59 (just below the default 0.6 threshold) when any evidence
+    # is low-confidence or unvalidated.  This guarantees a review flag for
+    # documents with questionable evidence, regardless of how many high-
+    # confidence items pull the average up.  The equal penalty is intentional:
+    # an unvalidated high-confidence claim is no more trustworthy than a
+    # validated low-confidence one — both need human review.
     if any(ev.get("confidence") == "low" for ev in evidence):
         score = min(score, 0.59)
     if any(not ev.get("validated", False) for ev in evidence):
@@ -137,6 +154,12 @@ class ReviewAssessment:
     review_status: str
     review_flags: list[str]
     extraction_confidence: float | None
+
+    def __repr__(self) -> str:
+        return (
+            f"ReviewAssessment(status={self.review_status!r}, "
+            f"flags={self.review_flags!r}, confidence={self.extraction_confidence})"
+        )
 
 
 def assess_review_state(
@@ -160,7 +183,10 @@ def assess_review_state(
         flags.append("analysis_unavailable")
 
     for slide_num, analysis_item in analyses.items():
-        evidence = getattr(analysis_item, "evidence", [])
+        evidence = [
+            ev for ev in getattr(analysis_item, "evidence", [])
+            if isinstance(ev, dict)
+        ]
         if any(ev.get("confidence") == "low" for ev in evidence):
             flags.append(f"low_confidence_slide_{slide_num}")
         if any(not ev.get("validated", False) for ev in evidence):
@@ -185,6 +211,10 @@ def assess_review_state(
     if flags:
         review_status = "flagged"
     elif existing_review_status in {"reviewed", "overridden"}:
+        # "reviewed" = human confirmed flags are resolved.
+        # "overridden" = human explicitly accepted despite flags (set via
+        #   manual frontmatter edit; no CLI command exists yet).
+        # Both are preserved when no new flags are generated.
         review_status = existing_review_status
     else:
         review_status = "clean"

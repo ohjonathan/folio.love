@@ -772,7 +772,15 @@ def promote(ctx, deck_id: str, level: str):
         click.echo(f"✗ Cannot promote: document is flagged for review.")
         for f in flags:
             click.echo(f"  - {f}")
+        click.echo("")
+        click.echo("To resolve: address the flagged issues, then set")
+        click.echo("  review_status: reviewed")
+        click.echo("in the document's YAML frontmatter.")
         sys.exit(1)
+    if fm.get("review_status") is None:
+        click.echo("⚠ No review status found (legacy document). "
+                    "Re-convert to generate review assessment.")
+        click.echo("")
 
     warnings = []
 

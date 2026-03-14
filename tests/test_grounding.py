@@ -846,3 +846,55 @@ class TestAssessReviewState:
         )
         assert result.review_status == "flagged"
 
+    def test_malformed_evidence_non_dict_items(self):
+        """Non-dict evidence items should not crash assess_review_state (CRIT-2)."""
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=["not a dict", 42, None, {"confidence": "high", "validated": True}],
+        )}
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        # Should not crash; only the valid dict item is inspected
+        assert result.review_status == "clean"
+
+    def test_mixed_pending_and_complete_slides(self):
+        """Mix of pending and complete slides should flag the pending ones correctly."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+            2: SlideAnalysis.pending(),
+            3: SlideAnalysis(
+                slide_type="framework",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+        }
+        texts = {
+            1: self._make_text(1),
+            2: self._make_text(2),
+            3: self._make_text(3),
+        }
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        # Not all pending, so analysis_unavailable should NOT be flagged
+        assert "analysis_unavailable" not in result.review_flags
+        # Confidence should be computed from the non-pending slides
+        assert result.extraction_confidence is not None
+
+    def test_malformed_evidence_in_compute_confidence(self):
+        """Non-dict evidence items should be skipped by _compute_extraction_confidence."""
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=["bad", {"confidence": "high", "validated": True}],
+        )}
+        score = _compute_extraction_confidence(analyses)
+        assert score == 0.9  # Only the valid dict item counted
+

@@ -96,7 +96,7 @@ def generate(
             preserved_curation = prev_curation
 
     # Build frontmatter in semantic group order:
-    # Identity > Lifecycle > Source > Temporal > Engagement > Content > Extensions
+    # Identity > Lifecycle > Review/Quality > Source > Temporal > Engagement > Content > Extensions
     frontmatter = {
         # Identity
         "id": preserved_id,
@@ -108,8 +108,9 @@ def generate(
         "authority": preserved_authority,
         "curation_level": preserved_curation,
         # Review state (FR-700)
-        "review_status": review_status or "clean",
+        "review_status": review_status if review_status is not None else "clean",
         "review_flags": review_flags if review_flags is not None else [],
+        "extraction_confidence": extraction_confidence,
         # Source
         "source": source_relative_path,
         "source_hash": source_hash,
@@ -147,10 +148,6 @@ def generate(
     grounding = _compute_grounding_summary(analyses)
     if grounding["total_claims"] > 0:
         frontmatter["grounding_summary"] = grounding
-
-    # Extraction confidence (FR-700)
-    if extraction_confidence is not None:
-        frontmatter["extraction_confidence"] = extraction_confidence
 
     # LLM provenance metadata
     if llm_metadata:
