@@ -149,7 +149,7 @@ These are the gaps this PR must close:
 
 - `review_status`, `review_flags`, and `extraction_confidence` in frontmatter
 - `review_confidence_threshold` in config
-- registry storage and reconciliation of review fields and `grounding_summary`
+- registry storage of review fields and `grounding_summary`, plus reconciliation of frontmatter-authoritative review fields
 - flagged counts in `folio status`
 - promotion gating on `review_status == flagged`
 - explicit review auto-flagging derived from evidence validation, low confidence, and analysis unavailability
@@ -555,7 +555,8 @@ Extend the registry schema forward-compatibly.
 - Add `review_status`, `review_flags`, `extraction_confidence`, and `grounding_summary` to `RegistryEntry`.
 - Ensure `to_dict()` preserves empty `review_flags` and present `grounding_summary`.
 - Update `rebuild_registry()` to read the new frontmatter fields when they exist.
-- Update `reconcile_from_frontmatter()` so these new fields are frontmatter-authoritative.
+- Update `reconcile_from_frontmatter()` so frontmatter-authoritative review fields are reconciled (`review_status`, `review_flags`).
+- Keep `grounding_summary` and `extraction_confidence` converter-authoritative (stored/upserted and loaded on rebuild, but not overwritten during reconcile).
 - Keep backward compatibility with old registry entries that lack the new fields.
 
 Do not redesign the registry format beyond these additive fields.
