@@ -177,7 +177,7 @@ def _collect_unique(
     exclude = exclude or set()
     values = set()
     for analysis in analyses.values():
-        evidence = getattr(analysis, "evidence", [])
+        evidence = [ev for ev in getattr(analysis, "evidence", []) if isinstance(ev, dict)]
         if evidence and not any(ev.get("validated", False) for ev in evidence):
             continue  # All evidence unvalidated — skip
         value = getattr(analysis, field, "")
@@ -200,6 +200,8 @@ def _compute_grounding_summary(analyses: dict[int, SlideAnalysis]) -> dict:
 
     for slide_num, analysis in analyses.items():
         for ev in getattr(analysis, "evidence", []):
+            if not isinstance(ev, dict):
+                continue
             total += 1
             conf = ev.get("confidence", "medium")
             if conf == "high":

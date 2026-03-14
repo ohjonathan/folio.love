@@ -170,8 +170,9 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
     """Reconcile registry entries against their actual markdown frontmatter.
 
     Updates registry fields that are frontmatter-authoritative
-    (title, client, engagement, authority, curation_level) so the
-    registry stays consistent after manual edits.
+    (title, client, engagement, authority, curation_level,
+    review_status, review_flags) so the registry stays consistent
+    after manual edits.
     """
     library_root = Path(library_root).resolve()
     changed = 0
