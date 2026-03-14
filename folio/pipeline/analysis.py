@@ -111,6 +111,7 @@ _CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
 
 # Valid flag prefixes emitted by assess_review_state().
 # - analysis_unavailable: all slides pending (LLM failure / no analysis)
+# - partial_analysis_slide_{n}: slide n pending while others succeeded
 # - low_confidence_slide_{n}: slide n has low-confidence evidence
 # - unvalidated_claim_slide_{n}: slide n has unvalidated evidence
 # - high_density_unanalyzed: dense slides exist but pass 2 was not run
@@ -182,7 +183,12 @@ def assess_review_state(
     if all_pending:
         flags.append("analysis_unavailable")
 
+    # Per-slide flags: pending, low-confidence, unvalidated
+    pending_slides = []
     for slide_num, analysis_item in analyses.items():
+        if analysis_item.slide_type == "pending":
+            pending_slides.append(slide_num)
+            continue  # No evidence to check on pending slides
         evidence = [
             ev for ev in getattr(analysis_item, "evidence", [])
             if isinstance(ev, dict)
@@ -191,6 +197,11 @@ def assess_review_state(
             flags.append(f"low_confidence_slide_{slide_num}")
         if any(not ev.get("validated", False) for ev in evidence):
             flags.append(f"unvalidated_claim_slide_{slide_num}")
+
+    # Flag individual pending slides when other slides succeeded (partial failure)
+    if pending_slides and not all_pending:
+        for slide_num in pending_slides:
+            flags.append(f"partial_analysis_slide_{slide_num}")
 
     if effective_passes < 2:
         dense_slides = [

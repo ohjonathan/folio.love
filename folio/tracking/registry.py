@@ -187,9 +187,12 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
         # Reconcile frontmatter-authoritative fields
         # review_status and review_flags are frontmatter-authoritative so
         # manual edits (e.g. setting review_status: reviewed) are respected.
-        # extraction_confidence is NOT authoritative — it is recomputed by
-        # assess_review_state() on every conversion and should not be
-        # manually overridden.
+        #
+        # NOT reconciled (converter-authoritative, recomputed on each conversion):
+        # - extraction_confidence: derived from evidence by assess_review_state()
+        # - grounding_summary: derived from evidence by _compute_grounding_summary()
+        # These are intentionally excluded; the registry retains the last-computed
+        # values and frontmatter is the source of truth only after re-conversion.
         authoritative = [
             "title", "client", "engagement", "authority", "curation_level",
             "review_status", "review_flags",

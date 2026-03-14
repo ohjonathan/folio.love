@@ -413,10 +413,8 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
     current = 0
     stale = 0
     missing = 0
-    flagged = 0
     stale_decks = []
     missing_decks = []
-    flagged_decks = []
 
     for deck_id, entry_data in data.get("decks", {}).items():
         entry = registry.entry_from_dict(entry_data)
@@ -440,15 +438,24 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
             missing += 1
             missing_decks.append(entry)
 
-        # FR-700: tally flagged documents
-        if entry_data.get("review_status") == "flagged":
-            flagged += 1
-            flagged_decks.append(entry)
-
     if do_refresh:
         # Reconcile frontmatter-authoritative fields (B2)
         data = registry.reconcile_from_frontmatter(library_root, data)
         registry.save_registry(registry_path, data)
+
+    # FR-700: tally flagged documents AFTER reconciliation so --refresh
+    # picks up manually edited review_status from frontmatter.
+    flagged = 0
+    flagged_decks = []
+    for deck_id, entry_data in data.get("decks", {}).items():
+        entry = registry.entry_from_dict(entry_data)
+        if scope:
+            if not (_matches_scope(entry.markdown_path, scope) or
+                    _matches_scope(entry.deck_dir, scope)):
+                continue
+        if entry_data.get("review_status") == "flagged":
+            flagged += 1
+            flagged_decks.append(entry)
 
     total = current + stale + missing
     click.echo(f"Library: {total} decks")

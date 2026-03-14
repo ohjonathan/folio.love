@@ -862,7 +862,7 @@ class TestAssessReviewState:
         assert result.review_status == "clean"
 
     def test_mixed_pending_and_complete_slides(self):
-        """Mix of pending and complete slides should flag the pending ones correctly."""
+        """Mix of pending and complete slides must flag the pending ones."""
         analyses = {
             1: SlideAnalysis(
                 slide_type="data",
@@ -886,8 +886,30 @@ class TestAssessReviewState:
         )
         # Not all pending, so analysis_unavailable should NOT be flagged
         assert "analysis_unavailable" not in result.review_flags
-        # Confidence should be computed from the non-pending slides
+        # Partial failure: slide 2 is pending while others succeeded
+        assert "partial_analysis_slide_2" in result.review_flags
+        assert result.review_status == "flagged"
+        # Confidence should be computed from the non-pending slides only
         assert result.extraction_confidence is not None
+
+    def test_partial_pending_single_slide_flagged(self):
+        """One pending slide in otherwise clean deck → flagged with partial flag."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+            2: SlideAnalysis.pending(),
+        }
+        texts = {1: self._make_text(1), 2: self._make_text(2)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status == "flagged"
+        assert "partial_analysis_slide_2" in result.review_flags
+        assert "analysis_unavailable" not in result.review_flags
 
     def test_malformed_evidence_in_compute_confidence(self):
         """Non-dict evidence items should be skipped by _compute_extraction_confidence."""
@@ -897,4 +919,5 @@ class TestAssessReviewState:
         )}
         score = _compute_extraction_confidence(analyses)
         assert score == 0.9  # Only the valid dict item counted
+
 

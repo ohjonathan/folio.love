@@ -1127,3 +1127,53 @@ class TestPromoteFlaggedBlocking:
         assert result.exit_code == 0
         assert "Promoted" in result.output
 
+
+class TestStatusRefreshReconcilesFlagged:
+    """Finding 3: --refresh must use post-reconciliation review state."""
+
+    def test_refresh_picks_up_flagged_from_frontmatter(self, tmp_path):
+        """Registry says clean, frontmatter says flagged → --refresh shows Flagged: 1."""
+        library = tmp_path / "library"
+        source = tmp_path / "sources" / "deck.pptx"
+        _make_source(source)
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        md_path = library / "Client" / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "drift_deck",
+            "title": "Drift Deck",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": h,
+            "source_type": "deck",
+            "version": 1,
+            "converted": "2026-01-01",
+            "review_status": "flagged",
+            "review_flags": ["partial_analysis_slide_2"],
+        })
+
+        # Registry is stale: says "clean" even though frontmatter says "flagged"
+        entry = _sample_registry_entry(
+            id="drift_deck",
+            markdown_path="Client/deck/deck.md",
+            deck_dir="Client/deck",
+            source_relative_path="../../../sources/deck.pptx",
+            source_hash=h,
+            review_status="clean",
+            review_flags=[],
+        )
+        reg_data = {"_schema_version": 1, "decks": {"drift_deck": entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status", "--refresh"])
+        assert result.exit_code == 0
+        # After reconciliation, frontmatter's "flagged" should win
+        assert "Flagged: 1" in result.output
+        assert "partial_analysis_slide_2" in result.output
+
+
