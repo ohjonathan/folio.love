@@ -9,7 +9,7 @@ generated_by: ontos_scaffold
 
 # Folio: Implementation Roadmap
 
-**February 2026 baseline | March 2026 updated**  
+**February 2026 baseline | March 2026 updated**
 **folio.love**
 
 **What changed from v1:** Incorporates features from the February 2026 brainstorming session (dual ontology, interaction ingestion, authority tiers, entity extraction, temporal roll-ups, retroactive provenance). Restructured from 3 phases to 4 tiers. Original Phase 1-2 priorities are unchanged. New features slot into Tiers 3-4 based on dependency chain and real-world validation requirements. Frontmatter schema aligned to the current Folio Ontology Architecture (merged tags/concepts, date-based IDs, engagement requirement, frontmatter as relationship source of truth).
