@@ -5,6 +5,10 @@ version: 2
 date: 2026-02-20
 lineage: Adapted from Project Ontos Philosophy & Ontology
 changelog: |
+  v2.1 (2026-03-14): Added Trust & Reviewability section (2.7). Added review
+  schema fields to universal fields table (12.1) and new section 12.7. Per
+  strategic direction update: review_status, review_flags, extraction_confidence
+  are now universal ontology fields orthogonal to authority and curation_level.
   v2 (2026-02-20): Merged concepts/tags into single field. Added authority tiers.
   Established frontmatter as source of truth for relationships. Made engagement
   required at L1+ for engagement-scoped types. Defined date-based ID convention.
@@ -100,6 +104,26 @@ A perfectly curated (L3) interview note is still T1. A rough (L1) SteerCo deck i
 Wikilinks in document bodies are **derived** from frontmatter, not the other way around. `folio enrich` generates a "Related" section from frontmatter fields. If a user manually adds a wikilink in the body, `folio enrich` detects it and offers to promote it to frontmatter.
 
 This prevents sync drift between two representations. One source, one direction.
+
+### 2.7 Trust & Reviewability
+
+Folio's output must be trustworthy enough for direct use in active engagements serving Fortune 100 clients. This introduces a third orthogonal dimension alongside curation level and authority:
+
+| Dimension | Measures | Set By | Example |
+|-----------|----------|--------|---------|
+| **Curation Level** (L0-L3) | Completeness of human curation | Pipeline default + human promotion | L0 = raw conversion, L2 = enriched with links |
+| **Authority** (T1-T4) | Organizational validation weight | Human judgment | T1 = one person said it, T4 = board signed off |
+| **Review Status** | Whether the system trusts its own output | Machine + human | `flagged` = system detected issues, `reviewed` = human confirmed |
+
+A document can be L0/T1/clean (raw conversion, no issues detected), L2/T3/flagged (enriched and client-aligned, but a specific data point has low-confidence extraction), or L1/T1/overridden (contextualized interview note where a human corrected an entity name).
+
+**Design principles:**
+- The system must know what it doesn't know. Every LLM extraction carries a confidence level. Uncertainty is surfaced, not hidden.
+- Every extracted fact traces to its source: which page, which text span, which model, which pass, which extraction method.
+- Human corrections persist across re-processing. The system never silently overwrites human judgment.
+- Flagged documents are visible in both CLI (`folio status`) and Obsidian (Dataview queries on `review_status`).
+
+See PRD FR-700 for the full requirements specification.
 
 ---
 
@@ -743,6 +767,9 @@ Semantic search operates over full text content + metadata, complementing struct
 | `authority` | enum | Yes | `captured`, `analyzed`, `aligned`, `decided` |
 | `curation_level` | enum | Auto | `L0`, `L1`, `L2`, `L3` |
 | `tags` | list | Yes (L1+) | Unified tag field with soft vocabulary validation |
+| `review_status` | enum | Auto | `clean`, `flagged`, `reviewed`, `overridden`. See Section 2.7. |
+| `review_flags` | list | Auto | Machine-generated list of specific issues. Empty when clean. |
+| `extraction_confidence` | float/null | Auto | 0.0-1.0 aggregate confidence. `null` if no LLM analysis ran. |
 | `created` | date | Auto | Creation date |
 | `modified` | date | Auto | Last modification date |
 
@@ -794,6 +821,61 @@ Semantic search operates over full text content + metadata, complementing struct
 |-------|------|------------|----------|
 | `digest_period` | date | analysis (digest subtype) | Yes |
 | `digest_type` | enum | analysis (digest subtype) | Yes (`daily`, `weekly`, `steerco`) |
+
+### 12.7 Trust & Reviewability Fields
+
+| Field | Type | Applies To | Required |
+|-------|------|------------|----------|
+| `review_status` | enum | all | Auto (`clean` default) |
+| `review_flags` | list[string] | all | Auto (empty default) |
+| `extraction_confidence` | float or null | all with LLM analysis | Auto |
+| `grounding_summary` | object | evidence, interaction, analysis | Auto |
+
+**`review_status` values:**
+
+| Value | Meaning | Set By |
+|-------|---------|--------|
+| `clean` | No issues detected | Pipeline (default) |
+| `flagged` | System detected issues requiring human attention | Pipeline (automatic) |
+| `reviewed` | Human has reviewed and confirmed content | Human |
+| `overridden` | Human has corrected system output | Human (via `.overrides.json`) |
+
+**Auto-flagging triggers** (pipeline sets `review_status: flagged` when any apply):
+- Any extraction claim has an unvalidated quoted span (not found in source text)
+- Any extraction claim has low confidence
+- LLM analysis was unavailable (degraded conversion)
+- Aggregate `extraction_confidence` is below the configured threshold (default: 0.6)
+
+**`grounding_summary` structure:**
+
+```yaml
+grounding_summary:
+  total_claims: 12
+  high_confidence: 8
+  medium_confidence: 3
+  low_confidence: 1
+  validated: 10
+  unvalidated: 2
+  pass_1_claims: 9
+  pass_2_claims: 3
+  pass_2_slides: 2
+```
+
+This is a queryable summary only. Full per-claim evidence (quoted spans, element types, confidence levels, pass numbers) lives in the markdown body alongside each slide's analysis section.
+
+**`extraction_confidence` computation:**
+
+The aggregate score is derived from per-claim evidence:
+- All claims high-confidence and validated: approaches 1.0
+- Mix of high and medium: 0.6-0.8 range
+- Any low-confidence or unvalidated: below 0.6
+- No LLM analysis: `null`
+
+The exact formula is an implementation detail subject to empirical calibration. The requirement is that the score exists, is queryable, and is directionally meaningful.
+
+**Interaction with `folio promote`:**
+
+Promotion to L1+ may require `review_status != flagged`. A document with unresolved quality issues should not be promoted to a higher curation level without the human explicitly reviewing the flagged items first.
 
 ---
 
@@ -857,5 +939,5 @@ folio vocab                       # View/manage tag vocabulary
 
 ---
 
-*v2 — 2026-02-20*
-*Lineage: Project Ontos Philosophy & Ontology → Folio Ontology Architecture v1 → v2 (master session review)*
+*v2.1 — 2026-03-14*
+*Lineage: Project Ontos Philosophy & Ontology → Folio Ontology Architecture v1 → v2 (master session review) → v2.1 (trust & reviewability addendum)*

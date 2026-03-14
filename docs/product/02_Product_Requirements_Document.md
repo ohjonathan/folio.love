@@ -9,8 +9,15 @@ generated_by: ontos_scaffold
 
 # Folio: Product Requirements Document
 
-**Version 1.0 | January 2026**  
+**Version 1.1 | March 2026**
 **folio.love**
+
+**v1.1 changes:** Added FR-700 (Trust & Reviewability) section per strategic
+direction update. Revised FR-103 to require source grounding for LLM
+extractions. Revised FR-607 to flag incomplete output rather than silently
+filing it. Revised NFR-100 to establish quality as a hard floor with speed as
+a soft target. Updated frontmatter examples with review schema fields.
+See `docs/product/strategic_direction_memo.md` for governing principles.
 
 ---
 
@@ -19,6 +26,8 @@ generated_by: ontos_scaffold
 ### 1.1 Purpose
 
 This document defines the requirements for Folio, a knowledge management system that converts consulting materials into an AI-native, searchable library. Requirements are prioritized by the hierarchy of value: conversion quality first, then version integrity, then organization features.
+
+Folio's output must be trustworthy enough for direct use in active McKinsey engagements serving Fortune 100 clients. The quality bar is not "searchable and retrievable" but "a senior consultant can include this in a client deliverable without manually verifying every detail."
 
 ### 1.2 Scope
 
@@ -30,6 +39,8 @@ Folio v1.0 encompasses:
 - Knowledge library organization (multi-client, multi-engagement)
 - Obsidian-compatible output format
 - CLI for all operations
+- Source grounding and extraction confidence scoring
+- Review status tracking and human override persistence
 
 ### 1.3 Definitions
 
@@ -42,6 +53,10 @@ Folio v1.0 encompasses:
 | Verbatim Text | Exact text extracted from slides, preserving wording |
 | Analysis | LLM-generated description of visual content and frameworks |
 | Frontmatter | YAML metadata block at the top of markdown files (Obsidian standard) |
+| Source Grounding | Mapping from an extracted claim to the specific text that supports it |
+| Extraction Confidence | Aggregate score (0.0-1.0) reflecting reliability of LLM analysis for a document |
+| Review Status | Machine-tracked state indicating whether a document needs human attention |
+| Human Override | A correction made by a human reviewer that persists across re-conversion |
 
 ---
 
@@ -79,12 +94,14 @@ The system SHALL extract text exactly as it appears in the source:
 
 #### FR-103: LLM Analysis Generation
 
-The system SHALL generate analysis for each slide using the configured LLM provider when valid credentials are available:
+The system SHALL generate grounded analysis for each slide using the configured LLM provider when valid credentials are available:
 - **Slide Type:** title, executive-summary, framework, data, narrative, next-steps, appendix
 - **Framework Detection:** 2x2-matrix, scr, mece, waterfall, gantt, timeline, process-flow, org-chart
 - **Visual Description:** Axes labels, quadrant contents, chart types, spatial relationships
 - **Key Data Points:** Numbers, percentages, metrics mentioned
 - **Main Insight:** One-sentence summary of the "so what"
+- **Source Grounding:** Every claim must cite the specific slide text that supports it (see FR-701)
+- **Per-Claim Confidence:** Each grounded claim must include a confidence level (high/medium/low)
 
 Supported providers in v1.0:
 - Anthropic
@@ -95,7 +112,9 @@ Supported providers in v1.0:
 - [ ] Every slide has all five analysis fields populated
 - [ ] Framework detection correctly identifies common consulting frameworks
 - [ ] Visual description captures information lost in text-only extraction
-- [ ] If analysis cannot run, conversion still succeeds with pending-analysis placeholders
+- [ ] Every claim includes a quoted text span and confidence level
+- [ ] Quoted spans are validated against extracted text; unvalidated quotes are flagged
+- [ ] If analysis cannot run, conversion succeeds with `review_status: flagged` and flag `analysis_unavailable`
 
 #### FR-104: Source File Tracking
 
@@ -115,7 +134,8 @@ The system SHALL produce a single markdown file per deck with:
 - Obsidian-compatible YAML frontmatter
 - Source tracking (path and hash)
 - Version information
-- Per-slide sections with image, verbatim text, and analysis
+- Per-slide sections with image, verbatim text, and grounded analysis
+- Evidence block per slide showing claims with quoted sources and confidence
 - Version history table at end
 
 ---
@@ -230,7 +250,8 @@ folio_library/
 │           │   ├── slide-001.png
 │           │   └── ...
 │           ├── version_history.json
-│           └── .texts_cache.json
+│           ├── .texts_cache.json
+│           └── .overrides.json  # Human corrections (if any)
 │
 ├── Internal/
 │   └── Templates/
@@ -271,6 +292,9 @@ slide_types:
 tags:
   - market-sizing
   - competitive-analysis
+review_status: clean         # clean | flagged | reviewed | overridden
+review_flags: []
+extraction_confidence: 0.87
 ---
 ```
 
@@ -285,6 +309,7 @@ The system SHALL maintain a `registry.json` with:
 - Source paths and hashes
 - Last conversion timestamp
 - Current staleness status
+- Review status and extraction confidence (for library-wide review queries)
 
 ---
 
@@ -315,6 +340,7 @@ folio status [<scope>]
 - Show all decks and their status
 - Flag stale conversions
 - Flag missing source files
+- Flag documents with `review_status: flagged`
 - Scope to client/engagement or any library-relative path (any path relative to
   `library_root`) if specified
 
@@ -334,6 +360,7 @@ folio refresh [--scope <path>] [--all]
 - Optionally scope to a specific client/engagement or library-relative path
   (any path relative to `library_root`)
 - Update registry
+- Respect human overrides: do not overwrite sections recorded in `.overrides.json`
 
 ---
 
@@ -369,22 +396,166 @@ Folio SHALL support configured fallback chains for transient provider failures o
 
 Folio SHALL record internal LLM execution metadata in output frontmatter, including the requested profile, actual provider/model used, fallback activation, and Pass 2 status.
 
-#### FR-607: Graceful Degradation
+#### FR-607: Graceful Degradation with Explicit Flagging
 
-Folio SHALL degrade to pending analysis without failing conversion when analysis cannot run because of missing credentials, missing SDKs, provider rejection, or exhausted transient fallbacks.
+Folio SHALL degrade to pending analysis without failing conversion when analysis
+cannot run because of missing credentials, missing SDKs, provider rejection, or
+exhausted transient fallbacks.
+
+When degradation occurs, the system SHALL:
+- Set `review_status: flagged` in frontmatter
+- Add `analysis_unavailable` to `review_flags`
+- Set `extraction_confidence: null`
+- Display a visible warning in the markdown body (not just a placeholder)
+
+The conversion still succeeds, but the output is explicitly marked as
+incomplete. A document with pending analysis must never appear identical to a
+fully analyzed document when browsing in Obsidian or querying via Dataview.
+
+---
+
+### 2.7 Trust & Reviewability (FR-700) — P0 CRITICAL
+
+These requirements ensure that Folio's output meets the quality bar for
+professional engagement use. They apply to all LLM-generated content across all
+pipeline paths (conversion, ingestion, enrichment).
+
+#### FR-701: Source Grounding
+
+Every LLM-extracted claim SHALL include source grounding:
+- A verbatim quoted text span (10-100 characters) from the source material
+- The element type the quote came from (title, body, note, chart label)
+- A per-claim confidence level (high, medium, low)
+
+Quoted spans SHALL be validated against extracted text. If the quoted span does
+not appear in the source material (case-insensitive, whitespace-normalized
+fuzzy match), the claim SHALL be flagged as `unvalidated`.
+
+**Acceptance Criteria:**
+- [ ] Every LLM claim includes a quoted source span
+- [ ] Validation correctly identifies matching and non-matching quotes
+- [ ] Unvalidated claims are flagged, not silently discarded
+
+#### FR-702: Extraction Confidence Scoring
+
+Every document SHALL carry an aggregate `extraction_confidence` score (0.0-1.0)
+computed from per-claim confidence levels:
+- All claims high-confidence and validated: confidence approaches 1.0
+- Mix of high and medium: confidence in 0.6-0.8 range
+- Any low-confidence or unvalidated claims: confidence below 0.6
+- No LLM analysis: `null`
+
+The exact scoring formula is an implementation detail and may be calibrated over
+time. The requirement is that the score exists, is queryable, and is
+directionally meaningful.
+
+**Acceptance Criteria:**
+- [ ] Every analyzed document has a non-null `extraction_confidence`
+- [ ] Confidence is queryable via Dataview (`WHERE extraction_confidence < 0.7`)
+- [ ] Confidence correlates with actual extraction quality on ground-truth fixtures
+
+#### FR-703: Review Status Tracking
+
+Every document SHALL carry a `review_status` field orthogonal to both
+`curation_level` and `authority`:
+
+| Status | Meaning |
+|--------|---------|
+| `clean` | No issues detected by the system |
+| `flagged` | System detected issues requiring human attention |
+| `reviewed` | Human has reviewed and confirmed the content |
+| `overridden` | Human has corrected system output |
+
+The system SHALL automatically set `review_status: flagged` when:
+- Any extraction claim is unvalidated (quoted span not found in source)
+- Any extraction claim has low confidence
+- Analysis was unavailable (degraded conversion)
+- Extraction confidence is below a configurable threshold (default: 0.6)
+
+Humans update `review_status` to `reviewed` or `overridden` manually or via
+`folio promote` (promotion to L1+ may require `review_status != flagged`).
+
+**Acceptance Criteria:**
+- [ ] `review_status` is populated on every document
+- [ ] Auto-flagging triggers on the defined conditions
+- [ ] `folio status` reports flagged document count
+
+#### FR-704: Review Flags
+
+Every document SHALL carry a `review_flags` list that enumerates specific
+issues detected by the system:
+
+Example flags:
+- `analysis_unavailable` — LLM analysis could not run
+- `low_confidence_slide_N` — slide N has low-confidence extractions
+- `unvalidated_claim_slide_N` — slide N has a quoted span that doesn't match source
+- `high_density_unanalyzed` — dense slide only received single-pass analysis
+
+Review flags are machine-generated. Humans clear them by resolving the
+underlying issue or by setting `review_status: reviewed`.
+
+**Acceptance Criteria:**
+- [ ] Flags are specific and actionable (include slide numbers where applicable)
+- [ ] Flags are queryable via Dataview
+- [ ] Clearing `review_status` to `reviewed` does not delete the flags (they remain as historical record)
+
+#### FR-705: Human Override Persistence
+
+When a human corrects an extraction in the markdown body, that correction SHALL
+persist across re-conversion (`folio refresh`).
+
+Implementation: the system SHALL maintain a `.overrides.json` sidecar file per
+deck that records which sections have been manually edited. During re-conversion,
+the pipeline SHALL preserve overridden sections rather than regenerating them.
+
+When an override is active:
+- `review_status` SHALL be set to `overridden`
+- The overridden sections SHALL be clearly marked in the markdown body
+- Re-conversion SHALL warn (not error) that overrides were preserved
+
+**Acceptance Criteria:**
+- [ ] Manual edits to analysis sections survive `folio refresh`
+- [ ] Overrides are recorded in `.overrides.json`
+- [ ] `review_status: overridden` is set when overrides exist
+- [ ] User can clear overrides to allow regeneration
+
+#### FR-706: Extraction Provenance
+
+Every LLM extraction SHALL record provenance metadata sufficient to answer
+"which model produced this claim, when, and how":
+- Model identifier (provider + model name)
+- Extraction method (vision analysis, text extraction, OCR)
+- Pass number (1 = breadth, 2 = depth)
+- Timestamp
+
+This metadata extends the existing `_llm_metadata` block in frontmatter.
+Per-slide provenance is recorded in the markdown body alongside evidence blocks.
+Document-level provenance remains in `_llm_metadata`.
+
+**Acceptance Criteria:**
+- [ ] Every extraction is traceable to a specific model and pass
+- [ ] Provenance is recorded, not reconstructed
+- [ ] Re-conversion with a different model produces updated provenance
 
 ---
 
 ## 3. Non-Functional Requirements
 
-### 3.1 Performance (NFR-100)
+### 3.1 Performance & Quality (NFR-100)
 
-| Requirement | Target |
-|-------------|--------|
-| Conversion speed (no LLM) | <30 seconds for 20-slide deck |
-| Conversion speed (with LLM) | <3 minutes for 20-slide deck |
-| Batch processing | Process 50 decks in <30 minutes |
-| Status command | <5 seconds for 500-deck library |
+Quality is a hard floor. Speed and cost are soft targets tracked for
+transparency but never used to gate or throttle quality.
+
+| Requirement | Type | Target |
+|-------------|------|--------|
+| Extraction accuracy | Hard floor | 99%+ character accuracy for text; directionally accurate for LLM claims |
+| Image extraction | Hard floor | 100% of slides captured |
+| Source path validity | Hard floor | 100% of paths resolvable |
+| Conversion speed (no LLM) | Soft target | <30 seconds for 20-slide deck |
+| Conversion speed (with LLM) | Soft target | Tracked, not capped. Multi-pass and validation may increase time. |
+| Batch processing | Soft target | Tracked, not capped. |
+| Status command | Soft target | <5 seconds for 500-deck library |
+| LLM cost per deck | Tracked | Logged in `_llm_metadata` for auditability. Never gates quality decisions. |
 
 ### 3.2 Reliability (NFR-200)
 
@@ -394,6 +565,7 @@ Folio SHALL degrade to pending analysis without failing conversion when analysis
 | Image extraction | 100% of slides captured |
 | Source path validity | 100% of paths resolvable |
 | Crash recovery | Never corrupt existing conversions |
+| Human override safety | Never silently overwrite human corrections |
 
 ### 3.3 Portability (NFR-300)
 
@@ -410,6 +582,7 @@ Folio SHALL degrade to pending analysis without failing conversion when analysis
 | Zero config start | Basic conversion works without config file |
 | Error messages | Actionable (what failed, how to fix) |
 | Progress feedback | Long operations show progress |
+| Review surfacing | Flagged documents visible in `folio status` and Dataview queries |
 
 ---
 
@@ -440,6 +613,16 @@ slide_types:
   - framework
 tags:
   - market-sizing
+review_status: clean
+review_flags: []
+extraction_confidence: 0.91
+grounding_summary:
+  total_claims: 8
+  high_confidence: 6
+  medium_confidence: 2
+  low_confidence: 0
+  validated: 8
+  unvalidated: 0
 _llm_metadata:
   convert:
     requested_profile: high_quality_anthropic
@@ -488,6 +671,12 @@ _llm_metadata:
 **Key Data:** $2.3B TAM, 12% CAGR, 45% North America, 18% APAC growth  
 **Main Insight:** Large and growing market with APAC as key growth driver
 
+**Evidence:**
+- **TAM identification (high):** "total addressable market is $2.3B" *(body)*
+- **Growth rate (high):** "growing at 12% CAGR" *(body)*
+- **Regional split (high):** "North America represents 45% of market" *(body)*
+- **Growth driver (medium):** "APAC is fastest growing region (18% CAGR)" *(body)*
+
 ---
 
 ## Slide 2 *(modified)*
@@ -507,6 +696,10 @@ _llm_metadata:
 **Visual Description:** X-axis: Market Size (Small → Large), Y-axis: Growth Rate (Low → High). Four quadrants: TL=Niche, TR=Stars, BL=Dogs, BR=Cash Cows. Company positioned in "Stars" quadrant.  
 **Key Data:** Market size ranges $100M-$5B, growth rates 2%-25%  
 **Main Insight:** Company is well-positioned in high-growth, large-market segment
+
+**Evidence:**
+- **Framework identification (high):** "Market Segmentation" *(title)*
+- **Positioning claim (medium):** "Company positioned in Stars quadrant" *(body, inferred from visual)*
 
 ---
 
@@ -571,6 +764,7 @@ conversion:
   default_passes: 1
   density_threshold: 2.0
   pptx_renderer: auto
+  review_confidence_threshold: 0.6  # Below this, auto-flag for review
 ```
 
 Legacy shorthand remains valid for Anthropic-only setups:
@@ -601,6 +795,7 @@ llm:
 - Sufficient disk space (~100KB per slide for images)
 - Network access for LLM API calls
 - Provider credentials are managed through environment variables, not committed config
+- Quality and accuracy take precedence over cost and processing time in all design decisions
 
 ### 5.3 Platform Support
 
