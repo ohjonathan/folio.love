@@ -198,10 +198,16 @@ def assess_review_state(
         if any(not ev.get("validated", False) for ev in evidence):
             flags.append(f"unvalidated_claim_slide_{slide_num}")
 
-    # Flag individual pending slides when other slides succeeded (partial failure)
+    # Flag individual pending slides when other slides succeeded (partial failure).
+    # Blank/divider slides are intentionally set to pending by the converter
+    # and should NOT be flagged — only flag pending slides that had text content
+    # (meaning the LLM should have analyzed them but failed).
     if pending_slides and not all_pending:
         for slide_num in pending_slides:
-            flags.append(f"partial_analysis_slide_{slide_num}")
+            text = slide_texts.get(slide_num)
+            has_text = bool(text and getattr(text, "full_text", "").strip())
+            if has_text:
+                flags.append(f"partial_analysis_slide_{slide_num}")
 
     if effective_passes < 2:
         dense_slides = [

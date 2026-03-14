@@ -201,6 +201,7 @@ grounding_summary:
 `review_flags` must use stable, machine-generated strings. Implement these exact flags in this PR:
 
 - `analysis_unavailable`
+- `partial_analysis_slide_<N>` — slide N is pending while others succeeded (only for slides with text content; blank/divider slides are intentionally pending and not flagged)
 - `low_confidence_slide_<N>`
 - `unvalidated_claim_slide_<N>`
 - `high_density_unanalyzed`

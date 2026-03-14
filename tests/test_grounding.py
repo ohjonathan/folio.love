@@ -893,7 +893,7 @@ class TestAssessReviewState:
         assert result.extraction_confidence is not None
 
     def test_partial_pending_single_slide_flagged(self):
-        """One pending slide in otherwise clean deck → flagged with partial flag."""
+        """One pending slide WITH TEXT in otherwise clean deck → flagged."""
         analyses = {
             1: SlideAnalysis(
                 slide_type="data",
@@ -901,7 +901,7 @@ class TestAssessReviewState:
             ),
             2: SlideAnalysis.pending(),
         }
-        texts = {1: self._make_text(1), 2: self._make_text(2)}
+        texts = {1: self._make_text(1), 2: self._make_text(2, "Real content here")}
         result = assess_review_state(
             analyses, texts,
             effective_passes=1, density_threshold=2.0,
@@ -911,6 +911,49 @@ class TestAssessReviewState:
         assert "partial_analysis_slide_2" in result.review_flags
         assert "analysis_unavailable" not in result.review_flags
 
+    def test_blank_pending_slide_not_flagged(self):
+        """Blank/divider slide set to pending must NOT produce a partial flag."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+            2: SlideAnalysis.pending(),  # Blank divider slide
+        }
+        # Slide 2 has no text — it's a blank/divider slide
+        texts = {1: self._make_text(1), 2: self._make_text(2, "")}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "partial_analysis_slide_2" not in result.review_flags
+        assert result.review_status == "clean"
+
+    def test_mixed_blank_and_failure_pending(self):
+        """Blank slide = not flagged, text slide pending = flagged."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+            2: SlideAnalysis.pending(),  # Blank divider
+            3: SlideAnalysis.pending(),  # Real LLM failure — has text
+        }
+        texts = {
+            1: self._make_text(1),
+            2: self._make_text(2, ""),        # blank
+            3: self._make_text(3, "Lots of text here"),  # has content
+        }
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "partial_analysis_slide_2" not in result.review_flags  # blank → skip
+        assert "partial_analysis_slide_3" in result.review_flags      # text → flag
+        assert result.review_status == "flagged"
+
     def test_malformed_evidence_in_compute_confidence(self):
         """Non-dict evidence items should be skipped by _compute_extraction_confidence."""
         analyses = {1: SlideAnalysis(
@@ -919,5 +962,6 @@ class TestAssessReviewState:
         )}
         score = _compute_extraction_confidence(analyses)
         assert score == 0.9  # Only the valid dict item counted
+
 
 

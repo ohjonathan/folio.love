@@ -144,10 +144,10 @@ def generate(
     if reconciliation_metadata:
         frontmatter.update(reconciliation_metadata)
 
-    # Grounding summary from evidence
+    # Grounding summary from evidence — always emit to prevent
+    # registry/frontmatter drift (Finding 4 / round 1 + Finding 2 / round 2).
     grounding = _compute_grounding_summary(analyses)
-    if grounding["total_claims"] > 0:
-        frontmatter["grounding_summary"] = grounding
+    frontmatter["grounding_summary"] = grounding
 
     # LLM provenance metadata
     if llm_metadata:
