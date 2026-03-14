@@ -54,7 +54,7 @@ This keeps the validation evidence honest and reproducible.
 
 ## Testing
 
-- `PYTHONPATH=/tmp/folio-pr12 /Users/jonathanoh/Dev/folio.love/.venv/bin/pytest tests -q`
+- `PYTHONPATH=/tmp/folio-pr12 /Users/jonathanoh/Dev/folio.love/.venv/bin/python -m pytest tests -q`
   -> `434 passed, 3 skipped`
 - `git -C /tmp/folio-pr12 diff --check`
   -> clean after the final documentation cleanup

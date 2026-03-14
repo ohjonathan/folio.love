@@ -17,7 +17,7 @@ created: 2026-03-14
 **Strategic memo:** `docs/product/strategic_direction_memo.md`  
 **Historical prompt reviewed:** `docs/prompts/CLAUDE_CODE_PROMPT_grounding_multipass.md` from commit `69abd9f3e9aa6c45020aea857d3f385565a6970b`  
 **Branch:** `codex/grounding-reviewability` from `main`  
-**Test command:** `python3 -m pytest tests/ -v`  
+**Test command:** `.venv/bin/python -m pytest tests/ -v`  
 **Commit format:** `feat(reviewability): description`  
 **PR title:** `feat: reviewability fields for grounded multi-pass analysis`
 
@@ -686,8 +686,8 @@ At minimum, ensure the existing cache suite still passes unchanged.
 Run:
 
 ```bash
-python3 -m pytest tests/test_grounding.py -v
-python3 -m pytest tests/test_config.py -v
+.venv/bin/python -m pytest tests/test_grounding.py -v
+.venv/bin/python -m pytest tests/test_config.py -v
 ```
 
 ### 2. Frontmatter and Converter Wiring
@@ -699,9 +699,9 @@ python3 -m pytest tests/test_config.py -v
 Run:
 
 ```bash
-python3 -m pytest tests/test_frontmatter.py -v
-python3 -m pytest tests/test_converter_integration.py -v
-python3 -m pytest tests/test_pipeline_integration.py -v
+.venv/bin/python -m pytest tests/test_frontmatter.py -v
+.venv/bin/python -m pytest tests/test_converter_integration.py -v
+.venv/bin/python -m pytest tests/test_pipeline_integration.py -v
 ```
 
 ### 3. Registry and CLI Integration
@@ -713,8 +713,8 @@ python3 -m pytest tests/test_pipeline_integration.py -v
 Run:
 
 ```bash
-python3 -m pytest tests/test_registry.py -v
-python3 -m pytest tests/test_cli_tier2.py -v
+.venv/bin/python -m pytest tests/test_registry.py -v
+.venv/bin/python -m pytest tests/test_cli_tier2.py -v
 ```
 
 ### 4. Final Regression Pass
@@ -725,8 +725,8 @@ python3 -m pytest tests/test_cli_tier2.py -v
 Run:
 
 ```bash
-python3 -m pytest tests/test_analysis_cache.py -v
-python3 -m pytest tests/ -v
+.venv/bin/python -m pytest tests/test_analysis_cache.py -v
+.venv/bin/python -m pytest tests/ -v
 ```
 
 ---

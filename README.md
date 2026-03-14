@@ -432,8 +432,8 @@ Version history is recorded in both the markdown output and `version_history.jso
 
 ```bash
 pip install -e ".[dev]"
-pytest
-pytest --cov=folio
+.venv/bin/python -m pytest
+.venv/bin/python -m pytest --cov=folio
 ```
 
 ```
