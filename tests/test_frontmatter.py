@@ -513,3 +513,14 @@ class TestReviewFields:
         assert "review_status" in fm
         assert "review_flags" in fm
 
+    def test_zero_claim_grounding_summary_always_emitted(self):
+        fm = _parse_frontmatter(_generate_simple(
+            analyses={1: SlideAnalysis.pending()},
+        ))
+        assert "grounding_summary" in fm
+        assert fm["grounding_summary"]["total_claims"] == 0
+        assert fm["grounding_summary"]["high_confidence"] == 0
+        assert fm["grounding_summary"]["medium_confidence"] == 0
+        assert fm["grounding_summary"]["low_confidence"] == 0
+        assert fm["grounding_summary"]["validated"] == 0
+        assert fm["grounding_summary"]["unvalidated"] == 0

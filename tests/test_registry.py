@@ -419,6 +419,38 @@ class TestReviewFieldsRegistry:
         assert entry["review_flags"] == ["analysis_unavailable"]
         assert entry["extraction_confidence"] == 0.3
 
+    def test_rebuild_preserves_zero_claim_grounding_summary(self, tmp_path):
+        library = tmp_path / "library"
+        source = tmp_path / "sources" / "deck.pptx"
+        _make_source(source)
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        grounding_summary = {
+            "total_claims": 0,
+            "high_confidence": 0,
+            "medium_confidence": 0,
+            "low_confidence": 0,
+            "validated": 0,
+            "unvalidated": 0,
+        }
+        md_path = library / "Client" / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "test_deck",
+            "title": "Test",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": h,
+            "source_type": "deck",
+            "version": 1,
+            "converted": "2026-01-01",
+            "grounding_summary": grounding_summary,
+        })
+
+        data = rebuild_registry(library)
+        entry = data["decks"]["test_deck"]
+        assert entry["grounding_summary"] == grounding_summary
+
     def test_reconcile_updates_review_status(self, tmp_path):
         from folio.tracking.registry import reconcile_from_frontmatter
 
@@ -449,4 +481,3 @@ class TestReviewFieldsRegistry:
         result = reconcile_from_frontmatter(library, data)
         assert result["decks"]["test_deck"]["review_status"] == "reviewed"
         assert result["decks"]["test_deck"]["review_flags"] == []
-

@@ -883,6 +883,7 @@ class TestAssessReviewState:
             analyses, texts,
             effective_passes=1, density_threshold=2.0,
             review_confidence_threshold=0.6,
+            known_blank_slides=set(),
         )
         # Not all pending, so analysis_unavailable should NOT be flagged
         assert "analysis_unavailable" not in result.review_flags
@@ -906,52 +907,116 @@ class TestAssessReviewState:
             analyses, texts,
             effective_passes=1, density_threshold=2.0,
             review_confidence_threshold=0.6,
+            known_blank_slides=set(),
         )
         assert result.review_status == "flagged"
         assert "partial_analysis_slide_2" in result.review_flags
         assert "analysis_unavailable" not in result.review_flags
 
-    def test_blank_pending_slide_not_flagged(self):
-        """Blank/divider slide set to pending must NOT produce a partial flag."""
+    def test_blank_pending_slide_not_flagged_when_known_blank(self):
+        """Blank pending slide must not be flagged when explicitly marked blank."""
         analyses = {
             1: SlideAnalysis(
                 slide_type="data",
                 evidence=[{"confidence": "high", "validated": True}],
             ),
-            2: SlideAnalysis.pending(),  # Blank divider slide
+            2: SlideAnalysis.pending(),
         }
-        # Slide 2 has no text — it's a blank/divider slide
+        # Slide text is not authoritative for blankness.
         texts = {1: self._make_text(1), 2: self._make_text(2, "")}
         result = assess_review_state(
             analyses, texts,
             effective_passes=1, density_threshold=2.0,
             review_confidence_threshold=0.6,
+            known_blank_slides={2},
         )
         assert "partial_analysis_slide_2" not in result.review_flags
         assert result.review_status == "clean"
+        assert "analysis_unavailable" not in result.review_flags
 
-    def test_mixed_blank_and_failure_pending(self):
-        """Blank slide = not flagged, text slide pending = flagged."""
+    def test_visual_only_pending_slide_flagged_when_not_known_blank(self):
+        """Nonblank visual-only pending slide is still flagged even with empty text."""
         analyses = {
             1: SlideAnalysis(
                 slide_type="data",
                 evidence=[{"confidence": "high", "validated": True}],
             ),
-            2: SlideAnalysis.pending(),  # Blank divider
-            3: SlideAnalysis.pending(),  # Real LLM failure — has text
+            2: SlideAnalysis.pending(),
+        }
+        # Empty extracted text does not suppress partial-analysis flags.
+        texts = {1: self._make_text(1), 2: self._make_text(2, "")}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+            known_blank_slides=set(),
+        )
+        assert "partial_analysis_slide_2" in result.review_flags
+        assert "analysis_unavailable" not in result.review_flags
+
+    def test_all_blank_pending_slides_not_analysis_unavailable(self):
+        analyses = {
+            1: SlideAnalysis.pending(),
+            2: SlideAnalysis.pending(),
+        }
+        texts = {1: self._make_text(1, ""), 2: self._make_text(2, "")}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+            known_blank_slides={1, 2},
+        )
+        assert "analysis_unavailable" not in result.review_flags
+        assert "partial_analysis_slide_1" not in result.review_flags
+        assert "partial_analysis_slide_2" not in result.review_flags
+        assert result.review_status == "clean"
+
+    def test_all_reviewable_pending_triggers_analysis_unavailable_even_with_blank_slides(self):
+        analyses = {
+            1: SlideAnalysis.pending(),  # known blank
+            2: SlideAnalysis.pending(),  # reviewable and failed
+            3: SlideAnalysis.pending(),  # reviewable and failed
         }
         texts = {
-            1: self._make_text(1),
-            2: self._make_text(2, ""),        # blank
-            3: self._make_text(3, "Lots of text here"),  # has content
+            1: self._make_text(1, ""),
+            2: self._make_text(2, ""),
+            3: self._make_text(3, ""),
         }
         result = assess_review_state(
             analyses, texts,
             effective_passes=1, density_threshold=2.0,
             review_confidence_threshold=0.6,
+            known_blank_slides={1},
         )
-        assert "partial_analysis_slide_2" not in result.review_flags  # blank → skip
-        assert "partial_analysis_slide_3" in result.review_flags      # text → flag
+        assert "analysis_unavailable" in result.review_flags
+        assert "partial_analysis_slide_2" not in result.review_flags
+        assert "partial_analysis_slide_3" not in result.review_flags
+        assert result.extraction_confidence is None
+
+    def test_mixed_blank_and_failed_pending_uses_blank_slide_set(self):
+        """Blank pending slide excluded; reviewable pending slide flagged."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+            2: SlideAnalysis.pending(),  # blank divider
+            3: SlideAnalysis.pending(),  # real failure
+        }
+        texts = {
+            1: self._make_text(1),
+            2: self._make_text(2, ""),  # text is irrelevant for blank detection
+            3: self._make_text(3, ""),  # visual-only nonblank slide
+        }
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+            known_blank_slides={2},
+        )
+        assert "analysis_unavailable" not in result.review_flags
+        assert "partial_analysis_slide_2" not in result.review_flags
+        assert "partial_analysis_slide_3" in result.review_flags
         assert result.review_status == "flagged"
 
     def test_malformed_evidence_in_compute_confidence(self):
@@ -962,6 +1027,5 @@ class TestAssessReviewState:
         )}
         score = _compute_extraction_confidence(analyses)
         assert score == 0.9  # Only the valid dict item counted
-
 
 

@@ -110,8 +110,8 @@ class SlideAnalysis:
 _CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
 
 # Valid flag prefixes emitted by assess_review_state().
-# - analysis_unavailable: all slides pending (LLM failure / no analysis)
-# - partial_analysis_slide_{n}: slide n pending while others succeeded
+# - analysis_unavailable: all reviewable slides pending (LLM failure / no analysis)
+# - partial_analysis_slide_{n}: reviewable slide n pending while others succeeded
 # - low_confidence_slide_{n}: slide n has low-confidence evidence
 # - unvalidated_claim_slide_{n}: slide n has unvalidated evidence
 # - high_density_unanalyzed: dense slides exist but pass 2 was not run
@@ -171,6 +171,7 @@ def assess_review_state(
     density_threshold: float,
     review_confidence_threshold: float,
     existing_review_status: str | None = None,
+    known_blank_slides: set[int] | None = None,
 ) -> ReviewAssessment:
     """Derive document-level review state after Pass 1 / Pass 2 complete.
 
@@ -178,16 +179,27 @@ def assess_review_state(
     registry review fields, status flagged counts, and promote blocking.
     """
     flags: list[str] = []
+    known_blank_slides = known_blank_slides or set()
 
-    all_pending = bool(analyses) and all(a.slide_type == "pending" for a in analyses.values())
-    if all_pending:
+    reviewable_slides = {
+        slide_num for slide_num in analyses
+        if slide_num not in known_blank_slides
+    }
+    pending_reviewable_slides = {
+        slide_num for slide_num in reviewable_slides
+        if analyses[slide_num].slide_type == "pending"
+    }
+    successful_reviewable_slides = reviewable_slides - pending_reviewable_slides
+    all_reviewable_pending = (
+        bool(reviewable_slides)
+        and pending_reviewable_slides == reviewable_slides
+    )
+    if all_reviewable_pending:
         flags.append("analysis_unavailable")
 
-    # Per-slide flags: pending, low-confidence, unvalidated
-    pending_slides = []
+    # Per-slide flags: low-confidence, unvalidated
     for slide_num, analysis_item in analyses.items():
         if analysis_item.slide_type == "pending":
-            pending_slides.append(slide_num)
             continue  # No evidence to check on pending slides
         evidence = [
             ev for ev in getattr(analysis_item, "evidence", [])
@@ -198,16 +210,12 @@ def assess_review_state(
         if any(not ev.get("validated", False) for ev in evidence):
             flags.append(f"unvalidated_claim_slide_{slide_num}")
 
-    # Flag individual pending slides when other slides succeeded (partial failure).
-    # Blank/divider slides are intentionally set to pending by the converter
-    # and should NOT be flagged — only flag pending slides that had text content
-    # (meaning the LLM should have analyzed them but failed).
-    if pending_slides and not all_pending:
-        for slide_num in pending_slides:
-            text = slide_texts.get(slide_num)
-            has_text = bool(text and getattr(text, "full_text", "").strip())
-            if has_text:
-                flags.append(f"partial_analysis_slide_{slide_num}")
+    # Flag individual reviewable pending slides when other reviewable slides
+    # succeeded (partial failure). Known blank slides are intentionally pending
+    # and excluded by membership in known_blank_slides.
+    if successful_reviewable_slides:
+        for slide_num in sorted(pending_reviewable_slides):
+            flags.append(f"partial_analysis_slide_{slide_num}")
 
     if effective_passes < 2:
         dense_slides = [
@@ -236,7 +244,7 @@ def assess_review_state(
     else:
         review_status = "clean"
 
-    if all_pending:
+    if all_reviewable_pending:
         extraction_confidence = None
 
     return ReviewAssessment(review_status, flags, extraction_confidence)
@@ -1295,4 +1303,3 @@ def _save_cache(cache_dir: Path, cache: dict, model: str | None = None, provider
         tmp_file.rename(cache_file)
     except OSError as e:
         logger.warning("Failed to write cache %s: %s", cache_file, e)
-

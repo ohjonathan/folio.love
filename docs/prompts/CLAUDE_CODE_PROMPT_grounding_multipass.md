@@ -201,13 +201,14 @@ grounding_summary:
 `review_flags` must use stable, machine-generated strings. Implement these exact flags in this PR:
 
 - `analysis_unavailable`
-- `partial_analysis_slide_<N>` — slide N is pending while others succeeded (only for slides with text content; blank/divider slides are intentionally pending and not flagged)
+- `partial_analysis_slide_<N>` — slide N is pending while other reviewable slides succeeded (known blank slides are excluded via converter-provided blank-slide metadata)
 - `low_confidence_slide_<N>`
 - `unvalidated_claim_slide_<N>`
 - `high_density_unanalyzed`
 - `confidence_below_threshold`
 
 `reviewed` and `overridden` are human states. The pipeline must not auto-set either of them. It may preserve them when the current run is otherwise clean.
+`grounding_summary` must always be emitted, including zero-claim cases.
 
 ### Non-Breaking Evidence Helper
 
@@ -342,19 +343,39 @@ def assess_review_state(
     density_threshold: float,
     review_confidence_threshold: float,
     existing_review_status: str | None = None,
+    known_blank_slides: set[int] | None = None,
 ) -> ReviewAssessment:
     flags: list[str] = []
+    known_blank_slides = known_blank_slides or set()
 
-    all_pending = bool(analyses) and all(a.slide_type == "pending" for a in analyses.values())
-    if all_pending:
+    reviewable_slides = {
+        slide_num for slide_num in analyses
+        if slide_num not in known_blank_slides
+    }
+    pending_reviewable_slides = {
+        slide_num for slide_num in reviewable_slides
+        if analyses[slide_num].slide_type == "pending"
+    }
+    successful_reviewable_slides = reviewable_slides - pending_reviewable_slides
+    all_reviewable_pending = (
+        bool(reviewable_slides)
+        and pending_reviewable_slides == reviewable_slides
+    )
+    if all_reviewable_pending:
         flags.append("analysis_unavailable")
 
     for slide_num, analysis in analyses.items():
+        if analysis.slide_type == "pending":
+            continue
         evidence = getattr(analysis, "evidence", [])
         if any(ev.get("confidence") == "low" for ev in evidence):
             flags.append(f"low_confidence_slide_{slide_num}")
         if any(not ev.get("validated", False) for ev in evidence):
             flags.append(f"unvalidated_claim_slide_{slide_num}")
+
+    if successful_reviewable_slides:
+        for slide_num in sorted(pending_reviewable_slides):
+            flags.append(f"partial_analysis_slide_{slide_num}")
 
     if effective_passes < 2:
         dense_slides = [
@@ -379,7 +400,7 @@ def assess_review_state(
     else:
         review_status = "clean"
 
-    if all_pending:
+    if all_reviewable_pending:
         extraction_confidence = None
 
     return ReviewAssessment(review_status, flags, extraction_confidence)
@@ -465,7 +486,8 @@ This is the main implementation file.
 
 Important behavior:
 
-- `analysis_unavailable` only when every slide result is `pending`.
+- `analysis_unavailable` only when there is at least one reviewable slide and every reviewable slide result is `pending`.
+- `partial_analysis_slide_<N>` only for pending reviewable slides; known blank slides are excluded by the converter-provided blank-slide set.
 - `high_density_unanalyzed` only when `effective_passes < 2` and at least one slide exceeds the existing density threshold.
 - `confidence_below_threshold` only when aggregate confidence is non-null and below the configured threshold.
 - `reviewed` or `overridden` may be preserved only when the current run produces no machine flags.
@@ -717,8 +739,11 @@ The final PR is not acceptable unless it demonstrates all of the following:
 - low-confidence auto-flagging
 - unvalidated-claim auto-flagging
 - `analysis_unavailable` path with `extraction_confidence: null`
+- intentional blank slides excluded from pending-failure flags
+- nonblank visual-only pending slides can still trigger `partial_analysis_slide_<N>`
 - `confidence_below_threshold` path
 - `high_density_unanalyzed` path when Pass 2 is disabled
+- zero-claim `grounding_summary` persistence through rebuild
 - registry round-trip of review fields and `grounding_summary`
 - `folio status` flagged counts
 - `folio promote` rejection on flagged documents
@@ -751,6 +776,9 @@ Use existing fixtures and mock styles whenever possible.
 - [ ] flagged documents carry specific, slide-addressable flags
 - [ ] `analysis_unavailable` produces `review_status: flagged`
 - [ ] `analysis_unavailable` produces `extraction_confidence: null`
+- [ ] intentional blank slides do not create `partial_analysis_slide_<N>`
+- [ ] nonblank visual-only pending slides can create `partial_analysis_slide_<N>`
+- [ ] zero-claim `grounding_summary` survives registry rebuild unchanged
 - [ ] `folio status` prints flagged counts from registry data
 - [ ] `folio status --refresh` reconciles review fields from frontmatter
 - [ ] `folio promote` blocks when `review_status == flagged`

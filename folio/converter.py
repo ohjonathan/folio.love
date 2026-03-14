@@ -284,6 +284,7 @@ class FolioConverter:
             density_threshold=self.config.conversion.density_threshold,
             review_confidence_threshold=self.config.conversion.review_confidence_threshold,
             existing_review_status=existing_review_status,
+            known_blank_slides=blank_slides,
         )
 
         fm = frontmatter.generate(
@@ -552,4 +553,3 @@ def _read_existing_frontmatter(markdown_path: Path) -> Optional[dict]:
         return result
     except (yaml_lib.YAMLError, OSError):
         return None
-

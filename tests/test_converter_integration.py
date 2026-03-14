@@ -11,7 +11,7 @@ import yaml
 
 from folio.config import FolioConfig
 from folio.converter import FolioConverter, _alignment_status
-from folio.pipeline.analysis import SlideAnalysis
+from folio.pipeline.analysis import CacheStats, SlideAnalysis
 from folio.pipeline.images import ImageResult
 from folio.pipeline.normalize import NormalizationResult
 from folio.pipeline.text import SlideText, reconcile_slide_count
@@ -122,6 +122,58 @@ class TestBlankOverridePath:
 
             # Check blank slide is pending (its analysis should not pollute frontmatter)
             assert result.slide_count == 3
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_blank_slide_override_does_not_create_partial_analysis_flag(self):
+        """Blank override path must not emit partial_analysis flags for blank slides."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            image_paths = []
+            for i in range(1, 4):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(self._make_unique_png(i))
+                image_paths.append(img)
+
+            image_results = [
+                ImageResult(path=image_paths[0], slide_num=1, is_blank=False, width=200, height=200),
+                ImageResult(path=image_paths[1], slide_num=2, is_blank=True, width=200, height=200),
+                ImageResult(path=image_paths[2], slide_num=3, is_blank=False, width=200, height=200),
+            ]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Slide 1 content", elements=[]),
+                2: SlideText(slide_num=2, full_text="", elements=[]),
+                3: SlideText(slide_num=3, full_text="Slide 3 content", elements=[]),
+            }
+            pass1_analyses = {
+                1: SlideAnalysis(slide_type="data", evidence=[{"confidence": "high", "validated": True}]),
+                2: SlideAnalysis(slide_type="data", evidence=[{"confidence": "high", "validated": True}]),
+                3: SlideAnalysis(slide_type="framework", evidence=[{"confidence": "high", "validated": True}]),
+            }
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(pass1_analyses, CacheStats(hits=0, misses=3, pass_name="pass1"), None),
+                 ):
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            content = result.output_path.read_text()
+            parsed_fm = yaml.safe_load(content[3:content.index("---", 3)])
+
+            assert parsed_fm["review_status"] == "clean"
+            assert parsed_fm["review_flags"] == []
+            assert "partial_analysis_slide_2" not in parsed_fm["review_flags"]
 
 
 class TestReconciliationMetadataInFrontmatter:
@@ -650,5 +702,4 @@ class TestPptxOutputDirPlumbing:
 
             # Intermediate PDF should STILL be cleaned up (try/finally)
             assert not ppt_pdf.exists()
-
 
