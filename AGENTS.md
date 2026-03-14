@@ -87,6 +87,10 @@ Every validation run (Tier 1, Tier 2, etc.) MUST produce four artifacts in
    transcript. Keep it unedited: include dead ends, wrong guesses, user
    frustration, real-time debugging. This is the ground truth that session
    logs and reports summarize.
+   **Platform exception:** When the AI platform cannot export raw transcripts
+   as files (e.g. Cursor agent transcripts), a decision-and-rationale summary
+   is an acceptable substitute. The summary must state where the raw
+   transcript is preserved and why export was not possible.
 4. **Prompt** (`tier<N>_<label>_prompt.md`) — the task specification that
    drove the run (may already exist before the run starts).
 

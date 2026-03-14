@@ -30,3 +30,8 @@ mnt/
 *.bak
 .env
 tests/validation/*.env
+
+# Operator-local config
+folio.yaml
+
+# Local engagement data (add operator-specific paths here or via .git/info/exclude)
