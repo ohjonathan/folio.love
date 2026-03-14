@@ -18,7 +18,7 @@ generated_by: ontos_scaffold
 
 ## March 2026 Status Update
 
-Since this roadmap was published, `main` has shipped three important baseline
+Since this roadmap was published, `main` has shipped five important baseline
 changes:
 
 - PR #8: multi-provider LLM analysis for `folio convert` / `folio batch`
@@ -30,13 +30,21 @@ changes:
 - PR #12: fixed PowerPoint sandbox staging-dir export path
   (`~/Documents/.folio_pdf_staging/`) plus a full Tier 1 rerun on the same
   50-deck real consulting corpus used in the March baseline
+- PR #14: Tier 1 closeout validation confirming OneDrive portability and
+  same-PDF cache rerun behavior on real retained PDFs
+- PR #15: Tier 2 daily-driver implementation (`registry.json`, `folio status`,
+  `folio scan`, `folio refresh`, `folio promote`, source-root routing, and
+  Obsidian query docs)
+- PR #17: accelerated Tier 2 operational validation on a real engagement
+  corpus, with an explicit recommendation to continue Tier 3 planning while
+  formal Tier 2 closeout remains pending
 
 This does **not** change the roadmap hierarchy. It does change the current
 implementation baseline: multi-provider LLM support is now shipped foundation,
 and the managed-mac automated PPTX conversion path has been rerun successfully
 on the real Tier 1 corpus.
 
-Current Tier 1 reality after PR #12:
+Current Tier 1 reality after PR #14:
 
 - Managed-mac automated PPTX rerun: **50/50 succeeded** on the March 2026 real
   corpus (**49/50 clean output**), with zero conversion failures during the
@@ -45,18 +53,21 @@ Current Tier 1 reality after PR #12:
   intervention during the main run after the one-time staging-dir grant
 - Output quality: one documented template-only edge case in `building_blocks`;
   no structural silent failures in the rerun report
-- Same-PDF cache rerun behavior on an identical PDF with no content change was
-  **not re-tested**
+- Same-PDF cache rerun behavior on an identical PDF with no content change:
+  **PASS** in `docs/validation/tier1_closeout_report.md`
 - Automated-PPTX rerun cache persistence remains a **known deferred
   limitation** because PowerPoint PDF output is non-deterministic
-- Cross-machine portability (OneDrive sync test) remains **not yet tested**
+- Cross-machine portability (OneDrive sync test): **PASS** in
+  `docs/validation/tier1_closeout_report.md`
 
-Remaining follow-up after PR #12:
+Remaining Tier 1 carried-forward limitations after closeout:
 
 - Pass 2 fallback provenance should be surfaced more cleanly in execution
   metadata/frontmatter
-- Same-PDF cache rerun should still be explicitly re-validated
-- Cross-machine portability still needs the planned OneDrive sync test
+- Automated-PPTX rerun cache persistence remains deferred until the follow-on
+  cache work lands
+- `building_blocks` remains a documented template-only edge case rather than a
+  general pipeline defect
 
 ---
 
@@ -283,6 +294,29 @@ unchecked boxes remain the canonical gate list.
 - [ ] Configuration supports multiple source roots
 - [ ] Configuration supports named LLM profiles and provider-specific credential references
 - [ ] Johnny uses it daily on real engagement for 2+ weeks
+
+### Current Status Against Tier 2 Exit Criteria
+
+The table below tracks current progress against the Tier 2 exit criteria above.
+The unchecked boxes remain the canonical gate list.
+
+| Checkpoint | Current Status | Evidence / Notes |
+|-----------|----------------|------------------|
+| CLI handles full daily workflow | Achieved in accelerated operational validation | `docs/validation/tier2_accelerated_precloseout_report.md` records successful `convert`, `batch`, `status`, `scan`, `refresh`, and `promote` runs on a real engagement corpus |
+| Route-based LLM selection plus `--llm-profile` override | Achieved in accelerated operational validation | Default routing and explicit `--llm-profile` override were both verified in `_llm_metadata` during the accelerated run |
+| Multi-client library organized and navigable | Partial | Accelerated run validated 9 decks for 1 client; the formal 100+ deck / 5+ client target remains open |
+| Obsidian opens library with no errors | Partial | Frontmatter and slide-image rendering checks passed, but manual vault-open confirmation and inline content image limitations remain open |
+| Dataview queries work for all frontmatter fields | Achieved on accelerated sample | Required Dataview-queryable fields were present across the accelerated validation sample; one template file had no frameworks |
+| Configuration supports multiple source roots | Partial | Non-empty `target_prefix` routing passed; empty `target_prefix` validation remains blocked by broken validation-corpus symlinks |
+| Configuration supports named LLM profiles and credential references | Achieved | Named profiles, credential env-var references, route-based selection, and single-command override are all in current `main` and exercised in the accelerated run |
+| Johnny uses it daily on real engagement for 2+ weeks | Not yet complete | The accelerated pre-closeout explicitly does not satisfy the formal 2-week daily-use criterion |
+
+Current program status after PR #17:
+
+- Tier 2 implementation is on `main`
+- Accelerated operational validation found no systematic blockers
+- Tier 3 planning can proceed in parallel
+- Formal Tier 2 closeout is still pending the remaining gate items above
 
 ---
 
