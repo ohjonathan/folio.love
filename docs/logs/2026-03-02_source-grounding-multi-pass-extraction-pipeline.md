@@ -45,4 +45,4 @@ Add evidence-backed analysis to Folio conversions so every claim is traceable to
 
 ## Testing
 
-49 tests passing: `pytest tests/ -v`
+49 tests passing: `.venv/bin/python -m pytest tests/ -v`

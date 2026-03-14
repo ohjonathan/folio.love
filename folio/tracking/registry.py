@@ -35,10 +35,28 @@ class RegistryEntry:
     authority: Optional[str] = None
     curation_level: Optional[str] = None
     staleness_status: str = "current"  # current | stale | missing
+    # FR-700 reviewability
+    review_status: Optional[str] = None
+    review_flags: Optional[list[str]] = field(default=None)
+    extraction_confidence: Optional[float] = None
+    grounding_summary: Optional[dict] = field(default=None)
 
     def to_dict(self) -> dict:
-        """Serialize to a dict suitable for JSON storage."""
-        return {k: v for k, v in asdict(self).items() if v is not None}
+        """Serialize to a dict suitable for JSON storage.
+
+        Review field semantics:
+        - ``None`` means the field has not been computed (legacy doc or LLM failure).
+        - ``[]`` / ``{}`` means the field was computed and is clean (no issues).
+        We preserve empty list/dict so downstream consumers can distinguish
+        "not computed" from "computed, clean".
+        """
+        d = {k: v for k, v in asdict(self).items() if v is not None}
+        # Preserve empty list / dict for review fields (FR-700)
+        if self.review_flags is not None:
+            d["review_flags"] = self.review_flags
+        if self.grounding_summary is not None:
+            d["grounding_summary"] = self.grounding_summary
+        return d
 
 
 def load_registry(registry_path: Path) -> dict:
@@ -136,6 +154,10 @@ def rebuild_registry(library_root: Path) -> dict:
             authority=fm.get("authority"),
             curation_level=fm.get("curation_level"),
             staleness_status=staleness["status"],
+            review_status=fm.get("review_status"),
+            review_flags=fm.get("review_flags"),
+            extraction_confidence=fm.get("extraction_confidence"),
+            grounding_summary=fm.get("grounding_summary"),
         )
         data["decks"][entry.id] = entry.to_dict()
 
@@ -148,8 +170,9 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
     """Reconcile registry entries against their actual markdown frontmatter.
 
     Updates registry fields that are frontmatter-authoritative
-    (title, client, engagement, authority, curation_level) so the
-    registry stays consistent after manual edits.
+    (title, client, engagement, authority, curation_level,
+    review_status, review_flags) so the registry stays consistent
+    after manual edits.
     """
     library_root = Path(library_root).resolve()
     changed = 0
@@ -162,8 +185,17 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
         if fm is None:
             continue
         # Reconcile frontmatter-authoritative fields
+        # review_status and review_flags are frontmatter-authoritative so
+        # manual edits (e.g. setting review_status: reviewed) are respected.
+        #
+        # NOT reconciled (converter-authoritative, recomputed on each conversion):
+        # - extraction_confidence: derived from evidence by assess_review_state()
+        # - grounding_summary: derived from evidence by _compute_grounding_summary()
+        # These are intentionally excluded; the registry retains the last-computed
+        # values and frontmatter is the source of truth only after re-conversion.
         authoritative = [
             "title", "client", "engagement", "authority", "curation_level",
+            "review_status", "review_flags",
         ]
         for field_name in authoritative:
             if field_name in fm:

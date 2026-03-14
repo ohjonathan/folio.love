@@ -61,6 +61,6 @@ Unblock Week 5-6 validation of 50 real PPTX decks on locked-down corporate lapto
 
 ## Testing
 
-- `python3 -m pytest` — 334 passed in isolated virtualenv with `.[dev]`
+- `.venv/bin/python -m pytest` — 334 passed in isolated virtualenv with `.[dev]`
 - All tests fully mocked (no real PowerPoint/LibreOffice needed)
 - Manual smoke test on managed Mac pending before 50-deck validation run

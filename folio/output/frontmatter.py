@@ -27,6 +27,9 @@ def generate(
     existing_frontmatter: Optional[dict] = None,
     reconciliation_metadata: Optional[dict] = None,
     llm_metadata: Optional[dict] = None,
+    review_status: Optional[str] = None,
+    review_flags: Optional[list[str]] = None,
+    extraction_confidence: Optional[float] = None,
 ) -> str:
     """Generate YAML frontmatter conforming to Folio Ontology v2 schema.
 
@@ -93,7 +96,7 @@ def generate(
             preserved_curation = prev_curation
 
     # Build frontmatter in semantic group order:
-    # Identity > Lifecycle > Source > Temporal > Engagement > Content > Extensions
+    # Identity > Lifecycle > Review/Quality > Source > Temporal > Engagement > Content > Extensions
     frontmatter = {
         # Identity
         "id": preserved_id,
@@ -104,6 +107,10 @@ def generate(
         "status": "active",
         "authority": preserved_authority,
         "curation_level": preserved_curation,
+        # Review state (FR-700)
+        "review_status": review_status if review_status is not None else "clean",
+        "review_flags": review_flags if review_flags is not None else [],
+        "extraction_confidence": extraction_confidence,
         # Source
         "source": source_relative_path,
         "source_hash": source_hash,
@@ -137,10 +144,10 @@ def generate(
     if reconciliation_metadata:
         frontmatter.update(reconciliation_metadata)
 
-    # Grounding summary from evidence
+    # Grounding summary from evidence — always emit to prevent
+    # registry/frontmatter drift (Finding 4 / round 1 + Finding 2 / round 2).
     grounding = _compute_grounding_summary(analyses)
-    if grounding["total_claims"] > 0:
-        frontmatter["grounding_summary"] = grounding
+    frontmatter["grounding_summary"] = grounding
 
     # LLM provenance metadata
     if llm_metadata:
@@ -170,7 +177,7 @@ def _collect_unique(
     exclude = exclude or set()
     values = set()
     for analysis in analyses.values():
-        evidence = getattr(analysis, "evidence", [])
+        evidence = [ev for ev in getattr(analysis, "evidence", []) if isinstance(ev, dict)]
         if evidence and not any(ev.get("validated", False) for ev in evidence):
             continue  # All evidence unvalidated — skip
         value = getattr(analysis, field, "")
@@ -193,6 +200,8 @@ def _compute_grounding_summary(analyses: dict[int, SlideAnalysis]) -> dict:
 
     for slide_num, analysis in analyses.items():
         for ev in getattr(analysis, "evidence", []):
+            if not isinstance(ev, dict):
+                continue
             total += 1
             conf = ev.get("confidence", "medium")
             if conf == "high":

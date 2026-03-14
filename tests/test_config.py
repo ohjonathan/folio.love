@@ -329,3 +329,34 @@ class TestLLMConfigValidation:
                     },
                 )
             )
+
+
+class TestReviewConfidenceThreshold:
+    """Test review_confidence_threshold config field."""
+
+    def test_default_value(self):
+        config = FolioConfig()
+        assert config.conversion.review_confidence_threshold == 0.6
+
+    def test_explicit_yaml_load(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("conversion:\n  review_confidence_threshold: 0.8\n")
+            f.flush()
+            config = FolioConfig.load(Path(f.name))
+        assert config.conversion.review_confidence_threshold == 0.8
+
+    def test_below_zero_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="review_confidence_threshold"):
+            FolioConfig(conversion=ConversionConfig(review_confidence_threshold=-0.1))
+
+    def test_above_one_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="review_confidence_threshold"):
+            FolioConfig(conversion=ConversionConfig(review_confidence_threshold=1.1))
+
+    def test_non_numeric_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="review_confidence_threshold"):
+            FolioConfig(conversion=ConversionConfig(review_confidence_threshold="high"))
+

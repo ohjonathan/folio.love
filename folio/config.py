@@ -147,6 +147,7 @@ class ConversionConfig:
     default_passes: int = 1
     density_threshold: float = 2.0
     pptx_renderer: str = "auto"
+    review_confidence_threshold: float = 0.6
 
 
 @dataclass
@@ -175,6 +176,14 @@ class FolioConfig:
         if c.pptx_renderer not in ("auto", "libreoffice", "powerpoint"):
             raise ValueError(
                 f"pptx_renderer must be 'auto', 'libreoffice', or 'powerpoint', got {c.pptx_renderer!r}"
+            )
+        if not isinstance(c.review_confidence_threshold, (int, float)):
+            raise ValueError(
+                f"review_confidence_threshold must be a number, got {c.review_confidence_threshold!r}"
+            )
+        if c.review_confidence_threshold < 0.0 or c.review_confidence_threshold > 1.0:
+            raise ValueError(
+                f"review_confidence_threshold must be between 0.0 and 1.0, got {c.review_confidence_threshold!r}"
             )
 
         # LLM validation (spec §3.2)
@@ -362,6 +371,7 @@ class FolioConfig:
             default_passes=conv_raw.get("default_passes", 1),
             density_threshold=conv_raw.get("density_threshold", 2.0),
             pptx_renderer=conv_raw.get("pptx_renderer", "auto"),
+            review_confidence_threshold=conv_raw.get("review_confidence_threshold", 0.6),
         )
 
         config_dir = config_path.resolve().parent

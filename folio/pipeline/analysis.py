@@ -99,6 +99,157 @@ class SlideAnalysis:
         )
 
 
+# ---------------------------------------------------------------------------
+# FR-700: Reviewability helpers
+# ---------------------------------------------------------------------------
+
+# Base confidence scores per evidence confidence level.
+# Calibrated so that a document of all-high evidence scores 0.90 (well above
+# the 0.6 default threshold), mixed high/medium lands ~0.78, and all-low
+# scores 0.40 (well below threshold, triggering review).
+_CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
+
+# Valid flag prefixes emitted by assess_review_state().
+# - analysis_unavailable: all reviewable slides pending (LLM failure / no analysis)
+# - partial_analysis_slide_{n}: reviewable slide n pending while others succeeded
+# - low_confidence_slide_{n}: slide n has low-confidence evidence
+# - unvalidated_claim_slide_{n}: slide n has unvalidated evidence
+# - high_density_unanalyzed: dense slides exist but pass 2 was not run
+# - confidence_below_threshold: document-level confidence < threshold
+
+
+def _compute_extraction_confidence(analyses: dict[int, SlideAnalysis]) -> float | None:
+    """Compute document-level extraction confidence from evidence.
+
+    Returns None when no evidence exists (e.g., all slides pending).
+    """
+    evidence = [
+        ev
+        for analysis in analyses.values()
+        for ev in getattr(analysis, "evidence", [])
+        if isinstance(ev, dict)
+    ]
+    if not evidence:
+        return None
+
+    score = sum(_CONFIDENCE_BASE.get(ev.get("confidence", "medium"), 0.65) for ev in evidence)
+    score = score / len(evidence)
+
+    # Cap at 0.59 (just below the default 0.6 threshold) when any evidence
+    # is low-confidence or unvalidated.  This guarantees a review flag for
+    # documents with questionable evidence, regardless of how many high-
+    # confidence items pull the average up.  The equal penalty is intentional:
+    # an unvalidated high-confidence claim is no more trustworthy than a
+    # validated low-confidence one — both need human review.
+    if any(ev.get("confidence") == "low" for ev in evidence):
+        score = min(score, 0.59)
+    if any(not ev.get("validated", False) for ev in evidence):
+        score = min(score, 0.59)
+
+    return round(score, 2)
+
+
+@dataclass(frozen=True)
+class ReviewAssessment:
+    """Document-level review state derived from analysis results."""
+    review_status: str
+    review_flags: list[str]
+    extraction_confidence: float | None
+
+    def __repr__(self) -> str:
+        return (
+            f"ReviewAssessment(status={self.review_status!r}, "
+            f"flags={self.review_flags!r}, confidence={self.extraction_confidence})"
+        )
+
+
+def assess_review_state(
+    analyses: dict[int, SlideAnalysis],
+    slide_texts: dict[int, "SlideText"],
+    *,
+    effective_passes: int,
+    density_threshold: float,
+    review_confidence_threshold: float,
+    existing_review_status: str | None = None,
+    known_blank_slides: set[int] | None = None,
+) -> ReviewAssessment:
+    """Derive document-level review state after Pass 1 / Pass 2 complete.
+
+    This is the single source of truth for frontmatter review fields,
+    registry review fields, status flagged counts, and promote blocking.
+    """
+    flags: list[str] = []
+    known_blank_slides = known_blank_slides or set()
+
+    reviewable_slides = {
+        slide_num for slide_num in analyses
+        if slide_num not in known_blank_slides
+    }
+    pending_reviewable_slides = {
+        slide_num for slide_num in reviewable_slides
+        if analyses[slide_num].slide_type == "pending"
+    }
+    successful_reviewable_slides = reviewable_slides - pending_reviewable_slides
+    all_reviewable_pending = (
+        bool(reviewable_slides)
+        and pending_reviewable_slides == reviewable_slides
+    )
+    if all_reviewable_pending:
+        flags.append("analysis_unavailable")
+
+    # Per-slide flags: low-confidence, unvalidated
+    for slide_num, analysis_item in analyses.items():
+        if analysis_item.slide_type == "pending":
+            continue  # No evidence to check on pending slides
+        evidence = [
+            ev for ev in getattr(analysis_item, "evidence", [])
+            if isinstance(ev, dict)
+        ]
+        if any(ev.get("confidence") == "low" for ev in evidence):
+            flags.append(f"low_confidence_slide_{slide_num}")
+        if any(not ev.get("validated", False) for ev in evidence):
+            flags.append(f"unvalidated_claim_slide_{slide_num}")
+
+    # Flag individual reviewable pending slides when other reviewable slides
+    # succeeded (partial failure). Known blank slides are intentionally pending
+    # and excluded by membership in known_blank_slides.
+    if successful_reviewable_slides:
+        for slide_num in sorted(pending_reviewable_slides):
+            flags.append(f"partial_analysis_slide_{slide_num}")
+
+    if effective_passes < 2:
+        dense_slides = [
+            slide_num
+            for slide_num, analysis_item in analyses.items()
+            if slide_num in slide_texts
+            and _compute_density_score(analysis_item, slide_texts[slide_num]) > density_threshold
+        ]
+        if dense_slides:
+            flags.append("high_density_unanalyzed")
+
+    extraction_confidence = _compute_extraction_confidence(analyses)
+    if extraction_confidence is not None and extraction_confidence < review_confidence_threshold:
+        flags.append("confidence_below_threshold")
+
+    flags = sorted(set(flags))
+
+    if flags:
+        review_status = "flagged"
+    elif existing_review_status in {"reviewed", "overridden"}:
+        # "reviewed" = human confirmed flags are resolved.
+        # "overridden" = human explicitly accepted despite flags (set via
+        #   manual frontmatter edit; no CLI command exists yet).
+        # Both are preserved when no new flags are generated.
+        review_status = existing_review_status
+    else:
+        review_status = "clean"
+
+    if all_reviewable_pending:
+        extraction_confidence = None
+
+    return ReviewAssessment(review_status, flags, extraction_confidence)
+
+
 @dataclass
 class CacheStats:
     """Cache hit/miss statistics for a single analysis pass."""
@@ -1152,4 +1303,3 @@ def _save_cache(cache_dir: Path, cache: dict, model: str | None = None, provider
         tmp_file.rename(cache_file)
     except OSError as e:
         logger.warning("Failed to write cache %s: %s", cache_file, e)
-

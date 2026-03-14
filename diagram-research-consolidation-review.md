@@ -72,5 +72,5 @@ Reuse the current test seams instead of inventing a new LLM-heavy harness. Add a
 ## Verification Notes
 
 - Code paths inspected on `main`.
-- `/Users/jonathanoh/Dev/folio.love/.venv/bin/pytest --collect-only -q` reports 506 tests.
-- The system `pytest` on this machine resolves to Python 3.9 and mis-collects this repo, so `.venv/bin/pytest` is the correct test entrypoint here.
+- `/Users/jonathanoh/Dev/folio.love/.venv/bin/python -m pytest --collect-only -q` reports 506 tests.
+- The system `pytest` on this machine resolves to Python 3.9 and mis-collects this repo, so `.venv/bin/python -m pytest` is the correct test entrypoint here.
