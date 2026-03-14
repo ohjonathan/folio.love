@@ -35,10 +35,21 @@ class RegistryEntry:
     authority: Optional[str] = None
     curation_level: Optional[str] = None
     staleness_status: str = "current"  # current | stale | missing
+    # FR-700 reviewability
+    review_status: Optional[str] = None
+    review_flags: Optional[list[str]] = field(default=None)
+    extraction_confidence: Optional[float] = None
+    grounding_summary: Optional[dict] = field(default=None)
 
     def to_dict(self) -> dict:
         """Serialize to a dict suitable for JSON storage."""
-        return {k: v for k, v in asdict(self).items() if v is not None}
+        d = {k: v for k, v in asdict(self).items() if v is not None}
+        # Preserve empty list / dict for review fields (FR-700)
+        if self.review_flags is not None:
+            d["review_flags"] = self.review_flags
+        if self.grounding_summary is not None:
+            d["grounding_summary"] = self.grounding_summary
+        return d
 
 
 def load_registry(registry_path: Path) -> dict:
@@ -136,6 +147,10 @@ def rebuild_registry(library_root: Path) -> dict:
             authority=fm.get("authority"),
             curation_level=fm.get("curation_level"),
             staleness_status=staleness["status"],
+            review_status=fm.get("review_status"),
+            review_flags=fm.get("review_flags"),
+            extraction_confidence=fm.get("extraction_confidence"),
+            grounding_summary=fm.get("grounding_summary"),
         )
         data["decks"][entry.id] = entry.to_dict()
 
@@ -164,6 +179,7 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
         # Reconcile frontmatter-authoritative fields
         authoritative = [
             "title", "client", "engagement", "authority", "curation_level",
+            "review_status", "review_flags", "extraction_confidence",
         ]
         for field_name in authoritative:
             if field_name in fm:

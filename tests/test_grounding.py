@@ -16,6 +16,9 @@ from folio.pipeline.analysis import (
     _deduplicate_evidence,
     _load_cache,
     _load_cache_deep,
+    _compute_extraction_confidence,
+    ReviewAssessment,
+    assess_review_state,
 )
 from folio.pipeline.text import SlideText
 
@@ -600,3 +603,246 @@ class TestPass2JsonConflictHandling:
         evidence, _, _ = _normalize_pass2_json(data)
         assert len(evidence) == 10
         assert all(ev["pass"] == 2 for ev in evidence)
+
+
+class TestExtractionConfidence:
+    """Test _compute_extraction_confidence()."""
+
+    def test_all_high_validated(self):
+        """All high-confidence, validated evidence → ~0.90."""
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[
+                {"confidence": "high", "validated": True},
+                {"confidence": "high", "validated": True},
+            ],
+        )}
+        score = _compute_extraction_confidence(analyses)
+        assert score == 0.9
+
+    def test_mixed_high_medium_validated(self):
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[
+                {"confidence": "high", "validated": True},
+                {"confidence": "medium", "validated": True},
+            ],
+        )}
+        score = _compute_extraction_confidence(analyses)
+        # (0.9 + 0.65) / 2 = 0.775
+        assert score == 0.78  # rounded
+
+    def test_low_confidence_clamps(self):
+        """Any low-confidence evidence → score capped at 0.59."""
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[
+                {"confidence": "high", "validated": True},
+                {"confidence": "low", "validated": True},
+            ],
+        )}
+        score = _compute_extraction_confidence(analyses)
+        assert score is not None
+        assert score <= 0.59
+
+    def test_unvalidated_clamps(self):
+        """Any unvalidated evidence → score capped at 0.59."""
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[
+                {"confidence": "high", "validated": False},
+            ],
+        )}
+        score = _compute_extraction_confidence(analyses)
+        assert score is not None
+        assert score <= 0.59
+
+    def test_no_evidence_returns_none(self):
+        analyses = {1: SlideAnalysis.pending()}
+        score = _compute_extraction_confidence(analyses)
+        assert score is None
+
+    def test_empty_analyses(self):
+        score = _compute_extraction_confidence({})
+        assert score is None
+
+
+class TestAssessReviewState:
+    """Test assess_review_state() for all flag types."""
+
+    def _make_text(self, slide_num, full_text="Some slide text"):
+        return SlideText(slide_num=slide_num, full_text=full_text, elements=[])
+
+    def test_clean_document(self):
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[{"confidence": "high", "validated": True}],
+        )}
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status == "clean"
+        assert result.review_flags == []
+        assert result.extraction_confidence == 0.9
+
+    def test_analysis_unavailable(self):
+        analyses = {1: SlideAnalysis.pending(), 2: SlideAnalysis.pending()}
+        texts = {1: self._make_text(1), 2: self._make_text(2)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status == "flagged"
+        assert "analysis_unavailable" in result.review_flags
+        assert result.extraction_confidence is None
+
+    def test_low_confidence_slide(self):
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[{"confidence": "low", "validated": True}],
+        )}
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status == "flagged"
+        assert "low_confidence_slide_1" in result.review_flags
+
+    def test_unvalidated_claim_slide(self):
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[{"confidence": "high", "validated": False}],
+        )}
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status == "flagged"
+        assert "unvalidated_claim_slide_1" in result.review_flags
+
+    def test_high_density_unanalyzed(self):
+        """Dense slides with passes < 2 → high_density_unanalyzed."""
+        evidence = [
+            {"claim": f"C{i}", "quote": f"q{i}", "confidence": "high", "validated": True}
+            for i in range(5)
+        ]
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            framework="tam-sam-som",
+            evidence=evidence,
+            key_data="a, b, c, d, e, f",
+        )}
+        long_text = " ".join(["word"] * 200)
+        texts = {1: self._make_text(1, long_text)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "high_density_unanalyzed" in result.review_flags
+
+    def test_high_density_not_flagged_with_pass2(self):
+        """Dense slides with passes >= 2 → no high_density_unanalyzed flag."""
+        evidence = [
+            {"claim": f"C{i}", "quote": f"q{i}", "confidence": "high", "validated": True}
+            for i in range(5)
+        ]
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            framework="tam-sam-som",
+            evidence=evidence,
+            key_data="a, b, c, d, e, f",
+        )}
+        long_text = " ".join(["word"] * 200)
+        texts = {1: self._make_text(1, long_text)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=2, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "high_density_unanalyzed" not in result.review_flags
+
+    def test_confidence_below_threshold(self):
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[{"confidence": "low", "validated": True}],
+        )}
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "confidence_below_threshold" in result.review_flags
+
+    def test_flags_are_sorted_and_deduplicated(self):
+        """Flags should be sorted and unique."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "low", "validated": False},
+                    {"confidence": "low", "validated": False},
+                ],
+            ),
+        }
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_flags == sorted(set(result.review_flags))
+
+    def test_preserves_reviewed_status_when_clean(self):
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[{"confidence": "high", "validated": True}],
+        )}
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+            existing_review_status="reviewed",
+        )
+        assert result.review_status == "reviewed"
+        assert result.review_flags == []
+
+    def test_preserves_overridden_status_when_clean(self):
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[{"confidence": "high", "validated": True}],
+        )}
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+            existing_review_status="overridden",
+        )
+        assert result.review_status == "overridden"
+
+    def test_escalates_reviewed_back_to_flagged(self):
+        """Even if previously reviewed, new flags → flagged."""
+        analyses = {1: SlideAnalysis(
+            slide_type="data",
+            evidence=[{"confidence": "low", "validated": False}],
+        )}
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+            existing_review_status="reviewed",
+        )
+        assert result.review_status == "flagged"
+

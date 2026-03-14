@@ -1002,3 +1002,128 @@ class TestPromoteBootstraps:
         assert "Bootstrapping" in result.output
         assert "Promoted" in result.output
         assert (library / "registry.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# FR-700: status flagged + promote blocking
+# ---------------------------------------------------------------------------
+
+class TestStatusFlagged:
+    def test_status_shows_flagged_count(self, tmp_path):
+        """folio status should print flagged count when documents are flagged."""
+        library = tmp_path / "library"
+        library.mkdir(parents=True)
+
+        entry = _sample_registry_entry(
+            review_status="flagged",
+            review_flags=["low_confidence_slide_1"],
+        )
+        reg_data = {"_schema_version": 1, "decks": {entry["id"]: entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "Flagged: 1" in result.output
+        assert "low_confidence_slide_1" in result.output
+
+    def test_status_no_flagged_when_clean(self, tmp_path):
+        """folio status should not show Flagged line when all clean."""
+        library = tmp_path / "library"
+        library.mkdir(parents=True)
+
+        entry = _sample_registry_entry(review_status="clean", review_flags=[])
+        reg_data = {"_schema_version": 1, "decks": {entry["id"]: entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "Flagged" not in result.output
+
+
+class TestPromoteFlaggedBlocking:
+    def test_promote_blocked_when_flagged(self, tmp_path):
+        """folio promote should fail with non-zero exit when document is flagged."""
+        library = tmp_path / "library"
+        deck_dir = library / "Client" / "deck"
+        md_path = deck_dir / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "flagged_deck",
+            "title": "Flagged Deck",
+            "type": "evidence",
+            "curation_level": "L0",
+            "client": "ClientA",
+            "engagement": "Q1",
+            "tags": ["tag"],
+            "source": "../../../sources/deck.pptx",
+            "source_hash": "abc",
+            "review_status": "flagged",
+            "review_flags": ["unvalidated_claim_slide_1", "confidence_below_threshold"],
+        })
+
+        entry = _sample_registry_entry(
+            id="flagged_deck",
+            markdown_path="Client/deck/deck.md",
+            deck_dir="Client/deck",
+            curation_level="L0",
+            client="ClientA",
+            review_status="flagged",
+            review_flags=["unvalidated_claim_slide_1"],
+        )
+        reg_data = {"_schema_version": 1, "decks": {"flagged_deck": entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "promote", "flagged_deck", "L1"])
+        assert result.exit_code != 0
+        assert "flagged" in result.output.lower()
+        assert "unvalidated_claim_slide_1" in result.output
+
+    def test_promote_allowed_when_clean(self, tmp_path):
+        """folio promote should succeed when review_status is clean."""
+        library = tmp_path / "library"
+        deck_dir = library / "Client" / "deck"
+        md_path = deck_dir / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "clean_deck",
+            "title": "Clean Deck",
+            "type": "evidence",
+            "curation_level": "L0",
+            "client": "ClientA",
+            "engagement": "Q1",
+            "tags": ["tag"],
+            "source": "../../../sources/deck.pptx",
+            "source_hash": "abc",
+            "review_status": "clean",
+            "review_flags": [],
+        })
+
+        entry = _sample_registry_entry(
+            id="clean_deck",
+            markdown_path="Client/deck/deck.md",
+            deck_dir="Client/deck",
+            curation_level="L0",
+            client="ClientA",
+            review_status="clean",
+        )
+        reg_data = {"_schema_version": 1, "decks": {"clean_deck": entry}}
+        save_registry(library / "registry.json", reg_data)
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "promote", "clean_deck", "L1"])
+        assert result.exit_code == 0
+        assert "Promoted" in result.output
+

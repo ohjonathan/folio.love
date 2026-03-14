@@ -273,6 +273,19 @@ class FolioConverter:
             },
         }
 
+        # FR-700: Compute review state
+        existing_review_status = None
+        if isinstance(existing_fm, dict):
+            existing_review_status = existing_fm.get("review_status")
+        review_assessment = analysis.assess_review_state(
+            slide_analyses,
+            slide_texts,
+            effective_passes=effective_passes,
+            density_threshold=self.config.conversion.density_threshold,
+            review_confidence_threshold=self.config.conversion.review_confidence_threshold,
+            existing_review_status=existing_review_status,
+        )
+
         fm = frontmatter.generate(
             title=_title_from_name(deck_name),
             deck_id=deck_id,
@@ -289,6 +302,9 @@ class FolioConverter:
             existing_frontmatter=existing_fm,
             reconciliation_metadata=reconciliation_meta,
             llm_metadata=llm_meta,
+            review_status=review_assessment.review_status,
+            review_flags=review_assessment.review_flags,
+            extraction_confidence=review_assessment.extraction_confidence,
         )
 
         # Assemble markdown
@@ -352,6 +368,10 @@ class FolioConverter:
                 authority=reg_authority,
                 curation_level=reg_curation,
                 staleness_status="current",
+                review_status=review_assessment.review_status,
+                review_flags=review_assessment.review_flags,
+                extraction_confidence=review_assessment.extraction_confidence,
+                grounding_summary=frontmatter._compute_grounding_summary(slide_analyses),
             )
             registry_path = library_root / "registry.json"
             registry.upsert_entry(registry_path, reg_entry)

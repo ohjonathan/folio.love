@@ -99,6 +99,102 @@ class SlideAnalysis:
         )
 
 
+# ---------------------------------------------------------------------------
+# FR-700: Reviewability helpers
+# ---------------------------------------------------------------------------
+
+_CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
+
+
+def _compute_extraction_confidence(analyses: dict[int, SlideAnalysis]) -> float | None:
+    """Compute document-level extraction confidence from evidence.
+
+    Returns None when no evidence exists (e.g., all slides pending).
+    """
+    evidence = [
+        ev
+        for analysis in analyses.values()
+        for ev in getattr(analysis, "evidence", [])
+        if isinstance(ev, dict)
+    ]
+    if not evidence:
+        return None
+
+    score = sum(_CONFIDENCE_BASE.get(ev.get("confidence", "medium"), 0.65) for ev in evidence)
+    score = score / len(evidence)
+
+    if any(ev.get("confidence") == "low" for ev in evidence):
+        score = min(score, 0.59)
+    if any(not ev.get("validated", False) for ev in evidence):
+        score = min(score, 0.59)
+
+    return round(score, 2)
+
+
+@dataclass(frozen=True)
+class ReviewAssessment:
+    """Document-level review state derived from analysis results."""
+    review_status: str
+    review_flags: list[str]
+    extraction_confidence: float | None
+
+
+def assess_review_state(
+    analyses: dict[int, SlideAnalysis],
+    slide_texts: dict[int, "SlideText"],
+    *,
+    effective_passes: int,
+    density_threshold: float,
+    review_confidence_threshold: float,
+    existing_review_status: str | None = None,
+) -> ReviewAssessment:
+    """Derive document-level review state after Pass 1 / Pass 2 complete.
+
+    This is the single source of truth for frontmatter review fields,
+    registry review fields, status flagged counts, and promote blocking.
+    """
+    flags: list[str] = []
+
+    all_pending = bool(analyses) and all(a.slide_type == "pending" for a in analyses.values())
+    if all_pending:
+        flags.append("analysis_unavailable")
+
+    for slide_num, analysis_item in analyses.items():
+        evidence = getattr(analysis_item, "evidence", [])
+        if any(ev.get("confidence") == "low" for ev in evidence):
+            flags.append(f"low_confidence_slide_{slide_num}")
+        if any(not ev.get("validated", False) for ev in evidence):
+            flags.append(f"unvalidated_claim_slide_{slide_num}")
+
+    if effective_passes < 2:
+        dense_slides = [
+            slide_num
+            for slide_num, analysis_item in analyses.items()
+            if slide_num in slide_texts
+            and _compute_density_score(analysis_item, slide_texts[slide_num]) > density_threshold
+        ]
+        if dense_slides:
+            flags.append("high_density_unanalyzed")
+
+    extraction_confidence = _compute_extraction_confidence(analyses)
+    if extraction_confidence is not None and extraction_confidence < review_confidence_threshold:
+        flags.append("confidence_below_threshold")
+
+    flags = sorted(set(flags))
+
+    if flags:
+        review_status = "flagged"
+    elif existing_review_status in {"reviewed", "overridden"}:
+        review_status = existing_review_status
+    else:
+        review_status = "clean"
+
+    if all_pending:
+        extraction_confidence = None
+
+    return ReviewAssessment(review_status, flags, extraction_confidence)
+
+
 @dataclass
 class CacheStats:
     """Cache hit/miss statistics for a single analysis pass."""

@@ -465,3 +465,49 @@ class TestSourceTypeReportDeferral:
         assert _detect_source_type(Path("report.pdf")) != "report"
         assert _detect_source_type(Path("report.pptx")) != "report"
         assert _detect_source_type(Path("report.docx")) != "report"
+
+
+# --- FR-700: Review fields ---
+
+
+class TestReviewFields:
+    """Test review_status, review_flags, extraction_confidence in frontmatter."""
+
+    def test_default_clean_status(self):
+        fm = _parse_frontmatter(_generate_simple())
+        assert fm["review_status"] == "clean"
+        assert fm["review_flags"] == []
+
+    def test_flagged_with_flags(self):
+        fm = _parse_frontmatter(_generate_simple(
+            review_status="flagged",
+            review_flags=["low_confidence_slide_1", "unvalidated_claim_slide_1"],
+        ))
+        assert fm["review_status"] == "flagged"
+        assert "low_confidence_slide_1" in fm["review_flags"]
+        assert "unvalidated_claim_slide_1" in fm["review_flags"]
+
+    def test_extraction_confidence_present(self):
+        fm = _parse_frontmatter(_generate_simple(extraction_confidence=0.85))
+        assert fm["extraction_confidence"] == 0.85
+
+    def test_extraction_confidence_absent_when_none(self):
+        fm = _parse_frontmatter(_generate_simple())
+        assert "extraction_confidence" not in fm
+
+    def test_review_status_ordering(self):
+        """review_status and review_flags must appear after curation_level."""
+        fm = _parse_frontmatter(_generate_simple(
+            review_status="clean",
+            review_flags=[],
+        ))
+        keys = list(fm.keys())
+        assert keys.index("curation_level") < keys.index("review_status")
+        assert keys.index("review_status") < keys.index("review_flags")
+        assert keys.index("review_flags") < keys.index("source")
+
+    def test_required_fields_include_review(self):
+        fm = _parse_frontmatter(_generate_simple())
+        assert "review_status" in fm
+        assert "review_flags" in fm
+

@@ -353,3 +353,100 @@ class TestWriteSafety:
         path.write_text(json.dumps({"_schema_version": 1, "decks": "not a dict"}))
         data = load_registry(path)
         assert data.get("_corrupt") is True
+
+
+# ---------------------------------------------------------------------------
+# FR-700: review fields
+# ---------------------------------------------------------------------------
+
+class TestReviewFieldsRegistry:
+    def test_round_trip_with_review_fields(self, tmp_path):
+        entry = _sample_entry(
+            review_status="flagged",
+            review_flags=["low_confidence_slide_1", "unvalidated_claim_slide_1"],
+            extraction_confidence=0.45,
+            grounding_summary={"total_claims": 3, "high_confidence": 1},
+        )
+        d = entry.to_dict()
+        assert d["review_status"] == "flagged"
+        assert d["review_flags"] == ["low_confidence_slide_1", "unvalidated_claim_slide_1"]
+        assert d["extraction_confidence"] == 0.45
+        assert d["grounding_summary"]["total_claims"] == 3
+
+        restored = entry_from_dict(d)
+        assert restored.review_status == "flagged"
+        assert restored.review_flags == ["low_confidence_slide_1", "unvalidated_claim_slide_1"]
+        assert restored.extraction_confidence == 0.45
+
+    def test_empty_review_flags_preserved(self):
+        entry = _sample_entry(review_status="clean", review_flags=[])
+        d = entry.to_dict()
+        assert "review_flags" in d
+        assert d["review_flags"] == []
+
+    def test_none_review_fields_omitted(self):
+        entry = _sample_entry()
+        d = entry.to_dict()
+        assert "review_status" not in d
+        assert "review_flags" not in d
+        assert "extraction_confidence" not in d
+
+    def test_rebuild_reads_review_fields(self, tmp_path):
+        library = tmp_path / "library"
+        source = tmp_path / "sources" / "deck.pptx"
+        _make_source(source)
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        md_path = library / "Client" / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "test_deck",
+            "title": "Test",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": h,
+            "source_type": "deck",
+            "version": 1,
+            "converted": "2026-01-01",
+            "review_status": "flagged",
+            "review_flags": ["analysis_unavailable"],
+            "extraction_confidence": 0.3,
+        })
+
+        data = rebuild_registry(library)
+        entry = data["decks"]["test_deck"]
+        assert entry["review_status"] == "flagged"
+        assert entry["review_flags"] == ["analysis_unavailable"]
+        assert entry["extraction_confidence"] == 0.3
+
+    def test_reconcile_updates_review_status(self, tmp_path):
+        from folio.tracking.registry import reconcile_from_frontmatter
+
+        library = tmp_path / "library"
+        md_path = library / "deck" / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "test_deck",
+            "title": "Test",
+            "source": "../../sources/deck.pptx",
+            "source_hash": "abc",
+            "review_status": "reviewed",
+            "review_flags": [],
+        })
+
+        data = {
+            "_schema_version": 1,
+            "decks": {
+                "test_deck": {
+                    "id": "test_deck",
+                    "title": "Test",
+                    "markdown_path": "deck/deck.md",
+                    "review_status": "flagged",
+                    "review_flags": ["low_confidence_slide_1"],
+                },
+            },
+        }
+
+        result = reconcile_from_frontmatter(library, data)
+        assert result["decks"]["test_deck"]["review_status"] == "reviewed"
+        assert result["decks"]["test_deck"]["review_flags"] == []
+

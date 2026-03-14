@@ -413,8 +413,10 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
     current = 0
     stale = 0
     missing = 0
+    flagged = 0
     stale_decks = []
     missing_decks = []
+    flagged_decks = []
 
     for deck_id, entry_data in data.get("decks", {}).items():
         entry = registry.entry_from_dict(entry_data)
@@ -438,6 +440,11 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
             missing += 1
             missing_decks.append(entry)
 
+        # FR-700: tally flagged documents
+        if entry_data.get("review_status") == "flagged":
+            flagged += 1
+            flagged_decks.append(entry)
+
     if do_refresh:
         # Reconcile frontmatter-authoritative fields (B2)
         data = registry.reconcile_from_frontmatter(library_root, data)
@@ -445,11 +452,22 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
 
     total = current + stale + missing
     click.echo(f"Library: {total} decks")
+    if flagged:
+        click.echo(f"  ! Flagged: {flagged}")
     click.echo(f"  ✓ Current: {current}")
     if stale:
         click.echo(f"  ⚠ Stale: {stale}")
     if missing:
         click.echo(f"  ✗ Missing source: {missing}")
+
+    if flagged_decks:
+        click.echo("")
+        click.echo("Flagged:")
+        for entry in flagged_decks:
+            ed = data["decks"].get(entry.id, {})
+            flags = ed.get("review_flags", [])
+            flags_str = ", ".join(flags) if flags else "(no flags)"
+            click.echo(f"  {entry.markdown_path}  [{flags_str}]")
 
     if stale_decks:
         click.echo("")
@@ -746,6 +764,14 @@ def promote(ctx, deck_id: str, level: str):
     fm = _read_existing_frontmatter(md_path)
     if fm is None:
         click.echo(f"✗ Cannot read frontmatter from {entry.markdown_path}")
+        sys.exit(1)
+
+    # FR-700: Block promotion of flagged documents
+    if fm.get("review_status") == "flagged":
+        flags = fm.get("review_flags", [])
+        click.echo(f"✗ Cannot promote: document is flagged for review.")
+        for f in flags:
+            click.echo(f"  - {f}")
         sys.exit(1)
 
     warnings = []

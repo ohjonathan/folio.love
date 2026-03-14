@@ -27,6 +27,9 @@ def generate(
     existing_frontmatter: Optional[dict] = None,
     reconciliation_metadata: Optional[dict] = None,
     llm_metadata: Optional[dict] = None,
+    review_status: Optional[str] = None,
+    review_flags: Optional[list[str]] = None,
+    extraction_confidence: Optional[float] = None,
 ) -> str:
     """Generate YAML frontmatter conforming to Folio Ontology v2 schema.
 
@@ -104,6 +107,9 @@ def generate(
         "status": "active",
         "authority": preserved_authority,
         "curation_level": preserved_curation,
+        # Review state (FR-700)
+        "review_status": review_status or "clean",
+        "review_flags": review_flags if review_flags is not None else [],
         # Source
         "source": source_relative_path,
         "source_hash": source_hash,
@@ -141,6 +147,10 @@ def generate(
     grounding = _compute_grounding_summary(analyses)
     if grounding["total_claims"] > 0:
         frontmatter["grounding_summary"] = grounding
+
+    # Extraction confidence (FR-700)
+    if extraction_confidence is not None:
+        frontmatter["extraction_confidence"] = extraction_confidence
 
     # LLM provenance metadata
     if llm_metadata:
