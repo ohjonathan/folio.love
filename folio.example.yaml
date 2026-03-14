@@ -1,0 +1,38 @@
+library_root: ./library
+
+sources:
+  - name: client_engagement
+    path: "./path/to/engagement/documents"
+    target_prefix: "Client Name"
+
+  - name: validation_corpus
+    path: ./tests/validation/corpus
+    target_prefix: ""
+
+llm:
+  profiles:
+    anthropic_sonnet:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+      api_key_env: ANTHROPIC_API_KEY
+
+    openai_gpt4o:
+      provider: openai
+      model: gpt-4o
+      api_key_env: OPENAI_API_KEY
+
+  routing:
+    default:
+      primary: anthropic_sonnet
+      fallbacks: [openai_gpt4o]
+    convert:
+      primary: anthropic_sonnet
+      fallbacks: [openai_gpt4o]
+
+conversion:
+  image_dpi: 150
+  image_format: png
+  default_passes: 1
+  density_threshold: 2.0
+  pptx_renderer: powerpoint
+  libreoffice_timeout: 120
