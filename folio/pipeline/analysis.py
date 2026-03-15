@@ -51,7 +51,7 @@ _DIAGRAM_MARKER_FIELDS = frozenset({
 
 def _stable_signature(*parts: str) -> str:
     """Compute a stable SHA-256 signature from ordered string parts."""
-    combined = "|".join(parts)
+    combined = "\x00".join(parts)
     return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
 ANALYSIS_PROMPT = """Analyze this consulting slide. Return a single JSON object with exactly this structure (no other text):
@@ -215,7 +215,7 @@ class DiagramNode:
                 bbox = None
         # S4: Guard against NaN/Inf values in bbox
         if bbox is not None and any(
-            not isinstance(v, (int, float)) or v != v or abs(v) == float('inf')
+            v != v or abs(v) == float('inf')
             for v in bbox
         ):
             bbox = None
@@ -413,13 +413,14 @@ class DiagramAnalysis(SlideAnalysis):
     ) -> "DiagramAnalysis":
         """Promote a SlideAnalysis to DiagramAnalysis, copying inherited fields.
 
-        Warning: if called on a DiagramAnalysis, diagram-specific fields
-        (graph, mermaid, description, uncertainties) are NOT copied.
+        Raises:
+            TypeError: If sa is already a DiagramAnalysis (diagram-specific
+                fields would be silently lost).
         """
         if isinstance(sa, DiagramAnalysis):
-            logger.warning(
+            raise TypeError(
                 "from_slide_analysis() called on DiagramAnalysis — "
-                "diagram-specific fields will be lost"
+                "use the instance directly or copy diagram-specific fields manually"
             )
         return cls(
             slide_type=sa.slide_type,
@@ -734,7 +735,10 @@ def _pass1_context_hash(analysis: SlideAnalysis) -> str:
     framework, key_data, main_insight. Evidence is excluded because
     it is not an input to the depth prompt.
     """
-    content = f"{analysis.slide_type}|{analysis.framework}|{analysis.key_data}|{analysis.main_insight}"
+    content = "\x00".join([
+        analysis.slide_type, analysis.framework,
+        analysis.key_data, analysis.main_insight,
+    ])
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
@@ -1946,14 +1950,6 @@ def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None, pro
         cache["_schema_version"] = _DIAGRAM_SCHEMA_VERSION
         cache["_pipeline_version"] = _DIAGRAM_PIPELINE_VERSION
         cache["_image_strategy_version"] = _IMAGE_STRATEGY_VERSION
-        cache["_cache_signature"] = _stable_signature(
-            _prompt_version(DEPTH_PROMPT.template),
-            _DIAGRAM_SCHEMA_VERSION,
-            _DIAGRAM_PIPELINE_VERSION,
-            _IMAGE_STRATEGY_VERSION,
-            provider or "",
-            model or "",
-        )
         tmp_file = cache_file.with_suffix(".tmp")
         tmp_file.write_text(json.dumps(cache, indent=2))
         tmp_file.rename(cache_file)
@@ -2042,14 +2038,6 @@ def _save_cache(cache_dir: Path, cache: dict, model: str | None = None, provider
         cache["_schema_version"] = _DIAGRAM_SCHEMA_VERSION
         cache["_pipeline_version"] = _DIAGRAM_PIPELINE_VERSION
         cache["_image_strategy_version"] = _IMAGE_STRATEGY_VERSION
-        cache["_cache_signature"] = _stable_signature(
-            _prompt_version(ANALYSIS_PROMPT),
-            _DIAGRAM_SCHEMA_VERSION,
-            _DIAGRAM_PIPELINE_VERSION,
-            _IMAGE_STRATEGY_VERSION,
-            provider or "",
-            model or "",
-        )
         # Atomic write
         tmp_file = cache_file.with_suffix(".tmp")
         tmp_file.write_text(json.dumps(cache, indent=2))

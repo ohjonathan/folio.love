@@ -272,6 +272,12 @@ class TestDiagramAnalysis:
         assert d["review_required"] is True
         assert d["diagram_type"] == "unsupported"
 
+    def test_from_slide_analysis_rejects_diagram_analysis(self):
+        """M-NEW-3: Passing a DiagramAnalysis should raise TypeError."""
+        da = DiagramAnalysis(diagram_type="architecture", mermaid="graph LR")
+        with pytest.raises(TypeError, match="from_slide_analysis.*DiagramAnalysis"):
+            DiagramAnalysis.from_slide_analysis(da, diagram_type="mixed")
+
 
 # ---------------------------------------------------------------------------
 # Polymorphic factory dispatch
@@ -480,6 +486,12 @@ class TestStableSignature:
     def test_length(self):
         s = _stable_signature("test")
         assert len(s) == 16
+
+    def test_delimiter_not_ambiguous(self):
+        """M5: Parts containing the old '|' delimiter must not collide."""
+        s1 = _stable_signature("a|b", "c")
+        s2 = _stable_signature("a", "b|c")
+        assert s1 != s2
 
 
 # ---------------------------------------------------------------------------
