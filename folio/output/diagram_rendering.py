@@ -229,7 +229,8 @@ _DIRECTION_DISPLAY: dict[str, str] = {
 _RESERVED_WORDS = frozenset({"end", "subgraph", "graph", "direction"})
 
 # Characters that need escaping/removal in Mermaid labels.
-_UNSAFE_LABEL_RE = re.compile(r'[()\[\]{}<>"\|;`]')
+# Includes control bytes (\x00-\x1f, \x7f) to prevent injection.
+_UNSAFE_LABEL_RE = re.compile(r'[()\[\]{}<>"\|;`\x00-\x1f\x7f]')
 
 # Control characters and newlines that must be stripped from prose/table values.
 _CONTROL_CHAR_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
@@ -279,13 +280,13 @@ def _sanitize_edge_label(label: str | None) -> tuple[str, bool]:
 def _make_safe_id(node_id: str, registry: dict[str, str] | None = None) -> str:
     """Ensure a node ID is safe for Mermaid (alphanumeric + underscore).
 
-    Detects collisions from non-ASCII IDs that collapse to the same safe form
-    and appends a counter suffix to disambiguate.
+    Uses a bidirectional registry to ensure stable, collision-free mapping:
+    the same original ID always returns the same safe ID across calls.
 
     Args:
         node_id: Original node ID.
-        registry: Optional collision registry (dict mapping safe_id → original_id).
-            When provided, collisions are detected and disambiguated.
+        registry: Optional collision registry. Maps BOTH directions:
+            safe_id → original_id AND '_rev:'+original_id → safe_id.
     """
     safe = re.sub(r"[^a-zA-Z0-9_]", "_", node_id)
     safe = re.sub(r"_+", "_", safe).strip("_")
@@ -294,19 +295,24 @@ def _make_safe_id(node_id: str, registry: dict[str, str] | None = None) -> str:
     if registry is None:
         return base
 
-    # Check for collision (different original ID → same safe ID)
+    # Reverse lookup: if we already assigned a safe ID for this original, return it
+    rev_key = f"_rev:{node_id}"
+    if rev_key in registry:
+        return registry[rev_key]
+
+    # Forward collision check (different original ID → same safe ID)
     if base in registry:
         if registry[base] != node_id:
-            # Collision — find unique suffix
             counter = 1
             while f"{base}_{counter}" in registry:
                 counter += 1
             safe = f"{base}_{counter}"
-            registry[safe] = node_id
-            return safe
-    else:
-        registry[base] = node_id
-    return base
+        # else: base maps to same node_id, reuse it
+    
+    # Register both directions
+    registry[safe] = node_id
+    registry[rev_key] = safe
+    return safe
 
 
 # ---------------------------------------------------------------------------
@@ -394,19 +400,32 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
             # Flatten: render contained nodes at current level
             _render_group_nodes(group, indent)
             rendered_groups.add(group.id)
+            # Continue traversing descendant subgroups (flattened at this level)
+            nested = sorted(
+                [group_map[gid] for gid in group.contains_groups if gid in group_map],
+                key=lambda g: (g.name, g.id),
+            )
+            recursion_path.add(group.id)
+            for nested_group in nested:
+                _render_group(nested_group, depth + 1, indent)
+            recursion_path.discard(group.id)
             return
 
         recursion_path.add(group.id)
         rendered_groups.add(group.id)
 
-        # Determine if group has renderable content
-        has_nodes = any(nid in node_map for nid in group.contains)
+        # Determine if group has renderable content — use reconciled map
+        nodes_for_group = [
+            node_map[nid] for nid in node_to_group
+            if node_to_group[nid] == group.id and nid in node_map
+        ]
+        has_nodes = bool(nodes_for_group)
         nested = sorted(
             [group_map[gid] for gid in group.contains_groups if gid in group_map],
             key=lambda g: (g.name, g.id),
         )
 
-        # S3 + m-NEW-1: Only emit subgraph wrapper if there's direct content
+        # Only emit subgraph wrapper if there's direct content
         # or unrendered subgroups. But ALWAYS recurse into subgroups for
         # cycle detection even if we elide the wrapper.
         emit_wrapper = has_nodes or any(
@@ -416,14 +435,24 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
         if emit_wrapper:
             safe_gid = _make_safe_id(group.id, safe_id_registry)
             sanitized_name = _sanitize_label(group.name)
-            # S1: Flag when group name falls back to ID
             if sanitized_name is None:
+                # Omit-and-flag: group name unsanitizable
                 sanitized_name = safe_gid
                 uncertainties.append(
                     f"Group '{group.id}' name unsanitizable; using ID as label"
                 )
             lines.append(f"{indent}subgraph {safe_gid} [{sanitized_name}]")
-            _render_group_nodes(group, indent + "    ")
+            # Render nodes from reconciled map, NOT just group.contains
+            sorted_nodes = sorted(nodes_for_group, key=lambda n: (n.label, n.id))
+            for node in sorted_nodes:
+                node_line = _render_node(node)
+                if node_line is not None:
+                    lines.append(f"{indent}    {node_line}")
+                else:
+                    omitted_node_ids.add(node.id)
+                    uncertainties.append(
+                        f"Node '{node.id}' omitted from Mermaid: label unsanitizable"
+                    )
 
         # Always recurse into nested subgroups (cycle detection)
         for nested_group in nested:
@@ -455,14 +484,8 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
         safe_id = _make_safe_id(node.id, safe_id_registry)
         label = _sanitize_label(node.label)
         if label is None:
-            label = safe_id  # fallback to node id
-            # S1: Flag the fallback as an uncertainty
-            if label:
-                uncertainties.append(
-                    f"Node '{node.id}' label unsanitizable; using ID as label"
-                )
-            else:
-                return None
+            # Per proposal: omit and flag, do NOT fall back to node ID
+            return None
 
         # B2: Use plain text technology in Mermaid (not wiki-linked).
         # Wiki-links are reserved for component_table and prose.
@@ -718,7 +741,8 @@ def graph_to_component_table(graph: "DiagramGraph") -> str:
         group = node_to_group_name.get(node.id, "")
         confidence = f"{node.confidence:.2f}"
         # S4: Escape pipes in cell values to prevent table breakage
-        label = _escape_table_cell(node.label)
+        # Blank-label fallback: use node ID if label is empty after cleaning
+        label = _escape_table_cell(node.label) or _escape_table_cell(node.id)
         kind = _escape_table_cell(node.kind or "")
         tech = _escape_table_cell(tech)
         group = _escape_table_cell(group)
@@ -764,8 +788,13 @@ def graph_to_connection_table(graph: "DiagramGraph") -> str:
         src = node_map.get(edge.source_id)
         tgt = node_map.get(edge.target_id)
         # S4: Escape pipes in cell values
-        from_label = _escape_table_cell(src.label if src else edge.source_id)
-        to_label = _escape_table_cell(tgt.label if tgt else edge.target_id)
+        # Blank-label fallback: use node ID if label is empty after cleaning
+        from_label = _escape_table_cell(
+            (src.label if src else "") or (src.id if src else edge.source_id)
+        )
+        to_label = _escape_table_cell(
+            (tgt.label if tgt else "") or (tgt.id if tgt else edge.target_id)
+        )
         label = _escape_table_cell(edge.label or "")
         # S3: Conservative direction handling in connection table
         direction = (edge.direction or "").lower()

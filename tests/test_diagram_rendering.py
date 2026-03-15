@@ -407,10 +407,14 @@ class TestSanitization:
 
 
 class TestEmptyLabelFallback:
-    def test_empty_label_uses_node_id(self):
+    def test_empty_label_omits_node(self):
+        """Per proposal: unsanitizable label → omit node from Mermaid."""
         graph = _simple_graph(nodes=[_n("fallback_node", "")])
-        mermaid, _ = graph_to_mermaid(graph)
-        assert "fallback_node" in mermaid
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        # Node should be omitted, not fallen back to ID
+        assert "fallback_node" not in mermaid or "graph TD" == mermaid.strip()
+        assert any("omitted" in u.lower() or "unsanitizable" in u.lower()
+                   for u in uncertainties)
 
 
 # ---------------------------------------------------------------------------
@@ -419,9 +423,8 @@ class TestEmptyLabelFallback:
 
 
 class TestOmitAndFlag:
-    def test_unsanitizable_label_falls_back_to_id_with_uncertainty(self):
-        """S1: When label sanitizes to empty, fall back to node ID and
-        emit an uncertainty (omit-and-flag contract)."""
+    def test_unsanitizable_label_omits_node_with_uncertainty(self):
+        """Per proposal: unsanitizable label → omit node, emit uncertainty."""
         graph = _simple_graph(
             nodes=[
                 _n("good", "Good Node"),
@@ -431,9 +434,10 @@ class TestOmitAndFlag:
         )
         mermaid, uncertainties = graph_to_mermaid(graph)
         assert "Good Node" in mermaid
-        assert "bad" in mermaid
-        # S1: Should flag the fallback
-        assert any("unsanitizable" in u.lower() or "using id" in u.lower()
+        # 'bad' node should be omitted from Mermaid
+        assert any("omitted" in u.lower() for u in uncertainties)
+        # Edge referencing omitted node should also be flagged
+        assert any("edge" in u.lower() and "omitted" in u.lower()
                    for u in uncertainties)
 
     def test_unsanitizable_edge_label_flagged(self):
@@ -1045,3 +1049,107 @@ class TestRenderDiagramAnalyses:
         assert rendered.description is not None
         assert rendered.component_table is not None
         assert rendered.connection_table is not None
+
+
+# ---------------------------------------------------------------------------
+# Round 4 Regression Tests
+# ---------------------------------------------------------------------------
+
+
+class TestRound4Regressions:
+    """Targeted regressions for Round 4 semantic bugs."""
+
+    def test_regrouped_node_renders_in_mermaid_with_edge(self):
+        """P1 regression: PR4-style regrouped node (group_id set, group.contains
+        empty) must appear inside the subgraph with its edge intact."""
+        graph = _simple_graph(
+            nodes=[
+                _n("api", "API Server", group_id="backend"),
+                _n("db", "Database", kind="database"),
+            ],
+            edges=[_e("api_db", "api", "db", label="SQL")],
+            groups=[_g("backend", "Backend", contains=[])],  # PR4: contains empty
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        # Node must appear in Mermaid, inside the subgraph
+        assert "API Server" in mermaid
+        assert "subgraph" in mermaid
+        assert "Backend" in mermaid
+        # Edge must be present
+        assert "SQL" in mermaid
+        # No silent erasure
+        assert mermaid.strip() != "graph TD"
+
+    def test_cjk_id_collision_edges_stable(self):
+        """P1 regression: two CJK node IDs that collapse to the same safe form
+        must produce edges that reference the SAME safe IDs used for nodes
+        (no phantom node_2 created)."""
+        graph = _simple_graph(
+            nodes=[
+                _n("データ", "Data Store"),
+                _n("サービス", "Service"),
+            ],
+            edges=[_e("edge1", "データ", "サービス", label="fetch")],
+        )
+        mermaid, _ = graph_to_mermaid(graph)
+        # Both nodes present
+        assert "Data Store" in mermaid
+        assert "Service" in mermaid
+        # Extract all Mermaid IDs used (node definitions + edges)
+        lines = mermaid.strip().split("\n")
+        # Only "node" and "node_1" should exist (no "node_2")
+        mermaid_text = "\n".join(lines)
+        assert "node_2" not in mermaid_text
+
+    def test_depth_limit_preserves_descendants(self):
+        """P2 regression: nodes in deeply nested subgroups beyond the depth limit
+        must still render (flattened) rather than silently disappearing."""
+        # Build chain: g0 → g1 → ... → g6 (contains leaf)
+        groups = []
+        for i in range(7):
+            groups.append(_g(
+                f"g{i}", f"Group {i}",
+                contains=["leaf"] if i == 6 else [],
+                contains_groups=[f"g{i+1}"] if i < 6 else [],
+            ))
+        graph = _simple_graph(
+            nodes=[_n("leaf", "Leaf Node")],
+            groups=groups,
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        # Leaf MUST appear even though it's past depth limit
+        assert "Leaf Node" in mermaid
+        # Should report depth overflow
+        assert any("depth" in u.lower() for u in uncertainties)
+
+    def test_mermaid_control_bytes_stripped(self):
+        """P2 regression: control bytes in labels must be stripped from
+        Mermaid output, not passed through."""
+        graph = _simple_graph(
+            nodes=[_n("x", "Clean\x00Label\x07Here")],
+        )
+        mermaid, _ = graph_to_mermaid(graph)
+        assert "\x00" not in mermaid
+        assert "\x07" not in mermaid
+        assert "CleanLabelHere" in mermaid
+
+    def test_blank_label_table_cells_use_id_fallback(self):
+        """P2 regression: blank-label nodes must show node ID in table cells
+        rather than empty Component column."""
+        graph = _simple_graph(
+            nodes=[_n("my_node", "")],
+        )
+        table = graph_to_component_table(graph)
+        # Node ID should appear as fallback in Component column
+        assert "my_node" in table
+
+    def test_blank_label_connection_table_uses_id(self):
+        """P2 regression: blank-label nodes in connection table should
+        show node ID, not empty From/To cells."""
+        graph = _simple_graph(
+            nodes=[_n("src", ""), _n("tgt", "Target")],
+            edges=[_e("e1", "src", "tgt")],
+        )
+        table = graph_to_connection_table(graph)
+        assert "src" in table  # fallback to node ID
+        assert "Target" in table
