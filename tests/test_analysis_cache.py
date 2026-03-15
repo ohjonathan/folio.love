@@ -1254,6 +1254,67 @@ class TestCacheHitProvenance:
         assert stage_meta.per_slide_providers[1] == ("openai", "gpt-4o")
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass2_fresh_fallback_sets_summary_metadata(self, tmp_path):
+        """Pass-2 fallback miss should update stage fallback summary fields."""
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(82))
+        pass1_results = {
+            1: SlideAnalysis(
+                slide_type="data",
+                framework="none",
+                key_data="revenue: $10M",
+                main_insight="growing",
+                evidence=[{
+                    "claim": "Revenue",
+                    "quote": "$10M",
+                    "element_type": "body",
+                    "confidence": "high",
+                    "validated": True,
+                    "pass": 1,
+                }],
+            ),
+        }
+        texts = {1: SlideText(slide_num=1, full_text="Dense content " * 40, elements=[])}
+
+        mock_provider = MagicMock()
+        mock_provider.create_client.return_value = MagicMock()
+        usage = MagicMock(total_tokens=0, input_tokens=0, output_tokens=0)
+
+        with patch("folio.pipeline.analysis.get_provider", return_value=mock_provider), \
+             patch("folio.pipeline.analysis._compute_density_score", return_value=999.0), \
+             patch(
+                 "folio.pipeline.analysis._run_depth_with_fallback",
+                 return_value=(
+                     [{
+                         "claim": "Extra detail",
+                         "quote": "detail",
+                         "element_type": "body",
+                         "confidence": "high",
+                         "validated": False,
+                     }],
+                     None,
+                     None,
+                     "openai",
+                     "gpt-4o",
+                     usage,
+                 ),
+             ):
+            _, stats, stage_meta = analyze_slides_deep(
+                pass1_results=pass1_results,
+                slide_texts=texts,
+                image_paths=[img],
+                model="test-model",
+                provider_name="anthropic",
+                force_miss=True,
+            )
+
+        assert stats.misses == 1
+        assert stage_meta.per_slide_providers[1] == ("openai", "gpt-4o")
+        assert stage_meta.fallback_activated is True
+        assert stage_meta.fallback_provider == "openai"
+        assert stage_meta.fallback_model == "gpt-4o"
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_cache_hit_missing_provider_model_falls_back_to_primary(self, tmp_path):
         """Old cache entry without _provider/_model should not crash; falls back to primary."""
         from folio.pipeline.analysis import _hash_image, _text_hash, _prompt_version, ANALYSIS_PROMPT
@@ -1297,6 +1358,62 @@ class TestCacheHitProvenance:
         # Falls back to primary provider/model
         assert stage_meta.per_slide_providers[1] == ("anthropic", "test-model")
         # No fallback flagged (provider matches primary)
+        assert stage_meta.fallback_activated is False
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    @pytest.mark.parametrize(
+        ("cache_fields", "case_name"),
+        [
+            ({"_provider": "openai"}, "provider_only"),
+            ({"_model": "gpt-4o"}, "model_only"),
+        ],
+    )
+    def test_cache_hit_partial_provenance_falls_back_to_primary_pair(self, tmp_path, cache_fields, case_name):
+        """Partial legacy provenance must fall back to the full primary pair."""
+        from folio.pipeline.analysis import _hash_image, _text_hash, _prompt_version, ANALYSIS_PROMPT
+        from folio.pipeline.text import _EXTRACTION_VERSION
+
+        img = tmp_path / f"slide-{case_name}.png"
+        img.write_bytes(_make_unique_png(90 if case_name == "provider_only" else 91))
+        image_hash = _hash_image(img)
+        texts = {1: SlideText(slide_num=1, full_text=f"Legacy {case_name} text")}
+
+        cache = {
+            image_hash: {
+                "slide_type": "data",
+                "framework": "none",
+                "visual_description": "chart",
+                "key_data": "$10M",
+                "main_insight": "growing",
+                "evidence": [{
+                    "claim": "Rev",
+                    "quote": "$10M",
+                    "element_type": "body",
+                    "confidence": "high",
+                    "validated": True,
+                    "pass": 1,
+                }],
+                "_text_hash": _text_hash(texts[1]),
+                **cache_fields,
+            },
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
+            "_model_version": "test-model",
+            "_provider_version": "anthropic",
+            "_extraction_version": _EXTRACTION_VERSION,
+        }
+        (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache, indent=2))
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(side_effect=AssertionError("No API"))
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            _, stats, stage_meta = analyze_slides(
+                [img], model="test-model", cache_dir=tmp_path,
+                slide_texts=texts, provider_name="anthropic",
+            )
+
+        assert stats.hits == 1
+        assert stage_meta.per_slide_providers[1] == ("anthropic", "test-model")
         assert stage_meta.fallback_activated is False
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -1372,4 +1489,3 @@ class TestCacheHitProvenance:
         providers = set(stage_meta.per_slide_providers.values())
         distinct_providers = set(p for p, _ in providers)
         assert len(distinct_providers) > 1, "Should detect multiple providers"
-

@@ -511,10 +511,14 @@ def _cached_provider_model(
     primary_model: str,
 ) -> tuple[str, str]:
     """Extract provider/model from a cache entry, falling back to primary."""
-    return (
-        cached.get("_provider", primary_provider),
-        cached.get("_model", primary_model),
-    )
+    cached_provider = cached.get("_provider")
+    cached_model = cached.get("_model")
+    if (
+        isinstance(cached_provider, str) and cached_provider
+        and isinstance(cached_model, str) and cached_model
+    ):
+        return cached_provider, cached_model
+    return primary_provider, primary_model
 
 
 # Cache is flushed after every resolved miss for per-page durability
@@ -1244,6 +1248,10 @@ def analyze_slides_deep(
 
         # Track per-slide provider for mixed-provider provenance
         stage_meta.per_slide_providers[slide_num] = (used_provider, used_model)
+        if used_provider != provider_name and not stage_meta.fallback_activated:
+            stage_meta.fallback_activated = True
+            stage_meta.fallback_provider = used_provider
+            stage_meta.fallback_model = used_model
 
         # Store in cache (B2: include _text_hash + _pass1_hash)
         # Finding 6: store actually-used provider/model, not primary

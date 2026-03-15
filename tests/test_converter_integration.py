@@ -11,6 +11,7 @@ import yaml
 
 from folio.config import FolioConfig
 from folio.converter import FolioConverter, _alignment_status
+from folio.llm.types import StageLLMMetadata
 from folio.pipeline.analysis import CacheStats, SlideAnalysis
 from folio.pipeline.images import ImageResult
 from folio.pipeline.normalize import NormalizationResult
@@ -368,6 +369,129 @@ class TestBlankSlidesSkipPass2:
         # Slides 1 and 3 should have been scored
         assert 1 in scored_slides
         assert 3 in scored_slides
+
+
+class TestLLMMetadataConverterIntegration:
+    """Test converter-level LLM metadata emission for fallback scenarios."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass2_fallback_written_to_frontmatter(self):
+        """Frontmatter should reflect the actual pass-2 fallback provider/model."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            img = target_dir / "slide-001.png"
+            img.write_bytes(self._make_unique_png(1))
+
+            image_results = [
+                ImageResult(path=img, slide_num=1, width=200, height=200),
+            ]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Content " * 20, elements=[]),
+            }
+            pass1_analyses = {
+                1: SlideAnalysis(
+                    slide_type="data",
+                    framework="none",
+                    visual_description="chart",
+                    key_data="$10M",
+                    main_insight="growing",
+                    evidence=[{
+                        "claim": "Revenue",
+                        "quote": "$10M",
+                        "element_type": "body",
+                        "confidence": "high",
+                        "validated": True,
+                        "pass": 1,
+                    }],
+                ),
+            }
+            pass2_analyses = {
+                1: SlideAnalysis(
+                    slide_type="data",
+                    framework="none",
+                    visual_description="chart",
+                    key_data="$10M",
+                    main_insight="growing",
+                    evidence=[
+                        {
+                            "claim": "Revenue",
+                            "quote": "$10M",
+                            "element_type": "body",
+                            "confidence": "high",
+                            "validated": True,
+                            "pass": 1,
+                        },
+                        {
+                            "claim": "Expanded detail",
+                            "quote": "detail",
+                            "element_type": "body",
+                            "confidence": "high",
+                            "validated": False,
+                            "pass": 2,
+                        },
+                    ],
+                ),
+            }
+            pass1_meta = StageLLMMetadata(
+                provider="anthropic",
+                model="claude-sonnet-4-20250514",
+                slide_count=1,
+                cache_misses=1,
+                per_slide_providers={1: ("anthropic", "claude-sonnet-4-20250514")},
+            )
+            pass2_meta = StageLLMMetadata(
+                provider="anthropic",
+                model="claude-sonnet-4-20250514",
+                slide_count=1,
+                cache_misses=1,
+                fallback_activated=True,
+                fallback_provider="openai",
+                fallback_model="gpt-4o",
+                per_slide_providers={1: ("openai", "gpt-4o")},
+            )
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(pass1_analyses, CacheStats(hits=0, misses=1, pass_name="pass1"), pass1_meta),
+                 ), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides_deep",
+                     return_value=(pass2_analyses, CacheStats(hits=0, misses=1, pass_name="pass2"), pass2_meta),
+                 ):
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=2)
+
+            content = result.output_path.read_text()
+            parsed = yaml.safe_load(content[3:content.index("---", 3)])
+            llm_meta = parsed["_llm_metadata"]["convert"]
+
+            assert llm_meta["fallback_used"] is True
+            assert llm_meta["provider"] == "openai"
+            assert llm_meta["model"] == "gpt-4o"
+            assert llm_meta["pass2"]["status"] == "executed"
+            assert llm_meta["pass2"]["fallback_used"] is True
+            assert llm_meta["pass2"]["provider"] == "openai"
+            assert llm_meta["pass2"]["model"] == "gpt-4o"
 
 
 class TestSparsePageAlignment:
@@ -728,4 +852,3 @@ class TestPptxOutputDirPlumbing:
 
             # Intermediate PDF should STILL be cleaned up (try/finally)
             assert not ppt_pdf.exists()
-
