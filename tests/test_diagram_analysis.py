@@ -316,11 +316,11 @@ class TestFactoryDispatch:
         result = SlideAnalysis.from_dict(d)
         assert isinstance(result, DiagramAnalysis)
 
-    def test_description_alone_does_NOT_trigger_diagram(self):
-        """S2: 'description' was removed from markers — too generic."""
+    def test_description_alone_triggers_diagram(self):
+        """description is included in the approved 9-marker set."""
         d = {"slide_type": "data", "description": "A chart showing revenue"}
         result = SlideAnalysis.from_dict(d)
-        assert type(result) is SlideAnalysis
+        assert isinstance(result, DiagramAnalysis)
 
     def test_empty_dict_returns_default_slide_analysis(self):
         result = SlideAnalysis.from_dict({})
@@ -437,7 +437,7 @@ class TestRewriteEdgeIds:
         mapping = {"n1": "inherited_1", "n2": "inherited_2"}
         result = _rewrite_edge_ids(edges, mapping)
         assert len(result) == 1
-        assert result[0].id == "inherited_1_inherited_2_0"
+        assert result[0].id == "inherited_1_inherited_2"
         assert result[0].source_id == "inherited_1"
         assert result[0].target_id == "inherited_2"
         assert result[0].label == "connects"
@@ -452,7 +452,7 @@ class TestRewriteEdgeIds:
     def test_empty_mapping(self):
         edges = [DiagramEdge(id="e1", source_id="a", target_id="b")]
         result = _rewrite_edge_ids(edges, {})
-        assert result[0].id == "a_b_0"
+        assert result[0].id == "a_b"
         assert result[0].source_id == "a"
 
     def test_parallel_edges_get_unique_ids(self):
@@ -463,7 +463,7 @@ class TestRewriteEdgeIds:
         ]
         result = _rewrite_edge_ids(edges, {})
         assert result[0].id != result[1].id
-        assert result[0].id == "a_b_0"
+        assert result[0].id == "a_b"
         assert result[1].id == "a_b_1"
 
 

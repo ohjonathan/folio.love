@@ -40,13 +40,9 @@ _DIAGRAM_PIPELINE_VERSION = "pr3-routing-v1"
 _IMAGE_STRATEGY_VERSION = "global-only-v1"
 
 # Diagram marker fields — presence of ANY triggers DiagramAnalysis dispatch.
-# NOTE: "description" excluded (S2) — too generic, risks false-positive dispatch.
-# Any real diagram response will also contain diagram_type or graph.
-# This is an intentional deviation from the prompt spec which lists description
-# in the minimum marker set. Rationale: a hallucinated "description" key in a
-# standard SlideAnalysis response would silently promote to DiagramAnalysis.
+# 9 fields per approved PR 3 spec. Includes "description" as specified.
 _DIAGRAM_MARKER_FIELDS = frozenset({
-    "diagram_type", "graph", "mermaid",
+    "diagram_type", "graph", "mermaid", "description",
     "uncertainties", "review_required", "abstained",
     "extraction_confidence", "review_questions",
 })
@@ -526,17 +522,22 @@ def _rewrite_edge_ids(
 ) -> list["DiagramEdge"]:
     """Rewrite edge source/target IDs and recompute edge IDs after node inheritance.
 
-    PROVISIONAL — stable edge-ID contract deferred to PR 4.
+    Edge IDs are derived solely from final source_id and target_id, as specified
+    in the approved proposal (§3 "Stable Element IDs"). When node IDs are
+    inherited via IoU, edge IDs become automatically stable.
 
-    Uses index-based disambiguator to prevent collisions when multiple edges
-    exist between the same node pair. The index is positional within the edge
-    list, not derived from the prior transient edge ID.
+    Parallel edges (multiple edges between the same node pair) are disambiguated
+    with a per-pair counter: ``{src}_{tgt}``, ``{src}_{tgt}_1``, etc.
     """
     result = []
-    for idx, edge in enumerate(edges):
+    pair_counts: dict[tuple[str, str], int] = {}
+    for edge in edges:
         new_source = node_id_mapping.get(edge.source_id, edge.source_id)
         new_target = node_id_mapping.get(edge.target_id, edge.target_id)
-        new_id = f"{new_source}_{new_target}_{idx}"
+        pair = (new_source, new_target)
+        count = pair_counts.get(pair, 0)
+        pair_counts[pair] = count + 1
+        new_id = f"{new_source}_{new_target}" if count == 0 else f"{new_source}_{new_target}_{count}"
         result.append(DiagramEdge(
             id=new_id,
             source_id=new_source,

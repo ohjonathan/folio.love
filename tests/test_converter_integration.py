@@ -1070,3 +1070,82 @@ class TestCacheHitPolymorphicRoundTrip:
         assert restored.graph is not None
         assert len(restored.graph.nodes) == 1
         assert restored.graph.nodes[0].id == "n1"
+
+
+class TestWarmCacheConverterDiagramRouting:
+    """End-to-end: analyze_slides with a warm cache containing DiagramAnalysis."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_warm_cache_returns_diagram_analysis_through_analyze_slides(self, tmp_path):
+        """Pre-populated cache with DiagramAnalysis → analyze_slides returns DiagramAnalysis."""
+        from folio.pipeline.analysis import (
+            DiagramAnalysis,
+            DiagramGraph,
+            DiagramNode,
+            SlideAnalysis,
+            _hash_image,
+            _save_cache,
+            _text_hash,
+            analyze_slides,
+        )
+        from folio.pipeline.text import SlideText
+
+        # Write a unique image and compute its hash
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(self._make_unique_png(42))
+        image_hash = _hash_image(img)
+
+        # Build a DiagramAnalysis entry
+        da = DiagramAnalysis(
+            slide_type="diagram",
+            framework="none",
+            visual_description="Architecture diagram",
+            key_data="3 services",
+            main_insight="Microservices",
+            evidence=[{"claim": "test", "confidence": "high", "validated": True}],
+            diagram_type="architecture",
+            graph=DiagramGraph(
+                nodes=[DiagramNode(id="n1", label="Service A", bbox=(0, 0, 50, 50))],
+            ),
+            mermaid="graph LR\n  A --> B",
+            extraction_confidence=0.85,
+        )
+
+        # Pre-populate cache with matching image hash and text hash
+        slide_text = SlideText(slide_num=1, full_text="Service A connects", elements=[])
+        entry = da.to_dict()
+        entry["_text_hash"] = _text_hash(slide_text)
+        entry["_provider"] = "anthropic"
+        entry["_model"] = "claude-sonnet-4-20250514"
+
+        cache = {image_hash: entry}
+        _save_cache(tmp_path, cache, model="claude-sonnet-4-20250514", provider="anthropic")
+
+        # Call analyze_slides — should get a cache hit, no API calls
+        results, stats, meta = analyze_slides(
+            image_paths=[img],
+            model="claude-sonnet-4-20250514",
+            cache_dir=tmp_path,
+            slide_texts={1: slide_text},
+            provider_name="anthropic",
+        )
+
+        # Verify: result is DiagramAnalysis with correct fields
+        assert stats.hits == 1
+        assert stats.misses == 0
+        assert 1 in results
+        assert isinstance(results[1], DiagramAnalysis)
+        assert results[1].diagram_type == "architecture"
+        assert results[1].mermaid == "graph LR\n  A --> B"
+        assert results[1].graph is not None
+        assert len(results[1].graph.nodes) == 1
+
