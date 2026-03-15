@@ -505,6 +505,18 @@ def _normalize_pass2_json(data: dict) -> tuple[list[dict], str | None, str | Non
     return evidence, reassessed_type, reassessed_framework
 
 
+def _cached_provider_model(
+    cached: dict,
+    primary_provider: str,
+    primary_model: str,
+) -> tuple[str, str]:
+    """Extract provider/model from a cache entry, falling back to primary."""
+    return (
+        cached.get("_provider", primary_provider),
+        cached.get("_model", primary_model),
+    )
+
+
 # Cache is flushed after every resolved miss for per-page durability
 
 
@@ -617,6 +629,15 @@ def analyze_slides(
                     logger.debug("Slide %d: using cached analysis", i)
                     results[i] = SlideAnalysis.from_dict(cached_entry)
                     stats.hits += 1
+
+                    # Populate per-slide provenance from cache entry
+                    cp, cm = _cached_provider_model(cached_entry, provider_name, model)
+                    stage_meta.per_slide_providers[i] = (cp, cm)
+                    # If cached provider differs from primary, mark fallback
+                    if cp != provider_name and not stage_meta.fallback_activated:
+                        stage_meta.fallback_activated = True
+                        stage_meta.fallback_provider = cp
+                        stage_meta.fallback_model = cm
                     continue
 
         # Call API with fallback
@@ -1168,6 +1189,14 @@ def analyze_slides_deep(
                     else:
                         logger.debug("Slide %d: using cached deep analysis", slide_num)
                         stats.hits += 1
+
+                        # Populate per-slide provenance from deep cache entry
+                        cp, cm = _cached_provider_model(cached, provider_name, model)
+                        stage_meta.per_slide_providers[slide_num] = (cp, cm)
+                        if cp != provider_name and not stage_meta.fallback_activated:
+                            stage_meta.fallback_activated = True
+                            stage_meta.fallback_provider = cp
+                            stage_meta.fallback_model = cm
 
                         # Merge evidence
                         if new_evidence:

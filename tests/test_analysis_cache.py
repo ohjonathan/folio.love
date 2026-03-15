@@ -1111,3 +1111,265 @@ def _mock_anthropic_response(text: str | None = None):
     response.usage.output_tokens = 50
     return response
 
+
+# ---------------------------------------------------------------------------
+# Cache-Hit Provenance Regression Tests
+# ---------------------------------------------------------------------------
+
+class TestCacheHitProvenance:
+    """Verify per_slide_providers is populated on cache hits."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass1_cache_hit_populates_per_slide_providers(self, tmp_path):
+        """Pass-1 cache hit should record cached _provider/_model in per_slide_providers."""
+        from folio.pipeline.analysis import _hash_image, _text_hash, _prompt_version, ANALYSIS_PROMPT
+        from folio.pipeline.text import _EXTRACTION_VERSION
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(80))
+        image_hash = _hash_image(img)
+        texts = {1: SlideText(slide_num=1, full_text="Test text")}
+
+        # Pre-populate cache with entry from a DIFFERENT provider
+        cache = {
+            image_hash: {
+                "slide_type": "data",
+                "framework": "none",
+                "visual_description": "chart",
+                "key_data": "$10M",
+                "main_insight": "growing",
+                "evidence": [{"claim": "Rev", "quote": "$10M",
+                              "element_type": "body", "confidence": "high", "validated": True, "pass": 1}],
+                "_text_hash": _text_hash(texts[1]),
+                "_provider": "openai",
+                "_model": "gpt-4o",
+            },
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
+            "_model_version": "test-model",
+            "_provider_version": "anthropic",
+            "_extraction_version": _EXTRACTION_VERSION,
+        }
+        cache_file = tmp_path / ".analysis_cache.json"
+        cache_file.write_text(json.dumps(cache, indent=2))
+
+        # Run with anthropic as primary — should get cache hit
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(side_effect=AssertionError("Should not call API"))
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            results, stats, stage_meta = analyze_slides(
+                [img], model="test-model", cache_dir=tmp_path,
+                slide_texts=texts, provider_name="anthropic",
+            )
+
+        assert stats.hits == 1
+        assert stats.misses == 0
+        # Key assertion: per_slide_providers populated from cache
+        assert 1 in stage_meta.per_slide_providers
+        assert stage_meta.per_slide_providers[1] == ("openai", "gpt-4o")
+        # Fallback should be marked since openai != anthropic primary
+        assert stage_meta.fallback_activated is True
+        assert stage_meta.fallback_provider == "openai"
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_pass2_deep_cache_hit_populates_per_slide_providers(self, tmp_path):
+        """Pass-2 deep cache hit should record cached _provider/_model in per_slide_providers."""
+        from folio.pipeline.analysis import (
+            _hash_image, _text_hash, _pass1_context_hash,
+            _prompt_version, ANALYSIS_PROMPT, DEPTH_PROMPT,
+        )
+        from folio.pipeline.text import _EXTRACTION_VERSION
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(81))
+        image_hash = _hash_image(img)
+        texts = {1: SlideText(slide_num=1, full_text="Dense " * 50)}
+
+        # Step 1: Pre-populate pass-1 cache so analyze_slides hits it
+        pass1_analysis = SlideAnalysis(
+            slide_type="data", framework="tam-sam-som",
+            visual_description="chart", key_data="$10M",
+            main_insight="growing",
+            evidence=[{"claim": "R", "quote": "$10M", "element_type": "body",
+                        "confidence": "high", "validated": True, "pass": 1}] * 3,
+        )
+        pass1_cache = {
+            image_hash: {
+                **pass1_analysis.to_dict(),
+                "_text_hash": _text_hash(texts[1]),
+                "_provider": "anthropic",
+                "_model": "test-model",
+            },
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
+            "_model_version": "test-model",
+            "_provider_version": "anthropic",
+            "_extraction_version": _EXTRACTION_VERSION,
+        }
+        (tmp_path / ".analysis_cache.json").write_text(json.dumps(pass1_cache, indent=2))
+
+        # Step 2: Get pass-1 results (cache hit)
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(side_effect=AssertionError("No API"))
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            pass1_results, _, _ = analyze_slides(
+                [img], model="test-model", cache_dir=tmp_path,
+                slide_texts=texts, provider_name="anthropic",
+            )
+
+        # Step 3: Pre-populate deep cache with entry from different provider
+        p1_hash = _pass1_context_hash(pass1_results[1])
+        deep_key = f"{image_hash}_deep"
+        deep_cache = {
+            deep_key: {
+                "evidence": [{"claim": "Extra", "quote": "detail",
+                              "element_type": "body", "confidence": "high"}],
+                "pass2_slide_type": None,
+                "pass2_framework": None,
+                "_text_hash": _text_hash(texts[1]),
+                "_pass1_hash": p1_hash,
+                "_provider": "openai",
+                "_model": "gpt-4o",
+            },
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
+            "_model_version": "test-model",
+            "_provider_version": "anthropic",
+            "_extraction_version": _EXTRACTION_VERSION,
+        }
+        (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(deep_cache, indent=2))
+
+        # Step 4: Run pass-2 with anthropic as primary — deep cache hit
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            results, stats, stage_meta = analyze_slides_deep(
+                pass1_results, texts, [img],
+                model="test-model", cache_dir=tmp_path,
+                provider_name="anthropic",
+                density_threshold=0.0,  # Force all slides into pass 2
+            )
+
+        assert stats.hits == 1
+        # Key assertion: per_slide_providers populated from deep cache
+        assert 1 in stage_meta.per_slide_providers
+        assert stage_meta.per_slide_providers[1] == ("openai", "gpt-4o")
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_cache_hit_missing_provider_model_falls_back_to_primary(self, tmp_path):
+        """Old cache entry without _provider/_model should not crash; falls back to primary."""
+        from folio.pipeline.analysis import _hash_image, _text_hash, _prompt_version, ANALYSIS_PROMPT
+        from folio.pipeline.text import _EXTRACTION_VERSION
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(_make_unique_png(82))
+        image_hash = _hash_image(img)
+        texts = {1: SlideText(slide_num=1, full_text="Legacy text")}
+
+        # Pre-populate cache WITHOUT _provider/_model (legacy entry)
+        cache = {
+            image_hash: {
+                "slide_type": "data",
+                "framework": "none",
+                "visual_description": "chart",
+                "key_data": "$10M",
+                "main_insight": "growing",
+                "evidence": [{"claim": "Rev", "quote": "$10M",
+                              "element_type": "body", "confidence": "high", "validated": True, "pass": 1}],
+                "_text_hash": _text_hash(texts[1]),
+                # No _provider or _model — legacy entry
+            },
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
+            "_model_version": "test-model",
+            "_provider_version": "anthropic",
+            "_extraction_version": _EXTRACTION_VERSION,
+        }
+        (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache, indent=2))
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(side_effect=AssertionError("No API"))
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            results, stats, stage_meta = analyze_slides(
+                [img], model="test-model", cache_dir=tmp_path,
+                slide_texts=texts, provider_name="anthropic",
+            )
+
+        assert stats.hits == 1
+        # Falls back to primary provider/model
+        assert stage_meta.per_slide_providers[1] == ("anthropic", "test-model")
+        # No fallback flagged (provider matches primary)
+        assert stage_meta.fallback_activated is False
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_warm_cache_mixed_provider_frontmatter(self, tmp_path):
+        """Warm-cache run with mixed providers should report mixed_providers=True."""
+        from folio.pipeline.analysis import _hash_image, _text_hash, _prompt_version, ANALYSIS_PROMPT
+        from folio.pipeline.text import _EXTRACTION_VERSION
+
+        img1 = tmp_path / "slide-001.png"
+        img1.write_bytes(_make_unique_png(83))
+        img2 = tmp_path / "slide-002.png"
+        img2.write_bytes(_make_unique_png(84))
+
+        hash1 = _hash_image(img1)
+        hash2 = _hash_image(img2)
+
+        texts = {
+            1: SlideText(slide_num=1, full_text="Primary text"),
+            2: SlideText(slide_num=2, full_text="Fallback text"),
+        }
+
+        # Slide 1 cached from primary (anthropic), slide 2 from fallback (openai)
+        cache = {
+            hash1: {
+                "slide_type": "data", "framework": "none",
+                "visual_description": "a", "key_data": "b",
+                "main_insight": "c",
+                "evidence": [{"claim": "X", "quote": "y",
+                              "element_type": "body", "confidence": "high",
+                              "validated": True, "pass": 1}],
+                "_text_hash": _text_hash(texts[1]),
+                "_provider": "anthropic",
+                "_model": "claude-sonnet-4-20250514",
+            },
+            hash2: {
+                "slide_type": "narrative", "framework": "none",
+                "visual_description": "d", "key_data": "e",
+                "main_insight": "f",
+                "evidence": [{"claim": "A", "quote": "b",
+                              "element_type": "body", "confidence": "high",
+                              "validated": True, "pass": 1}],
+                "_text_hash": _text_hash(texts[2]),
+                "_provider": "openai",
+                "_model": "gpt-4o",
+            },
+            "_cache_version": _ANALYSIS_CACHE_VERSION,
+            "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
+            "_model_version": "test-model",
+            "_provider_version": "anthropic",
+            "_extraction_version": _EXTRACTION_VERSION,
+        }
+        (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache, indent=2))
+
+        mock_client = MagicMock()
+        mock_client.messages.create = MagicMock(side_effect=AssertionError("No API"))
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            results, stats, stage_meta = analyze_slides(
+                [img1, img2], model="test-model", cache_dir=tmp_path,
+                slide_texts=texts, provider_name="anthropic",
+            )
+
+        assert stats.hits == 2
+        assert stats.misses == 0
+
+        # Per-slide providers recorded
+        assert stage_meta.per_slide_providers[1] == ("anthropic", "claude-sonnet-4-20250514")
+        assert stage_meta.per_slide_providers[2] == ("openai", "gpt-4o")
+
+        # Fallback marked since slide 2 used openai != anthropic
+        assert stage_meta.fallback_activated is True
+
+        # Verify converter-level mixed_providers derivation
+        providers = set(stage_meta.per_slide_providers.values())
+        distinct_providers = set(p for p, _ in providers)
+        assert len(distinct_providers) > 1, "Should detect multiple providers"
+
