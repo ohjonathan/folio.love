@@ -31,7 +31,26 @@ _MAX_IMAGE_BYTES = 20_000_000  # 20 MB
 
 # Cache format version. Increment when the cache data shape changes.
 # On mismatch, the cache is fully invalidated (one-time re-analysis).
-_ANALYSIS_CACHE_VERSION = 2
+_ANALYSIS_CACHE_VERSION = 3
+
+# PR 3: Diagram schema and pipeline versioning.
+# Used for deterministic cache invalidation when diagram dimensions change.
+_DIAGRAM_SCHEMA_VERSION = "1.0"
+_DIAGRAM_PIPELINE_VERSION = "pr3-routing-v1"
+_IMAGE_STRATEGY_VERSION = "global-only-v1"
+
+# Diagram marker fields — presence of ANY triggers DiagramAnalysis dispatch.
+_DIAGRAM_MARKER_FIELDS = frozenset({
+    "diagram_type", "graph", "mermaid", "description",
+    "uncertainties", "review_required", "abstained",
+    "extraction_confidence", "review_questions",
+})
+
+
+def _stable_signature(*parts: str) -> str:
+    """Compute a stable SHA-256 signature from ordered string parts."""
+    combined = "|".join(parts)
+    return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
 ANALYSIS_PROMPT = """Analyze this consulting slide. Return a single JSON object with exactly this structure (no other text):
 
@@ -86,6 +105,12 @@ class SlideAnalysis:
 
     @classmethod
     def from_dict(cls, d: dict) -> "SlideAnalysis":
+        """Polymorphic factory: dispatches to DiagramAnalysis when diagram markers present."""
+        if not isinstance(d, dict) or not d:
+            return cls()
+        # Dispatch to DiagramAnalysis when any diagram marker field is present
+        if d.keys() & _DIAGRAM_MARKER_FIELDS:
+            return DiagramAnalysis.from_dict(d)
         fields = {k: d.get(k, "") for k in ("slide_type", "framework",
                   "visual_description", "key_data", "main_insight")}
         fields["evidence"] = d.get("evidence", [])
@@ -109,6 +134,376 @@ class SlideAnalysis:
             key_data="[pending]",
             main_insight="[pending]",
         )
+
+
+# ---------------------------------------------------------------------------
+# PR 3: Diagram graph data model
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class DiagramGroup:
+    """A grouping container for diagram nodes (e.g., boundaries, clusters)."""
+    id: str
+    name: str
+    contains: list[str] = field(default_factory=list)
+    contains_groups: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "contains": list(self.contains),
+            "contains_groups": list(self.contains_groups),
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DiagramGroup":
+        if not isinstance(d, dict):
+            return cls(id="unknown", name="unknown")
+        return cls(
+            id=str(d.get("id", "unknown")),
+            name=str(d.get("name", "unknown")),
+            contains=list(d.get("contains", [])),
+            contains_groups=list(d.get("contains_groups", [])),
+        )
+
+
+@dataclass
+class DiagramNode:
+    """A node in a diagram graph."""
+    id: str
+    label: str
+    kind: str = "unknown"
+    group_id: str | None = None
+    technology: str | None = None
+    source_text: str = "vision"
+    bbox: tuple[float, float, float, float] | None = None
+    confidence: float = 1.0
+    verification_evidence: str | None = None
+
+    def to_dict(self) -> dict:
+        d: dict = {
+            "id": self.id,
+            "label": self.label,
+            "kind": self.kind,
+            "source_text": self.source_text,
+            "confidence": self.confidence,
+        }
+        if self.group_id is not None:
+            d["group_id"] = self.group_id
+        if self.technology is not None:
+            d["technology"] = self.technology
+        if self.bbox is not None:
+            d["bbox"] = list(self.bbox)
+        if self.verification_evidence is not None:
+            d["verification_evidence"] = self.verification_evidence
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DiagramNode":
+        if not isinstance(d, dict):
+            return cls(id="unknown", label="unknown")
+        bbox_raw = d.get("bbox")
+        bbox = None
+        if isinstance(bbox_raw, (list, tuple)) and len(bbox_raw) == 4:
+            try:
+                bbox = tuple(float(v) for v in bbox_raw)
+            except (TypeError, ValueError):
+                bbox = None
+        return cls(
+            id=str(d.get("id", "unknown")),
+            label=str(d.get("label", "unknown")),
+            kind=str(d.get("kind", "unknown")),
+            group_id=d.get("group_id"),
+            technology=d.get("technology"),
+            source_text=str(d.get("source_text", "vision")),
+            bbox=bbox,
+            confidence=float(d.get("confidence", 1.0)),
+            verification_evidence=d.get("verification_evidence"),
+        )
+
+
+@dataclass
+class DiagramEdge:
+    """An edge in a diagram graph."""
+    id: str
+    source_id: str
+    target_id: str
+    label: str | None = None
+    direction: str = "->"
+    confidence: float = 1.0
+    evidence_bbox: tuple[float, float, float, float] | None = None
+    verification_evidence: str | None = None
+
+    def to_dict(self) -> dict:
+        d: dict = {
+            "id": self.id,
+            "source_id": self.source_id,
+            "target_id": self.target_id,
+            "direction": self.direction,
+            "confidence": self.confidence,
+        }
+        if self.label is not None:
+            d["label"] = self.label
+        if self.evidence_bbox is not None:
+            d["evidence_bbox"] = list(self.evidence_bbox)
+        if self.verification_evidence is not None:
+            d["verification_evidence"] = self.verification_evidence
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DiagramEdge":
+        if not isinstance(d, dict):
+            return cls(id="unknown", source_id="unknown", target_id="unknown")
+        bbox_raw = d.get("evidence_bbox")
+        evidence_bbox = None
+        if isinstance(bbox_raw, (list, tuple)) and len(bbox_raw) == 4:
+            try:
+                evidence_bbox = tuple(float(v) for v in bbox_raw)
+            except (TypeError, ValueError):
+                evidence_bbox = None
+        return cls(
+            id=str(d.get("id", "unknown")),
+            source_id=str(d.get("source_id", "unknown")),
+            target_id=str(d.get("target_id", "unknown")),
+            label=d.get("label"),
+            direction=str(d.get("direction", "->")),
+            confidence=float(d.get("confidence", 1.0)),
+            evidence_bbox=evidence_bbox,
+            verification_evidence=d.get("verification_evidence"),
+        )
+
+
+@dataclass
+class DiagramGraph:
+    """Complete graph structure extracted from a diagram."""
+    nodes: list[DiagramNode] = field(default_factory=list)
+    edges: list[DiagramEdge] = field(default_factory=list)
+    groups: list[DiagramGroup] = field(default_factory=list)
+    schema_version: str = "1.0"
+
+    def to_dict(self) -> dict:
+        return {
+            "nodes": [n.to_dict() for n in self.nodes],
+            "edges": [e.to_dict() for e in self.edges],
+            "groups": [g.to_dict() for g in self.groups],
+            "schema_version": self.schema_version,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DiagramGraph":
+        if not isinstance(d, dict):
+            return cls()
+        nodes_raw = d.get("nodes", [])
+        nodes = [DiagramNode.from_dict(n) for n in nodes_raw if isinstance(n, dict)]
+        edges_raw = d.get("edges", [])
+        edges = [DiagramEdge.from_dict(e) for e in edges_raw if isinstance(e, dict)]
+        groups_raw = d.get("groups", [])
+        groups = [DiagramGroup.from_dict(g) for g in groups_raw if isinstance(g, dict)]
+        return cls(
+            nodes=nodes,
+            edges=edges,
+            groups=groups,
+            schema_version=str(d.get("schema_version", "1.0")),
+        )
+
+
+@dataclass
+class DiagramAnalysis(SlideAnalysis):
+    """Analysis of a diagram slide, extending SlideAnalysis with graph data."""
+    diagram_type: str = "unknown"
+    graph: DiagramGraph | None = None
+    mermaid: str | None = None
+    description: str | None = None
+    uncertainties: list[str] = field(default_factory=list)
+    extraction_confidence: float = 0.0
+    confidence_reasoning: str = ""
+    review_questions: list[str] = field(default_factory=list)
+    review_required: bool = False
+    abstained: bool = False
+
+    def to_dict(self) -> dict:
+        """Serialize including inherited SlideAnalysis fields plus diagram fields."""
+        d = super().to_dict()
+        d["diagram_type"] = self.diagram_type
+        if self.graph is not None:
+            d["graph"] = self.graph.to_dict()
+        if self.mermaid is not None:
+            d["mermaid"] = self.mermaid
+        if self.description is not None:
+            d["description"] = self.description
+        d["uncertainties"] = list(self.uncertainties)
+        d["extraction_confidence"] = self.extraction_confidence
+        d["confidence_reasoning"] = self.confidence_reasoning
+        d["review_questions"] = list(self.review_questions)
+        d["review_required"] = self.review_required
+        d["abstained"] = self.abstained
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DiagramAnalysis":
+        """Deserialize diagram analysis with safe defaults for missing fields."""
+        if not isinstance(d, dict):
+            return cls()
+        # Inherited slide fields
+        slide_fields = {k: d.get(k, "") for k in (
+            "slide_type", "framework", "visual_description", "key_data", "main_insight",
+        )}
+        slide_fields["evidence"] = d.get("evidence", [])
+        slide_fields["pass2_slide_type"] = d.get("pass2_slide_type")
+        slide_fields["pass2_framework"] = d.get("pass2_framework")
+        # Diagram fields
+        graph_raw = d.get("graph")
+        graph = DiagramGraph.from_dict(graph_raw) if isinstance(graph_raw, dict) else None
+        uncertainties_raw = d.get("uncertainties", [])
+        uncertainties = list(uncertainties_raw) if isinstance(uncertainties_raw, list) else []
+        review_questions_raw = d.get("review_questions", [])
+        review_questions = list(review_questions_raw) if isinstance(review_questions_raw, list) else []
+        try:
+            extraction_conf = float(d.get("extraction_confidence", 0.0))
+        except (TypeError, ValueError):
+            extraction_conf = 0.0
+        return cls(
+            **slide_fields,
+            diagram_type=str(d.get("diagram_type", "unknown")),
+            graph=graph,
+            mermaid=d.get("mermaid"),
+            description=d.get("description"),
+            uncertainties=uncertainties,
+            extraction_confidence=extraction_conf,
+            confidence_reasoning=str(d.get("confidence_reasoning", "")),
+            review_questions=review_questions,
+            review_required=bool(d.get("review_required", False)),
+            abstained=bool(d.get("abstained", False)),
+        )
+
+    @classmethod
+    def from_slide_analysis(
+        cls,
+        sa: "SlideAnalysis",
+        *,
+        diagram_type: str = "unknown",
+        review_required: bool = False,
+        abstained: bool = False,
+    ) -> "DiagramAnalysis":
+        """Promote a SlideAnalysis to DiagramAnalysis, copying inherited fields."""
+        return cls(
+            slide_type=sa.slide_type,
+            framework=sa.framework,
+            visual_description=sa.visual_description,
+            key_data=sa.key_data,
+            main_insight=sa.main_insight,
+            evidence=list(sa.evidence),
+            pass2_slide_type=sa.pass2_slide_type,
+            pass2_framework=sa.pass2_framework,
+            diagram_type=diagram_type,
+            review_required=review_required,
+            abstained=abstained,
+        )
+
+
+# ---------------------------------------------------------------------------
+# PR 3: Spatial IoU helpers for cross-run node ID inheritance
+# ---------------------------------------------------------------------------
+
+
+def _normalize_bbox(
+    bbox: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    """Normalize bbox to (x_min, y_min, x_max, y_max)."""
+    x1, y1, x2, y2 = bbox
+    return (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
+
+
+def _compute_iou(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+) -> float:
+    """Compute Intersection over Union for two bboxes."""
+    a = _normalize_bbox(a)
+    b = _normalize_bbox(b)
+    ix1 = max(a[0], b[0])
+    iy1 = max(a[1], b[1])
+    ix2 = min(a[2], b[2])
+    iy2 = min(a[3], b[3])
+    inter_w = max(0.0, ix2 - ix1)
+    inter_h = max(0.0, iy2 - iy1)
+    inter_area = inter_w * inter_h
+    area_a = (a[2] - a[0]) * (a[3] - a[1])
+    area_b = (b[2] - b[0]) * (b[3] - b[1])
+    union_area = area_a + area_b - inter_area
+    if union_area <= 0:
+        return 0.0
+    return inter_area / union_area
+
+
+def match_nodes_by_iou(
+    new_nodes: list["DiagramNode"],
+    cached_nodes: list["DiagramNode"],
+    threshold: float = 0.80,
+) -> dict[str, str]:
+    """Match new nodes to cached nodes by spatial IoU for ID inheritance.
+
+    Algorithm:
+    1. Consider only node pairs where both have bboxes.
+    2. Compute all pairwise IoU scores.
+    3. Sort candidates by highest IoU first.
+    4. Greedily assign one-to-one matches.
+    5. Only inherit IDs for IoU >= threshold.
+
+    Returns:
+        Mapping from new_node.id -> cached_node.id for matched nodes.
+    """
+    candidates: list[tuple[float, int, int]] = []
+    for i, new_node in enumerate(new_nodes):
+        if new_node.bbox is None:
+            continue
+        for j, cached_node in enumerate(cached_nodes):
+            if cached_node.bbox is None:
+                continue
+            iou = _compute_iou(new_node.bbox, cached_node.bbox)
+            if iou >= threshold:
+                candidates.append((iou, i, j))
+
+    # Sort by IoU descending for greedy best-match
+    candidates.sort(key=lambda x: x[0], reverse=True)
+
+    matched_new: set[int] = set()
+    matched_cached: set[int] = set()
+    mapping: dict[str, str] = {}
+
+    for iou, i, j in candidates:
+        if i in matched_new or j in matched_cached:
+            continue
+        mapping[new_nodes[i].id] = cached_nodes[j].id
+        matched_new.add(i)
+        matched_cached.add(j)
+
+    return mapping
+
+
+def _rewrite_edge_ids(
+    edges: list["DiagramEdge"],
+    node_id_mapping: dict[str, str],
+) -> list["DiagramEdge"]:
+    """Rewrite edge source/target IDs and recompute edge IDs after node inheritance."""
+    result = []
+    for edge in edges:
+        new_source = node_id_mapping.get(edge.source_id, edge.source_id)
+        new_target = node_id_mapping.get(edge.target_id, edge.target_id)
+        new_id = f"{new_source}_{new_target}"
+        result.append(DiagramEdge(
+            id=new_id,
+            source_id=new_source,
+            target_id=new_target,
+            label=edge.label,
+            direction=edge.direction,
+            confidence=edge.confidence,
+            evidence_bbox=edge.evidence_bbox,
+            verification_evidence=edge.verification_evidence,
+        ))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -534,6 +929,7 @@ def analyze_slides(
     api_key_env: str = "",
     fallback_profiles: Optional[list[tuple[str, str, str]]] = None,
     all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
+    slide_numbers: list[int] | None = None,
 ) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
     """Analyze slides via LLM provider with caching and fallback.
 
@@ -549,13 +945,29 @@ def analyze_slides(
             for transient fallback per spec §6.2.
         all_provider_settings: Dict mapping provider name to ProviderRuntimeSettings.
             If None, uses sensible defaults for each provider.
+        slide_numbers: Optional list of real slide numbers corresponding to
+            image_paths. If provided, must match len(image_paths). Cache and
+            provenance keyed by real slide number instead of sequential index.
 
     Returns:
         Tuple of (results dict, CacheStats, StageLLMMetadata).
     """
+    # Validate slide_numbers if provided
+    if slide_numbers is not None and len(slide_numbers) != len(image_paths):
+        raise ValueError(
+            f"slide_numbers length ({len(slide_numbers)}) must match "
+            f"image_paths length ({len(image_paths)})"
+        )
+
     stage_meta = StageLLMMetadata(
         provider=provider_name, model=model,
     )
+
+    def _slide_num(index: int) -> int:
+        """Map 0-based index to real slide number."""
+        if slide_numbers is not None:
+            return slide_numbers[index]
+        return index + 1
 
     try:
         provider = get_provider(provider_name)
@@ -564,21 +976,21 @@ def analyze_slides(
         reason = f"Analysis pending \u2014 profile requires {api_key_env or provider_name.upper() + '_API_KEY'}"
         logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
         return (
-            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
             CacheStats(), stage_meta,
         )
     except ImportError as e:
         reason = f"Analysis pending \u2014 install the {provider_name} SDK"
         logger.warning("LLM provider '%s' SDK missing: %s. Skipping analysis.", provider_name, e)
         return (
-            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
             CacheStats(), stage_meta,
         )
     except Exception as e:
         reason = f"Analysis pending \u2014 provider '{provider_name}' rejected the request"
         logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
         return (
-            {i + 1: SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+            {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
             CacheStats(), stage_meta,
         )
 
@@ -615,7 +1027,8 @@ def analyze_slides(
 
     stats = CacheStats(pass_name="pass1")
     results = {}
-    for i, image_path in enumerate(image_paths, 1):
+    for idx, image_path in enumerate(image_paths):
+        slide_num = _slide_num(idx)
         image_hash = _hash_image(image_path)
 
         # Check cache (B1: validate _text_hash per entry)
@@ -623,20 +1036,20 @@ def analyze_slides(
             cached_entry = cache[image_hash]
             # Validate payload shape (review fix: malformed entries → miss)
             if not isinstance(cached_entry, dict):
-                logger.warning("Slide %d: malformed cache entry (not dict) — cache miss", i)
+                logger.warning("Slide %d: malformed cache entry (not dict) — cache miss", slide_num)
             else:
-                current_th = _text_hash(slide_texts.get(i) if slide_texts else None)
+                current_th = _text_hash(slide_texts.get(slide_num) if slide_texts else None)
                 if cached_entry.get("_text_hash") != current_th:
-                    logger.info("Slide %d: text changed — cache miss", i)
+                    logger.info("Slide %d: text changed — cache miss", slide_num)
                     # Fall through to API call
                 else:
-                    logger.debug("Slide %d: using cached analysis", i)
-                    results[i] = SlideAnalysis.from_dict(cached_entry)
+                    logger.debug("Slide %d: using cached analysis", slide_num)
+                    results[slide_num] = SlideAnalysis.from_dict(cached_entry)
                     stats.hits += 1
 
                     # Populate per-slide provenance from cache entry
                     cp, cm = _cached_provider_model(cached_entry, provider_name, model)
-                    stage_meta.per_slide_providers[i] = (cp, cm)
+                    stage_meta.per_slide_providers[slide_num] = (cp, cm)
                     # If cached provider differs from primary, mark fallback
                     if cp != provider_name and not stage_meta.fallback_activated:
                         stage_meta.fallback_activated = True
@@ -646,8 +1059,8 @@ def analyze_slides(
 
         # Call API with fallback
         stats.misses += 1
-        logger.info("Analyzing slide %d/%d...", i, len(image_paths))
-        slide_text = slide_texts.get(i) if slide_texts else None
+        logger.info("Analyzing slide %d/%d...", slide_num, len(image_paths))
+        slide_text = slide_texts.get(slide_num) if slide_texts else None
         analysis, used_provider, used_model, slide_usage = _analyze_with_fallback(
             provider, client, image_path, model, provider_name,
             slide_text=slide_text,
@@ -657,11 +1070,11 @@ def analyze_slides(
             all_provider_settings=_all_settings,
             fallback_limiters=fallback_limiters,
         )
-        results[i] = analysis
+        results[slide_num] = analysis
 
         # Track token usage per-slide and total (Finding 3: include total_tokens)
         if slide_usage.total_tokens > 0:
-            stage_meta.per_slide_usage[i] = slide_usage
+            stage_meta.per_slide_usage[slide_num] = slide_usage
             stage_meta.usage_total = TokenUsage(
                 input_tokens=stage_meta.usage_total.input_tokens + slide_usage.input_tokens,
                 output_tokens=stage_meta.usage_total.output_tokens + slide_usage.output_tokens,
@@ -675,7 +1088,7 @@ def analyze_slides(
             stage_meta.fallback_model = used_model
 
         # Track per-slide provider for mixed-provider provenance
-        stage_meta.per_slide_providers[i] = (used_provider, used_model)
+        stage_meta.per_slide_providers[slide_num] = (used_provider, used_model)
 
         # Update cache (B1: store _text_hash + provenance per entry)
         if cache_dir:
@@ -1438,7 +1851,8 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None, provider: str | 
     """Load deep analysis cache from disk with strict validation.
 
     Invalidates on: format version mismatch (B3), prompt change (S1),
-    model change (G1), extraction version change (G2), or provider change.
+    model change (G1), extraction version change (G2), provider change,
+    or schema/pipeline/image-strategy version drift.
     """
     cache_file = cache_dir / ".analysis_cache_deep.json"
     if cache_file.exists():
@@ -1464,6 +1878,16 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None, provider: str | 
             if data.get("_extraction_version") != _EXTRACTION_VERSION:
                 logger.info("Extraction version changed — invalidating deep cache")
                 return {}
+            # PR 3: Schema/pipeline/image-strategy version checks
+            if data.get("_schema_version") != _DIAGRAM_SCHEMA_VERSION:
+                logger.info("Diagram schema version changed — invalidating deep cache")
+                return {}
+            if data.get("_pipeline_version") != _DIAGRAM_PIPELINE_VERSION:
+                logger.info("Diagram pipeline version changed — invalidating deep cache")
+                return {}
+            if data.get("_image_strategy_version") != _IMAGE_STRATEGY_VERSION:
+                logger.info("Image strategy version changed — invalidating deep cache")
+                return {}
             return data
         except (json.JSONDecodeError, OSError):
             logger.warning("Cache file corrupt or unreadable: %s", cache_file)
@@ -1481,6 +1905,18 @@ def _save_cache_deep(cache_dir: Path, cache: dict, model: str | None = None, pro
         cache["_model_version"] = model
         cache["_provider_version"] = provider
         cache["_extraction_version"] = _EXTRACTION_VERSION
+        # PR 3: Diagram schema/pipeline/image-strategy markers
+        cache["_schema_version"] = _DIAGRAM_SCHEMA_VERSION
+        cache["_pipeline_version"] = _DIAGRAM_PIPELINE_VERSION
+        cache["_image_strategy_version"] = _IMAGE_STRATEGY_VERSION
+        cache["_cache_signature"] = _stable_signature(
+            _prompt_version(DEPTH_PROMPT.template),
+            _DIAGRAM_SCHEMA_VERSION,
+            _DIAGRAM_PIPELINE_VERSION,
+            _IMAGE_STRATEGY_VERSION,
+            provider or "",
+            model or "",
+        )
         tmp_file = cache_file.with_suffix(".tmp")
         tmp_file.write_text(json.dumps(cache, indent=2))
         tmp_file.rename(cache_file)
@@ -1506,7 +1942,8 @@ def _load_cache(cache_dir: Path, model: str | None = None, provider: str | None 
     """Load analysis cache from disk with strict validation.
 
     Invalidates on: format version mismatch (B3), prompt change (S1),
-    model change (G1), extraction version change (G2), or provider change.
+    model change (G1), extraction version change (G2), provider change,
+    or schema/pipeline/image-strategy version drift.
     """
     cache_file = cache_dir / ".analysis_cache.json"
     if cache_file.exists():
@@ -1537,6 +1974,16 @@ def _load_cache(cache_dir: Path, model: str | None = None, provider: str | None 
             if data.get("_extraction_version") != _EXTRACTION_VERSION:
                 logger.info("Extraction version changed — invalidating cache")
                 return {}
+            # PR 3: Schema/pipeline/image-strategy version checks
+            if data.get("_schema_version") != _DIAGRAM_SCHEMA_VERSION:
+                logger.info("Diagram schema version changed — invalidating cache")
+                return {}
+            if data.get("_pipeline_version") != _DIAGRAM_PIPELINE_VERSION:
+                logger.info("Diagram pipeline version changed — invalidating cache")
+                return {}
+            if data.get("_image_strategy_version") != _IMAGE_STRATEGY_VERSION:
+                logger.info("Image strategy version changed — invalidating cache")
+                return {}
             return data
         except (json.JSONDecodeError, OSError):
             logger.warning("Cache file corrupt or unreadable: %s", cache_file)
@@ -1554,6 +2001,18 @@ def _save_cache(cache_dir: Path, cache: dict, model: str | None = None, provider
         cache["_model_version"] = model
         cache["_provider_version"] = provider
         cache["_extraction_version"] = _EXTRACTION_VERSION
+        # PR 3: Diagram schema/pipeline/image-strategy markers
+        cache["_schema_version"] = _DIAGRAM_SCHEMA_VERSION
+        cache["_pipeline_version"] = _DIAGRAM_PIPELINE_VERSION
+        cache["_image_strategy_version"] = _IMAGE_STRATEGY_VERSION
+        cache["_cache_signature"] = _stable_signature(
+            _prompt_version(ANALYSIS_PROMPT),
+            _DIAGRAM_SCHEMA_VERSION,
+            _DIAGRAM_PIPELINE_VERSION,
+            _IMAGE_STRATEGY_VERSION,
+            provider or "",
+            model or "",
+        )
         # Atomic write
         tmp_file = cache_file.with_suffix(".tmp")
         tmp_file.write_text(json.dumps(cache, indent=2))

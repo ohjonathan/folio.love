@@ -169,6 +169,23 @@ class FolioConverter:
             if blank_slides:
                 logger.info("Blank slides: %s", sorted(blank_slides))
 
+            # PR 3: Derive diagram-like slide sets from classifications
+            _DIAGRAM_CLASSIFICATIONS = {"diagram", "mixed", "unsupported_diagram"}
+            diagram_like_slides = {
+                p for p, prof in page_profiles.items()
+                if prof.classification in _DIAGRAM_CLASSIFICATIONS
+            }
+            unsupported_diagram_slides = {
+                p for p, prof in page_profiles.items()
+                if prof.classification == "unsupported_diagram"
+            }
+            diagram_or_mixed_slides = {
+                p for p, prof in page_profiles.items()
+                if prof.classification in {"diagram", "mixed"}
+            }
+            if diagram_like_slides:
+                logger.info("Diagram-like slides: %s", sorted(diagram_like_slides))
+
             # Stage 3: Extract text
             logger.info("  Extracting text...")
             slide_texts = text.extract_structured(source_path)
@@ -205,8 +222,15 @@ class FolioConverter:
             # Pass full provider settings dict (Finding 1: each fallback needs its own settings)
             all_provider_settings = self.config.providers
 
+            # PR 3: Compute pass-1 slide numbers, excluding unsupported_diagram
+            all_slide_nums = [r.slide_num for r in image_results]
+            pass1_slide_numbers = [n for n in all_slide_nums if n not in unsupported_diagram_slides]
+            pass1_image_paths = [
+                r.path for r in image_results if r.slide_num not in unsupported_diagram_slides
+            ]
+
             slide_analyses, pass1_stats, pass1_meta = analysis.analyze_slides(
-                image_paths,
+                pass1_image_paths,
                 model=profile.model,
                 cache_dir=deck_dir,
                 slide_texts=slide_texts,
@@ -215,12 +239,37 @@ class FolioConverter:
                 api_key_env=profile.api_key_env,
                 fallback_profiles=fallback_profiles_list,
                 all_provider_settings=all_provider_settings,
+                slide_numbers=pass1_slide_numbers,
             )
+
+            # PR 3: Insert abstained DiagramAnalysis placeholders for unsupported_diagram
+            for slide_num in unsupported_diagram_slides:
+                slide_analyses[slide_num] = analysis.DiagramAnalysis(
+                    slide_type="pending",
+                    framework="pending",
+                    visual_description="[Unsupported diagram — abstained]",
+                    key_data="[pending]",
+                    main_insight="[pending]",
+                    diagram_type="unsupported",
+                    abstained=True,
+                    review_required=True,
+                )
 
             # Override blank slides with pending() (API call ran but result is unreliable)
             for slide_num in blank_slides:
                 if slide_num in slide_analyses:
                     slide_analyses[slide_num] = analysis.SlideAnalysis.pending()
+
+            # PR 3: Coerce diagram/mixed pages to DiagramAnalysis post pass-1
+            for slide_num in diagram_or_mixed_slides:
+                existing = slide_analyses.get(slide_num)
+                if existing and not isinstance(existing, analysis.DiagramAnalysis):
+                    classification = page_profiles.get(slide_num)
+                    dtype = classification.classification if classification else "unknown"
+                    slide_analyses[slide_num] = analysis.DiagramAnalysis.from_slide_analysis(
+                        existing,
+                        diagram_type=dtype,
+                    )
 
             # Stage 4b: Optional depth pass
             effective_passes = passes if passes is not None else self.config.conversion.default_passes
@@ -234,7 +283,7 @@ class FolioConverter:
                     model=profile.model,
                     cache_dir=deck_dir,
                     density_threshold=self.config.conversion.density_threshold,
-                    skip_slides=blank_slides,
+                    skip_slides=blank_slides | diagram_like_slides,
                     force_miss=no_cache,
                     provider_name=profile.provider,
                     api_key_env=profile.api_key_env,

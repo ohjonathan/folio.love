@@ -17,6 +17,9 @@ from folio.pipeline.analysis import (
     CacheStats,
     SlideAnalysis,
     _ANALYSIS_CACHE_VERSION,
+    _DIAGRAM_PIPELINE_VERSION,
+    _DIAGRAM_SCHEMA_VERSION,
+    _IMAGE_STRATEGY_VERSION,
     _load_cache,
     _load_cache_deep,
     _pass1_context_hash,
@@ -106,6 +109,9 @@ class TestCacheFormatVersion:
                  "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
                  "_model_version": None, "_provider_version": "anthropic",
                  "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
                  "abc123": {"slide_type": "data"}}
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
         result = _load_cache(tmp_path)
@@ -266,6 +272,9 @@ class TestDeepCacheContextHash:
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             f"{img_hash}_deep": {
                 "evidence": [{"claim": "Old", "quote": "old", "confidence": "high", "pass": 2}],
                 "pass2_slide_type": None,
@@ -312,6 +321,9 @@ class TestDeepCacheContextHash:
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             f"{img_hash}_deep": {
                 "evidence": [{"claim": "Cached", "quote": "cached", "confidence": "high", "pass": 2}],
                 "pass2_slide_type": None,
@@ -357,6 +369,9 @@ class TestDeepCacheContextHash:
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             f"{img_hash}_deep": {
                 "evidence": [{"claim": "Cached", "quote": "cached", "confidence": "high", "pass": 2}],
                 "pass2_slide_type": None,
@@ -400,6 +415,9 @@ class TestDeepCacheContextHash:
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             f"{img_hash}_deep": [{"claim": "old"}],  # list format = legacy
         }
         (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(cache))
@@ -724,6 +742,9 @@ class TestDeepCacheForceMiss:
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             f"{img_hash}_deep": {
                 "evidence": [{"claim": "Stale", "quote": "stale", "confidence": "low", "pass": 2}],
                 "pass2_slide_type": None,
@@ -823,6 +844,9 @@ class TestMalformedCachePayloads:
             "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             img_hash: ["not", "a", "dict"],  # malformed
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
@@ -854,6 +878,9 @@ class TestMalformedCachePayloads:
             "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             img_hash: "corrupted_string",  # malformed
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
@@ -891,6 +918,9 @@ class TestMalformedCachePayloads:
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             f"{img_hash}_deep": {
                 "evidence": "not_a_list",  # malformed!
                 "pass2_slide_type": None,
@@ -935,6 +965,9 @@ class TestMalformedCachePayloads:
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             f"{img_hash}_deep": {
                 "evidence": ["not_a_dict", 42],  # list of non-dict
                 "pass2_slide_type": None,
@@ -973,6 +1006,9 @@ class TestPromptVersionInvalidation:
             "_prompt_version": "wrong_hash",  # Only prompt changed
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             "abc123": {"slide_type": "data"},
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
@@ -987,6 +1023,9 @@ class TestPromptVersionInvalidation:
             "_prompt_version": "wrong_hash",  # Only prompt changed
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             "abc_deep": {"evidence": []},
         }
         (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(cache))
@@ -1000,6 +1039,9 @@ class TestPromptVersionInvalidation:
             "_prompt_version": _prompt_version(ANALYSIS_PROMPT),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             "abc123": {"slide_type": "data"},
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
@@ -1014,6 +1056,9 @@ class TestPromptVersionInvalidation:
             "_prompt_version": _prompt_version(DEPTH_PROMPT.template),
             "_model_version": "test", "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
             "abc_deep": {"evidence": []},
         }
         (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(cache))
@@ -1149,6 +1194,9 @@ class TestCacheHitProvenance:
             "_model_version": "test-model",
             "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
         }
         cache_file = tmp_path / ".analysis_cache.json"
         cache_file.write_text(json.dumps(cache, indent=2))
@@ -1205,6 +1253,9 @@ class TestCacheHitProvenance:
             "_model_version": "test-model",
             "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(pass1_cache, indent=2))
 
@@ -1236,6 +1287,9 @@ class TestCacheHitProvenance:
             "_model_version": "test-model",
             "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
         }
         (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(deep_cache, indent=2))
 
@@ -1343,6 +1397,9 @@ class TestCacheHitProvenance:
             "_model_version": "test-model",
             "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache, indent=2))
 
@@ -1401,6 +1458,9 @@ class TestCacheHitProvenance:
             "_model_version": "test-model",
             "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache, indent=2))
 
@@ -1464,6 +1524,9 @@ class TestCacheHitProvenance:
             "_model_version": "test-model",
             "_provider_version": "anthropic",
             "_extraction_version": _EXTRACTION_VERSION,
+            "_schema_version": _DIAGRAM_SCHEMA_VERSION,
+            "_pipeline_version": _DIAGRAM_PIPELINE_VERSION,
+            "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache, indent=2))
 
