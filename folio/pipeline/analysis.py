@@ -552,8 +552,10 @@ def _rewrite_edge_ids(
     inherited via IoU, edge IDs become automatically stable.
 
     Parallel edges (multiple edges between the same node pair) are disambiguated
-    with a per-pair counter after sorting by (label, direction). This makes the
-    output order-independent: reordering input edges does not change IDs.
+    with a per-pair counter after sorting by a canonical semantic key
+    (label, direction, confidence, evidence_bbox, verification_evidence).
+    This makes the output order-independent: reordering input edges does not
+    change IDs. Truly identical edges are indistinguishable by definition.
     """
     # Group edges by their (new_source, new_target) pair
     from collections import defaultdict
