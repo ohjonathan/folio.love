@@ -310,7 +310,8 @@ class TestApplyMutations:
         assert len(result["nodes"]) == 2
         assert acc["skipped_unknown_action"] == 1
 
-    def test_all_seven_actions(self):
+    def test_all_nine_actions(self):
+        """All valid mutation actions including change_direction and regroup."""
         graph = self._base_graph()
         mutations = [
             {"action": "add_node", "data": {"label": "Cache", "kind": "service"}},
@@ -319,37 +320,103 @@ class TestApplyMutations:
             {"action": "rebox_node", "target_id": "web", "data": {"bbox": [1, 1, 2, 2]}},
             {"action": "add_edge", "data": {"source_id": "web", "target_id": "cache", "label": "get"}},
             {"action": "relabel_edge", "target_id": "web_cache", "data": {"label": "set"}},
+            {"action": "change_direction", "target_id": "web_cache", "data": {"direction": "reverse"}},
+            {"action": "regroup", "target_id": "web", "data": {"group_id": "vpc"}},
             {"action": "remove_edge", "target_id": "web_cache"},
         ]
         result, acc = _apply_mutations(graph, mutations)
-        assert acc["applied"] == 7
+        assert acc["applied"] == 9
+
+    def test_ghost_edge_rejected(self):
+        """S-F1: add_edge referencing non-existent nodes is rejected."""
+        graph = self._base_graph()
+        mutations = [{"action": "add_edge", "data": {
+            "source_id": "nonexistent_src", "target_id": "web", "label": "ghost"}}]
+        result, acc = _apply_mutations(graph, mutations)
+        assert len(result["edges"]) == 1  # only original edge
+        assert acc["skipped_invalid_id"] == 1
+
+    def test_change_direction(self):
+        """S-F1: change_direction updates edge direction."""
+        graph = self._base_graph()
+        graph["edges"][0]["direction"] = "forward"
+        mutations = [{"action": "change_direction", "target_id": "web_db",
+                       "data": {"direction": "bidirectional"}}]
+        result, acc = _apply_mutations(graph, mutations)
+        assert result["edges"][0]["direction"] == "bidirectional"
+        assert acc["applied"] == 1
+
+    def test_regroup(self):
+        """S-F1: regroup moves node to different group."""
+        graph = self._base_graph()
+        mutations = [{"action": "regroup", "target_id": "web",
+                       "data": {"group_id": "vpc"}}]
+        result, acc = _apply_mutations(graph, mutations)
+        node = next(n for n in result["nodes"] if n["id"] == "web")
+        assert node["group_id"] == "vpc"
+        assert acc["applied"] == 1
 
 
 # ---------------------------------------------------------------------------
-# Sanity check
+# Sanity check (B3: accounting-based)
 # ---------------------------------------------------------------------------
 
 
 class TestSanityCheck:
     def test_under_threshold(self):
-        orig = {"nodes": [{"id": "a"}] * 10, "edges": [{"id": "e"}] * 5}
-        mutated = {"nodes": [{"id": "a"}] * 11, "edges": [{"id": "e"}] * 6}
-        assert _sanity_check(orig, mutated) is False
+        """Small mutations below 40% ratio → safe."""
+        orig = {"nodes": [{"id": f"n{i}", "label": f"L{i}"} for i in range(10)],
+                "edges": [{"id": f"e{i}"} for i in range(5)]}
+        mutated = dict(orig)
+        accounting = {"applied": 2, "by_action": {"relabel_node": 2}}
+        triggered, reason = _sanity_check(orig, mutated, accounting)
+        assert triggered is False
 
-    def test_over_node_threshold(self):
-        orig = {"nodes": [{"id": "a"}] * 10, "edges": []}
-        mutated = {"nodes": [{"id": "a"}] * 14, "edges": []}  # 40% increase
-        assert _sanity_check(orig, mutated) is True
+    def test_over_mutation_ratio(self):
+        """B3: Total mutations > 40% of elements → triggered."""
+        orig = {"nodes": [{"id": f"n{i}", "label": f"L{i}"} for i in range(5)],
+                "edges": [{"id": f"e{i}"} for i in range(5)]}
+        # 10 elements total, 5 mutations = 50% > 40%
+        accounting = {"applied": 5, "by_action": {"relabel_node": 3, "add_edge": 2}}
+        triggered, reason = _sanity_check(orig, orig, accounting)
+        assert triggered is True
+        assert "50%" in reason
 
-    def test_over_edge_threshold(self):
-        orig = {"nodes": [], "edges": [{"id": "e"}] * 10}
-        mutated = {"nodes": [], "edges": [{"id": "e"}] * 15}  # 50% increase
-        assert _sanity_check(orig, mutated) is True
+    def test_action_dominance(self):
+        """B3: Single action > 50% of elements → triggered (via dominance or ratio)."""
+        orig = {"nodes": [{"id": f"n{i}", "label": f"L{i}"} for i in range(4)],
+                "edges": [{"id": f"e{i}"} for i in range(4)]}
+        # 8 elements, relabel_edge=5 → triggers either via ratio (62%) or dominance (62%)
+        accounting = {"applied": 5, "by_action": {"relabel_edge": 5}}
+        triggered, reason = _sanity_check(orig, orig, accounting)
+        assert triggered is True
+        # Either "exceeds" (ratio) or "dominates" (dominance) — both are valid
+
+    def test_mass_relabeling(self):
+        """B3: >50% of surviving nodes relabeled → triggered."""
+        orig = {"nodes": [{"id": f"n{i}", "label": f"L{i}"} for i in range(10)], "edges": []}
+        mutated = {"nodes": [{"id": f"n{i}", "label": f"NEW{i}"} for i in range(10)], "edges": []}
+        accounting = {"applied": 1, "by_action": {"relabel_node": 1}}  # low ratio
+        triggered, reason = _sanity_check(orig, mutated, accounting)
+        assert triggered is True
+        assert "relabeled" in reason
 
     def test_empty_original(self):
+        """Empty graph has 0 elements → no ratio, safe."""
         orig = {"nodes": [], "edges": []}
         mutated = {"nodes": [{"id": "a"}] * 5, "edges": []}
-        assert _sanity_check(orig, mutated) is False
+        accounting = {"applied": 5, "by_action": {"add_node": 5}}
+        triggered, _ = _sanity_check(orig, mutated, accounting)
+        assert triggered is False
+
+    def test_edge_label_mutations_detected(self):
+        """B3 repro: mutating all edge labels should trigger action dominance."""
+        orig = {"nodes": [{"id": "n1", "label": "A"}],
+                "edges": [{"id": f"e{i}"} for i in range(5)]}
+        # 6 elements, relabel_edge=5 → 83% dominance
+        accounting = {"applied": 5, "by_action": {"relabel_edge": 5}}
+        triggered, reason = _sanity_check(orig, orig, accounting)
+        assert triggered is True
 
 
 # ---------------------------------------------------------------------------

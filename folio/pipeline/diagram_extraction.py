@@ -41,7 +41,7 @@ from .analysis import (
     _rewrite_edge_ids,
 )
 from . import diagram_cache
-from .image_strategy import prepare_images
+from .image_strategy import prepare_images, highlight_regions
 
 if TYPE_CHECKING:
     from .inspect import PageProfile
@@ -577,12 +577,65 @@ def _anchor_bboxes(
 
 
 # ---------------------------------------------------------------------------
+# B1: Evidence-driven image selection
+# ---------------------------------------------------------------------------
+
+# B4: Diagram types that are out-of-scope for v1 graph extraction
+_UNSUPPORTED_DIAGRAM_TYPES = {"sequence", "gantt", "timeline"}
+
+
+def _select_pass_a_images(
+    page_img: Image.Image,
+    profile: "PageProfile",
+) -> tuple[ImagePart, ...]:
+    """Select image parts for Pass A based on diagram complexity.
+
+    Simple diagrams: global-only (1 ImagePart).
+    Medium/dense diagrams: global + tiles (5 ImageParts).
+    """
+    escalation = getattr(profile, "escalation_level", "simple")
+    if escalation == "simple":
+        # Global-only for simple diagrams
+        from .image_strategy import _resize_to_max_edge, _to_png_bytes, _MAX_LONG_EDGE
+        global_img = _resize_to_max_edge(page_img, _MAX_LONG_EDGE)
+        return (ImagePart(
+            image_data=_to_png_bytes(global_img),
+            role="global",
+            media_type="image/png",
+            detail="auto",
+        ),)
+    return tuple(prepare_images(page_img, profile))
+
+
+def _select_pass_c_images(
+    page_img: Image.Image,
+    profile: "PageProfile",
+) -> tuple[ImagePart, ...]:
+    """Select image parts for Pass C claim verification.
+
+    Always global-only: verification needs full picture context,
+    not quadrant tiles.
+    """
+    from .image_strategy import _resize_to_max_edge, _to_png_bytes, _MAX_LONG_EDGE
+    escalation = getattr(profile, "escalation_level", "simple")
+    detail = "high" if escalation in {"medium", "dense"} else "auto"
+    global_img = _resize_to_max_edge(page_img, _MAX_LONG_EDGE)
+    return (ImagePart(
+        image_data=_to_png_bytes(global_img),
+        role="global",
+        media_type="image/png",
+        detail=detail,
+    ),)
+
+
+# ---------------------------------------------------------------------------
 # Mutation application (Pass B)
 # ---------------------------------------------------------------------------
 
 _VALID_MUTATION_ACTIONS = {
     "add_node", "remove_node", "relabel_node", "rebox_node",
     "add_edge", "remove_edge", "relabel_edge",
+    "change_direction", "regroup",
 }
 
 
@@ -693,7 +746,8 @@ def _apply_mutations(
             edge_data = dict(data)
             source = edge_data.get("source_id", "")
             target = edge_data.get("target_id", "")
-            if source and target:
+            # S-F1: Reject ghost edges — both endpoints must exist
+            if source and target and source in node_ids and target in node_ids:
                 eid = f"{source}_{target}"
                 if eid in edge_ids:
                     counter = 1
@@ -730,6 +784,32 @@ def _apply_mutations(
             accounting["applied"] += 1
             accounting["by_action"]["relabel_edge"] = accounting["by_action"].get("relabel_edge", 0) + 1
 
+        elif action == "change_direction":
+            if target_id not in edge_ids:
+                accounting["skipped_invalid_id"] += 1
+                continue
+            new_dir = str(data.get("direction", ""))
+            if new_dir in {"forward", "reverse", "bidirectional", "none"}:
+                for e in edges:
+                    if e["id"] == target_id:
+                        e["direction"] = new_dir
+                        break
+            accounting["applied"] += 1
+            accounting["by_action"]["change_direction"] = accounting["by_action"].get("change_direction", 0) + 1
+
+        elif action == "regroup":
+            # Move node to a different group
+            if target_id not in node_ids:
+                accounting["skipped_invalid_id"] += 1
+                continue
+            new_group = data.get("group_id")
+            for n in nodes:
+                if n["id"] == target_id:
+                    n["group_id"] = new_group
+                    break
+            accounting["applied"] += 1
+            accounting["by_action"]["regroup"] = accounting["by_action"].get("regroup", 0) + 1
+
     return {
         "diagram_type": graph_dict.get("diagram_type", "unknown"),
         "nodes": nodes,
@@ -745,38 +825,49 @@ def _apply_mutations(
 def _sanity_check(
     original_graph: dict,
     mutated_graph: dict,
-    node_threshold: float = 0.30,
-    edge_threshold: float = 0.40,
-) -> bool:
-    """Return True if mutations exceed sanity thresholds.
+    accounting: dict,
+    mutation_ratio_threshold: float = 0.40,
+    action_dominance_threshold: float = 0.50,
+) -> tuple[bool, str]:
+    """Return (triggered, reason) if mutations exceed sanity thresholds.
 
-    Checks both count deltas AND structural deltas (m5: relabel ratio).
-    If True, the original graph should be kept (sanity short-circuit).
+    B3: Uses mutation accounting ratios, not graph-size deltas.
+    Checks:
+    1. Total mutation ratio: applied / (orig_nodes + orig_edges) > 40%
+    2. Action dominance: any single action type > 50% of total elements
+    3. Structural: >50% of surviving nodes relabeled
     """
     orig_nodes = len(original_graph.get("nodes", []))
     orig_edges = len(original_graph.get("edges", []))
-    mut_nodes = len(mutated_graph.get("nodes", []))
-    mut_edges = len(mutated_graph.get("edges", []))
+    total_elements = orig_nodes + orig_edges
 
-    if orig_nodes > 0:
-        node_delta = abs(mut_nodes - orig_nodes) / orig_nodes
-        if node_delta > node_threshold:
-            logger.warning(
-                "Sanity check: node delta %.1f%% exceeds %.0f%% threshold",
-                node_delta * 100, node_threshold * 100,
+    applied = accounting.get("applied", 0) if accounting else 0
+
+    # Check 1: Overall mutation ratio
+    if total_elements > 0 and applied > 0:
+        mutation_ratio = applied / total_elements
+        if mutation_ratio > mutation_ratio_threshold:
+            reason = (
+                f"Mutation ratio {mutation_ratio:.0%} exceeds "
+                f"{mutation_ratio_threshold:.0%} threshold "
+                f"({applied} mutations on {total_elements} elements)"
             )
-            return True
+            logger.warning("Sanity check: %s", reason)
+            return True, reason
 
-    if orig_edges > 0:
-        edge_delta = abs(mut_edges - orig_edges) / orig_edges
-        if edge_delta > edge_threshold:
-            logger.warning(
-                "Sanity check: edge delta %.1f%% exceeds %.0f%% threshold",
-                edge_delta * 100, edge_threshold * 100,
-            )
-            return True
+    # Check 2: Single action dominance
+    by_action = accounting.get("by_action", {}) if accounting else {}
+    if total_elements > 0:
+        for action_name, count in by_action.items():
+            if count / total_elements > action_dominance_threshold:
+                reason = (
+                    f"Action '{action_name}' dominates: {count} of "
+                    f"{total_elements} elements ({count/total_elements:.0%})"
+                )
+                logger.warning("Sanity check: %s", reason)
+                return True, reason
 
-    # m5: Structural delta — detect mass relabeling
+    # Check 3: Structural delta — mass relabeling
     if orig_nodes > 0:
         orig_labels = {n.get("id"): n.get("label") for n in original_graph.get("nodes", [])}
         mut_labels = {n.get("id"): n.get("label") for n in mutated_graph.get("nodes", [])}
@@ -788,13 +879,14 @@ def _sanity_check(
             )
             relabel_ratio = relabeled / len(common_ids)
             if relabel_ratio > 0.50:
-                logger.warning(
-                    "Sanity check: %.0f%% of nodes relabeled (>50%% threshold)",
-                    relabel_ratio * 100,
+                reason = (
+                    f"{relabel_ratio:.0%} of nodes relabeled "
+                    f"({relabeled}/{len(common_ids)})"
                 )
-                return True
+                logger.warning("Sanity check: %s", reason)
+                return True, reason
 
-    return False
+    return False, ""
 
 
 # ---------------------------------------------------------------------------
@@ -994,6 +1086,11 @@ def _merge_sweep_results(
         eid = f"{src}_{tgt}"
         if eid not in existing_edge_ids:
             new_edge["id"] = eid
+            # S-F2: Force low confidence on sweep-added edges
+            new_edge["confidence"] = min(
+                float(new_edge.get("confidence", 0.5)), 0.5
+            )
+            new_edge["sweep_discovered"] = True
             edges.append(new_edge)
             existing_edge_ids.add(eid)
 
@@ -1290,19 +1387,8 @@ def analyze_diagram_pages(
         image_hash = _hash_image(img_result.path)
         is_mixed = profile.classification == "mixed"
 
-        # Check final cache first
-        final_deps = {"_image_hash": image_hash}
-        cached_final = diagram_cache.check_entry(final_cache, image_hash, final_deps)
-        if cached_final is not None and not force_miss:
-            stats.hits += 1
-            results[slide_num] = DiagramAnalysis.from_dict(cached_final)
-            logger.debug("Slide %d: using cached final diagram analysis", slide_num)
-            continue
-
-        stats.misses += 1
-        logger.info("Diagram extraction slide %d...", slide_num)
-
-        # Build text inventory
+        # Build text inventory and load page image BEFORE cache check
+        # (needed for B2 dep hashes)
         bounded_texts = []
         if hasattr(profile, 'bounded_texts') and profile.bounded_texts:
             bounded_texts = [
@@ -1325,8 +1411,40 @@ def analyze_diagram_pages(
             page_img.height,
         )
 
-        # Prepare image parts (tiles for diagrams)
-        image_parts = tuple(prepare_images(page_img, profile))
+        # B2: Expanded dep hashes for cache invalidation
+        text_inv_hash = diagram_cache.text_inventory_hash(text_inventory)
+        profile_hash = diagram_cache.page_profile_hash(
+            classification=profile.classification,
+            escalation_level=getattr(profile, 'escalation_level', 'simple'),
+            render_dpi=getattr(profile, 'render_dpi', 150),
+            crop_box=getattr(profile, 'crop_box', (0.0, 0.0, 1.0, 1.0)),
+            rotation=getattr(profile, 'rotation', 0),
+            word_count=word_count,
+            vector_count=getattr(profile, 'vector_count', 0),
+            char_count=getattr(profile, 'char_count', 0),
+            has_bounded_texts=bool(bounded_texts),
+        )
+
+        # Check final cache with expanded deps
+        final_deps = {
+            "_image_hash": image_hash,
+            "_text_inventory_hash": text_inv_hash,
+            "_profile_hash": profile_hash,
+        }
+        cached_final = diagram_cache.check_entry(final_cache, image_hash, final_deps)
+        if cached_final is not None and not force_miss:
+            stats.hits += 1
+            results[slide_num] = DiagramAnalysis.from_dict(cached_final)
+            logger.debug("Slide %d: using cached final diagram analysis", slide_num)
+            page_img.close()
+            continue
+
+        stats.misses += 1
+        logger.info("Diagram extraction slide %d...", slide_num)
+
+        # B1: Evidence-driven image selection
+        pass_a_images = _select_pass_a_images(page_img, profile)
+        pass_c_images = _select_pass_c_images(page_img, profile)
 
         # --- Pass A: Extract ---
         pass_a_prompt = DIAGRAM_EXTRACTION_PROMPT.replace(
@@ -1335,7 +1453,7 @@ def analyze_diagram_pages(
 
         pass_a_out, pass_a_usage = _call_llm(
             provider, client, model, pass_a_prompt,
-            image_parts, primary_settings, limiter,
+            pass_a_images, primary_settings, limiter,
         )
 
         total_usage = pass_a_usage
@@ -1364,6 +1482,18 @@ def analyze_diagram_pages(
             results[slide_num] = analysis
             continue
 
+        # B4: Abstain on unsupported diagram types
+        diagram_type = normalized.get("diagram_type", "unknown")
+        if diagram_type in _UNSUPPORTED_DIAGRAM_TYPES:
+            analysis.abstained = True
+            analysis.diagram_type = diagram_type
+            analysis.review_required = True
+            analysis.review_questions = [
+                f"Unsupported diagram type for v1 extraction: {diagram_type}"
+            ]
+            results[slide_num] = analysis
+            continue
+
         # Anchor bboxes
         normalized["nodes"] = _anchor_bboxes(normalized["nodes"], bounded_texts)
 
@@ -1375,7 +1505,7 @@ def analyze_diagram_pages(
 
         pass_b_out, pass_b_usage = _call_llm(
             provider, client, model, pass_b_prompt,
-            image_parts, primary_settings, limiter,
+            pass_a_images, primary_settings, limiter,
         )
         total_usage = TokenUsage(
             input_tokens=total_usage.input_tokens + pass_b_usage.input_tokens,
@@ -1394,25 +1524,30 @@ def analyze_diagram_pages(
                     normalized, mutations_raw["mutations"]
                 )
 
-                if _sanity_check(normalized, mutated):
-                    sanity_triggered = True
+                # B3: Sanity check using mutation accounting ratios
+                sanity_triggered, sanity_reason = _sanity_check(
+                    normalized, mutated, mutation_accounting
+                )
+                if sanity_triggered:
                     logger.warning("Slide %d: sanity triggered, abstaining", slide_num)
-                    # B3: Set abstained, skip Pass C/sweep, keep original
                     analysis.abstained = True
                     analysis.review_required = True
+                    # B3: Store rejected mutation details in review_questions
                     analysis.review_questions = [
-                        "Sanity check triggered: mutations exceeded thresholds"
+                        f"Sanity check triggered: {sanity_reason}",
+                        f"Rejected mutations: {json.dumps(mutation_accounting.get('by_action', {}))}",
                     ]
                     post_b_graph = normalized
                 else:
                     post_b_graph = mutated
 
-        # --- Pass C: Claim verification (B3: skip if sanity triggered) ---
-        pass_c_run = False
+        # --- Pass C: Claim verification (skip if sanity triggered) ---
+        pass_c_attempted = False
+        pass_c_verdicts_parsed = False
         claims = _generate_claims(post_b_graph)
 
         if claims and not sanity_triggered:
-            pass_c_run = True
+            pass_c_attempted = True
             # Batch claims (target 18 per batch)
             batch_size = 18
             all_verdicts = []
@@ -1425,9 +1560,10 @@ def analyze_diagram_pages(
                     "$claims_json", claims_json
                 )
 
+                # B1: Pass C uses global-only images
                 pass_c_out, pass_c_usage = _call_llm(
                     provider, client, model, pass_c_prompt,
-                    image_parts, primary_settings, limiter,
+                    pass_c_images, primary_settings, limiter,
                     max_tokens=2048,
                 )
                 total_usage = TokenUsage(
@@ -1440,6 +1576,8 @@ def analyze_diagram_pages(
                     verdicts_raw = _extract_diagram_json(pass_c_out.raw_text)
                     if verdicts_raw and isinstance(verdicts_raw.get("verdicts"), list):
                         all_verdicts.extend(verdicts_raw["verdicts"])
+                        # B5: Only mark as parsed when verdicts actually extracted
+                        pass_c_verdicts_parsed = True
 
             if all_verdicts:
                 post_b_graph = _apply_verdicts(post_b_graph, all_verdicts)
@@ -1509,7 +1647,7 @@ def analyze_diagram_pages(
                     )
                     sweep_images = (region_part,)
                 except Exception:
-                    sweep_images = image_parts  # fallback to global
+                    sweep_images = pass_a_images  # fallback to global
 
                 sweep_out, sweep_usage = _call_llm(
                     provider, client, model, sweep_prompt,
@@ -1528,9 +1666,10 @@ def analyze_diagram_pages(
                         post_b_graph = _merge_sweep_results(post_b_graph, sweep_data)
 
         # --- Confidence scoring ---
+        # B5: Only award Pass C bonus if verdicts were actually parsed
         confidence, reasoning = _compute_diagram_confidence(
             post_b_graph, word_count,
-            pass_c_run=pass_c_run,
+            pass_c_run=pass_c_verdicts_parsed,
             sweep_run=sweep_run,
             sanity_triggered=sanity_triggered,
         )
@@ -1538,9 +1677,37 @@ def analyze_diagram_pages(
         # --- Build final DiagramAnalysis ---
         graph = DiagramGraph.from_dict(post_b_graph)
 
-        # IoU-based ID inheritance from prior cached graph
+        # B4: Abstain on empty graph
+        if len(graph.nodes) == 0:
+            analysis.abstained = True
+            analysis.review_required = True
+            analysis.review_questions = [
+                "Extraction produced zero nodes — possible empty or unrecognizable diagram"
+            ]
+            analysis.diagram_confidence = confidence
+            analysis.extraction_confidence = confidence
+            analysis.confidence_reasoning = reasoning
+            results[slide_num] = analysis
+            page_img.close()
+            continue
+
+        # B2: IoU-based ID inheritance — check prior cached graph first,
+        # then fall back to in-memory analysis.graph
+        prior_graph = None
         if analysis.graph and analysis.graph.nodes:
-            mapping = match_nodes_by_iou(graph.nodes, analysis.graph.nodes)
+            prior_graph = analysis.graph
+        elif cached_final is None:
+            # Look for prior graph in final cache (B2: stale-cache fallback)
+            prior_entry = diagram_cache.check_entry(
+                final_cache, image_hash, {"_image_hash": image_hash}
+            )
+            if prior_entry is not None:
+                prior_da = DiagramAnalysis.from_dict(prior_entry)
+                if prior_da.graph and prior_da.graph.nodes:
+                    prior_graph = prior_da.graph
+
+        if prior_graph and prior_graph.nodes:
+            mapping = match_nodes_by_iou(graph.nodes, prior_graph.nodes)
             if mapping:
                 for node in graph.nodes:
                     if node.id in mapping:
@@ -1557,8 +1724,15 @@ def analyze_diagram_pages(
         analysis.extraction_confidence = confidence  # backward compat
         analysis.confidence_reasoning = reasoning
 
-        # Review required if confidence below threshold
-        if confidence < 0.60:
+        # B4: Abstain on very low confidence
+        if confidence < 0.30:
+            analysis.abstained = True
+            analysis.review_required = True
+            if not analysis.review_questions:
+                analysis.review_questions = [
+                    f"Confidence {confidence:.2f} below abstention threshold (0.30)"
+                ]
+        elif confidence < 0.60:
             analysis.review_required = True
 
         # S-NEW-1: Review questions from low-confidence nodes
@@ -1586,7 +1760,8 @@ def analyze_diagram_pages(
             "pass_a_provider": provider_name,
             "pass_b_mutations": mutation_accounting,
             "pass_b_sanity_triggered": sanity_triggered,
-            "pass_c_run": pass_c_run,
+            "pass_c_attempted": pass_c_attempted,
+            "pass_c_verdicts_parsed": pass_c_verdicts_parsed,
             "pass_c_claims_count": len(claims),
             "sweep_run": sweep_run,
             "total_usage": {
@@ -1608,12 +1783,12 @@ def analyze_diagram_pages(
             total_tokens=stage_meta.usage_total.total_tokens + total_usage.total_tokens,
         )
 
-        # Cache final result
+        # Cache final result with expanded dep hashes
         if cache_dir:
             entry = analysis.to_dict()
             diagram_cache.store_entry(
                 final_cache, image_hash, entry,
-                {"_image_hash": image_hash},
+                final_deps,
                 provider_name, model,
             )
             diagram_cache.save_stage_cache(
