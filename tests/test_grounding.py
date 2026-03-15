@@ -50,6 +50,20 @@ class TestExtractJson:
     def test_empty_string(self):
         assert _extract_json("") is None
 
+    def test_single_line_fenced_with_lang(self):
+        """Single-line fenced JSON: ```json {"a":1} ```"""
+        raw = '```json {"slide_type": "data"} ```'
+        result = _extract_json(raw)
+        assert result is not None
+        assert json.loads(result)["slide_type"] == "data"
+
+    def test_single_line_fenced_no_lang(self):
+        """Single-line fenced JSON without lang tag: ```{"a":1}```"""
+        raw = '```{"slide_type":"data"}```'
+        result = _extract_json(raw)
+        assert result is not None
+        assert json.loads(result)["slide_type"] == "data"
+
 
 class TestNormalizePass1Json:
     """Test pass-1 JSON normalization."""

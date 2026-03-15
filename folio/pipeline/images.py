@@ -216,9 +216,28 @@ def _extract_per_page_dpi(
         info = pdfinfo_from_path(str(pdf_path))
         total_pages = info.get("Pages", 0)
     except Exception:
-        # Fallback: render all at low DPI to count
-        all_images = convert_from_path(pdf_path, dpi=72, fmt=fmt)
-        total_pages = len(all_images)
+        # Fallback: render one page at low DPI to count (not full deck)
+        try:
+            single = convert_from_path(pdf_path, dpi=72, fmt=fmt, last_page=1)
+            # Use pdfinfo-from-path's error; try alternative count method
+            import subprocess
+            result = subprocess.run(
+                ["pdfinfo", str(pdf_path)],
+                capture_output=True, text=True, timeout=10,
+            )
+            for line in result.stdout.splitlines():
+                if line.startswith("Pages:"):
+                    total_pages = int(line.split(":")[1].strip())
+                    break
+            else:
+                # Last resort: render all at minimum DPI (unavoidable)
+                all_images = convert_from_path(pdf_path, dpi=72, fmt=fmt)
+                total_pages = len(all_images)
+                del all_images  # Free immediately
+        except Exception:
+            all_images = convert_from_path(pdf_path, dpi=72, fmt=fmt)
+            total_pages = len(all_images)
+            del all_images  # Free immediately
 
     if total_pages == 0:
         raise ImageExtractionError(f"No pages found in {pdf_path.name}")
@@ -235,8 +254,8 @@ def _extract_per_page_dpi(
             shutil.rmtree(tmp_dir)
         tmp_dir.mkdir(parents=True)
 
-        # Render batches: one convert_from_path call per distinct DPI
-        page_images: dict[int, Image.Image] = {}
+        # Render batches: save-and-release per batch to limit memory
+        results = []
 
         for batch_dpi, page_nums in sorted(dpi_to_pages.items()):
             # Find contiguous runs to minimize subprocess calls
@@ -254,38 +273,39 @@ def _extract_per_page_dpi(
                         f"Expected {expected} images for pages {run_start}-{run_end}, "
                         f"got {len(batch)}"
                     )
+                # Save each image immediately and release PIL object
                 for i, img in enumerate(batch):
-                    page_images[run_start + i] = img
+                    page_num = run_start + i
+                    profile = page_profiles.get(page_num)
+                    page_dpi_val = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
+
+                    filename = f"slide-{page_num:03d}.{fmt}"
+                    image_path = tmp_dir / filename
+                    img.save(str(image_path))
+
+                    _validate_image(image_path, img, slide_num=page_num)
+
+                    width, height = img.size
+                    is_blank = _is_mostly_blank(img, threshold=0.95)
+                    is_tiny = width < 100 or height < 100
+
+                    results.append(ImageResult(
+                        path=image_path,
+                        slide_num=page_num,
+                        is_blank=is_blank,
+                        is_tiny=is_tiny,
+                        width=width,
+                        height=height,
+                        render_dpi=page_dpi_val,
+                    ))
+                    img.close()  # Release PIL memory
+
+                del batch  # Free batch list
 
             logger.info("  Rendered %d pages at %d DPI", len(page_nums), batch_dpi)
 
-        # Write images in page order
-        results = []
-        for page_num in range(1, total_pages + 1):
-            image = page_images[page_num]
-            profile = page_profiles.get(page_num)
-            page_dpi = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
-
-            filename = f"slide-{page_num:03d}.{fmt}"
-            image_path = tmp_dir / filename
-            image.save(str(image_path))
-
-            # Validate
-            _validate_image(image_path, image, slide_num=page_num)
-
-            width, height = image.size
-            is_blank = _is_mostly_blank(image, threshold=0.95)
-            is_tiny = width < 100 or height < 100
-
-            results.append(ImageResult(
-                path=image_path,
-                slide_num=page_num,
-                is_blank=is_blank,
-                is_tiny=is_tiny,
-                width=width,
-                height=height,
-                render_dpi=page_dpi,
-            ))
+        # Sort results by page number (batches may be interleaved)
+        results.sort(key=lambda r: r.slide_num)
 
     except Exception as e:
         if tmp_dir.exists():

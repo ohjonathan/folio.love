@@ -355,13 +355,29 @@ def _extract_json(raw_text: str) -> str | None:
     # Attempt 2: strip one surrounding markdown code fence pair
     stripped = raw_text.strip()
     if stripped.startswith("```"):
-        # Remove opening fence (with optional language tag)
         newline_pos = stripped.find("\n")
         if newline_pos == -1:
-            # Single-line fenced content — no newline after opening fence
+            # Single-line fenced: ```json {"a":1} ``` — extract between first ``` and last ```
+            if stripped.endswith("```") and len(stripped) > 6:
+                # Remove opening ``` (with optional lang tag) and closing ```
+                inner = stripped[3:].rstrip()[:-3].strip()
+                # Strip optional language tag (e.g. 'json')
+                # If inner starts with a non-{ non-[ word, it's a lang tag
+                if inner and inner[0] not in ('{', '[', '"'):
+                    space_pos = inner.find(' ')
+                    if space_pos != -1:
+                        inner = inner[space_pos + 1:].strip()
+                    else:
+                        return None  # Only a lang tag, no content
+                try:
+                    json.loads(inner)
+                    return inner
+                except (json.JSONDecodeError, TypeError):
+                    pass
             return None
+
+        # Multi-line fenced: remove opening fence line and closing fence
         inner = stripped[newline_pos + 1:]
-        # Remove closing fence
         if inner.rstrip().endswith("```"):
             inner = inner.rstrip()[:-3].rstrip()
             try:
@@ -489,7 +505,7 @@ def _normalize_pass2_json(data: dict) -> tuple[list[dict], str | None, str | Non
     return evidence, reassessed_type, reassessed_framework
 
 
-_CACHE_FLUSH_INTERVAL = 5  # Flush cache every N misses (Finding 4)
+# Cache is flushed after every resolved miss for per-page durability
 
 
 def analyze_slides(
@@ -641,9 +657,8 @@ def analyze_slides(
             entry["_model"] = used_model
             cache[image_hash] = entry
 
-            # Incremental flush every N misses (Finding 4: survive mid-pass crash)
-            if cache_dir and stats.misses % _CACHE_FLUSH_INTERVAL == 0:
-                _save_cache(cache_dir, cache, model=model, provider=provider_name)
+            # Flush after every miss for per-page durability
+            _save_cache(cache_dir, cache, model=model, provider=provider_name)
 
     # Final cache write (always writes, even with force_miss)
     if cache_dir:
@@ -1208,9 +1223,8 @@ def analyze_slides_deep(
                 "_model": used_model,
             }
 
-            # Incremental flush every N misses (Finding 4)
-            if cache_dir and stats.misses % _CACHE_FLUSH_INTERVAL == 0:
-                _save_cache_deep(cache_dir, deep_cache, model=model, provider=provider_name)
+            # Flush after every miss for per-page durability
+            _save_cache_deep(cache_dir, deep_cache, model=model, provider=provider_name)
 
         # Merge evidence
         if new_evidence:

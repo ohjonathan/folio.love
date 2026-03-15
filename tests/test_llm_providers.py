@@ -114,6 +114,35 @@ class TestAnthropicProvider:
 
         assert output.truncated is True
 
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_analyze_multiple_images(self):
+        """Multi-image support: provider embeds all images in request."""
+        provider = AnthropicAnalysisProvider()
+        mock_client = MagicMock()
+        response_text = json.dumps({"slide_type": "data", "framework": "none",
+                                     "evidence": [{"claim": "c", "quote": "q"}],
+                                     "visual_description": "v", "key_data": "k",
+                                     "main_insight": "i"})
+        mock_response = make_anthropic_response(response_text)
+        mock_client.messages.create.return_value = mock_response
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            imgs = []
+            for i in range(3):
+                img_path = Path(tmpdir) / f"test_{i}.png"
+                img_path.write_bytes(_make_unique_png(100 + i))
+                imgs.append(ImagePart(image_data=img_path.read_bytes(), role="global", media_type="image/png"))
+
+            inp = ProviderInput(prompt="Analyze these", images=tuple(imgs), max_tokens=2048)
+            output = provider.analyze(mock_client, "test-model", inp)
+
+        assert isinstance(output, ProviderOutput)
+        # Verify all 3 images were included in the API call
+        call_args = mock_client.messages.create.call_args
+        content_parts = call_args.kwargs.get("messages", [{}])[0].get("content", [])
+        image_parts = [p for p in content_parts if p.get("type") == "image"]
+        assert len(image_parts) == 3, f"Expected 3 images, got {len(image_parts)}"
+
     def test_classify_error_rate_limit(self):
         provider = AnthropicAnalysisProvider()
         try:

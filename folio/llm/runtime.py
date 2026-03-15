@@ -77,23 +77,28 @@ class RateLimiter:
                 while self._request_times and (now - self._request_times[0]) >= _WINDOW_SECONDS:
                     self._request_times.popleft()
 
-        # TPM gate (best-effort)
+        # TPM gate (best-effort, looping until under cap)
         if self.tpm_limit is not None:
-            while self._token_records and (now - self._token_records[0][0]) >= _WINDOW_SECONDS:
-                self._token_records.popleft()
+            while True:
+                while self._token_records and (now - self._token_records[0][0]) >= _WINDOW_SECONDS:
+                    self._token_records.popleft()
 
-            window_tokens = sum(t for _, t in self._token_records)
-            if window_tokens >= self.tpm_limit:
+                window_tokens = sum(t for _, t in self._token_records)
+                if window_tokens < self.tpm_limit:
+                    break  # Under cap — proceed
+
+                if not self._token_records:
+                    break  # Nothing to wait for
+
                 oldest_ts = self._token_records[0][0]
                 sleep_time = _WINDOW_SECONDS - (now - oldest_ts) + 0.05
-                if sleep_time > 0:
-                    logger.debug("TPM limit reached (%d/%d), sleeping %.1fs",
-                                 window_tokens, self.tpm_limit, sleep_time)
-                    time.sleep(sleep_time)
-                    now = time.monotonic()
-                    # Re-prune after sleep (SF1: mirror RPM gate pattern)
-                    while self._token_records and (now - self._token_records[0][0]) >= _WINDOW_SECONDS:
-                        self._token_records.popleft()
+                if sleep_time <= 0:
+                    continue  # Already expired, re-prune on next iteration
+
+                logger.debug("TPM limit reached (%d/%d), sleeping %.1fs",
+                             window_tokens, self.tpm_limit, sleep_time)
+                time.sleep(sleep_time)
+                now = time.monotonic()
 
     def record_request(self) -> None:
         """Record a request timestamp for RPM tracking."""

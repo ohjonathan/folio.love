@@ -238,3 +238,50 @@ class TestExecuteWithRetry:
         assert result.raw_text == "ok"
         # Should have used Retry-After (0.01s) not base_delay (100s)
         assert elapsed < 5.0
+
+
+class TestTPMLooping:
+    """Verify TPM limiter correctly loops until window is under cap."""
+
+    def test_staggered_tokens_drain_fully(self):
+        """Three records totaling 180 tokens against 100-cap must all drain."""
+        limiter = RateLimiter(rpm_limit=100, tpm_limit=100)
+
+        # Simulate staggered records:
+        #   t=-50s: 60 tokens, t=-30s: 60 tokens, t=-10s: 60 tokens = 180 total
+        # After sleeping ~10s, oldest expires → 120 still over cap
+        # Need full loop to drain enough
+        base = time.monotonic()
+        limiter._token_records.append((base - 50, 60))
+        limiter._token_records.append((base - 30, 60))
+        limiter._token_records.append((base - 10, 60))
+
+        # Mock time.sleep to advance monotonic time
+        real_monotonic = time.monotonic
+        sleep_total = [0.0]
+        time_offset = [0.0]
+
+        def fake_monotonic():
+            return real_monotonic() + time_offset[0]
+
+        def fake_sleep(duration):
+            time_offset[0] += duration
+            sleep_total[0] += duration
+
+        with patch("folio.llm.runtime.time.monotonic", side_effect=fake_monotonic):
+            with patch("folio.llm.runtime.time.sleep", side_effect=fake_sleep):
+                limiter.wait_for_capacity()
+
+        # After wait, window tokens should be under cap
+        now = time.monotonic() + time_offset[0]
+        while limiter._token_records and (now - limiter._token_records[0][0]) >= 60:
+            limiter._token_records.popleft()
+        remaining = sum(t for _, t in limiter._token_records)
+        assert remaining < 100, f"TPM still at {remaining}, expected < 100"
+
+    def test_no_records_exits_immediately(self):
+        """TPM gate with no records should not loop or sleep."""
+        limiter = RateLimiter(rpm_limit=100, tpm_limit=100)
+        start = time.monotonic()
+        limiter.wait_for_capacity()
+        assert time.monotonic() - start < 0.1
