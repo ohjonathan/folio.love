@@ -293,7 +293,6 @@ class FolioConverter:
                     provider_name=profile.provider,
                     model=profile.model,
                     api_key_env=profile.api_key_env,
-                    fallback_profiles=fallback_profiles_list,
                     all_provider_settings=all_provider_settings,
                     slide_numbers=sorted(diagram_or_mixed_slides),
                 )

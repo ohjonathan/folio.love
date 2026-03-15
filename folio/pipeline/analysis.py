@@ -340,12 +340,24 @@ class DiagramAnalysis(SlideAnalysis):
     mermaid: str | None = None
     description: str | None = None
     uncertainties: list[str] = field(default_factory=list)
-    extraction_confidence: float = 0.0
+    extraction_confidence: float = 0.0  # D2: DEPRECATED alias, use diagram_confidence
+    diagram_confidence: float = 0.0
     confidence_reasoning: str = ""
     review_questions: list[str] = field(default_factory=list)
     review_required: bool = False
     abstained: bool = False
     _extraction_metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """D2: Sync extraction_confidence ↔ diagram_confidence.
+
+        If only one was set (non-default), propagate to the other.
+        If both were set, diagram_confidence takes priority.
+        """
+        if self.diagram_confidence != 0.0:
+            self.extraction_confidence = self.diagram_confidence
+        elif self.extraction_confidence != 0.0:
+            self.diagram_confidence = self.extraction_confidence
 
     def to_dict(self) -> dict:
         """Serialize including inherited SlideAnalysis fields plus diagram fields."""
@@ -358,7 +370,8 @@ class DiagramAnalysis(SlideAnalysis):
         if self.description is not None:
             d["description"] = self.description
         d["uncertainties"] = list(self.uncertainties)
-        d["extraction_confidence"] = self.extraction_confidence
+        d["extraction_confidence"] = self.diagram_confidence  # backward compat
+        d["diagram_confidence"] = self.diagram_confidence
         d["confidence_reasoning"] = self.confidence_reasoning
         d["review_questions"] = list(self.review_questions)
         d["review_required"] = self.review_required
@@ -387,7 +400,10 @@ class DiagramAnalysis(SlideAnalysis):
         review_questions_raw = d.get("review_questions", [])
         review_questions = list(review_questions_raw) if isinstance(review_questions_raw, list) else []
         try:
-            extraction_conf = float(d.get("extraction_confidence", 0.0))
+            # D2: read either new or old field name
+            extraction_conf = float(
+                d.get("diagram_confidence", d.get("extraction_confidence", 0.0))
+            )
         except (TypeError, ValueError):
             extraction_conf = 0.0
         # PR 4: _extraction_metadata with safe fallback
@@ -401,6 +417,7 @@ class DiagramAnalysis(SlideAnalysis):
             description=d.get("description"),
             uncertainties=uncertainties,
             extraction_confidence=extraction_conf,
+            diagram_confidence=extraction_conf,
             confidence_reasoning=str(d.get("confidence_reasoning", "")),
             review_questions=review_questions,
             review_required=bool(d.get("review_required", False)),

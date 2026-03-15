@@ -41,7 +41,7 @@ from .analysis import (
     _rewrite_edge_ids,
 )
 from . import diagram_cache
-from .image_strategy import highlight_regions, prepare_images, crop_region
+from .image_strategy import prepare_images
 
 if TYPE_CHECKING:
     from .inspect import PageProfile
@@ -182,7 +182,7 @@ Return a SINGLE JSON object:
 }
 
 Rules:
-1. Examine the highlighted region of the image carefully.
+1. Examine the image carefully for each claim.
 2. Return ONLY the JSON object."""
 
 
@@ -587,9 +587,10 @@ def _apply_mutations(
     Returns (mutated_graph, accounting) where accounting tracks counts.
     Mutations with invalid IDs or unknown actions are skipped.
     """
-    nodes = list(graph_dict.get("nodes", []))
-    edges = list(graph_dict.get("edges", []))
-    groups = list(graph_dict.get("groups", []))
+    # S3: Deep copy to prevent in-place mutation of original graph
+    nodes = [dict(n) for n in graph_dict.get("nodes", [])]
+    edges = [dict(e) for e in graph_dict.get("edges", [])]
+    groups = [dict(g) for g in graph_dict.get("groups", [])]
 
     node_ids = {n["id"] for n in nodes}
     edge_ids = {e["id"] for e in edges}
@@ -636,11 +637,16 @@ def _apply_mutations(
                 continue
             nodes = [n for n in nodes if n["id"] != target_id]
             node_ids.discard(target_id)
-            # Also remove edges referencing this node
+            # Also remove edges referencing this node (S5: update edge_ids)
+            removed_edges = {
+                e["id"] for e in edges
+                if e.get("source_id") == target_id or e.get("target_id") == target_id
+            }
             edges = [
                 e for e in edges
                 if e.get("source_id") != target_id and e.get("target_id") != target_id
             ]
+            edge_ids -= removed_edges
             accounting["applied"] += 1
             accounting["by_action"]["remove_node"] = accounting["by_action"].get("remove_node", 0) + 1
 
@@ -1105,7 +1111,6 @@ def analyze_diagram_pages(
     provider_name: str = "anthropic",
     model: str = "claude-sonnet-4-20250514",
     api_key_env: str = "",
-    fallback_profiles: list[tuple[str, str, str]] | None = None,
     all_provider_settings: dict[str, ProviderRuntimeSettings] | None = None,
     slide_numbers: list[int] | None = None,
 ) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
@@ -1124,7 +1129,6 @@ def analyze_diagram_pages(
         provider_name: LLM provider name.
         model: LLM model name.
         api_key_env: API key env var.
-        fallback_profiles: Fallback (provider, model, api_key_env) tuples.
         all_provider_settings: Per-provider runtime settings.
         slide_numbers: Which slides to process (diagram/mixed only).
 
@@ -1205,9 +1209,9 @@ def analyze_diagram_pages(
         bounded_texts = []
         if hasattr(profile, 'bounded_texts') and profile.bounded_texts:
             bounded_texts = [
-                {"text": bt.text, "bbox_pixel": bt.bbox_pixel}
+                {"text": bt.text, "bbox_pixel": bt.pixel_bbox}
                 for bt in profile.bounded_texts
-                if bt.text and bt.bbox_pixel
+                if bt.text and bt.pixel_bbox
             ]
 
         page_img = _load_page_image(img_result)
@@ -1295,16 +1299,22 @@ def analyze_diagram_pages(
 
                 if _sanity_check(normalized, mutated):
                     sanity_triggered = True
-                    logger.warning("Slide %d: sanity triggered, keeping original", slide_num)
+                    logger.warning("Slide %d: sanity triggered, abstaining", slide_num)
+                    # B3: Set abstained, skip Pass C/sweep, keep original
+                    analysis.abstained = True
+                    analysis.review_required = True
+                    analysis.review_questions = [
+                        "Sanity check triggered: mutations exceeded thresholds"
+                    ]
                     post_b_graph = normalized
                 else:
                     post_b_graph = mutated
 
-        # --- Pass C: Claim verification ---
+        # --- Pass C: Claim verification (B3: skip if sanity triggered) ---
         pass_c_run = False
         claims = _generate_claims(post_b_graph)
 
-        if claims:
+        if claims and not sanity_triggered:
             pass_c_run = True
             # Batch claims (target 18 per batch)
             batch_size = 18
@@ -1337,9 +1347,9 @@ def analyze_diagram_pages(
             if all_verdicts:
                 post_b_graph = _apply_verdicts(post_b_graph, all_verdicts)
 
-        # --- Completeness sweep ---
+        # --- Completeness sweep (B3: skip if sanity triggered) ---
         sweep_run = False
-        if _should_sweep(post_b_graph, word_count):
+        if _should_sweep(post_b_graph, word_count) and not sanity_triggered:
             sweep_run = True
             # Use quadrant regions
             w, h = page_img.size
@@ -1438,7 +1448,8 @@ def analyze_diagram_pages(
 
         analysis.diagram_type = post_b_graph.get("diagram_type", "unknown")
         analysis.graph = graph
-        analysis.extraction_confidence = confidence
+        analysis.diagram_confidence = confidence
+        analysis.extraction_confidence = confidence  # backward compat
         analysis.confidence_reasoning = reasoning
 
         # Review required if confidence below threshold
