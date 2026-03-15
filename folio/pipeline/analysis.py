@@ -387,7 +387,7 @@ class DiagramAnalysis(SlideAnalysis):
             extraction_conf = float(d.get("extraction_confidence", 0.0))
         except (TypeError, ValueError):
             extraction_conf = 0.0
-        return cls(
+        da = cls(
             **slide_fields,
             diagram_type=str(d.get("diagram_type", "unknown")),
             graph=graph,
@@ -400,6 +400,21 @@ class DiagramAnalysis(SlideAnalysis):
             review_required=bool(d.get("review_required", False)),
             abstained=bool(d.get("abstained", False)),
         )
+        return cls._validate_base_fields(da)
+
+    @classmethod
+    def _validate_base_fields(cls, da: "DiagramAnalysis") -> "DiagramAnalysis":
+        """Mark partial diagram payloads as review-required.
+
+        A cached or deserialized DiagramAnalysis with empty/missing inherited
+        base fields (slide_type, visual_description, key_data, main_insight)
+        is a partial payload that should not surface as a clean analysis.
+        """
+        base_fields = (da.slide_type, da.visual_description, da.key_data, da.main_insight)
+        has_meaningful_base = any(v and v not in ("", "pending", "[pending]") for v in base_fields)
+        if not has_meaningful_base and not da.abstained:
+            da.review_required = True
+        return da
 
     @classmethod
     def from_slide_analysis(
@@ -527,27 +542,37 @@ def _rewrite_edge_ids(
     inherited via IoU, edge IDs become automatically stable.
 
     Parallel edges (multiple edges between the same node pair) are disambiguated
-    with a per-pair counter: ``{src}_{tgt}``, ``{src}_{tgt}_1``, etc.
+    with a per-pair counter after sorting by (label, direction). This makes the
+    output order-independent: reordering input edges does not change IDs.
     """
-    result = []
-    pair_counts: dict[tuple[str, str], int] = {}
+    # Group edges by their (new_source, new_target) pair
+    from collections import defaultdict
+    pair_edges: dict[tuple[str, str], list[DiagramEdge]] = defaultdict(list)
     for edge in edges:
         new_source = node_id_mapping.get(edge.source_id, edge.source_id)
         new_target = node_id_mapping.get(edge.target_id, edge.target_id)
-        pair = (new_source, new_target)
-        count = pair_counts.get(pair, 0)
-        pair_counts[pair] = count + 1
-        new_id = f"{new_source}_{new_target}" if count == 0 else f"{new_source}_{new_target}_{count}"
-        result.append(DiagramEdge(
-            id=new_id,
-            source_id=new_source,
-            target_id=new_target,
-            label=edge.label,
-            direction=edge.direction,
-            confidence=edge.confidence,
-            evidence_bbox=edge.evidence_bbox,
-            verification_evidence=edge.verification_evidence,
-        ))
+        pair_edges[(new_source, new_target)].append(edge)
+
+    result = []
+    for (new_source, new_target), group in pair_edges.items():
+        # Sort by (label, direction) for deterministic disambiguation
+        sorted_group = sorted(group, key=lambda e: (e.label or "", e.direction or ""))
+        for counter, edge in enumerate(sorted_group):
+            new_id = (
+                f"{new_source}_{new_target}"
+                if counter == 0
+                else f"{new_source}_{new_target}_{counter}"
+            )
+            result.append(DiagramEdge(
+                id=new_id,
+                source_id=new_source,
+                target_id=new_target,
+                label=edge.label,
+                direction=edge.direction,
+                confidence=edge.confidence,
+                evidence_bbox=edge.evidence_bbox,
+                verification_evidence=edge.verification_evidence,
+            ))
     return result
 
 

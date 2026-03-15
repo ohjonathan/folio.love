@@ -463,8 +463,71 @@ class TestRewriteEdgeIds:
         ]
         result = _rewrite_edge_ids(edges, {})
         assert result[0].id != result[1].id
+        # Sorted by label: "HTTP" < "gRPC" (uppercase H < lowercase g in ASCII)
+        assert result[0].label == "HTTP"
         assert result[0].id == "a_b"
+        assert result[1].label == "gRPC"
         assert result[1].id == "a_b_1"
+
+    def test_parallel_edges_are_order_independent(self):
+        """B1: Reversing input order must produce identical IDs per semantic edge."""
+        edges_forward = [
+            DiagramEdge(id="e1", source_id="a", target_id="b", label="HTTP", direction="forward"),
+            DiagramEdge(id="e2", source_id="a", target_id="b", label="gRPC", direction="bidirectional"),
+        ]
+        edges_reversed = list(reversed(edges_forward))
+
+        result_fwd = _rewrite_edge_ids(edges_forward, {})
+        result_rev = _rewrite_edge_ids(edges_reversed, {})
+
+        # Same IDs assigned to same labels regardless of input order
+        fwd_by_label = {e.label: e.id for e in result_fwd}
+        rev_by_label = {e.label: e.id for e in result_rev}
+        assert fwd_by_label == rev_by_label
+
+
+class TestPartialDiagramPayloadValidation:
+    """B2: Partial diagram cache payloads must not surface as clean analyses."""
+
+    def test_graph_only_payload_is_review_required(self):
+        """Cache entry with only 'graph' and empty base fields → review_required."""
+        d = {"graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []}}
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        assert result.review_required is True
+
+    def test_description_only_payload_is_review_required(self):
+        """Cache entry with only 'description' and empty base fields → review_required."""
+        d = {"description": "A chart showing revenue"}
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        assert result.review_required is True
+
+    def test_full_payload_is_not_review_required(self):
+        """Cache entry with meaningful base fields does NOT get auto-review_required."""
+        d = {
+            "slide_type": "diagram",
+            "visual_description": "Architecture diagram showing microservices",
+            "diagram_type": "architecture",
+            "graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []},
+        }
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        assert result.review_required is False
+
+    def test_abstained_partial_payload_is_not_auto_review_required(self):
+        """Abstained entries have empty base fields intentionally — no auto-flag."""
+        d = {
+            "slide_type": "pending",
+            "diagram_type": "unsupported",
+            "abstained": True,
+            "review_required": True,
+        }
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        # review_required was explicitly set, not auto-promoted
+        assert result.review_required is True
+        assert result.abstained is True
 
 
 # ---------------------------------------------------------------------------
