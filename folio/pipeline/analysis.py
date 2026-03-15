@@ -340,11 +340,24 @@ class DiagramAnalysis(SlideAnalysis):
     mermaid: str | None = None
     description: str | None = None
     uncertainties: list[str] = field(default_factory=list)
-    extraction_confidence: float = 0.0
+    extraction_confidence: float = 0.0  # D2: DEPRECATED alias, use diagram_confidence
+    diagram_confidence: float = 0.0
     confidence_reasoning: str = ""
     review_questions: list[str] = field(default_factory=list)
     review_required: bool = False
     abstained: bool = False
+    _extraction_metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """D2: Sync extraction_confidence ↔ diagram_confidence.
+
+        If only one was set (non-default), propagate to the other.
+        If both were set, diagram_confidence takes priority.
+        """
+        if self.diagram_confidence != 0.0:
+            self.extraction_confidence = self.diagram_confidence
+        elif self.extraction_confidence != 0.0:
+            self.diagram_confidence = self.extraction_confidence
 
     def to_dict(self) -> dict:
         """Serialize including inherited SlideAnalysis fields plus diagram fields."""
@@ -357,11 +370,14 @@ class DiagramAnalysis(SlideAnalysis):
         if self.description is not None:
             d["description"] = self.description
         d["uncertainties"] = list(self.uncertainties)
-        d["extraction_confidence"] = self.extraction_confidence
+        d["extraction_confidence"] = self.diagram_confidence  # backward compat
+        d["diagram_confidence"] = self.diagram_confidence
         d["confidence_reasoning"] = self.confidence_reasoning
         d["review_questions"] = list(self.review_questions)
         d["review_required"] = self.review_required
         d["abstained"] = self.abstained
+        if self._extraction_metadata:
+            d["_extraction_metadata"] = dict(self._extraction_metadata)
         return d
 
     @classmethod
@@ -384,9 +400,15 @@ class DiagramAnalysis(SlideAnalysis):
         review_questions_raw = d.get("review_questions", [])
         review_questions = list(review_questions_raw) if isinstance(review_questions_raw, list) else []
         try:
-            extraction_conf = float(d.get("extraction_confidence", 0.0))
+            # D2: read either new or old field name
+            extraction_conf = float(
+                d.get("diagram_confidence", d.get("extraction_confidence", 0.0))
+            )
         except (TypeError, ValueError):
             extraction_conf = 0.0
+        # PR 4: _extraction_metadata with safe fallback
+        meta_raw = d.get("_extraction_metadata")
+        extraction_metadata = dict(meta_raw) if isinstance(meta_raw, dict) else {}
         da = cls(
             **slide_fields,
             diagram_type=str(d.get("diagram_type", "unknown")),
@@ -395,10 +417,12 @@ class DiagramAnalysis(SlideAnalysis):
             description=d.get("description"),
             uncertainties=uncertainties,
             extraction_confidence=extraction_conf,
+            diagram_confidence=extraction_conf,
             confidence_reasoning=str(d.get("confidence_reasoning", "")),
             review_questions=review_questions,
             review_required=bool(d.get("review_required", False)),
             abstained=bool(d.get("abstained", False)),
+            _extraction_metadata=extraction_metadata,
         )
         return cls._validate_base_fields(da)
 
@@ -708,6 +732,15 @@ def assess_review_state(
     # Dedicated flags for intentional diagram abstentions
     for slide_num in sorted(abstained_slides):
         flags.append(f"diagram_abstained_slide_{slide_num}")
+
+    # PR 4: Dedicated flags for non-abstained diagrams needing review
+    for slide_num in sorted(reviewable_slides - abstained_slides):
+        analysis_item = analyses[slide_num]
+        if isinstance(analysis_item, DiagramAnalysis) and not analysis_item.abstained:
+            if analysis_item.review_required:
+                flags.append(f"diagram_review_required_slide_{slide_num}")
+            if analysis_item.review_questions:
+                flags.append(f"diagram_open_questions_slide_{slide_num}")
 
     # Per-slide flags: low-confidence, unvalidated
     for slide_num, analysis_item in analyses.items():

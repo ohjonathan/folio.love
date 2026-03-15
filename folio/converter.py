@@ -280,6 +280,25 @@ class FolioConverter:
                         diagram_type=dtype,
                     )
 
+            # PR 4: Diagram extraction for diagram/mixed slides
+            if diagram_or_mixed_slides:
+                from .pipeline import diagram_extraction as diag_ext
+                slide_analyses, diagram_stats, diagram_meta = diag_ext.analyze_diagram_pages(
+                    pass1_results=slide_analyses,
+                    page_profiles=page_profiles,
+                    image_results=image_results,
+                    slide_texts=slide_texts,
+                    cache_dir=deck_dir,
+                    force_miss=no_cache,
+                    provider_name=profile.provider,
+                    model=profile.model,
+                    api_key_env=profile.api_key_env,
+                    all_provider_settings=all_provider_settings,
+                    slide_numbers=sorted(diagram_or_mixed_slides),
+                )
+                # Merge stats (diagram pass is additive, not replacing pass1)
+                pass1_stats = pass1_stats.merge(diagram_stats)
+
             # Stage 4b: Optional depth pass
             effective_passes = passes if passes is not None else self.config.conversion.default_passes
             pass2_meta = None
