@@ -88,7 +88,7 @@ class TestAnthropicProvider:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(1))
 
-            inp = ProviderInput(prompt="Analyze this", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze this", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             output = provider.analyze(mock_client, "test-model", inp)
 
         assert isinstance(output, ProviderOutput)
@@ -109,7 +109,7 @@ class TestAnthropicProvider:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(2))
 
-            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             output = provider.analyze(mock_client, "test-model", inp)
 
         assert output.truncated is True
@@ -173,7 +173,7 @@ class TestContractTypes:
     """Test data types freeze correctly."""
 
     def test_provider_input_frozen(self):
-        inp = ProviderInput(prompt="Test", images=[])
+        inp = ProviderInput(prompt="Test", images=())
         with pytest.raises(AttributeError):
             inp.prompt = "New"  # type: ignore
 
@@ -324,7 +324,7 @@ class TestOpenAIAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(10))
 
-            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             output = provider.analyze(mock_client, "gpt-4o", inp)
 
         assert isinstance(output, ProviderOutput)
@@ -345,7 +345,7 @@ class TestOpenAIAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(11))
 
-            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             output = provider.analyze(mock_client, "gpt-4o", inp)
 
         assert output.truncated is True
@@ -393,7 +393,7 @@ class TestGoogleAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(20))
 
-            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             # Google adapter imports google.genai.types internally; mock it
             with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}):
                 import google.genai.types as mock_types
@@ -419,7 +419,7 @@ class TestGoogleAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(21))
 
-            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}):
                 import google.genai.types as mock_types
                 mock_types.Part.from_bytes.return_value = MagicMock()

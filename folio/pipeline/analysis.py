@@ -692,11 +692,14 @@ def _analyze_single_slide(
     image_part = _build_image_part(image_path)
     inp = ProviderInput(
         prompt=full_prompt,
-        images=[image_part],
+        images=(image_part,),
         max_tokens=2048,
         temperature=0.0,
     )
 
+    # TODO(PR-4): replace this hand-rolled retry loop with
+    # folio.llm.runtime.execute_with_retry for jitter, rate-limiting,
+    # and Retry-After support.
     for attempt in range(max_retries + 1):
         try:
             output = provider.analyze(client, model, inp)
@@ -1122,11 +1125,14 @@ def _run_depth_pass(
     image_part = _build_image_part(image_path)
     inp = ProviderInput(
         prompt=full_prompt,
-        images=[image_part],
+        images=(image_part,),
         max_tokens=1500,
         temperature=0.0,
     )
 
+    # TODO(PR-4): replace this hand-rolled retry loop with
+    # folio.llm.runtime.execute_with_retry for jitter, rate-limiting,
+    # and Retry-After support.
     for attempt in range(max_retries + 1):
         try:
             output = provider.analyze(client, model, inp)

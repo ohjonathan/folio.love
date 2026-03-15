@@ -82,7 +82,7 @@ class ProviderInput:
     """
 
     prompt: str
-    images: list[ImagePart] = field(default_factory=list)
+    images: tuple[ImagePart, ...] = ()
     max_tokens: int = 4096
     temperature: float = 0.0
     require_store_false: bool = False

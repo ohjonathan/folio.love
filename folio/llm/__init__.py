@@ -18,6 +18,7 @@ from .types import (
     TokenUsage,
 )
 from .registry import get_provider, list_providers
+from .runtime import RateLimiter, execute_with_retry
 
 __all__ = [
     "AnalysisProvider",
@@ -27,10 +28,12 @@ __all__ = [
     "ProviderInput",
     "ProviderOutput",
     "ProviderRuntimeSettings",
+    "RateLimiter",
     "ResolvedLLMProfile",
     "ResolvedLLMRoute",
     "StageLLMMetadata",
     "TokenUsage",
+    "execute_with_retry",
     "get_provider",
     "list_providers",
 ]

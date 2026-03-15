@@ -121,7 +121,7 @@ class TestExecuteWithRetry:
             allowed_endpoints=["messages"],
         )
         limiter = RateLimiter(rpm_limit=100)
-        inp = ProviderInput(prompt="test", images=[])
+        inp = ProviderInput(prompt="test", images=())
 
         result = execute_with_retry(provider, None, "model", inp, settings, limiter)
         assert result.raw_text == "success"
@@ -147,7 +147,7 @@ class TestExecuteWithRetry:
             allowed_endpoints=["messages"],
         )
         limiter = RateLimiter(rpm_limit=100)
-        inp = ProviderInput(prompt="test", images=[])
+        inp = ProviderInput(prompt="test", images=())
 
         result = execute_with_retry(provider, None, "model", inp, settings, limiter)
         assert result.raw_text == "ok"
@@ -165,7 +165,7 @@ class TestExecuteWithRetry:
             allowed_endpoints=["messages"],
         )
         limiter = RateLimiter(rpm_limit=100)
-        inp = ProviderInput(prompt="test", images=[])
+        inp = ProviderInput(prompt="test", images=())
 
         with pytest.raises(RuntimeError, match="auth failed"):
             execute_with_retry(provider, None, "model", inp, settings, limiter)
@@ -186,7 +186,7 @@ class TestExecuteWithRetry:
             allowed_endpoints=["messages"],
         )
         limiter = RateLimiter(rpm_limit=100)
-        inp = ProviderInput(prompt="test", images=[])
+        inp = ProviderInput(prompt="test", images=())
 
         with pytest.raises(RuntimeError, match="overloaded"):
             execute_with_retry(provider, None, "model", inp, settings, limiter)
@@ -201,7 +201,7 @@ class TestExecuteWithRetry:
             excluded_endpoints=["messages"],
         )
         limiter = RateLimiter(rpm_limit=100)
-        inp = ProviderInput(prompt="test", images=[])
+        inp = ProviderInput(prompt="test", images=())
 
         with pytest.raises(EndpointNotAllowedError):
             execute_with_retry(provider, None, "model", inp, settings, limiter)
@@ -229,7 +229,7 @@ class TestExecuteWithRetry:
             allowed_endpoints=["messages"],
         )
         limiter = RateLimiter(rpm_limit=100)
-        inp = ProviderInput(prompt="test", images=[])
+        inp = ProviderInput(prompt="test", images=())
 
         start = time.monotonic()
         result = execute_with_retry(provider, None, "model", inp, settings, limiter)
