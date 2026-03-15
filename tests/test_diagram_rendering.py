@@ -268,19 +268,20 @@ class TestMermaidTechnology:
         assert "[[" not in mermaid
         assert "]]" not in mermaid
 
-    def test_unsanitizable_technology_skipped(self):
-        """S-NEW-1: Technology that sanitizes to None should be silently
-        skipped (not injected as raw unsanitized text)."""
+    def test_unsanitizable_technology_skipped_with_flag(self):
+        """Technology that sanitizes to None should be skipped and flagged."""
         graph = _simple_graph(
             nodes=[_n("x", "Node X", technology="()")],
         )
-        mermaid, _ = graph_to_mermaid(graph)
+        mermaid, uncertainties = graph_to_mermaid(graph)
         assert "Node X" in mermaid
         # The unsanitizable tech "()" should NOT appear in Mermaid output
         assert "()" not in mermaid
         # No <br/> since tech was skipped
         assert "<br/>" not in mermaid
-        assert "]]" not in mermaid
+        # Should flag the omission
+        assert any("technology" in u.lower() and "unsanitizable" in u.lower()
+                   for u in uncertainties)
 
 
 # ---------------------------------------------------------------------------
@@ -1153,3 +1154,66 @@ class TestRound4Regressions:
         table = graph_to_connection_table(graph)
         assert "src" in table  # fallback to node ID
         assert "Target" in table
+
+    def test_cjk_ids_produce_valid_mermaid_ids(self):
+        """P1 regression (R5): CJK-only IDs must produce non-empty Mermaid IDs
+        like 'node' and 'node_1', not bare '[Label]' with empty ID."""
+        graph = _simple_graph(
+            nodes=[
+                _n("データ", "Data Store"),
+                _n("サービス", "Service"),
+            ],
+            edges=[_e("edge1", "データ", "サービス", label="fetch")],
+        )
+        mermaid, _ = graph_to_mermaid(graph)
+        # Must have proper node IDs, not bare [Label]
+        assert "node[" in mermaid or "node_1[" in mermaid
+        # No bare " --> " with empty source/target
+        lines = mermaid.strip().split("\n")
+        for line in lines:
+            stripped = line.strip()
+            if "-->" in stripped:
+                # Source must be non-empty before arrow
+                parts = stripped.split("-->")
+                assert parts[0].strip(), f"Empty source in edge: {stripped}"
+
+    def test_depth_plus_regroup_combined(self):
+        """P1 regression (R5): PR4-regrouped node below depth limit must
+        still render (flattened), not disappear."""
+        # g0 -> g1 -> ... -> g6 with leaf regrouped to g6 via group_id
+        groups = []
+        for i in range(7):
+            groups.append(_g(
+                f"g{i}", f"Group {i}",
+                contains=[],  # Empty contains—leaf is mapped via group_id
+                contains_groups=[f"g{i+1}"] if i < 6 else [],
+            ))
+        graph = _simple_graph(
+            nodes=[_n("leaf", "Leaf Node", group_id="g6")],
+            groups=groups,
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        # Leaf must render even past depth limit
+        assert "Leaf Node" in mermaid
+        assert any("depth" in u.lower() for u in uncertainties)
+
+    def test_prose_reverse_edge_swapped(self):
+        """P2 regression (R5): reverse edge should produce 'B connects to A'
+        in prose, consistent with Mermaid rendering."""
+        graph = _simple_graph(
+            nodes=[_n("a", "Alpha"), _n("b", "Beta")],
+            edges=[_e("e", "a", "b", direction="reverse")],
+        )
+        prose = graph_to_prose(graph)
+        # Reverse: Beta connects to Alpha (not Alpha connects to Beta)
+        assert "Beta connects to Alpha" in prose
+
+    def test_prose_includes_regroup_only_groups(self):
+        """P2 regression (R5): groups with members only via node.group_id
+        should still appear in prose group summary."""
+        graph = _simple_graph(
+            nodes=[_n("x", "NodeX", group_id="grp1")],
+            groups=[_g("grp1", "ReGroup", contains=[])],
+        )
+        prose = graph_to_prose(graph)
+        assert "ReGroup" in prose

@@ -291,6 +291,7 @@ def _make_safe_id(node_id: str, registry: dict[str, str] | None = None) -> str:
     safe = re.sub(r"[^a-zA-Z0-9_]", "_", node_id)
     safe = re.sub(r"_+", "_", safe).strip("_")
     base = safe or "node"
+    safe = base  # Ensure safe is never empty (CJK/emoji-only IDs → "node")
 
     if registry is None:
         return base
@@ -308,7 +309,7 @@ def _make_safe_id(node_id: str, registry: dict[str, str] | None = None) -> str:
                 counter += 1
             safe = f"{base}_{counter}"
         # else: base maps to same node_id, reuse it
-    
+
     # Register both directions
     registry[safe] = node_id
     registry[rev_key] = safe
@@ -397,8 +398,21 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
                 f"Max subgraph depth ({_MAX_SUBGRAPH_DEPTH}) exceeded for "
                 f"group '{group.name}' (id={group.id}); flattened"
             )
-            # Flatten: render contained nodes at current level
-            _render_group_nodes(group, indent)
+            # Flatten: render nodes from reconciled map (not just group.contains)
+            flattened_nodes = sorted(
+                [node_map[nid] for nid in node_to_group
+                 if node_to_group[nid] == group.id and nid in node_map],
+                key=lambda n: (n.label, n.id),
+            )
+            for node in flattened_nodes:
+                node_line = _render_node(node)
+                if node_line is not None:
+                    lines.append(f"{indent}{node_line}")
+                else:
+                    omitted_node_ids.add(node.id)
+                    uncertainties.append(
+                        f"Node '{node.id}' omitted from Mermaid: label unsanitizable"
+                    )
             rendered_groups.add(group.id)
             # Continue traversing descendant subgroups (flattened at this level)
             nested = sorted(
@@ -487,16 +501,20 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
             # Per proposal: omit and flag, do NOT fall back to node ID
             return None
 
-        # B2: Use plain text technology in Mermaid (not wiki-linked).
+        # Use plain text technology in Mermaid (not wiki-linked).
         # Wiki-links are reserved for component_table and prose.
-        # S-NEW-1: Skip tech line entirely if sanitization returns None
-        # (do NOT fallback to unsanitized text).
         if node.technology:
             tech_plain = node.technology.strip()
             if tech_plain:
                 tech_safe = _sanitize_label(tech_plain)
                 if tech_safe:
                     label = f"{label}<br/>{tech_safe}"
+                else:
+                    # Omit-and-flag: technology unsanitizable
+                    uncertainties.append(
+                        f"Node '{node.id}' technology '{tech_plain}' "
+                        "unsanitizable; omitted from Mermaid label"
+                    )
 
         kind = (node.kind or "other").lower()
         shape_fmt = _NODE_SHAPE_MAP.get(kind, _NODE_SHAPE_MAP["other"])
@@ -621,13 +639,18 @@ def graph_to_prose(graph: "DiagramGraph") -> str:
             if not src or not tgt:
                 continue
 
+            # Honor edge direction in prose (swap for reverse)
+            direction = (edge.direction or "").lower()
+            if direction == "reverse":
+                src, tgt = tgt, src
+
             src_label = _node_prose_label(src)
             tgt_label = _node_prose_label(tgt)
 
             if edge.label:
                 # S4: Clean control characters from edge label in prose
                 clean_label = _CONTROL_CHAR_RE.sub("", edge.label)
-                clean_label = clean_label.replace("\n", " ").strip()
+                clean_label = clean_label.replace("\n", " ").replace("\r", " ").strip()
                 sentences.append(
                     f"{src_label} connects to {tgt_label} via {clean_label}."
                 )
@@ -643,13 +666,22 @@ def graph_to_prose(graph: "DiagramGraph") -> str:
             f"{count} {noun} identified: {', '.join(labels)}."
         )
 
-    # Group summary — M2: only mention groups that were actually rendered
+    # Group summary — use reconciled group membership (group.contains ∪ node.group_id)
     if graph.groups:
-        # Filter to groups that contain at least one real node
         node_ids = {n.id for n in graph.nodes}
+        # Build reconciled group → node mapping
+        group_has_nodes: dict[str, bool] = {}
+        for group in graph.groups:
+            has = any(nid in node_ids for nid in group.contains)
+            group_has_nodes[group.id] = has
+        # Also check node.group_id for regroup-only membership
+        for node in graph.nodes:
+            gid = getattr(node, 'group_id', None)
+            if gid and gid in {g.id for g in graph.groups}:
+                group_has_nodes[gid] = True
         rendered_group_names = sorted(
             g.name for g in graph.groups
-            if any(nid in node_ids for nid in g.contains)
+            if group_has_nodes.get(g.id, False)
         )
         if rendered_group_names:
             sentences.append(
