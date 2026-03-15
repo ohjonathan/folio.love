@@ -485,26 +485,109 @@ class TestRewriteEdgeIds:
         rev_by_label = {e.label: e.id for e in result_rev}
         assert fwd_by_label == rev_by_label
 
+    def test_same_label_different_confidence_is_order_independent(self):
+        """Same label/direction but different confidence → stable across reorder."""
+        edges_a = [
+            DiagramEdge(id="e1", source_id="a", target_id="b", label="calls", direction="forward", confidence=0.8),
+            DiagramEdge(id="e2", source_id="a", target_id="b", label="calls", direction="forward", confidence=0.95),
+        ]
+        edges_b = list(reversed(edges_a))
+
+        result_a = _rewrite_edge_ids(edges_a, {})
+        result_b = _rewrite_edge_ids(edges_b, {})
+
+        a_by_conf = {e.confidence: e.id for e in result_a}
+        b_by_conf = {e.confidence: e.id for e in result_b}
+        assert a_by_conf == b_by_conf
+
+    def test_same_label_different_bbox_is_order_independent(self):
+        """Same label/direction but different evidence_bbox → stable across reorder."""
+        edges_a = [
+            DiagramEdge(id="e1", source_id="x", target_id="y", label="flow",
+                        evidence_bbox=(10, 20, 30, 40)),
+            DiagramEdge(id="e2", source_id="x", target_id="y", label="flow",
+                        evidence_bbox=(50, 60, 70, 80)),
+        ]
+        edges_b = list(reversed(edges_a))
+
+        result_a = _rewrite_edge_ids(edges_a, {})
+        result_b = _rewrite_edge_ids(edges_b, {})
+
+        a_by_bbox = {e.evidence_bbox: e.id for e in result_a}
+        b_by_bbox = {e.evidence_bbox: e.id for e in result_b}
+        assert a_by_bbox == b_by_bbox
+
+    def test_truly_identical_edges_documented_invariant(self):
+        """Truly identical edges (same across all fields) → IDs assigned but
+        per-instance stability is not meaningful because they are indistinguishable.
+        We only require distinct IDs, not a specific assignment."""
+        edges = [
+            DiagramEdge(id="e1", source_id="a", target_id="b", label="same"),
+            DiagramEdge(id="e2", source_id="a", target_id="b", label="same"),
+        ]
+        result = _rewrite_edge_ids(edges, {})
+        assert result[0].id != result[1].id
+        assert {result[0].id, result[1].id} == {"a_b", "a_b_1"}
+
 
 class TestPartialDiagramPayloadValidation:
     """B2: Partial diagram cache payloads must not surface as clean analyses."""
 
-    def test_graph_only_payload_is_review_required(self):
-        """Cache entry with only 'graph' and empty base fields → review_required."""
+    def test_graph_only_payload_coerced_to_pending(self):
+        """Cache entry with only 'graph' → pending base fields, review_required."""
         d = {"graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []}}
         result = SlideAnalysis.from_dict(d)
         assert isinstance(result, DiagramAnalysis)
+        assert result.slide_type == "pending"
+        assert result.framework == "pending"
+        assert result.key_data == "[pending]"
+        assert result.main_insight == "[pending]"
         assert result.review_required is True
+        # Diagram-specific fields preserved
+        assert result.graph is not None
 
-    def test_description_only_payload_is_review_required(self):
-        """Cache entry with only 'description' and empty base fields → review_required."""
+    def test_description_only_payload_coerced_to_pending(self):
+        """Cache entry with only 'description' → pending base fields, review_required."""
         d = {"description": "A chart showing revenue"}
         result = SlideAnalysis.from_dict(d)
         assert isinstance(result, DiagramAnalysis)
+        assert result.slide_type == "pending"
         assert result.review_required is True
 
-    def test_full_payload_is_not_review_required(self):
-        """Cache entry with meaningful base fields does NOT get auto-review_required."""
+    def test_graph_only_payload_is_non_clean_in_review_state(self):
+        """Partial payload through assess_review_state → non-clean status."""
+        from folio.pipeline.analysis import assess_review_state
+        from folio.pipeline.text import SlideText
+
+        d = {"graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []}}
+        da = SlideAnalysis.from_dict(d)
+        analyses = {1: da}
+        texts = {1: SlideText(slide_num=1, full_text="Some text", elements=[])}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status != "clean"
+
+    def test_description_only_payload_is_non_clean_in_review_state(self):
+        """Description-only partial payload → non-clean review status."""
+        from folio.pipeline.analysis import assess_review_state
+        from folio.pipeline.text import SlideText
+
+        d = {"description": "A chart"}
+        da = SlideAnalysis.from_dict(d)
+        analyses = {1: da}
+        texts = {1: SlideText(slide_num=1, full_text="Some text", elements=[])}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status != "clean"
+
+    def test_full_payload_is_not_coerced_to_pending(self):
+        """Cache entry with meaningful base fields stays clean — not coerced."""
         d = {
             "slide_type": "diagram",
             "visual_description": "Architecture diagram showing microservices",
@@ -513,10 +596,11 @@ class TestPartialDiagramPayloadValidation:
         }
         result = SlideAnalysis.from_dict(d)
         assert isinstance(result, DiagramAnalysis)
+        assert result.slide_type == "diagram"
         assert result.review_required is False
 
-    def test_abstained_partial_payload_is_not_auto_review_required(self):
-        """Abstained entries have empty base fields intentionally — no auto-flag."""
+    def test_abstained_partial_payload_not_coerced(self):
+        """Abstained entries have empty base fields intentionally — no coercion."""
         d = {
             "slide_type": "pending",
             "diagram_type": "unsupported",
@@ -525,9 +609,10 @@ class TestPartialDiagramPayloadValidation:
         }
         result = SlideAnalysis.from_dict(d)
         assert isinstance(result, DiagramAnalysis)
-        # review_required was explicitly set, not auto-promoted
         assert result.review_required is True
         assert result.abstained is True
+        # visual_description stays as-is, not overwritten
+        assert "Partial diagram" not in (result.visual_description or "")
 
 
 # ---------------------------------------------------------------------------

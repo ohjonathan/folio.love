@@ -404,15 +404,25 @@ class DiagramAnalysis(SlideAnalysis):
 
     @classmethod
     def _validate_base_fields(cls, da: "DiagramAnalysis") -> "DiagramAnalysis":
-        """Mark partial diagram payloads as review-required.
+        """Coerce non-abstained partial diagram payloads to pending state.
 
         A cached or deserialized DiagramAnalysis with empty/missing inherited
         base fields (slide_type, visual_description, key_data, main_insight)
-        is a partial payload that should not surface as a clean analysis.
+        is a partial payload that must not surface as a clean analysis.
+
+        Instead of just setting a flag, we coerce the base fields to
+        pending-style values so assess_review_state() will catch them
+        via the existing pending-detection machinery and markdown will
+        render the pending path instead of blank normal-analysis rows.
         """
         base_fields = (da.slide_type, da.visual_description, da.key_data, da.main_insight)
         has_meaningful_base = any(v and v not in ("", "pending", "[pending]") for v in base_fields)
         if not has_meaningful_base and not da.abstained:
+            da.slide_type = "pending"
+            da.framework = "pending"
+            da.visual_description = "[Partial diagram cache payload \u2014 review required]"
+            da.key_data = "[pending]"
+            da.main_insight = "[pending]"
             da.review_required = True
         return da
 
@@ -555,8 +565,18 @@ def _rewrite_edge_ids(
 
     result = []
     for (new_source, new_target), group in pair_edges.items():
-        # Sort by (label, direction) for deterministic disambiguation
-        sorted_group = sorted(group, key=lambda e: (e.label or "", e.direction or ""))
+        # Sort by full semantic key for deterministic disambiguation.
+        # Edges that differ in any meaningful non-transient field will get
+        # stable IDs regardless of input order. Truly identical edges
+        # (same across all semantic fields) are indistinguishable — their
+        # relative ordering is arbitrary but consistent within a single run.
+        sorted_group = sorted(group, key=lambda e: (
+            e.label or "",
+            e.direction or "",
+            e.confidence if e.confidence is not None else "",
+            str(e.evidence_bbox) if e.evidence_bbox else "",
+            str(e.verification_evidence) if e.verification_evidence else "",
+        ))
         for counter, edge in enumerate(sorted_group):
             new_id = (
                 f"{new_source}_{new_target}"

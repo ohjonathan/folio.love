@@ -1149,3 +1149,116 @@ class TestWarmCacheConverterDiagramRouting:
         assert results[1].graph is not None
         assert len(results[1].graph.nodes) == 1
 
+
+class TestPartialPayloadWarmCacheIntegration:
+    """Partial diagram cache payloads must not produce clean output end-to-end."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_graph_only_warm_cache_through_analyze_slides_is_pending(self, tmp_path):
+        """Graph-only partial payload through analyze_slides → pending DiagramAnalysis."""
+        from folio.pipeline.analysis import (
+            DiagramAnalysis,
+            SlideAnalysis,
+            _hash_image,
+            _save_cache,
+            _text_hash,
+            analyze_slides,
+        )
+        from folio.pipeline.text import SlideText
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(self._make_unique_png(99))
+        image_hash = _hash_image(img)
+
+        # Partial payload: graph only, no base slide fields
+        entry = {
+            "graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []},
+            "diagram_type": "unknown",
+        }
+        slide_text = SlideText(slide_num=1, full_text="placeholder", elements=[])
+        entry["_text_hash"] = _text_hash(slide_text)
+        entry["_provider"] = "anthropic"
+        entry["_model"] = "claude-sonnet-4-20250514"
+
+        _save_cache(tmp_path, {image_hash: entry}, model="claude-sonnet-4-20250514", provider="anthropic")
+
+        results, stats, meta = analyze_slides(
+            image_paths=[img],
+            model="claude-sonnet-4-20250514",
+            cache_dir=tmp_path,
+            slide_texts={1: slide_text},
+            provider_name="anthropic",
+        )
+
+        assert stats.hits == 1
+        assert isinstance(results[1], DiagramAnalysis)
+        assert results[1].slide_type == "pending"
+        assert results[1].review_required is True
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_graph_only_warm_cache_through_converter_is_flagged(self):
+        """Graph-only partial payload through FolioConverter.convert → flagged frontmatter."""
+        import yaml
+        from folio.pipeline.analysis import (
+            _hash_image,
+            _save_cache,
+            _text_hash,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            img = target_dir / "slide-001.png"
+            img.write_bytes(self._make_unique_png(77))
+            image_hash = _hash_image(img)
+
+            image_results = [
+                ImageResult(path=img, slide_num=1, is_blank=False, width=200, height=200),
+            ]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Some content", elements=[]),
+            }
+
+            # Pre-populate cache with graph-only partial payload
+            entry = {
+                "graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []},
+            }
+            entry["_text_hash"] = _text_hash(slide_texts[1])
+            entry["_provider"] = "anthropic"
+            entry["_model"] = "claude-sonnet-4-20250514"
+
+            _save_cache(target_dir, {image_hash: entry}, model="claude-sonnet-4-20250514", provider="anthropic")
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="text"),
+                 }), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            content = result.output_path.read_text()
+            parsed_fm = yaml.safe_load(content[3:content.index("---", 3)])
+
+            # Must NOT be clean — partial payload
+            assert parsed_fm["review_status"] != "clean"
+            # Must not have blank normal-analysis content
+            assert "**Slide Type:**  " not in content
