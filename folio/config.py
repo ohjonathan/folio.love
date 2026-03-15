@@ -7,6 +7,46 @@ from typing import Optional
 
 import yaml
 
+from .llm.types import ProviderRuntimeSettings
+
+
+# ---------------------------------------------------------------------------
+# Default provider runtime settings
+# ---------------------------------------------------------------------------
+
+_KNOWN_ENDPOINTS: dict[str, set[str]] = {
+    "anthropic": {"messages"},
+    "openai": {"chat_completions"},
+    "google": {"generate_content"},
+}
+
+_DEFAULT_PROVIDER_SETTINGS: dict[str, ProviderRuntimeSettings] = {
+    "anthropic": ProviderRuntimeSettings(
+        rate_limit_rpm=50,
+        rate_limit_tpm=80000,
+        max_attempts=3,
+        base_delay_seconds=1.0,
+        max_delay_seconds=60.0,
+        allowed_endpoints=["messages"],
+    ),
+    "openai": ProviderRuntimeSettings(
+        rate_limit_rpm=60,
+        rate_limit_tpm=None,
+        max_attempts=3,
+        base_delay_seconds=1.0,
+        max_delay_seconds=60.0,
+        allowed_endpoints=["chat_completions"],
+    ),
+    "google": ProviderRuntimeSettings(
+        rate_limit_rpm=60,
+        rate_limit_tpm=None,
+        max_attempts=3,
+        base_delay_seconds=1.0,
+        max_delay_seconds=60.0,
+        allowed_endpoints=["generate_content"],
+    ),
+}
+
 
 # Default env var names per provider (spec §3.3)
 _DEFAULT_API_KEY_ENV = {
@@ -157,6 +197,9 @@ class FolioConfig:
     sources: list[SourceConfig] = field(default_factory=list)
     llm: LLMConfig = field(default_factory=LLMConfig)
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
+    providers: dict[str, ProviderRuntimeSettings] = field(
+        default_factory=lambda: dict(_DEFAULT_PROVIDER_SETTINGS)
+    )
     config_dir: Optional[Path] = None  # directory containing folio.yaml
 
     def __post_init__(self):
@@ -188,6 +231,58 @@ class FolioConfig:
 
         # LLM validation (spec §3.2)
         self._validate_llm()
+
+        # Provider runtime settings validation
+        self._validate_providers()
+
+    def _validate_providers(self):
+        """Validate provider runtime settings."""
+        supported = {"anthropic", "openai", "google"}
+        for pname, settings in self.providers.items():
+            if pname not in supported:
+                raise ValueError(
+                    f"Unknown provider '{pname}'. Supported: {', '.join(sorted(supported))}"
+                )
+            if settings.rate_limit_rpm <= 0:
+                raise ValueError(
+                    f"Provider '{pname}': rate_limit_rpm must be > 0, got {settings.rate_limit_rpm}"
+                )
+            if settings.rate_limit_tpm is not None and settings.rate_limit_tpm <= 0:
+                raise ValueError(
+                    f"Provider '{pname}': rate_limit_tpm must be None or > 0, got {settings.rate_limit_tpm}"
+                )
+            if settings.max_attempts < 1:
+                raise ValueError(
+                    f"Provider '{pname}': max_attempts must be >= 1, got {settings.max_attempts}"
+                )
+            if settings.base_delay_seconds <= 0:
+                raise ValueError(
+                    f"Provider '{pname}': base_delay_seconds must be > 0, got {settings.base_delay_seconds}"
+                )
+            if settings.max_delay_seconds < settings.base_delay_seconds:
+                raise ValueError(
+                    f"Provider '{pname}': max_delay_seconds ({settings.max_delay_seconds}) "
+                    f"must be >= base_delay_seconds ({settings.base_delay_seconds})"
+                )
+            known = _KNOWN_ENDPOINTS.get(pname, set())
+            for ep in settings.allowed_endpoints:
+                if ep not in known:
+                    raise ValueError(
+                        f"Provider '{pname}': unknown allowed endpoint '{ep}'. "
+                        f"Known: {', '.join(sorted(known))}"
+                    )
+            for ep in settings.excluded_endpoints:
+                if ep not in known:
+                    raise ValueError(
+                        f"Provider '{pname}': unknown excluded endpoint '{ep}'. "
+                        f"Known: {', '.join(sorted(known))}"
+                    )
+            overlap = set(settings.allowed_endpoints) & set(settings.excluded_endpoints)
+            if overlap:
+                raise ValueError(
+                    f"Provider '{pname}': endpoints in both allowed and excluded: "
+                    f"{', '.join(sorted(overlap))}"
+                )
 
     def _validate_llm(self):
         """Validate LLM profiles and routing per spec §3.2."""
@@ -374,6 +469,23 @@ class FolioConfig:
             review_confidence_threshold=conv_raw.get("review_confidence_threshold", 0.6),
         )
 
+        # Parse provider runtime settings (merge onto defaults)
+        providers_raw = raw.get("providers") or {}
+        providers = dict(_DEFAULT_PROVIDER_SETTINGS)
+        for pname, pdata in providers_raw.items():
+            if isinstance(pdata, dict) and pname in _DEFAULT_PROVIDER_SETTINGS:
+                defaults = _DEFAULT_PROVIDER_SETTINGS[pname]
+                providers[pname] = ProviderRuntimeSettings(
+                    rate_limit_rpm=pdata.get("rate_limit_rpm", defaults.rate_limit_rpm),
+                    rate_limit_tpm=pdata.get("rate_limit_tpm", defaults.rate_limit_tpm),
+                    max_attempts=pdata.get("max_attempts", defaults.max_attempts),
+                    base_delay_seconds=pdata.get("base_delay_seconds", defaults.base_delay_seconds),
+                    max_delay_seconds=pdata.get("max_delay_seconds", defaults.max_delay_seconds),
+                    allowed_endpoints=pdata.get("allowed_endpoints", list(defaults.allowed_endpoints)),
+                    excluded_endpoints=pdata.get("excluded_endpoints", list(defaults.excluded_endpoints)),
+                    require_store_false=pdata.get("require_store_false", defaults.require_store_false),
+                )
+
         config_dir = config_path.resolve().parent
 
         return cls(
@@ -381,6 +493,7 @@ class FolioConfig:
             sources=sources,
             llm=llm,
             conversion=conversion,
+            providers=providers,
             config_dir=config_dir,
         )
 

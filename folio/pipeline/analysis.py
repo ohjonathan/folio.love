@@ -1,5 +1,6 @@
 """Stage 4: LLM analysis. Generate structured analysis per slide via LLM provider."""
 
+import base64
 import hashlib
 import json
 import logging
@@ -10,8 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from ..llm import get_provider, ProviderInput, ProviderOutput, ErrorDisposition
-from ..llm.types import StageLLMMetadata
+from ..llm import get_provider, ProviderInput, ProviderOutput, ErrorDisposition, ImagePart, TokenUsage
+from ..llm.types import StageLLMMetadata, ProviderRuntimeSettings, ExecutionProfile
+from ..llm.runtime import RateLimiter, execute_with_retry
 from .text import SlideText, _EXTRACTION_VERSION
 
 
@@ -582,14 +584,16 @@ def analyze_slides(
             stage_meta.fallback_model = used_model
 
         # Update cache (B1: store _text_hash + provenance per entry)
+        # Incremental write: flush after each miss, not just at end
         if cache_dir:
             entry = analysis.to_dict()
             entry["_text_hash"] = _text_hash(slide_text)
             entry["_provider"] = used_provider
             entry["_model"] = used_model
             cache[image_hash] = entry
+            _save_cache(cache_dir, cache, model=model, provider=provider_name)
 
-    # Save cache (always writes, even with force_miss)
+    # Final cache write (always writes, even with force_miss)
     if cache_dir:
         _save_cache(cache_dir, cache, model=model, provider=provider_name)
 
@@ -652,6 +656,23 @@ def _analyze_with_fallback(
     )
 
 
+def _build_image_part(image_path: Path) -> ImagePart:
+    """Read an image file and create a single global ImagePart."""
+    image_data = image_path.read_bytes()
+    suffix = image_path.suffix.lower()
+    media_type = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+    }.get(suffix, "image/png")
+    return ImagePart(
+        image_data=image_data,
+        role="global",
+        media_type=media_type,
+        detail="auto",
+    )
+
+
 def _analyze_single_slide(
     provider, client: Any, image_path: Path, model: str, max_retries: int = 1,
     slide_text: Optional["SlideText"] = None,
@@ -672,7 +693,13 @@ def _analyze_single_slide(
     else:
         full_prompt = ANALYSIS_PROMPT + "\n\nNOTE: No extracted text available for this slide. Base analysis on visual content only."
 
-    inp = ProviderInput(image_path=image_path, prompt=full_prompt, max_tokens=2048)
+    image_part = _build_image_part(image_path)
+    inp = ProviderInput(
+        prompt=full_prompt,
+        images=[image_part],
+        max_tokens=2048,
+        temperature=0.0,
+    )
 
     for attempt in range(max_retries + 1):
         try:
@@ -701,13 +728,13 @@ def _analyze_single_slide(
 
         except Exception as e:
             disposition = provider.classify_error(e)
-            if disposition == ErrorDisposition.TRANSIENT and attempt < max_retries:
+            if disposition.kind == "transient" and attempt < max_retries:
                 logger.warning(
                     "Slide analysis failed (attempt %d, transient), retrying: %s",
                     attempt + 1, e,
                 )
                 time.sleep(2 ** attempt)
-            elif disposition == ErrorDisposition.PERMANENT:
+            elif disposition.kind == "permanent":
                 logger.warning(
                     "Slide analysis failed (permanent) after %d attempt(s): %s",
                     attempt + 1, e,
@@ -1027,6 +1054,7 @@ def analyze_slides_deep(
         )
 
         # Store in cache (B2: include _text_hash + _pass1_hash)
+        # Incremental write: flush after each miss
         if cache_dir:
             deep_cache[deep_key] = {
                 "evidence": new_evidence,
@@ -1037,6 +1065,7 @@ def analyze_slides_deep(
                 "_provider": provider_name,
                 "_model": model,
             }
+            _save_cache_deep(cache_dir, deep_cache, model=model, provider=provider_name)
 
         # Merge evidence
         if new_evidence:
@@ -1061,7 +1090,7 @@ def analyze_slides_deep(
             )
             results[slide_num].pass2_framework = reassessed_framework
 
-    # Save deep cache (always writes, even with force_miss)
+    # Final deep cache write (always writes, even with force_miss)
     if cache_dir:
         _save_cache_deep(cache_dir, deep_cache, model=model, provider=provider_name)
 
@@ -1096,7 +1125,13 @@ def _run_depth_pass(
     else:
         full_prompt = prompt
 
-    inp = ProviderInput(image_path=image_path, prompt=full_prompt, max_tokens=1500)
+    image_part = _build_image_part(image_path)
+    inp = ProviderInput(
+        prompt=full_prompt,
+        images=[image_part],
+        max_tokens=1500,
+        temperature=0.0,
+    )
 
     for attempt in range(max_retries + 1):
         try:
@@ -1125,13 +1160,13 @@ def _run_depth_pass(
 
         except Exception as e:
             disposition = provider.classify_error(e)
-            if disposition == ErrorDisposition.TRANSIENT and attempt < max_retries:
+            if disposition.kind == "transient" and attempt < max_retries:
                 logger.warning(
                     "Depth pass failed (attempt %d, transient), retrying: %s",
                     attempt + 1, e,
                 )
                 time.sleep(2 ** attempt)
-            elif disposition == ErrorDisposition.PERMANENT:
+            elif disposition.kind == "permanent":
                 logger.warning(
                     "Depth pass failed (permanent) after %d attempt(s): %s",
                     attempt + 1, e,

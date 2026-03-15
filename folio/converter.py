@@ -130,6 +130,7 @@ class FolioConverter:
                 image_results = images.extract_with_metadata(
                     pdf_path, deck_dir,
                     dpi=self.config.conversion.image_dpi,
+                    page_profiles=page_profiles,
                 )
             finally:
                 # Clean up intermediate PowerPoint PDF written into deck_dir.

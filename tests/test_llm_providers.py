@@ -12,11 +12,13 @@ from folio.llm import get_provider, list_providers
 from folio.llm.types import (
     AnalysisProvider,
     ErrorDisposition,
+    ImagePart,
     ProviderInput,
     ProviderOutput,
     ResolvedLLMProfile,
     ResolvedLLMRoute,
     StageLLMMetadata,
+    TokenUsage,
 )
 from folio.llm.providers import AnthropicAnalysisProvider, OpenAIAnalysisProvider, GoogleAnalysisProvider
 from tests.llm_mocks import (
@@ -86,7 +88,7 @@ class TestAnthropicProvider:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(1))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze this", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze this", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
             output = provider.analyze(mock_client, "test-model", inp)
 
         assert isinstance(output, ProviderOutput)
@@ -107,7 +109,7 @@ class TestAnthropicProvider:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(2))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
             output = provider.analyze(mock_client, "test-model", inp)
 
         assert output.truncated is True
@@ -121,7 +123,7 @@ class TestAnthropicProvider:
                 response=MagicMock(status_code=429),
                 body=None,
             )
-            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+            assert provider.classify_error(exc).kind == "transient"
         except ImportError:
             pytest.skip("anthropic not installed")
 
@@ -134,13 +136,13 @@ class TestAnthropicProvider:
                 response=MagicMock(status_code=401),
                 body=None,
             )
-            assert provider.classify_error(exc) == ErrorDisposition.PERMANENT
+            assert provider.classify_error(exc).kind == "permanent"
         except ImportError:
             pytest.skip("anthropic not installed")
 
     def test_classify_error_generic(self):
         provider = AnthropicAnalysisProvider()
-        assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
+        assert provider.classify_error(RuntimeError("boom")).kind == "permanent"
 
     def test_classify_error_timeout(self):
         """B1: APITimeoutError must be transient."""
@@ -148,7 +150,7 @@ class TestAnthropicProvider:
         try:
             import anthropic
             exc = anthropic.APITimeoutError(request=MagicMock())
-            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+            assert provider.classify_error(exc).kind == "transient"
         except ImportError:
             pytest.skip("anthropic not installed")
 
@@ -162,7 +164,7 @@ class TestAnthropicProvider:
                 response=MagicMock(status_code=403),
                 body=None,
             )
-            assert provider.classify_error(exc) == ErrorDisposition.PERMANENT
+            assert provider.classify_error(exc).kind == "permanent"
         except ImportError:
             pytest.skip("anthropic not installed")
 
@@ -171,7 +173,7 @@ class TestContractTypes:
     """Test data types freeze correctly."""
 
     def test_provider_input_frozen(self):
-        inp = ProviderInput(image_path=Path("/tmp/test.png"), prompt="Test")
+        inp = ProviderInput(prompt="Test", images=[])
         with pytest.raises(AttributeError):
             inp.prompt = "New"  # type: ignore
 
@@ -322,7 +324,7 @@ class TestOpenAIAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(10))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
             output = provider.analyze(mock_client, "gpt-4o", inp)
 
         assert isinstance(output, ProviderOutput)
@@ -343,14 +345,14 @@ class TestOpenAIAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(11))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
             output = provider.analyze(mock_client, "gpt-4o", inp)
 
         assert output.truncated is True
 
     def test_classify_error_generic(self):
         provider = OpenAIAnalysisProvider()
-        assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
+        assert provider.classify_error(RuntimeError("boom")).kind == "permanent"
 
     def test_classify_error_timeout(self):
         """B2: APITimeoutError must be transient."""
@@ -358,7 +360,7 @@ class TestOpenAIAdapter:
         try:
             from openai import APITimeoutError
             exc = APITimeoutError(request=MagicMock())
-            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+            assert provider.classify_error(exc).kind == "transient"
         except ImportError:
             pytest.skip("openai not installed")
 
@@ -372,7 +374,7 @@ class TestOpenAIAdapter:
                 response=MagicMock(status_code=500),
                 body=None,
             )
-            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+            assert provider.classify_error(exc).kind == "transient"
         except ImportError:
             pytest.skip("openai not installed")
 
@@ -391,7 +393,7 @@ class TestGoogleAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(20))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
             # Google adapter imports google.genai.types internally; mock it
             with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}):
                 import google.genai.types as mock_types
@@ -417,7 +419,7 @@ class TestGoogleAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(21))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=[ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png")], max_tokens=2048)
             with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}):
                 import google.genai.types as mock_types
                 mock_types.Part.from_bytes.return_value = MagicMock()
@@ -428,26 +430,26 @@ class TestGoogleAdapter:
 
     def test_classify_error_generic(self):
         provider = GoogleAnalysisProvider()
-        assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
+        assert provider.classify_error(RuntimeError("boom")).kind == "permanent"
 
     def test_classify_error_internal_server(self):
         """B3: InternalServerError must be transient."""
         provider = GoogleAnalysisProvider()
         # Simulate Google's InternalServerError exception
         class InternalServerError(Exception): pass
-        assert provider.classify_error(InternalServerError("internal")) == ErrorDisposition.TRANSIENT
+        assert provider.classify_error(InternalServerError("internal")).kind == "transient"
 
     def test_classify_error_deadline_exceeded(self):
         """B3: DeadlineExceeded must be transient."""
         provider = GoogleAnalysisProvider()
         class DeadlineExceeded(Exception): pass
-        assert provider.classify_error(DeadlineExceeded("timeout")) == ErrorDisposition.TRANSIENT
+        assert provider.classify_error(DeadlineExceeded("timeout")).kind == "transient"
 
     def test_classify_error_permission_denied(self):
         """B3: PermissionDenied must be permanent."""
         provider = GoogleAnalysisProvider()
         class PermissionDenied(Exception): pass
-        assert provider.classify_error(PermissionDenied("forbidden")) == ErrorDisposition.PERMANENT
+        assert provider.classify_error(PermissionDenied("forbidden")).kind == "permanent"
 
 
 class TestRuntimeFallbackChain:
@@ -478,7 +480,7 @@ class TestRuntimeFallbackChain:
         primary = MagicMock()
         primary.provider_name = "anthropic"
         primary.analyze.side_effect = RuntimeError("service unavailable")
-        primary.classify_error.return_value = ErrorDisposition.TRANSIENT
+        primary.classify_error.return_value = ErrorDisposition.transient()
         primary_client = MagicMock()
 
         # Fallback succeeds
@@ -509,13 +511,13 @@ class TestRuntimeFallbackChain:
         primary = MagicMock()
         primary.provider_name = "anthropic"
         primary.analyze.side_effect = RuntimeError("overloaded")
-        primary.classify_error.return_value = ErrorDisposition.TRANSIENT
+        primary.classify_error.return_value = ErrorDisposition.transient()
         primary_client = MagicMock()
 
         fallback = MagicMock()
         fallback.provider_name = "openai"
         fallback.analyze.side_effect = RuntimeError("overloaded")
-        fallback.classify_error.return_value = ErrorDisposition.TRANSIENT
+        fallback.classify_error.return_value = ErrorDisposition.transient()
         fallback_client = MagicMock()
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -537,7 +539,7 @@ class TestRuntimeFallbackChain:
         primary = MagicMock()
         primary.provider_name = "anthropic"
         primary.analyze.side_effect = RuntimeError("auth failed")
-        primary.classify_error.return_value = ErrorDisposition.PERMANENT
+        primary.classify_error.return_value = ErrorDisposition.permanent()
         primary_client = MagicMock()
 
         # Fallback should NOT be called
