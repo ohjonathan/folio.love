@@ -19,7 +19,6 @@ from folio.output.diagram_rendering import (
     render_diagram_analyses,
     _sanitize_label,
     _sanitize_edge_label,
-    _make_safe_id,
     _escape_table_cell,
 )
 
@@ -258,6 +257,20 @@ class TestMermaidTechnology:
         assert "PostgreSQL" in mermaid
         # Must be plain text, NOT [[PostgreSQL]]
         assert "[[" not in mermaid
+        assert "]]" not in mermaid
+
+    def test_unsanitizable_technology_skipped(self):
+        """S-NEW-1: Technology that sanitizes to None should be silently
+        skipped (not injected as raw unsanitized text)."""
+        graph = _simple_graph(
+            nodes=[_n("x", "Node X", technology="()")],
+        )
+        mermaid, _ = graph_to_mermaid(graph)
+        assert "Node X" in mermaid
+        # The unsanitizable tech "()" should NOT appear in Mermaid output
+        assert "()" not in mermaid
+        # No <br/> since tech was skipped
+        assert "<br/>" not in mermaid
         assert "]]" not in mermaid
 
 

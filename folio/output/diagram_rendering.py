@@ -267,32 +267,36 @@ def _sanitize_edge_label(label: str | None) -> str:
     return sanitized
 
 
-# Track assigned safe IDs to detect collisions (reset per graph_to_mermaid call).
-_safe_id_registry: dict[str, str] = {}
-
-
-def _make_safe_id(node_id: str) -> str:
+def _make_safe_id(node_id: str, registry: dict[str, str] | None = None) -> str:
     """Ensure a node ID is safe for Mermaid (alphanumeric + underscore).
 
     Detects collisions from non-ASCII IDs that collapse to the same safe form
     and appends a counter suffix to disambiguate.
+
+    Args:
+        node_id: Original node ID.
+        registry: Optional collision registry (dict mapping safe_id → original_id).
+            When provided, collisions are detected and disambiguated.
     """
     safe = re.sub(r"[^a-zA-Z0-9_]", "_", node_id)
     safe = re.sub(r"_+", "_", safe).strip("_")
     base = safe or "node"
 
+    if registry is None:
+        return base
+
     # Check for collision (different original ID → same safe ID)
-    if base in _safe_id_registry:
-        if _safe_id_registry[base] != node_id:
+    if base in registry:
+        if registry[base] != node_id:
             # Collision — find unique suffix
             counter = 1
-            while f"{base}_{counter}" in _safe_id_registry:
+            while f"{base}_{counter}" in registry:
                 counter += 1
             safe = f"{base}_{counter}"
-            _safe_id_registry[safe] = node_id
+            registry[safe] = node_id
             return safe
     else:
-        _safe_id_registry[base] = node_id
+        registry[base] = node_id
     return base
 
 
@@ -314,8 +318,8 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
     if graph is None or (not graph.nodes and not graph.edges):
         return "", []
 
-    # Reset the safe-ID collision registry for this render
-    _safe_id_registry.clear()
+    # S-NEW-2: Local collision registry — no module-level mutable state.
+    safe_id_registry: dict[str, str] = {}
 
     lines: list[str] = ["graph TD"]
     uncertainties: list[str] = []
@@ -367,30 +371,36 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
 
         recursion_path.add(group.id)
         rendered_groups.add(group.id)
-        safe_gid = _make_safe_id(group.id)
-        sanitized_name = _sanitize_label(group.name) or safe_gid
 
-        # S3: Check if group has any renderable content before emitting subgraph
+        # Determine if group has renderable content
         has_nodes = any(nid in node_map for nid in group.contains)
-        has_subgroups = any(gid in group_map for gid in group.contains_groups)
-        if not has_nodes and not has_subgroups:
-            recursion_path.discard(group.id)
-            return  # Elide empty subgraph
-
-        lines.append(f"{indent}subgraph {safe_gid} [{sanitized_name}]")
-
-        # Render contained nodes
-        _render_group_nodes(group, indent + "    ")
-
-        # Render nested subgroups
         nested = sorted(
             [group_map[gid] for gid in group.contains_groups if gid in group_map],
             key=lambda g: (g.name, g.id),
         )
-        for nested_group in nested:
-            _render_group(nested_group, depth + 1, indent + "    ")
 
-        lines.append(f"{indent}end")
+        # S3 + m-NEW-1: Only emit subgraph wrapper if there's direct content
+        # or unrendered subgroups. But ALWAYS recurse into subgroups for
+        # cycle detection even if we elide the wrapper.
+        emit_wrapper = has_nodes or any(
+            g.id not in rendered_groups for g in nested
+        )
+
+        if emit_wrapper:
+            safe_gid = _make_safe_id(group.id, safe_id_registry)
+            sanitized_name = _sanitize_label(group.name) or safe_gid
+            lines.append(f"{indent}subgraph {safe_gid} [{sanitized_name}]")
+            _render_group_nodes(group, indent + "    ")
+
+        # Always recurse into nested subgroups (cycle detection)
+        for nested_group in nested:
+            _render_group(
+                nested_group, depth + 1,
+                (indent + "    ") if emit_wrapper else indent,
+            )
+
+        if emit_wrapper:
+            lines.append(f"{indent}end")
         recursion_path.discard(group.id)
 
     def _render_group_nodes(group: "DiagramGroup", indent: str) -> None:
@@ -409,7 +419,7 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
                 )
 
     def _render_node(node: "DiagramNode") -> str | None:
-        safe_id = _make_safe_id(node.id)
+        safe_id = _make_safe_id(node.id, safe_id_registry)
         label = _sanitize_label(node.label)
         if label is None:
             label = safe_id  # fallback to node id
@@ -418,12 +428,14 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
 
         # B2: Use plain text technology in Mermaid (not wiki-linked).
         # Wiki-links are reserved for component_table and prose.
+        # S-NEW-1: Skip tech line entirely if sanitization returns None
+        # (do NOT fallback to unsanitized text).
         if node.technology:
             tech_plain = node.technology.strip()
             if tech_plain:
-                # Sanitize the tech label too for Mermaid safety
-                tech_safe = _sanitize_label(tech_plain) or tech_plain
-                label = f"{label}<br/>{tech_safe}"
+                tech_safe = _sanitize_label(tech_plain)
+                if tech_safe:
+                    label = f"{label}<br/>{tech_safe}"
 
         kind = (node.kind or "other").lower()
         shape_fmt = _NODE_SHAPE_MAP.get(kind, _NODE_SHAPE_MAP["other"])
@@ -477,8 +489,8 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
         if direction == "reverse":
             source, target = target, source
 
-        safe_source = _make_safe_id(source)
-        safe_target = _make_safe_id(target)
+        safe_source = _make_safe_id(source, safe_id_registry)
+        safe_target = _make_safe_id(target, safe_id_registry)
 
         edge_label = _sanitize_edge_label(edge.label)
         if edge_label:
