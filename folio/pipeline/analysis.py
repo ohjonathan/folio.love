@@ -1,6 +1,5 @@
 """Stage 4: LLM analysis. Generate structured analysis per slide via LLM provider."""
 
-import base64
 import hashlib
 import json
 import logging
@@ -12,8 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..llm import get_provider, ProviderInput, ProviderOutput, ErrorDisposition, ImagePart, TokenUsage
-from ..llm.types import StageLLMMetadata, ProviderRuntimeSettings, ExecutionProfile
-from ..llm.runtime import RateLimiter, execute_with_retry
+from ..llm.types import StageLLMMetadata
 from .text import SlideText, _EXTRACTION_VERSION
 
 
@@ -584,14 +582,12 @@ def analyze_slides(
             stage_meta.fallback_model = used_model
 
         # Update cache (B1: store _text_hash + provenance per entry)
-        # Incremental write: flush after each miss, not just at end
         if cache_dir:
             entry = analysis.to_dict()
             entry["_text_hash"] = _text_hash(slide_text)
             entry["_provider"] = used_provider
             entry["_model"] = used_model
             cache[image_hash] = entry
-            _save_cache(cache_dir, cache, model=model, provider=provider_name)
 
     # Final cache write (always writes, even with force_miss)
     if cache_dir:
@@ -1054,7 +1050,6 @@ def analyze_slides_deep(
         )
 
         # Store in cache (B2: include _text_hash + _pass1_hash)
-        # Incremental write: flush after each miss
         if cache_dir:
             deep_cache[deep_key] = {
                 "evidence": new_evidence,
@@ -1065,7 +1060,6 @@ def analyze_slides_deep(
                 "_provider": provider_name,
                 "_model": model,
             }
-            _save_cache_deep(cache_dir, deep_cache, model=model, provider=provider_name)
 
         # Merge evidence
         if new_evidence:

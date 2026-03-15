@@ -95,9 +95,8 @@ class AnthropicAnalysisProvider:
             "max_tokens": inp.max_tokens,
             "timeout": 120.0,
             "messages": [{"role": "user", "content": content}],
+            "temperature": inp.temperature,
         }
-        if inp.temperature != 0.0:
-            kwargs["temperature"] = inp.temperature
 
         response = client.messages.create(**kwargs)
 
@@ -180,7 +179,6 @@ class OpenAIAnalysisProvider:
         client: Any,
         model: str,
         inp: ProviderInput,
-        require_store_false: bool = False,
     ) -> ProviderOutput:
         """Run analysis via OpenAI Chat Completions API with vision.
 
@@ -212,10 +210,9 @@ class OpenAIAnalysisProvider:
             "max_tokens": inp.max_tokens,
             "timeout": 120.0,
             "messages": [{"role": "user", "content": content}],
+            "temperature": inp.temperature,
         }
-        if inp.temperature != 0.0:
-            kwargs["temperature"] = inp.temperature
-        if require_store_false:
+        if inp.require_store_false:
             kwargs["store"] = False
 
         response = client.chat.completions.create(**kwargs)
@@ -329,9 +326,8 @@ class GoogleAnalysisProvider:
         config_kwargs: dict[str, Any] = {
             "max_output_tokens": inp.max_tokens,
             "http_options": {"timeout": 120_000},
+            "temperature": inp.temperature,
         }
-        if inp.temperature != 0.0:
-            config_kwargs["temperature"] = inp.temperature
 
         # High media resolution when any image requests it
         any_high = any(
@@ -339,10 +335,7 @@ class GoogleAnalysisProvider:
         )
         if any_high:
             # Use request-level media resolution on stable API surface
-            try:
-                config_kwargs["media_resolution"] = "high"
-            except Exception:
-                pass  # Silently skip if not supported on current SDK version
+            config_kwargs["media_resolution"] = "high"
 
         response = client.models.generate_content(
             model=model,

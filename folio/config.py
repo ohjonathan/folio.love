@@ -27,7 +27,7 @@ _DEFAULT_PROVIDER_SETTINGS: dict[str, ProviderRuntimeSettings] = {
         max_attempts=3,
         base_delay_seconds=1.0,
         max_delay_seconds=60.0,
-        allowed_endpoints=["messages"],
+        allowed_endpoints=("messages",),
     ),
     "openai": ProviderRuntimeSettings(
         rate_limit_rpm=60,
@@ -35,7 +35,7 @@ _DEFAULT_PROVIDER_SETTINGS: dict[str, ProviderRuntimeSettings] = {
         max_attempts=3,
         base_delay_seconds=1.0,
         max_delay_seconds=60.0,
-        allowed_endpoints=["chat_completions"],
+        allowed_endpoints=("chat_completions",),
     ),
     "google": ProviderRuntimeSettings(
         rate_limit_rpm=60,
@@ -43,7 +43,7 @@ _DEFAULT_PROVIDER_SETTINGS: dict[str, ProviderRuntimeSettings] = {
         max_attempts=3,
         base_delay_seconds=1.0,
         max_delay_seconds=60.0,
-        allowed_endpoints=["generate_content"],
+        allowed_endpoints=("generate_content",),
     ),
 }
 
@@ -481,8 +481,8 @@ class FolioConfig:
                     max_attempts=pdata.get("max_attempts", defaults.max_attempts),
                     base_delay_seconds=pdata.get("base_delay_seconds", defaults.base_delay_seconds),
                     max_delay_seconds=pdata.get("max_delay_seconds", defaults.max_delay_seconds),
-                    allowed_endpoints=pdata.get("allowed_endpoints", list(defaults.allowed_endpoints)),
-                    excluded_endpoints=pdata.get("excluded_endpoints", list(defaults.excluded_endpoints)),
+                    allowed_endpoints=tuple(pdata.get("allowed_endpoints", defaults.allowed_endpoints)),
+                    excluded_endpoints=tuple(pdata.get("excluded_endpoints", defaults.excluded_endpoints)),
                     require_store_false=pdata.get("require_store_false", defaults.require_store_false),
                 )
 

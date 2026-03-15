@@ -185,9 +185,10 @@ def _extract_per_page_dpi(
     fmt: str,
     page_profiles: "dict[int, PageProfile]",
 ) -> list[ImageResult]:
-    """Per-page DPI rendering: each page at its own DPI from PageProfile.render_dpi.
+    """Per-page DPI rendering: pages batched by DPI value.
 
-    Uses convert_from_path(first_page=n, last_page=n) for individual pages.
+    Groups pages sharing the same render_dpi into single
+    convert_from_path calls, minimizing subprocess launches.
     Preserves atomic swap semantics and slide-001.png naming.
     """
     output_dir = Path(output_dir)
@@ -209,13 +210,7 @@ def _extract_per_page_dpi(
         else:
             shutil.rmtree(old_dir)
 
-    # Determine total page count using a fast single-page probe
-    try:
-        probe = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=72, fmt=fmt)
-    except Exception as e:
-        raise ImageExtractionError(f"Cannot probe PDF page count: {e}") from e
-
-    # Get total page count from pdf2image
+    # Get total page count via pdfinfo (no rendering needed)
     from pdf2image.pdf2image import pdfinfo_from_path
     try:
         info = pdfinfo_from_path(str(pdf_path))
@@ -228,35 +223,49 @@ def _extract_per_page_dpi(
     if total_pages == 0:
         raise ImageExtractionError(f"No pages found in {pdf_path.name}")
 
+    # Group pages by DPI for batch rendering
+    dpi_to_pages: dict[int, list[int]] = {}
+    for page_num in range(1, total_pages + 1):
+        profile = page_profiles.get(page_num)
+        page_dpi = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
+        dpi_to_pages.setdefault(page_dpi, []).append(page_num)
+
     try:
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir)
         tmp_dir.mkdir(parents=True)
 
-        dpi_summary: dict[int, int] = {}
-        results = []
+        # Render batches: one convert_from_path call per distinct DPI
+        page_images: dict[int, Image.Image] = {}
 
+        for batch_dpi, page_nums in sorted(dpi_to_pages.items()):
+            # Find contiguous runs to minimize subprocess calls
+            for run_start, run_end in _contiguous_runs(page_nums):
+                batch = convert_from_path(
+                    pdf_path,
+                    first_page=run_start,
+                    last_page=run_end,
+                    dpi=batch_dpi,
+                    fmt=fmt,
+                )
+                expected = run_end - run_start + 1
+                if len(batch) != expected:
+                    raise ImageExtractionError(
+                        f"Expected {expected} images for pages {run_start}-{run_end}, "
+                        f"got {len(batch)}"
+                    )
+                for i, img in enumerate(batch):
+                    page_images[run_start + i] = img
+
+            logger.info("  Rendered %d pages at %d DPI", len(page_nums), batch_dpi)
+
+        # Write images in page order
+        results = []
         for page_num in range(1, total_pages + 1):
-            # Determine DPI for this page
+            image = page_images[page_num]
             profile = page_profiles.get(page_num)
             page_dpi = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
-            dpi_summary[page_dpi] = dpi_summary.get(page_dpi, 0) + 1
 
-            # Render single page
-            page_images = convert_from_path(
-                pdf_path,
-                first_page=page_num,
-                last_page=page_num,
-                dpi=page_dpi,
-                fmt=fmt,
-            )
-
-            if len(page_images) != 1:
-                raise ImageExtractionError(
-                    f"Expected 1 image for page {page_num}, got {len(page_images)}"
-                )
-
-            image = page_images[0]
             filename = f"slide-{page_num:03d}.{fmt}"
             image_path = tmp_dir / filename
             image.save(str(image_path))
@@ -307,15 +316,33 @@ def _extract_per_page_dpi(
     for result in results:
         result.path = slides_dir / result.path.name
 
-    # Log DPI summary
-    for page_dpi, count in sorted(dpi_summary.items()):
-        logger.info("  %d pages rendered at %d DPI", count, page_dpi)
-
     logger.info(
-        "Extracted %d images from %s (per-page DPI)",
-        len(results), pdf_path.name,
+        "Extracted %d images from %s (per-page DPI, %d batches)",
+        len(results), pdf_path.name, len(dpi_to_pages),
     )
     return results
+
+
+def _contiguous_runs(pages: list[int]) -> list[tuple[int, int]]:
+    """Group sorted page numbers into contiguous (start, end) runs.
+
+    Example: [1, 2, 3, 7, 8] → [(1, 3), (7, 8)]
+    """
+    if not pages:
+        return []
+    sorted_pages = sorted(pages)
+    runs = []
+    start = sorted_pages[0]
+    prev = start
+    for p in sorted_pages[1:]:
+        if p == prev + 1:
+            prev = p
+        else:
+            runs.append((start, prev))
+            start = p
+            prev = p
+    runs.append((start, prev))
+    return runs
 
 
 def _validate_image(image_path: Path, image: Image.Image, slide_num: int) -> dict:
@@ -352,3 +379,4 @@ def _is_mostly_blank(image: Image.Image, threshold: float = 0.95) -> bool:
         return (white_count / total) > threshold
     except Exception:
         return False
+

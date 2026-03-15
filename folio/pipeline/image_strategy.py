@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
 _MAX_LONG_EDGE = 1568  # Anthropic / OpenAI recommended max
 _TILE_PRODUCING_CLASSES = {"diagram", "mixed", "unsupported_diagram"}
+# NOTE: "unsupported_diagram" is included preemptively for PR 4 diagram
+# routing. On text-only pages it is inert — prepare_images treats it
+# identically to "diagram" (5 ImageParts with tile quadrants).
 _DEFAULT_PALETTE = [
     "#FF6B6B",  # coral red
     "#4ECDC4",  # teal
@@ -93,6 +96,8 @@ def prepare_images(
     tile_parts = []
     for role, box in tile_boxes:
         tile_img = page_image.crop(box)
+        # S3: resize tiles to MAX_LONG_EDGE (same cap as global)
+        tile_img = _resize_to_max_edge(tile_img, _MAX_LONG_EDGE)
         tile_parts.append(ImagePart(
             image_data=_to_png_bytes(tile_img),
             role=role,
@@ -117,7 +122,10 @@ def crop_region(
             0.1 = 10% padding on each side.
 
     Returns:
-        A new cropped Image.
+        A new cropped Image. Minimum 1x1 to avoid degenerate outputs.
+
+    Raises:
+        ValueError: If bbox has zero area after normalization.
     """
     w, h = page_image.size
 
@@ -126,6 +134,12 @@ def crop_region(
     y0 = min(bbox[1], bbox[3])
     x1 = max(bbox[0], bbox[2])
     y1 = max(bbox[1], bbox[3])
+
+    # Guard zero-area bbox (S7)
+    if x0 == x1 and y0 == y1:
+        raise ValueError(
+            f"Zero-area bbox at ({x0}, {y0}): cannot crop a zero-area region"
+        )
 
     # Calculate padding
     bw = x1 - x0
@@ -139,6 +153,10 @@ def crop_region(
     crop_x1 = min(w, x1 + pad_x)
     crop_y1 = min(h, y1 + pad_y)
 
+    # Enforce minimum 1x1 crop
+    crop_x1 = max(crop_x1, crop_x0 + 1)
+    crop_y1 = max(crop_y1, crop_y0 + 1)
+
     return page_image.crop((int(crop_x0), int(crop_y0), int(crop_x1), int(crop_y1)))
 
 
@@ -146,6 +164,7 @@ def highlight_regions(
     page_image: Image.Image,
     regions: list[tuple[float, float, float, float]],
     colors: list[str] | None = None,
+    outline_width: int | None = None,
 ) -> Image.Image:
     """Draw semi-transparent rectangle highlights over regions.
 
@@ -157,11 +176,19 @@ def highlight_regions(
         regions: List of (x0, y0, x1, y1) bounding boxes in pixel coordinates.
         colors: Optional list of hex color strings. Cycles through
             a default palette if not provided.
+        outline_width: Outline thickness in pixels. Defaults to
+            proportional scaling based on image long edge (~3px at
+            1000px, ~6px at 2000px).
     """
     palette = colors if colors else _DEFAULT_PALETTE
     result = page_image.copy().convert("RGBA")
     overlay = Image.new("RGBA", result.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
+
+    # DPI-proportional outline width (m2)
+    if outline_width is None:
+        long_edge = max(page_image.size)
+        outline_width = max(2, round(long_edge / 350))
 
     for i, region in enumerate(regions):
         color_hex = palette[i % len(palette)]
@@ -177,7 +204,7 @@ def highlight_regions(
         x1 = max(region[0], region[2])
         y1 = max(region[1], region[3])
 
-        draw.rectangle([x0, y0, x1, y1], fill=fill_color, outline=outline_color, width=3)
+        draw.rectangle([x0, y0, x1, y1], fill=fill_color, outline=outline_color, width=outline_width)
 
     result = Image.alpha_composite(result, overlay)
     return result.convert("RGB")
@@ -202,7 +229,13 @@ def _resize_to_max_edge(image: Image.Image, max_edge: int) -> Image.Image:
 
 
 def _to_png_bytes(image: Image.Image) -> bytes:
-    """Serialize a PIL Image to PNG bytes."""
+    """Serialize a PIL Image to PNG bytes.
+
+    Note: RGBA images are converted to RGB before saving,
+    which strips the alpha channel. This is intentional —
+    LLM vision APIs expect opaque images, and transparent
+    regions would appear as black on some providers.
+    """
     buf = io.BytesIO()
     # Ensure RGB mode for PNG serialization
     if image.mode == "RGBA":

@@ -49,6 +49,13 @@ class ErrorDisposition:
     kind: Literal["transient", "permanent"]
     retry_after_seconds: float | None = None
 
+    def __post_init__(self):
+        if self.kind not in ("transient", "permanent"):
+            raise ValueError(
+                f"ErrorDisposition.kind must be 'transient' or 'permanent', "
+                f"got {self.kind!r}"
+            )
+
     @classmethod
     def transient(cls, retry_after: float | None = None) -> ErrorDisposition:
         """Convenience: create a transient disposition."""
@@ -76,9 +83,9 @@ class ProviderInput:
 
     prompt: str
     images: list[ImagePart] = field(default_factory=list)
-    system_prompt: str | None = None
     max_tokens: int = 4096
     temperature: float = 0.0
+    require_store_false: bool = False
 
 
 @dataclass(frozen=True)
@@ -106,8 +113,8 @@ class ProviderRuntimeSettings:
     max_attempts: int = 3
     base_delay_seconds: float = 1.0
     max_delay_seconds: float = 60.0
-    allowed_endpoints: list[str] = field(default_factory=list)
-    excluded_endpoints: list[str] = field(default_factory=list)
+    allowed_endpoints: tuple[str, ...] = ()
+    excluded_endpoints: tuple[str, ...] = ()
     require_store_false: bool = False
 
 
