@@ -828,11 +828,14 @@ def graph_to_connection_table(graph: "DiagramGraph") -> str:
             (tgt.label if tgt else "") or (tgt.id if tgt else edge.target_id)
         )
         label = _escape_table_cell(edge.label or "")
-        # S3: Conservative direction handling in connection table
+        # Normalize direction consistently with Mermaid rendering:
+        # unrecognized directions → conservative undirected symbol
         direction = (edge.direction or "").lower()
         if not direction:
             direction = "forward"
-        dir_display = _DIRECTION_DISPLAY.get(direction, "?")
+        elif direction not in _DIRECTION_DISPLAY:
+            direction = "unknown"  # maps to "—" (undirected)
+        dir_display = _DIRECTION_DISPLAY.get(direction, "—")
         confidence = f"{edge.confidence:.2f}"
         lines.append(
             f"| {from_label} | {to_label} | {label} | {dir_display} | {confidence} |"

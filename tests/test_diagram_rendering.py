@@ -694,6 +694,16 @@ class TestConnectionTable:
         table = graph_to_connection_table(graph)
         assert "HTTP \\| gRPC" in table
 
+    def test_unrecognized_direction_shows_undirected(self):
+        """Unrecognized direction should show undirected symbol, not '?'."""
+        graph = _simple_graph(
+            nodes=[_n("a", "A"), _n("b", "B")],
+            edges=[_e("a_b", "a", "b", direction="mystery")],
+        )
+        table = graph_to_connection_table(graph)
+        assert "?" not in table
+        assert "—" in table  # conservative undirected symbol
+
 
 # ---------------------------------------------------------------------------
 # 28. Confidence values to 2 decimals
