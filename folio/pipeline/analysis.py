@@ -40,8 +40,10 @@ _DIAGRAM_PIPELINE_VERSION = "pr3-routing-v1"
 _IMAGE_STRATEGY_VERSION = "global-only-v1"
 
 # Diagram marker fields — presence of ANY triggers DiagramAnalysis dispatch.
+# NOTE: "description" excluded (S2) — too generic, risks false-positive dispatch.
+# Any real diagram response will also contain diagram_type or graph.
 _DIAGRAM_MARKER_FIELDS = frozenset({
-    "diagram_type", "graph", "mermaid", "description",
+    "diagram_type", "graph", "mermaid",
     "uncertainties", "review_required", "abstained",
     "extraction_confidence", "review_questions",
 })
@@ -211,6 +213,17 @@ class DiagramNode:
                 bbox = tuple(float(v) for v in bbox_raw)
             except (TypeError, ValueError):
                 bbox = None
+        # S4: Guard against NaN/Inf values in bbox
+        if bbox is not None and any(
+            not isinstance(v, (int, float)) or v != v or abs(v) == float('inf')
+            for v in bbox
+        ):
+            bbox = None
+        # B1: Safe confidence parsing
+        try:
+            confidence = float(d.get("confidence", 1.0))
+        except (TypeError, ValueError):
+            confidence = 1.0
         return cls(
             id=str(d.get("id", "unknown")),
             label=str(d.get("label", "unknown")),
@@ -219,7 +232,7 @@ class DiagramNode:
             technology=d.get("technology"),
             source_text=str(d.get("source_text", "vision")),
             bbox=bbox,
-            confidence=float(d.get("confidence", 1.0)),
+            confidence=confidence,
             verification_evidence=d.get("verification_evidence"),
         )
 
@@ -263,13 +276,18 @@ class DiagramEdge:
                 evidence_bbox = tuple(float(v) for v in bbox_raw)
             except (TypeError, ValueError):
                 evidence_bbox = None
+        # B1: Safe confidence parsing
+        try:
+            confidence = float(d.get("confidence", 1.0))
+        except (TypeError, ValueError):
+            confidence = 1.0
         return cls(
             id=str(d.get("id", "unknown")),
             source_id=str(d.get("source_id", "unknown")),
             target_id=str(d.get("target_id", "unknown")),
             label=d.get("label"),
             direction=str(d.get("direction", "->")),
-            confidence=float(d.get("confidence", 1.0)),
+            confidence=confidence,
             evidence_bbox=evidence_bbox,
             verification_evidence=d.get("verification_evidence"),
         )
@@ -387,7 +405,16 @@ class DiagramAnalysis(SlideAnalysis):
         review_required: bool = False,
         abstained: bool = False,
     ) -> "DiagramAnalysis":
-        """Promote a SlideAnalysis to DiagramAnalysis, copying inherited fields."""
+        """Promote a SlideAnalysis to DiagramAnalysis, copying inherited fields.
+
+        Warning: if called on a DiagramAnalysis, diagram-specific fields
+        (graph, mermaid, description, uncertainties) are NOT copied.
+        """
+        if isinstance(sa, DiagramAnalysis):
+            logger.warning(
+                "from_slide_analysis() called on DiagramAnalysis — "
+                "diagram-specific fields will be lost"
+            )
         return cls(
             slide_type=sa.slide_type,
             framework=sa.framework,
@@ -487,12 +514,16 @@ def _rewrite_edge_ids(
     edges: list["DiagramEdge"],
     node_id_mapping: dict[str, str],
 ) -> list["DiagramEdge"]:
-    """Rewrite edge source/target IDs and recompute edge IDs after node inheritance."""
+    """Rewrite edge source/target IDs and recompute edge IDs after node inheritance.
+
+    Uses original edge ID as disambiguator to prevent collisions when
+    multiple edges exist between the same node pair (S1 fix).
+    """
     result = []
     for edge in edges:
         new_source = node_id_mapping.get(edge.source_id, edge.source_id)
         new_target = node_id_mapping.get(edge.target_id, edge.target_id)
-        new_id = f"{new_source}_{new_target}"
+        new_id = f"{new_source}_{new_target}_{edge.id}"
         result.append(DiagramEdge(
             id=new_id,
             source_id=new_source,
@@ -1871,7 +1902,7 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None, provider: str | 
                 logger.info("Model changed (%s -> %s) — invalidating deep cache",
                             data.get("_model_version"), model)
                 return {}
-            if provider and data.get("_provider_version") != provider:
+            if data.get("_provider_version") != provider:
                 logger.info("Provider changed (%s -> %s) — invalidating deep cache",
                             data.get("_provider_version"), provider)
                 return {}
@@ -1965,8 +1996,8 @@ def _load_cache(cache_dir: Path, model: str | None = None, provider: str | None 
                 logger.info("Model changed (%s -> %s) — invalidating cache",
                             data.get("_model_version"), model)
                 return {}
-            # Provider version check
-            if provider and data.get("_provider_version") != provider:
+            # Provider version check (S5: unconditional to prevent stale cross-provider hits)
+            if data.get("_provider_version") != provider:
                 logger.info("Provider changed (%s -> %s) — invalidating cache",
                             data.get("_provider_version"), provider)
                 return {}

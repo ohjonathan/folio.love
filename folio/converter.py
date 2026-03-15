@@ -175,6 +175,7 @@ class FolioConverter:
                 p for p, prof in page_profiles.items()
                 if prof.classification in _DIAGRAM_CLASSIFICATIONS
             }
+            # Currently empty — unsupported_diagram classification deferred to PR 4
             unsupported_diagram_slides = {
                 p for p, prof in page_profiles.items()
                 if prof.classification == "unsupported_diagram"
@@ -259,6 +260,14 @@ class FolioConverter:
             for slide_num in blank_slides:
                 if slide_num in slide_analyses:
                     slide_analyses[slide_num] = analysis.SlideAnalysis.pending()
+
+            # M3: Blank and diagram classifications are mutually exclusive.
+            # If this invariant ever breaks, the ordering below would silently
+            # re-promote blank slides to DiagramAnalysis.
+            assert not (blank_slides & diagram_or_mixed_slides), (
+                f"Slide(s) classified as both blank and diagram: "
+                f"{blank_slides & diagram_or_mixed_slides}"
+            )
 
             # PR 3: Coerce diagram/mixed pages to DiagramAnalysis post pass-1
             for slide_num in diagram_or_mixed_slides:

@@ -310,6 +310,12 @@ class TestFactoryDispatch:
         result = SlideAnalysis.from_dict(d)
         assert isinstance(result, DiagramAnalysis)
 
+    def test_description_alone_does_NOT_trigger_diagram(self):
+        """S2: 'description' was removed from markers — too generic."""
+        d = {"slide_type": "data", "description": "A chart showing revenue"}
+        result = SlideAnalysis.from_dict(d)
+        assert type(result) is SlideAnalysis
+
     def test_empty_dict_returns_default_slide_analysis(self):
         result = SlideAnalysis.from_dict({})
         assert type(result) is SlideAnalysis
@@ -425,7 +431,7 @@ class TestRewriteEdgeIds:
         mapping = {"n1": "inherited_1", "n2": "inherited_2"}
         result = _rewrite_edge_ids(edges, mapping)
         assert len(result) == 1
-        assert result[0].id == "inherited_1_inherited_2"
+        assert result[0].id == "inherited_1_inherited_2_old_e"
         assert result[0].source_id == "inherited_1"
         assert result[0].target_id == "inherited_2"
         assert result[0].label == "connects"
@@ -440,8 +446,19 @@ class TestRewriteEdgeIds:
     def test_empty_mapping(self):
         edges = [DiagramEdge(id="e1", source_id="a", target_id="b")]
         result = _rewrite_edge_ids(edges, {})
-        assert result[0].id == "a_b"
+        assert result[0].id == "a_b_e1"
         assert result[0].source_id == "a"
+
+    def test_parallel_edges_get_unique_ids(self):
+        """S1: Multiple edges between same node pair must have distinct IDs."""
+        edges = [
+            DiagramEdge(id="e1", source_id="a", target_id="b", label="HTTP"),
+            DiagramEdge(id="e2", source_id="a", target_id="b", label="gRPC"),
+        ]
+        result = _rewrite_edge_ids(edges, {})
+        assert result[0].id != result[1].id
+        assert result[0].id == "a_b_e1"
+        assert result[1].id == "a_b_e2"
 
 
 # ---------------------------------------------------------------------------
@@ -463,3 +480,51 @@ class TestStableSignature:
     def test_length(self):
         s = _stable_signature("test")
         assert len(s) == 16
+
+
+# ---------------------------------------------------------------------------
+# PR 21 review fixes
+# ---------------------------------------------------------------------------
+
+
+class TestConfidenceCrashFix:
+    """B1: Malformed confidence must not crash deserialization."""
+
+    def test_node_confidence_none(self):
+        d = {"id": "n1", "label": "N", "confidence": None}
+        n = DiagramNode.from_dict(d)
+        assert n.confidence == 1.0
+
+    def test_node_confidence_string(self):
+        d = {"id": "n1", "label": "N", "confidence": "high"}
+        n = DiagramNode.from_dict(d)
+        assert n.confidence == 1.0
+
+    def test_edge_confidence_none(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b", "confidence": None}
+        e = DiagramEdge.from_dict(d)
+        assert e.confidence == 1.0
+
+    def test_edge_confidence_string(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b", "confidence": "medium"}
+        e = DiagramEdge.from_dict(d)
+        assert e.confidence == 1.0
+
+
+class TestNanBboxGuard:
+    """S4: NaN/Inf bbox values should be rejected."""
+
+    def test_nan_bbox_rejected(self):
+        d = {"id": "n1", "label": "N", "bbox": [0, 0, float("nan"), 10]}
+        n = DiagramNode.from_dict(d)
+        assert n.bbox is None
+
+    def test_inf_bbox_rejected(self):
+        d = {"id": "n1", "label": "N", "bbox": [0, 0, float("inf"), 10]}
+        n = DiagramNode.from_dict(d)
+        assert n.bbox is None
+
+    def test_valid_bbox_accepted(self):
+        d = {"id": "n1", "label": "N", "bbox": [0, 0, 100, 100]}
+        n = DiagramNode.from_dict(d)
+        assert n.bbox == (0.0, 0.0, 100.0, 100.0)

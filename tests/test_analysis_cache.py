@@ -114,7 +114,7 @@ class TestCacheFormatVersion:
             "_image_strategy_version": _IMAGE_STRATEGY_VERSION,
                  "abc123": {"slide_type": "data"}}
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
-        result = _load_cache(tmp_path)
+        result = _load_cache(tmp_path, provider="anthropic")
         assert "abc123" in result
 
     def test_deep_format_version_invalidates(self, tmp_path):
@@ -1045,7 +1045,7 @@ class TestPromptVersionInvalidation:
             "abc123": {"slide_type": "data"},
         }
         (tmp_path / ".analysis_cache.json").write_text(json.dumps(cache))
-        result = _load_cache(tmp_path, model="test")
+        result = _load_cache(tmp_path, model="test", provider="anthropic")
         assert "abc123" in result
 
     def test_deep_correct_prompt_loads(self, tmp_path):
@@ -1062,7 +1062,7 @@ class TestPromptVersionInvalidation:
             "abc_deep": {"evidence": []},
         }
         (tmp_path / ".analysis_cache_deep.json").write_text(json.dumps(cache))
-        result = _load_cache_deep(tmp_path, model="test")
+        result = _load_cache_deep(tmp_path, model="test", provider="anthropic")
         assert "abc_deep" in result
 
 
