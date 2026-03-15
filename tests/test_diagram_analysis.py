@@ -528,3 +528,25 @@ class TestNanBboxGuard:
         d = {"id": "n1", "label": "N", "bbox": [0, 0, 100, 100]}
         n = DiagramNode.from_dict(d)
         assert n.bbox == (0.0, 0.0, 100.0, 100.0)
+
+
+class TestEdgeEvidenceBboxNanGuard:
+    """S-NEW-1: NaN/Inf evidence_bbox values should be rejected."""
+
+    def test_nan_evidence_bbox_rejected(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b",
+             "evidence_bbox": [0, 0, float("nan"), 10]}
+        e = DiagramEdge.from_dict(d)
+        assert e.evidence_bbox is None
+
+    def test_inf_evidence_bbox_rejected(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b",
+             "evidence_bbox": [0, 0, float("inf"), 10]}
+        e = DiagramEdge.from_dict(d)
+        assert e.evidence_bbox is None
+
+    def test_valid_evidence_bbox_accepted(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b",
+             "evidence_bbox": [5, 5, 50, 50]}
+        e = DiagramEdge.from_dict(d)
+        assert e.evidence_bbox == (5.0, 5.0, 50.0, 50.0)

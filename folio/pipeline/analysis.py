@@ -276,6 +276,12 @@ class DiagramEdge:
                 evidence_bbox = tuple(float(v) for v in bbox_raw)
             except (TypeError, ValueError):
                 evidence_bbox = None
+        # S-NEW-1: Guard against NaN/Inf values in evidence_bbox
+        if evidence_bbox is not None and any(
+            v != v or abs(v) == float('inf')
+            for v in evidence_bbox
+        ):
+            evidence_bbox = None
         # B1: Safe confidence parsing
         try:
             confidence = float(d.get("confidence", 1.0))
