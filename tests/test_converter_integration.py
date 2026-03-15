@@ -24,6 +24,24 @@ from folio.tracking.versions import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _mock_inspect_pages():
+    """Auto-mock inspect_pages for all converter integration tests.
+
+    Returns text classification for all pages by default.
+    Individual tests override with their own patch when needed (e.g. blank tests).
+    """
+    class _DefaultProfileDict(dict):
+        """Dict that returns text PageProfile for any missing page."""
+        def __missing__(self, key):
+            profile = MagicMock(classification="text")
+            self[key] = profile
+            return profile
+
+    with patch("folio.pipeline.inspect.inspect_pages", return_value=_DefaultProfileDict()):
+        yield
+
+
 def _mock_anthropic_response(text: str):
     mock_response = MagicMock()
     mock_content = MagicMock()
@@ -110,6 +128,11 @@ class TestBlankOverridePath:
             config = FolioConfig()
 
             with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="text"),
+                     2: MagicMock(classification="image_blank"),
+                     3: MagicMock(classification="text"),
+                 }), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch("anthropic.Anthropic", return_value=mock_client):

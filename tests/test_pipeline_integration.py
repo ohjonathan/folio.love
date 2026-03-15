@@ -17,6 +17,18 @@ from folio.pipeline.text import SlideText
 from folio.output.frontmatter import _compute_grounding_summary
 
 
+@pytest.fixture(autouse=True)
+def _mock_inspect_pages():
+    """Auto-mock inspect_pages for pipeline integration tests."""
+    class _DefaultProfileDict(dict):
+        def __missing__(self, key):
+            profile = MagicMock(classification="text")
+            self[key] = profile
+            return profile
+    with patch("folio.pipeline.inspect.inspect_pages", return_value=_DefaultProfileDict()):
+        yield
+
+
 def _mock_anthropic_response(text: str):
     """Create a mock Anthropic API response."""
     mock_response = MagicMock()

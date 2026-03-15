@@ -11,7 +11,7 @@ from typing import Optional
 import yaml as yaml_lib
 
 from .config import FolioConfig
-from .pipeline import normalize, images, text, analysis
+from .pipeline import normalize, images, text, analysis, inspect
 from .tracking import sources, versions
 from .tracking import registry
 from .output import frontmatter, markdown
@@ -120,6 +120,10 @@ class FolioConverter:
             renderer_used = norm_result.renderer_used
             logger.info("  Renderer used: %s", renderer_used)
 
+            # Stage 1½: Deterministic page inspection
+            logger.info("  Inspecting pages...")
+            page_profiles = inspect.inspect_pages(pdf_path)
+
             # Stage 2: Extract images
             logger.info("  Extracting images...")
             try:
@@ -147,9 +151,22 @@ class FolioConverter:
             image_paths = [r.path for r in image_results]
             slide_count = len(image_results)
 
-            blank_slides = {r.slide_num for r in image_results if r.is_blank}
+            # Blank detection: combine inspection + histogram.
+            # Structurally blank (no text, no vectors, no images):
+            structural_blanks = {
+                p for p, prof in page_profiles.items()
+                if prof.classification == "blank"
+            }
+            # image_blank pages need histogram confirmation (BLK-2 fix):
+            # A raster-only page is only blank if the histogram also says so.
+            histogram_blanks = {r.slide_num for r in image_results if r.is_blank}
+            image_blanks_confirmed = {
+                p for p, prof in page_profiles.items()
+                if prof.classification == "image_blank" and p in histogram_blanks
+            }
+            blank_slides = structural_blanks | image_blanks_confirmed
             if blank_slides:
-                logger.info("Blank slides detected: %s", sorted(blank_slides))
+                logger.info("Blank slides: %s", sorted(blank_slides))
 
             # Stage 3: Extract text
             logger.info("  Extracting text...")
