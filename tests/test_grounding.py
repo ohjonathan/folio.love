@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from folio.pipeline.analysis import (
+    DiagramAnalysis,
     SlideAnalysis,
     _extract_json,
     _normalize_pass1_json,
@@ -1042,4 +1043,72 @@ class TestAssessReviewState:
         score = _compute_extraction_confidence(analyses)
         assert score == 0.9  # Only the valid dict item counted
 
+    # -- PR 3: Diagram abstention tests --
+
+    def test_abstained_diagram_not_analysis_unavailable(self):
+        """Sole abstained unsupported diagram must NOT trigger analysis_unavailable."""
+        analyses = {
+            1: DiagramAnalysis(
+                slide_type="pending",
+                diagram_type="unsupported",
+                abstained=True,
+                review_required=True,
+            ),
+        }
+        texts = {1: self._make_text(1)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "analysis_unavailable" not in result.review_flags
+        assert "diagram_abstained_slide_1" in result.review_flags
+
+    def test_abstained_diagram_not_partial_analysis(self):
+        """Normal + abstained diagram must NOT emit partial_analysis for the diagram."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+            2: DiagramAnalysis(
+                slide_type="pending",
+                diagram_type="unsupported",
+                abstained=True,
+                review_required=True,
+            ),
+        }
+        texts = {1: self._make_text(1), 2: self._make_text(2)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "partial_analysis_slide_2" not in result.review_flags
+        assert "analysis_unavailable" not in result.review_flags
+        assert "diagram_abstained_slide_2" in result.review_flags
+
+    def test_abstained_diagram_gets_dedicated_flag(self):
+        """Abstained diagram emits diagram_abstained_slide_N, sets flagged status."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+            3: DiagramAnalysis(
+                slide_type="pending",
+                diagram_type="unsupported",
+                abstained=True,
+                review_required=True,
+            ),
+        }
+        texts = {1: self._make_text(1), 3: self._make_text(3)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status == "flagged"
+        assert "diagram_abstained_slide_3" in result.review_flags
+        assert not any(f.startswith("partial_analysis") for f in result.review_flags)
 

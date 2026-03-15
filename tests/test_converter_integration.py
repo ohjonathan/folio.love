@@ -12,7 +12,7 @@ import yaml
 from folio.config import FolioConfig
 from folio.converter import FolioConverter, _alignment_status
 from folio.llm.types import StageLLMMetadata
-from folio.pipeline.analysis import CacheStats, SlideAnalysis
+from folio.pipeline.analysis import CacheStats, DiagramAnalysis, SlideAnalysis
 from folio.pipeline.images import ImageResult
 from folio.pipeline.normalize import NormalizationResult
 from folio.pipeline.text import SlideText, reconcile_slide_count
@@ -852,3 +852,413 @@ class TestPptxOutputDirPlumbing:
 
             # Intermediate PDF should STILL be cleaned up (try/finally)
             assert not ppt_pdf.exists()
+
+
+# ---------------------------------------------------------------------------
+# PR 3: Diagram routing integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestMixedPageRouting:
+    """Integration: mixed page → DiagramAnalysis, skips Pass 2."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_mixed_page_becomes_diagram_analysis_and_skips_pass2(self):
+        """Mixed-classified page is coerced to DiagramAnalysis and excluded from Pass 2."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            image_paths = []
+            for i in range(1, 4):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(self._make_unique_png(i))
+                image_paths.append(img)
+
+            image_results = [
+                ImageResult(path=image_paths[0], slide_num=1, is_blank=False, width=200, height=200),
+                ImageResult(path=image_paths[1], slide_num=2, is_blank=False, width=200, height=200),
+                ImageResult(path=image_paths[2], slide_num=3, is_blank=False, width=200, height=200),
+            ]
+            slide_texts = {
+                i: SlideText(slide_num=i, full_text=f"Slide {i} content", elements=[])
+                for i in range(1, 4)
+            }
+            # Pass 1 returns standard SlideAnalysis for all (converter coerces mixed)
+            pass1_analyses = {
+                1: SlideAnalysis(
+                    slide_type="data", framework="none",
+                    evidence=[{"confidence": "high", "validated": True}],
+                ),
+                2: SlideAnalysis(
+                    slide_type="data", framework="none",
+                    evidence=[{"confidence": "high", "validated": True}],
+                ),
+                3: SlideAnalysis(
+                    slide_type="data", framework="none",
+                    evidence=[{"confidence": "high", "validated": True}],
+                ),
+            }
+
+            config = FolioConfig()
+
+            # Track skip_slides passed to analyze_slides_deep
+            captured_skip_slides = []
+            original_deep = None
+
+            def tracking_deep(*args, **kwargs):
+                captured_skip_slides.append(kwargs.get("skip_slides", set()))
+                return kwargs.get("pass1_results", {}), CacheStats(hits=0, misses=0, pass_name="pass2"), None
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="text"),
+                     2: MagicMock(classification="mixed"),
+                     3: MagicMock(classification="text"),
+                 }), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(pass1_analyses, CacheStats(hits=0, misses=3, pass_name="pass1"), None),
+                 ), \
+                 patch("folio.pipeline.analysis.analyze_slides_deep", side_effect=tracking_deep) as mock_deep:
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=2)
+
+            # The mixed page's analysis should have been coerced to DiagramAnalysis
+            # (converter does this after pass 1, before pass 2)
+            # We verify this by checking that page 2 was in skip_slides for pass 2
+            assert len(captured_skip_slides) == 1
+            assert 2 in captured_skip_slides[0]
+
+
+class TestUnsupportedDiagramAbstention:
+    """Integration: unsupported_diagram → abstained placeholder, no failure flags."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_unsupported_diagram_gets_abstained_placeholder(self):
+        """Unsupported diagram inserts abstained DiagramAnalysis, not a failure flag."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            image_paths = []
+            for i in range(1, 3):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(self._make_unique_png(i))
+                image_paths.append(img)
+
+            image_results = [
+                ImageResult(path=image_paths[0], slide_num=1, is_blank=False, width=200, height=200),
+                ImageResult(path=image_paths[1], slide_num=2, is_blank=False, width=200, height=200),
+            ]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Normal slide", elements=[]),
+                2: SlideText(slide_num=2, full_text="Diagram slide", elements=[]),
+            }
+            # Only page 1 goes through pass 1 (page 2 is unsupported_diagram, skipped)
+            pass1_analyses = {
+                1: SlideAnalysis(
+                    slide_type="data", framework="none",
+                    evidence=[{"confidence": "high", "validated": True}],
+                ),
+            }
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="text"),
+                     2: MagicMock(classification="unsupported_diagram"),
+                 }), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(pass1_analyses, CacheStats(hits=0, misses=1, pass_name="pass1"), None),
+                 ):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            content = result.output_path.read_text()
+            parsed_fm = yaml.safe_load(content[3:content.index("---", 3)])
+
+            # Should NOT have analysis_unavailable or partial_analysis
+            assert "analysis_unavailable" not in parsed_fm.get("review_flags", [])
+            assert "partial_analysis_slide_2" not in parsed_fm.get("review_flags", [])
+            # Should have the dedicated abstention flag
+            assert "diagram_abstained_slide_2" in parsed_fm.get("review_flags", [])
+
+
+class TestCacheHitPolymorphicRoundTrip:
+    """Integration: cached DiagramAnalysis payloads deserialize correctly."""
+
+    def test_cached_diagram_analysis_round_trips_through_factory(self, tmp_path):
+        """Write DiagramAnalysis to cache, load via _load_cache, verify polymorphic type."""
+        from folio.pipeline.analysis import (
+            DiagramAnalysis,
+            DiagramGraph,
+            DiagramNode,
+            _load_cache,
+            _save_cache,
+            SlideAnalysis,
+        )
+
+        # Create a DiagramAnalysis and serialize to cache
+        da = DiagramAnalysis(
+            slide_type="diagram",
+            framework="none",
+            visual_description="Architecture diagram",
+            key_data="3 services",
+            main_insight="Microservices",
+            evidence=[{"claim": "test", "confidence": "high", "validated": True}],
+            diagram_type="architecture",
+            graph=DiagramGraph(
+                nodes=[DiagramNode(id="n1", label="Service A", bbox=(0, 0, 50, 50))],
+            ),
+            mermaid="graph LR\n  A --> B",
+            extraction_confidence=0.85,
+        )
+
+        # Build a cache dict with the DiagramAnalysis serialized
+        cache = {"img_hash_1": da.to_dict()}
+        _save_cache(tmp_path, cache, model="test-model", provider="test-provider")
+
+        # Load the cache back
+        loaded = _load_cache(tmp_path, model="test-model", provider="test-provider")
+        assert "img_hash_1" in loaded
+
+        # Deserialize through the polymorphic factory
+        entry = loaded["img_hash_1"]
+        restored = SlideAnalysis.from_dict(entry)
+
+        # Must come back as DiagramAnalysis, not plain SlideAnalysis
+        assert isinstance(restored, DiagramAnalysis)
+        assert restored.diagram_type == "architecture"
+        assert restored.mermaid == "graph LR\n  A --> B"
+        assert restored.extraction_confidence == 0.85
+        assert restored.graph is not None
+        assert len(restored.graph.nodes) == 1
+        assert restored.graph.nodes[0].id == "n1"
+
+
+class TestWarmCacheConverterDiagramRouting:
+    """End-to-end: analyze_slides with a warm cache containing DiagramAnalysis."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_warm_cache_returns_diagram_analysis_through_analyze_slides(self, tmp_path):
+        """Pre-populated cache with DiagramAnalysis → analyze_slides returns DiagramAnalysis."""
+        from folio.pipeline.analysis import (
+            DiagramAnalysis,
+            DiagramGraph,
+            DiagramNode,
+            SlideAnalysis,
+            _hash_image,
+            _save_cache,
+            _text_hash,
+            analyze_slides,
+        )
+        from folio.pipeline.text import SlideText
+
+        # Write a unique image and compute its hash
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(self._make_unique_png(42))
+        image_hash = _hash_image(img)
+
+        # Build a DiagramAnalysis entry
+        da = DiagramAnalysis(
+            slide_type="diagram",
+            framework="none",
+            visual_description="Architecture diagram",
+            key_data="3 services",
+            main_insight="Microservices",
+            evidence=[{"claim": "test", "confidence": "high", "validated": True}],
+            diagram_type="architecture",
+            graph=DiagramGraph(
+                nodes=[DiagramNode(id="n1", label="Service A", bbox=(0, 0, 50, 50))],
+            ),
+            mermaid="graph LR\n  A --> B",
+            extraction_confidence=0.85,
+        )
+
+        # Pre-populate cache with matching image hash and text hash
+        slide_text = SlideText(slide_num=1, full_text="Service A connects", elements=[])
+        entry = da.to_dict()
+        entry["_text_hash"] = _text_hash(slide_text)
+        entry["_provider"] = "anthropic"
+        entry["_model"] = "claude-sonnet-4-20250514"
+
+        cache = {image_hash: entry}
+        _save_cache(tmp_path, cache, model="claude-sonnet-4-20250514", provider="anthropic")
+
+        # Call analyze_slides — should get a cache hit, no API calls
+        results, stats, meta = analyze_slides(
+            image_paths=[img],
+            model="claude-sonnet-4-20250514",
+            cache_dir=tmp_path,
+            slide_texts={1: slide_text},
+            provider_name="anthropic",
+        )
+
+        # Verify: result is DiagramAnalysis with correct fields
+        assert stats.hits == 1
+        assert stats.misses == 0
+        assert 1 in results
+        assert isinstance(results[1], DiagramAnalysis)
+        assert results[1].diagram_type == "architecture"
+        assert results[1].mermaid == "graph LR\n  A --> B"
+        assert results[1].graph is not None
+        assert len(results[1].graph.nodes) == 1
+
+
+class TestPartialPayloadWarmCacheIntegration:
+    """Partial diagram cache payloads must not produce clean output end-to-end."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_graph_only_warm_cache_through_analyze_slides_is_pending(self, tmp_path):
+        """Graph-only partial payload through analyze_slides → pending DiagramAnalysis."""
+        from folio.pipeline.analysis import (
+            DiagramAnalysis,
+            SlideAnalysis,
+            _hash_image,
+            _save_cache,
+            _text_hash,
+            analyze_slides,
+        )
+        from folio.pipeline.text import SlideText
+
+        img = tmp_path / "slide-001.png"
+        img.write_bytes(self._make_unique_png(99))
+        image_hash = _hash_image(img)
+
+        # Partial payload: graph only, no base slide fields
+        entry = {
+            "graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []},
+            "diagram_type": "unknown",
+        }
+        slide_text = SlideText(slide_num=1, full_text="placeholder", elements=[])
+        entry["_text_hash"] = _text_hash(slide_text)
+        entry["_provider"] = "anthropic"
+        entry["_model"] = "claude-sonnet-4-20250514"
+
+        _save_cache(tmp_path, {image_hash: entry}, model="claude-sonnet-4-20250514", provider="anthropic")
+
+        results, stats, meta = analyze_slides(
+            image_paths=[img],
+            model="claude-sonnet-4-20250514",
+            cache_dir=tmp_path,
+            slide_texts={1: slide_text},
+            provider_name="anthropic",
+        )
+
+        assert stats.hits == 1
+        assert isinstance(results[1], DiagramAnalysis)
+        assert results[1].slide_type == "pending"
+        assert results[1].review_required is True
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_graph_only_warm_cache_through_converter_is_flagged(self):
+        """Graph-only partial payload through FolioConverter.convert → flagged frontmatter."""
+        import yaml
+        from folio.pipeline.analysis import (
+            _hash_image,
+            _save_cache,
+            _text_hash,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            img = target_dir / "slide-001.png"
+            img.write_bytes(self._make_unique_png(77))
+            image_hash = _hash_image(img)
+
+            image_results = [
+                ImageResult(path=img, slide_num=1, is_blank=False, width=200, height=200),
+            ]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Some content", elements=[]),
+            }
+
+            # Pre-populate cache with graph-only partial payload
+            entry = {
+                "graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []},
+            }
+            entry["_text_hash"] = _text_hash(slide_texts[1])
+            entry["_provider"] = "anthropic"
+            entry["_model"] = "claude-sonnet-4-20250514"
+
+            _save_cache(target_dir, {image_hash: entry}, model="claude-sonnet-4-20250514", provider="anthropic")
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="text"),
+                 }), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            content = result.output_path.read_text()
+            parsed_fm = yaml.safe_load(content[3:content.index("---", 3)])
+
+            # Must NOT be clean — partial payload
+            assert parsed_fm["review_status"] != "clean"
+            # Must not have blank normal-analysis content
+            assert "**Slide Type:**  " not in content

@@ -35,3 +35,7 @@ tests/validation/*.env
 folio.yaml
 
 # Local engagement data (add operator-specific paths here or via .git/info/exclude)
+
+# Scratch / generated outputs
+tmp/
+output/

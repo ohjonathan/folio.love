@@ -1,0 +1,712 @@
+"""Tests for PR 3: Diagram analysis dataclasses, serialization, IoU helpers, edge rewriting."""
+
+import pytest
+
+from folio.pipeline.analysis import (
+    DiagramAnalysis,
+    DiagramEdge,
+    DiagramGraph,
+    DiagramGroup,
+    DiagramNode,
+    SlideAnalysis,
+    _compute_iou,
+    _normalize_bbox,
+    _rewrite_edge_ids,
+    _stable_signature,
+    match_nodes_by_iou,
+)
+
+
+# ---------------------------------------------------------------------------
+# DiagramGroup
+# ---------------------------------------------------------------------------
+
+
+class TestDiagramGroup:
+    def test_round_trip(self):
+        g = DiagramGroup(id="vpc", name="VPC", contains=["n1", "n2"], contains_groups=["sg1"])
+        d = g.to_dict()
+        restored = DiagramGroup.from_dict(d)
+        assert restored.id == "vpc"
+        assert restored.name == "VPC"
+        assert restored.contains == ["n1", "n2"]
+        assert restored.contains_groups == ["sg1"]
+
+    def test_from_dict_non_dict(self):
+        restored = DiagramGroup.from_dict("notadict")
+        assert restored.id == "unknown"
+
+    def test_from_dict_missing_fields(self):
+        restored = DiagramGroup.from_dict({})
+        assert restored.id == "unknown"
+        assert restored.contains == []
+
+
+# ---------------------------------------------------------------------------
+# DiagramNode
+# ---------------------------------------------------------------------------
+
+
+class TestDiagramNode:
+    def test_round_trip_with_bbox(self):
+        n = DiagramNode(
+            id="web_server", label="Web Server", kind="service",
+            bbox=(10.0, 20.0, 100.0, 80.0), confidence=0.95,
+        )
+        d = n.to_dict()
+        assert d["bbox"] == [10.0, 20.0, 100.0, 80.0]  # tuple -> list
+        restored = DiagramNode.from_dict(d)
+        assert restored.bbox == (10.0, 20.0, 100.0, 80.0)  # list -> tuple
+        assert restored.confidence == 0.95
+
+    def test_bbox_none_omitted_from_dict(self):
+        n = DiagramNode(id="n1", label="Node 1")
+        d = n.to_dict()
+        assert "bbox" not in d
+
+    def test_bbox_malformed_ignored(self):
+        d = {"id": "n1", "label": "Label", "bbox": [1, 2]}  # only 2 elements
+        n = DiagramNode.from_dict(d)
+        assert n.bbox is None
+
+    def test_bbox_non_numeric_ignored(self):
+        d = {"id": "n1", "label": "Label", "bbox": ["a", "b", "c", "d"]}
+        n = DiagramNode.from_dict(d)
+        assert n.bbox is None
+
+    def test_optional_fields_preserved(self):
+        n = DiagramNode(
+            id="db", label="Database", group_id="vpc",
+            technology="PostgreSQL", verification_evidence="text says 'PostgreSQL'",
+        )
+        d = n.to_dict()
+        assert d["group_id"] == "vpc"
+        assert d["technology"] == "PostgreSQL"
+        restored = DiagramNode.from_dict(d)
+        assert restored.group_id == "vpc"
+        assert restored.technology == "PostgreSQL"
+
+    def test_from_dict_non_dict(self):
+        n = DiagramNode.from_dict(42)
+        assert n.id == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# DiagramEdge
+# ---------------------------------------------------------------------------
+
+
+class TestDiagramEdge:
+    def test_round_trip(self):
+        e = DiagramEdge(
+            id="e1", source_id="web", target_id="db",
+            label="HTTPS", direction="->", confidence=0.9,
+        )
+        d = e.to_dict()
+        restored = DiagramEdge.from_dict(d)
+        assert restored.source_id == "web"
+        assert restored.target_id == "db"
+        assert restored.label == "HTTPS"
+
+    def test_evidence_bbox_round_trip(self):
+        e = DiagramEdge(
+            id="e1", source_id="a", target_id="b",
+            evidence_bbox=(5.0, 5.0, 50.0, 50.0),
+        )
+        d = e.to_dict()
+        assert d["evidence_bbox"] == [5.0, 5.0, 50.0, 50.0]
+        restored = DiagramEdge.from_dict(d)
+        assert restored.evidence_bbox == (5.0, 5.0, 50.0, 50.0)
+
+    def test_from_dict_non_dict(self):
+        e = DiagramEdge.from_dict([])
+        assert e.id == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# DiagramGraph
+# ---------------------------------------------------------------------------
+
+
+class TestDiagramGraph:
+    def test_round_trip_empty(self):
+        g = DiagramGraph()
+        d = g.to_dict()
+        restored = DiagramGraph.from_dict(d)
+        assert restored.nodes == []
+        assert restored.edges == []
+        assert restored.groups == []
+        assert restored.schema_version == "1.0"
+
+    def test_round_trip_populated(self):
+        g = DiagramGraph(
+            nodes=[
+                DiagramNode(id="a", label="A", bbox=(0, 0, 10, 10)),
+                DiagramNode(id="b", label="B"),
+            ],
+            edges=[DiagramEdge(id="e1", source_id="a", target_id="b")],
+            groups=[DiagramGroup(id="g1", name="Group 1", contains=["a"])],
+        )
+        d = g.to_dict()
+        restored = DiagramGraph.from_dict(d)
+        assert len(restored.nodes) == 2
+        assert len(restored.edges) == 1
+        assert len(restored.groups) == 1
+        assert restored.nodes[0].id == "a"
+
+    def test_non_dict_entries_skipped(self):
+        d = {
+            "nodes": [{"id": "a", "label": "A"}, "not_a_dict", 42],
+            "edges": [],
+            "groups": [],
+        }
+        g = DiagramGraph.from_dict(d)
+        assert len(g.nodes) == 1
+
+    def test_from_dict_non_dict(self):
+        g = DiagramGraph.from_dict("invalid")
+        assert g.nodes == []
+
+
+# ---------------------------------------------------------------------------
+# DiagramAnalysis
+# ---------------------------------------------------------------------------
+
+
+class TestDiagramAnalysis:
+    def test_inherits_slide_analysis_fields(self):
+        da = DiagramAnalysis(
+            slide_type="data", framework="none",
+            diagram_type="architecture",
+        )
+        assert da.slide_type == "data"
+        assert da.diagram_type == "architecture"
+        assert isinstance(da, SlideAnalysis)
+
+    def test_round_trip_full(self):
+        graph = DiagramGraph(
+            nodes=[DiagramNode(id="n1", label="N1", bbox=(0, 0, 50, 50))],
+            edges=[DiagramEdge(id="e1", source_id="n1", target_id="n1")],
+        )
+        da = DiagramAnalysis(
+            slide_type="diagram",
+            framework="none",
+            visual_description="Architecture diagram",
+            key_data="3 services",
+            main_insight="Microservices architecture",
+            evidence=[{"claim": "test", "quote": "q", "confidence": "high"}],
+            diagram_type="architecture",
+            graph=graph,
+            mermaid="graph LR\n  A --> B",
+            description="An architecture diagram",
+            uncertainties=["Label unclear"],
+            extraction_confidence=0.85,
+            confidence_reasoning="Clear layout",
+            review_questions=["Is this correct?"],
+            review_required=True,
+            abstained=False,
+        )
+        d = da.to_dict()
+        restored = DiagramAnalysis.from_dict(d)
+        assert restored.diagram_type == "architecture"
+        assert restored.graph is not None
+        assert len(restored.graph.nodes) == 1
+        assert restored.mermaid == "graph LR\n  A --> B"
+        assert restored.uncertainties == ["Label unclear"]
+        assert restored.extraction_confidence == 0.85
+        assert restored.review_required is True
+        assert restored.abstained is False
+        assert len(restored.evidence) == 1
+
+    def test_round_trip_minimal(self):
+        da = DiagramAnalysis(diagram_type="flowchart")
+        d = da.to_dict()
+        restored = DiagramAnalysis.from_dict(d)
+        assert restored.diagram_type == "flowchart"
+        assert restored.graph is None
+        assert restored.mermaid is None
+
+    def test_from_dict_empty(self):
+        da = DiagramAnalysis.from_dict({})
+        assert da.diagram_type == "unknown"
+
+    def test_from_dict_non_dict(self):
+        da = DiagramAnalysis.from_dict("invalid")
+        assert da.diagram_type == "unknown"
+
+    def test_from_dict_malformed_extraction_confidence(self):
+        d = {"diagram_type": "flow", "extraction_confidence": "not_a_number"}
+        da = DiagramAnalysis.from_dict(d)
+        assert da.extraction_confidence == 0.0
+
+    def test_from_dict_malformed_uncertainties(self):
+        d = {"diagram_type": "flow", "uncertainties": "not_a_list"}
+        da = DiagramAnalysis.from_dict(d)
+        assert da.uncertainties == []
+
+    def test_from_slide_analysis(self):
+        sa = SlideAnalysis(
+            slide_type="data", framework="tam-sam-som",
+            visual_description="Chart", key_data="$10M",
+            main_insight="Revenue", evidence=[{"claim": "R"}],
+        )
+        da = DiagramAnalysis.from_slide_analysis(
+            sa, diagram_type="mixed", review_required=True,
+        )
+        assert isinstance(da, DiagramAnalysis)
+        assert da.slide_type == "data"
+        assert da.framework == "tam-sam-som"
+        assert da.diagram_type == "mixed"
+        assert da.review_required is True
+        assert da.evidence == [{"claim": "R"}]
+
+    def test_abstained_placeholder(self):
+        da = DiagramAnalysis(
+            slide_type="pending",
+            diagram_type="unsupported",
+            abstained=True,
+            review_required=True,
+        )
+        d = da.to_dict()
+        assert d["abstained"] is True
+        assert d["review_required"] is True
+        assert d["diagram_type"] == "unsupported"
+
+    def test_from_slide_analysis_rejects_diagram_analysis(self):
+        """M-NEW-3: Passing a DiagramAnalysis should raise TypeError."""
+        da = DiagramAnalysis(diagram_type="architecture", mermaid="graph LR")
+        with pytest.raises(TypeError, match="from_slide_analysis.*DiagramAnalysis"):
+            DiagramAnalysis.from_slide_analysis(da, diagram_type="mixed")
+
+
+# ---------------------------------------------------------------------------
+# Polymorphic factory dispatch
+# ---------------------------------------------------------------------------
+
+
+class TestFactoryDispatch:
+    """SlideAnalysis.from_dict() dispatches based on diagram markers."""
+
+    def test_slide_only_returns_slide_analysis(self):
+        d = {"slide_type": "data", "framework": "none", "evidence": []}
+        result = SlideAnalysis.from_dict(d)
+        assert type(result) is SlideAnalysis
+
+    def test_diagram_type_triggers_diagram_analysis(self):
+        d = {"slide_type": "data", "diagram_type": "architecture"}
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        assert result.diagram_type == "architecture"
+
+    def test_graph_alone_triggers_diagram_analysis(self):
+        d = {
+            "slide_type": "data",
+            "graph": {"nodes": [], "edges": [], "groups": []},
+        }
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+
+    def test_mermaid_alone_triggers_diagram_analysis(self):
+        d = {"slide_type": "data", "mermaid": "graph LR\n  A --> B"}
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+
+    def test_abstained_alone_triggers_diagram_analysis(self):
+        d = {"slide_type": "pending", "abstained": True}
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+
+    def test_description_alone_triggers_diagram(self):
+        """description is included in the approved 9-marker set."""
+        d = {"slide_type": "data", "description": "A chart showing revenue"}
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+
+    def test_empty_dict_returns_default_slide_analysis(self):
+        result = SlideAnalysis.from_dict({})
+        assert type(result) is SlideAnalysis
+
+    def test_non_dict_returns_default_slide_analysis(self):
+        result = SlideAnalysis.from_dict("invalid")
+        assert type(result) is SlideAnalysis
+
+    def test_backward_compat_old_cache(self):
+        """Old cache entries without diagram markers → SlideAnalysis."""
+        old = {
+            "slide_type": "data", "framework": "none",
+            "visual_description": "A chart", "key_data": "$10M",
+            "main_insight": "Growing", "evidence": [],
+        }
+        result = SlideAnalysis.from_dict(old)
+        assert type(result) is SlideAnalysis
+        assert result.slide_type == "data"
+
+
+# ---------------------------------------------------------------------------
+# IoU helpers
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeBbox:
+    def test_already_normalized(self):
+        assert _normalize_bbox((0, 0, 10, 10)) == (0, 0, 10, 10)
+
+    def test_swapped_coords(self):
+        assert _normalize_bbox((10, 10, 0, 0)) == (0, 0, 10, 10)
+
+
+class TestComputeIou:
+    def test_identity(self):
+        box = (0.0, 0.0, 100.0, 100.0)
+        assert _compute_iou(box, box) == 1.0
+
+    def test_no_overlap(self):
+        a = (0.0, 0.0, 10.0, 10.0)
+        b = (20.0, 20.0, 30.0, 30.0)
+        assert _compute_iou(a, b) == 0.0
+
+    def test_partial_overlap(self):
+        a = (0.0, 0.0, 10.0, 10.0)
+        b = (5.0, 5.0, 15.0, 15.0)
+        # Intersection: 5x5 = 25, Union: 100+100-25 = 175
+        iou = _compute_iou(a, b)
+        assert abs(iou - 25 / 175) < 0.001
+
+    def test_zero_area(self):
+        a = (0.0, 0.0, 0.0, 0.0)
+        b = (0.0, 0.0, 10.0, 10.0)
+        assert _compute_iou(a, b) == 0.0
+
+    def test_shifted_box(self):
+        a = (0.0, 0.0, 100.0, 100.0)
+        b = (10.0, 10.0, 110.0, 110.0)
+        # Intersection: 90x90 = 8100, Union: 10000+10000-8100 = 11900
+        iou = _compute_iou(a, b)
+        assert abs(iou - 8100 / 11900) < 0.001
+
+
+class TestMatchNodesByIou:
+    def test_exact_match(self):
+        new = [DiagramNode(id="n1", label="A", bbox=(0, 0, 10, 10))]
+        cached = [DiagramNode(id="cached_1", label="X", bbox=(0, 0, 10, 10))]
+        mapping = match_nodes_by_iou(new, cached)
+        assert mapping == {"n1": "cached_1"}
+
+    def test_shifted_below_threshold(self):
+        new = [DiagramNode(id="n1", label="A", bbox=(0, 0, 10, 10))]
+        cached = [DiagramNode(id="c1", label="X", bbox=(50, 50, 60, 60))]
+        mapping = match_nodes_by_iou(new, cached, threshold=0.80)
+        assert mapping == {}
+
+    def test_no_bbox_skipped(self):
+        new = [DiagramNode(id="n1", label="A")]  # no bbox
+        cached = [DiagramNode(id="c1", label="X", bbox=(0, 0, 10, 10))]
+        mapping = match_nodes_by_iou(new, cached)
+        assert mapping == {}
+
+    def test_greedy_one_to_one(self):
+        """Two new nodes, two cached nodes — greedy assigns best matches."""
+        new = [
+            DiagramNode(id="n1", label="A", bbox=(0, 0, 100, 100)),
+            DiagramNode(id="n2", label="B", bbox=(200, 200, 300, 300)),
+        ]
+        cached = [
+            DiagramNode(id="c1", label="X", bbox=(0, 0, 100, 100)),
+            DiagramNode(id="c2", label="Y", bbox=(200, 200, 300, 300)),
+        ]
+        mapping = match_nodes_by_iou(new, cached)
+        assert mapping == {"n1": "c1", "n2": "c2"}
+
+    def test_threshold_boundary(self):
+        """IoU exactly at threshold should match."""
+        # Build boxes such that IoU ≈ 0.80
+        # Box A: 100x100 = 10000, Box B shifted by ~5.5 pixels
+        new = [DiagramNode(id="n1", label="A", bbox=(0, 0, 100, 100))]
+        # Shift by ~5.13 in each direction: IoU = (94.87^2) / (2*10000 - 94.87^2)
+        # 94.87^2 = 9000.27, union = 20000 - 9000.27 = 10999.73, IoU ≈ 0.818
+        cached = [DiagramNode(id="c1", label="X", bbox=(5.13, 5.13, 105.13, 105.13))]
+        mapping = match_nodes_by_iou(new, cached, threshold=0.80)
+        assert "n1" in mapping
+
+
+class TestRewriteEdgeIds:
+    def test_basic_rewrite(self):
+        edges = [
+            DiagramEdge(id="old_e", source_id="n1", target_id="n2", label="connects"),
+        ]
+        mapping = {"n1": "inherited_1", "n2": "inherited_2"}
+        result = _rewrite_edge_ids(edges, mapping)
+        assert len(result) == 1
+        assert result[0].id == "inherited_1_inherited_2"
+        assert result[0].source_id == "inherited_1"
+        assert result[0].target_id == "inherited_2"
+        assert result[0].label == "connects"
+
+    def test_partial_mapping(self):
+        edges = [DiagramEdge(id="e1", source_id="n1", target_id="n2")]
+        mapping = {"n1": "new_1"}  # only n1 mapped
+        result = _rewrite_edge_ids(edges, mapping)
+        assert result[0].source_id == "new_1"
+        assert result[0].target_id == "n2"  # unmapped, stays same
+
+    def test_empty_mapping(self):
+        edges = [DiagramEdge(id="e1", source_id="a", target_id="b")]
+        result = _rewrite_edge_ids(edges, {})
+        assert result[0].id == "a_b"
+        assert result[0].source_id == "a"
+
+    def test_parallel_edges_get_unique_ids(self):
+        """S1: Multiple edges between same node pair must have distinct IDs."""
+        edges = [
+            DiagramEdge(id="e1", source_id="a", target_id="b", label="HTTP"),
+            DiagramEdge(id="e2", source_id="a", target_id="b", label="gRPC"),
+        ]
+        result = _rewrite_edge_ids(edges, {})
+        assert result[0].id != result[1].id
+        # Sorted by label: "HTTP" < "gRPC" (uppercase H < lowercase g in ASCII)
+        assert result[0].label == "HTTP"
+        assert result[0].id == "a_b"
+        assert result[1].label == "gRPC"
+        assert result[1].id == "a_b_1"
+
+    def test_parallel_edges_are_order_independent(self):
+        """B1: Reversing input order must produce identical IDs per semantic edge."""
+        edges_forward = [
+            DiagramEdge(id="e1", source_id="a", target_id="b", label="HTTP", direction="forward"),
+            DiagramEdge(id="e2", source_id="a", target_id="b", label="gRPC", direction="bidirectional"),
+        ]
+        edges_reversed = list(reversed(edges_forward))
+
+        result_fwd = _rewrite_edge_ids(edges_forward, {})
+        result_rev = _rewrite_edge_ids(edges_reversed, {})
+
+        # Same IDs assigned to same labels regardless of input order
+        fwd_by_label = {e.label: e.id for e in result_fwd}
+        rev_by_label = {e.label: e.id for e in result_rev}
+        assert fwd_by_label == rev_by_label
+
+    def test_same_label_different_confidence_is_order_independent(self):
+        """Same label/direction but different confidence → stable across reorder."""
+        edges_a = [
+            DiagramEdge(id="e1", source_id="a", target_id="b", label="calls", direction="forward", confidence=0.8),
+            DiagramEdge(id="e2", source_id="a", target_id="b", label="calls", direction="forward", confidence=0.95),
+        ]
+        edges_b = list(reversed(edges_a))
+
+        result_a = _rewrite_edge_ids(edges_a, {})
+        result_b = _rewrite_edge_ids(edges_b, {})
+
+        a_by_conf = {e.confidence: e.id for e in result_a}
+        b_by_conf = {e.confidence: e.id for e in result_b}
+        assert a_by_conf == b_by_conf
+
+    def test_same_label_different_bbox_is_order_independent(self):
+        """Same label/direction but different evidence_bbox → stable across reorder."""
+        edges_a = [
+            DiagramEdge(id="e1", source_id="x", target_id="y", label="flow",
+                        evidence_bbox=(10, 20, 30, 40)),
+            DiagramEdge(id="e2", source_id="x", target_id="y", label="flow",
+                        evidence_bbox=(50, 60, 70, 80)),
+        ]
+        edges_b = list(reversed(edges_a))
+
+        result_a = _rewrite_edge_ids(edges_a, {})
+        result_b = _rewrite_edge_ids(edges_b, {})
+
+        a_by_bbox = {e.evidence_bbox: e.id for e in result_a}
+        b_by_bbox = {e.evidence_bbox: e.id for e in result_b}
+        assert a_by_bbox == b_by_bbox
+
+    def test_truly_identical_edges_documented_invariant(self):
+        """Truly identical edges (same across all fields) → IDs assigned but
+        per-instance stability is not meaningful because they are indistinguishable.
+        We only require distinct IDs, not a specific assignment."""
+        edges = [
+            DiagramEdge(id="e1", source_id="a", target_id="b", label="same"),
+            DiagramEdge(id="e2", source_id="a", target_id="b", label="same"),
+        ]
+        result = _rewrite_edge_ids(edges, {})
+        assert result[0].id != result[1].id
+        assert {result[0].id, result[1].id} == {"a_b", "a_b_1"}
+
+
+class TestPartialDiagramPayloadValidation:
+    """B2: Partial diagram cache payloads must not surface as clean analyses."""
+
+    def test_graph_only_payload_coerced_to_pending(self):
+        """Cache entry with only 'graph' → pending base fields, review_required."""
+        d = {"graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []}}
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        assert result.slide_type == "pending"
+        assert result.framework == "pending"
+        assert result.key_data == "[pending]"
+        assert result.main_insight == "[pending]"
+        assert result.review_required is True
+        # Diagram-specific fields preserved
+        assert result.graph is not None
+
+    def test_description_only_payload_coerced_to_pending(self):
+        """Cache entry with only 'description' → pending base fields, review_required."""
+        d = {"description": "A chart showing revenue"}
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        assert result.slide_type == "pending"
+        assert result.review_required is True
+
+    def test_graph_only_payload_is_non_clean_in_review_state(self):
+        """Partial payload through assess_review_state → non-clean status."""
+        from folio.pipeline.analysis import assess_review_state
+        from folio.pipeline.text import SlideText
+
+        d = {"graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []}}
+        da = SlideAnalysis.from_dict(d)
+        analyses = {1: da}
+        texts = {1: SlideText(slide_num=1, full_text="Some text", elements=[])}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status != "clean"
+
+    def test_description_only_payload_is_non_clean_in_review_state(self):
+        """Description-only partial payload → non-clean review status."""
+        from folio.pipeline.analysis import assess_review_state
+        from folio.pipeline.text import SlideText
+
+        d = {"description": "A chart"}
+        da = SlideAnalysis.from_dict(d)
+        analyses = {1: da}
+        texts = {1: SlideText(slide_num=1, full_text="Some text", elements=[])}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.review_status != "clean"
+
+    def test_full_payload_is_not_coerced_to_pending(self):
+        """Cache entry with meaningful base fields stays clean — not coerced."""
+        d = {
+            "slide_type": "diagram",
+            "visual_description": "Architecture diagram showing microservices",
+            "diagram_type": "architecture",
+            "graph": {"nodes": [{"id": "n1", "label": "X"}], "edges": []},
+        }
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        assert result.slide_type == "diagram"
+        assert result.review_required is False
+
+    def test_abstained_partial_payload_not_coerced(self):
+        """Abstained entries have empty base fields intentionally — no coercion."""
+        d = {
+            "slide_type": "pending",
+            "diagram_type": "unsupported",
+            "abstained": True,
+            "review_required": True,
+        }
+        result = SlideAnalysis.from_dict(d)
+        assert isinstance(result, DiagramAnalysis)
+        assert result.review_required is True
+        assert result.abstained is True
+        # visual_description stays as-is, not overwritten
+        assert "Partial diagram" not in (result.visual_description or "")
+
+
+# ---------------------------------------------------------------------------
+# Stable signature
+# ---------------------------------------------------------------------------
+
+
+class TestStableSignature:
+    def test_deterministic(self):
+        s1 = _stable_signature("a", "b", "c")
+        s2 = _stable_signature("a", "b", "c")
+        assert s1 == s2
+
+    def test_different_inputs(self):
+        s1 = _stable_signature("a", "b", "c")
+        s2 = _stable_signature("x", "y", "z")
+        assert s1 != s2
+
+    def test_length(self):
+        s = _stable_signature("test")
+        assert len(s) == 16
+
+    def test_delimiter_not_ambiguous(self):
+        """M5: Parts containing the old '|' delimiter must not collide."""
+        s1 = _stable_signature("a|b", "c")
+        s2 = _stable_signature("a", "b|c")
+        assert s1 != s2
+
+
+# ---------------------------------------------------------------------------
+# PR 21 review fixes
+# ---------------------------------------------------------------------------
+
+
+class TestConfidenceCrashFix:
+    """B1: Malformed confidence must not crash deserialization."""
+
+    def test_node_confidence_none(self):
+        d = {"id": "n1", "label": "N", "confidence": None}
+        n = DiagramNode.from_dict(d)
+        assert n.confidence == 1.0
+
+    def test_node_confidence_string(self):
+        d = {"id": "n1", "label": "N", "confidence": "high"}
+        n = DiagramNode.from_dict(d)
+        assert n.confidence == 1.0
+
+    def test_edge_confidence_none(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b", "confidence": None}
+        e = DiagramEdge.from_dict(d)
+        assert e.confidence == 1.0
+
+    def test_edge_confidence_string(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b", "confidence": "medium"}
+        e = DiagramEdge.from_dict(d)
+        assert e.confidence == 1.0
+
+
+class TestNanBboxGuard:
+    """S4: NaN/Inf bbox values should be rejected."""
+
+    def test_nan_bbox_rejected(self):
+        d = {"id": "n1", "label": "N", "bbox": [0, 0, float("nan"), 10]}
+        n = DiagramNode.from_dict(d)
+        assert n.bbox is None
+
+    def test_inf_bbox_rejected(self):
+        d = {"id": "n1", "label": "N", "bbox": [0, 0, float("inf"), 10]}
+        n = DiagramNode.from_dict(d)
+        assert n.bbox is None
+
+    def test_valid_bbox_accepted(self):
+        d = {"id": "n1", "label": "N", "bbox": [0, 0, 100, 100]}
+        n = DiagramNode.from_dict(d)
+        assert n.bbox == (0.0, 0.0, 100.0, 100.0)
+
+
+class TestEdgeEvidenceBboxNanGuard:
+    """S-NEW-1: NaN/Inf evidence_bbox values should be rejected."""
+
+    def test_nan_evidence_bbox_rejected(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b",
+             "evidence_bbox": [0, 0, float("nan"), 10]}
+        e = DiagramEdge.from_dict(d)
+        assert e.evidence_bbox is None
+
+    def test_inf_evidence_bbox_rejected(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b",
+             "evidence_bbox": [0, 0, float("inf"), 10]}
+        e = DiagramEdge.from_dict(d)
+        assert e.evidence_bbox is None
+
+    def test_valid_evidence_bbox_accepted(self):
+        d = {"id": "e1", "source_id": "a", "target_id": "b",
+             "evidence_bbox": [5, 5, 50, 50]}
+        e = DiagramEdge.from_dict(d)
+        assert e.evidence_bbox == (5.0, 5.0, 50.0, 50.0)
