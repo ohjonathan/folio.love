@@ -210,31 +210,17 @@ def _extract_per_page_dpi(
         else:
             shutil.rmtree(old_dir)
 
-    # Get total page count via pdfinfo (no rendering needed)
-    from pdf2image.pdf2image import pdfinfo_from_path
-    try:
-        info = pdfinfo_from_path(str(pdf_path))
-        total_pages = info.get("Pages", 0)
-    except Exception:
-        # Fallback: render one page at low DPI to count (not full deck)
+    # Derive page count from page_profiles when available (inspect_pages guarantees
+    # one profile per page). Only fall back to pdfinfo when profiles are empty.
+    if page_profiles:
+        total_pages = max(page_profiles)
+    else:
+        from pdf2image.pdf2image import pdfinfo_from_path
         try:
-            single = convert_from_path(pdf_path, dpi=72, fmt=fmt, last_page=1)
-            # Use pdfinfo-from-path's error; try alternative count method
-            import subprocess
-            result = subprocess.run(
-                ["pdfinfo", str(pdf_path)],
-                capture_output=True, text=True, timeout=10,
-            )
-            for line in result.stdout.splitlines():
-                if line.startswith("Pages:"):
-                    total_pages = int(line.split(":")[1].strip())
-                    break
-            else:
-                # Last resort: render all at minimum DPI (unavoidable)
-                all_images = convert_from_path(pdf_path, dpi=72, fmt=fmt)
-                total_pages = len(all_images)
-                del all_images  # Free immediately
+            info = pdfinfo_from_path(str(pdf_path))
+            total_pages = info.get("Pages", 0)
         except Exception:
+            # Last resort: render all at minimum DPI
             all_images = convert_from_path(pdf_path, dpi=72, fmt=fmt)
             total_pages = len(all_images)
             del all_images  # Free immediately

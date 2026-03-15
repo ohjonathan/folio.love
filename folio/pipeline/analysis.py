@@ -649,6 +649,9 @@ def analyze_slides(
             stage_meta.fallback_provider = used_provider
             stage_meta.fallback_model = used_model
 
+        # Track per-slide provider for mixed-provider provenance
+        stage_meta.per_slide_providers[i] = (used_provider, used_model)
+
         # Update cache (B1: store _text_hash + provenance per entry)
         if cache_dir:
             entry = analysis.to_dict()
@@ -1209,6 +1212,9 @@ def analyze_slides_deep(
                 output_tokens=stage_meta.usage_total.output_tokens + slide_usage.output_tokens,
                 total_tokens=stage_meta.usage_total.total_tokens + slide_usage.total_tokens,
             )
+
+        # Track per-slide provider for mixed-provider provenance
+        stage_meta.per_slide_providers[slide_num] = (used_provider, used_model)
 
         # Store in cache (B2: include _text_hash + _pass1_hash)
         # Finding 6: store actually-used provider/model, not primary

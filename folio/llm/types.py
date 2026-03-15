@@ -206,3 +206,5 @@ class StageLLMMetadata:
     # PR 2: token tracking for future _extraction_metadata
     usage_total: TokenUsage = field(default_factory=TokenUsage)
     per_slide_usage: dict[int, TokenUsage] = field(default_factory=dict)
+    # Per-slide provider tracking for mixed-provider provenance
+    per_slide_providers: dict[int, tuple[str, str]] = field(default_factory=dict)

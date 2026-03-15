@@ -363,6 +363,30 @@ class TestOpenAIAdapter:
         data = json.loads(output.raw_text)
         assert data["slide_type"] == "data"
 
+    def test_analyze_multiple_images(self):
+        """Multi-image support: OpenAI embeds all images in request."""
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            imgs = []
+            for i in range(3):
+                img_path = Path(tmpdir) / f"test_{i}.png"
+                img_path.write_bytes(_make_unique_png(200 + i))
+                imgs.append(ImagePart(image_data=img_path.read_bytes(), role="global", media_type="image/png"))
+
+            inp = ProviderInput(prompt="Analyze", images=tuple(imgs), max_tokens=2048)
+            output = provider.analyze(mock_client, "gpt-4o", inp)
+
+        assert isinstance(output, ProviderOutput)
+        call_args = mock_client.chat.completions.create.call_args
+        content_parts = call_args.kwargs.get("messages", [{}])[0].get("content", [])
+        image_parts = [p for p in content_parts if p.get("type") == "image_url"]
+        assert len(image_parts) == 3, f"Expected 3 images, got {len(image_parts)}"
+
     def test_analyze_detects_truncation(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
@@ -456,6 +480,35 @@ class TestGoogleAdapter:
                 output = provider.analyze(mock_client, "gemini-2.5-pro", inp)
 
         assert output.truncated is True
+
+    def test_analyze_multiple_images(self):
+        """Multi-image support: Google embeds all images via Part.from_bytes."""
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = make_google_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            imgs = []
+            for i in range(3):
+                img_path = Path(tmpdir) / f"test_{i}.png"
+                img_path.write_bytes(_make_unique_png((50 + i) % 256))
+                imgs.append(ImagePart(image_data=img_path.read_bytes(), role="global", media_type="image/png"))
+
+            inp = ProviderInput(prompt="Analyze", images=tuple(imgs), max_tokens=2048)
+            with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}) as mocked:
+                import google.genai.types as mock_types
+                mock_types.Part.from_bytes.return_value = MagicMock()
+                mock_types.GenerateContentConfig.return_value = MagicMock()
+                output = provider.analyze(mock_client, "gemini-2.5-pro", inp)
+
+                assert isinstance(output, ProviderOutput)
+                # Verify generate_content was called with contents including image parts
+                call_args = mock_client.models.generate_content.call_args
+                contents = call_args.kwargs.get("contents", [])
+                # Contents should have 3 image parts + 1 text part = 4 total
+                assert len(contents) >= 4, f"Expected at least 4 content parts (3 images + prompt), got {len(contents)}"
 
     def test_classify_error_generic(self):
         provider = GoogleAnalysisProvider()
