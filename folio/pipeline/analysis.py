@@ -486,6 +486,9 @@ def _normalize_pass2_json(data: dict) -> tuple[list[dict], str | None, str | Non
     return evidence, reassessed_type, reassessed_framework
 
 
+_CACHE_FLUSH_INTERVAL = 5  # Flush cache every N misses (Finding 4)
+
+
 def analyze_slides(
     image_paths: list[Path],
     model: str = "claude-sonnet-4-20250514",
@@ -495,7 +498,7 @@ def analyze_slides(
     provider_name: str = "anthropic",
     api_key_env: str = "",
     fallback_profiles: Optional[list[tuple[str, str, str]]] = None,
-    provider_settings: Optional[ProviderRuntimeSettings] = None,
+    all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
 ) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
     """Analyze slides via LLM provider with caching and fallback.
 
@@ -509,8 +512,8 @@ def analyze_slides(
         api_key_env: Override env var for API key (from LLMProfile).
         fallback_profiles: List of (provider_name, model, api_key_env) tuples
             for transient fallback per spec §6.2.
-        provider_settings: Runtime settings for rate limiting, retry, etc.
-            If None, uses sensible defaults.
+        all_provider_settings: Dict mapping provider name to ProviderRuntimeSettings.
+            If None, uses sensible defaults for each provider.
 
     Returns:
         Tuple of (results dict, CacheStats, StageLLMMetadata).
@@ -554,11 +557,12 @@ def analyze_slides(
         except Exception as e:
             logger.warning("Fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
 
-    # Stage-scoped rate limiter from provider settings
-    settings = provider_settings or ProviderRuntimeSettings()
+    # Per-provider settings dict (Finding 1: each provider gets its own settings)
+    _all_settings = all_provider_settings or {}
+    primary_settings = _all_settings.get(provider_name, ProviderRuntimeSettings())
     limiter = RateLimiter(
-        rpm_limit=settings.rate_limit_rpm,
-        tpm_limit=settings.rate_limit_tpm,
+        rpm_limit=primary_settings.rate_limit_rpm,
+        tpm_limit=primary_settings.rate_limit_tpm,
     )
 
     # Load cache (skip read when force_miss)
@@ -594,17 +598,19 @@ def analyze_slides(
             provider, client, image_path, model, provider_name,
             slide_text=slide_text,
             fallback_chain=fallback_chain,
-            settings=settings,
+            settings=primary_settings,
             limiter=limiter,
+            all_provider_settings=_all_settings,
         )
         results[i] = analysis
 
-        # Track token usage per-slide and total
+        # Track token usage per-slide and total (Finding 3: include total_tokens)
         if slide_usage.total_tokens > 0:
             stage_meta.per_slide_usage[i] = slide_usage
             stage_meta.usage_total = TokenUsage(
                 input_tokens=stage_meta.usage_total.input_tokens + slide_usage.input_tokens,
                 output_tokens=stage_meta.usage_total.output_tokens + slide_usage.output_tokens,
+                total_tokens=stage_meta.usage_total.total_tokens + slide_usage.total_tokens,
             )
 
         # Track fallback activation
@@ -620,6 +626,10 @@ def analyze_slides(
             entry["_provider"] = used_provider
             entry["_model"] = used_model
             cache[image_hash] = entry
+
+            # Incremental flush every N misses (Finding 4: survive mid-pass crash)
+            if cache_dir and stats.misses % _CACHE_FLUSH_INTERVAL == 0:
+                _save_cache(cache_dir, cache, model=model, provider=provider_name)
 
     # Final cache write (always writes, even with force_miss)
     if cache_dir:
@@ -642,6 +652,7 @@ def _analyze_with_fallback(
     fallback_chain: Optional[list] = None,
     settings: Optional[ProviderRuntimeSettings] = None,
     limiter: Optional[RateLimiter] = None,
+    all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
 ) -> tuple[SlideAnalysis, str, str, TokenUsage]:
     """Try primary provider then fallback chain on transient failures only.
 
@@ -650,11 +661,14 @@ def _analyze_with_fallback(
     Fallback is ONLY triggered for transient failures, not permanent errors,
     truncation, or malformed output.
 
+    Each fallback provider uses its own settings and rate limiter (Finding 1).
+
     Returns:
         Tuple of (analysis, used_provider_name, used_model, usage).
     """
     _settings = settings or ProviderRuntimeSettings()
     _limiter = limiter or RateLimiter()
+    _all_settings = all_provider_settings or {}
 
     # Try primary
     analysis, failure_kind, usage = _analyze_single_slide(
@@ -672,9 +686,15 @@ def _analyze_with_fallback(
     # Primary exhausted transiently — try fallback chain
     for fb_provider, fb_client, fb_model, fb_name in fallback_chain:
         logger.info("Falling back to provider '%s' for slide analysis", fb_name)
+        # Finding 1: per-provider settings and rate limiter
+        fb_settings = _all_settings.get(fb_name, ProviderRuntimeSettings())
+        fb_limiter = RateLimiter(
+            rpm_limit=fb_settings.rate_limit_rpm,
+            tpm_limit=fb_settings.rate_limit_tpm,
+        )
         fb_analysis, fb_failure, fb_usage = _analyze_single_slide(
             fb_provider, fb_client, image_path, fb_model,
-            settings=_settings, limiter=_limiter,
+            settings=fb_settings, limiter=fb_limiter,
             slide_text=slide_text,
         )
         if fb_failure == "success":
@@ -778,6 +798,7 @@ def _analyze_single_slide(
         images=(image_part,),
         max_tokens=2048,
         temperature=0.0,
+        require_store_false=settings.require_store_false,  # Finding 2
     )
 
     try:
@@ -983,7 +1004,7 @@ def analyze_slides_deep(
     provider_name: str = "anthropic",
     api_key_env: str = "",
     fallback_profiles: Optional[list[tuple[str, str, str]]] = None,
-    provider_settings: Optional[ProviderRuntimeSettings] = None,
+    all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
 ) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
     """Run selective second pass on high-density slides.
 
@@ -999,8 +1020,8 @@ def analyze_slides_deep(
         force_miss: Skip cache reads but still write fresh results (G3).
         fallback_profiles: List of (provider_name, model, api_key_env) for
             transient fallback per spec §6.2.
-        provider_settings: Runtime settings for rate limiting, retry, etc.
-            If None, uses sensible defaults.
+        all_provider_settings: Dict mapping provider name to ProviderRuntimeSettings.
+            If None, uses sensible defaults for each provider.
 
     Returns:
         Tuple of (updated results dict, CacheStats, StageLLMMetadata).
@@ -1050,11 +1071,12 @@ def analyze_slides_deep(
         except Exception as e:
             logger.warning("Pass 2 fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
 
-    # Stage-scoped rate limiter from provider settings
-    settings = provider_settings or ProviderRuntimeSettings()
+    # Per-provider settings dict (Finding 1)
+    _all_settings = all_provider_settings or {}
+    primary_settings = _all_settings.get(provider_name, ProviderRuntimeSettings())
     limiter = RateLimiter(
-        rpm_limit=settings.rate_limit_rpm,
-        tpm_limit=settings.rate_limit_tpm,
+        rpm_limit=primary_settings.rate_limit_rpm,
+        tpm_limit=primary_settings.rate_limit_tpm,
     )
 
     stats = CacheStats(pass_name="pass2")
@@ -1121,23 +1143,27 @@ def analyze_slides_deep(
             main_insight=_sanitize_for_prompt(analysis.main_insight, 200),
         )
 
-        new_evidence, reassessed_type, reassessed_framework, slide_usage = _run_depth_with_fallback(
+        new_evidence, reassessed_type, reassessed_framework, used_provider, used_model, slide_usage = _run_depth_with_fallback(
             provider, client, image_path, model, prompt,
+            primary_name=provider_name,
             slide_text=slide_texts.get(slide_num),
             fallback_chain=fallback_chain,
-            settings=settings,
+            settings=primary_settings,
             limiter=limiter,
+            all_provider_settings=_all_settings,
         )
 
-        # Track token usage per-slide and total
+        # Track token usage per-slide and total (Finding 3: include total_tokens)
         if slide_usage.total_tokens > 0:
             stage_meta.per_slide_usage[slide_num] = slide_usage
             stage_meta.usage_total = TokenUsage(
                 input_tokens=stage_meta.usage_total.input_tokens + slide_usage.input_tokens,
                 output_tokens=stage_meta.usage_total.output_tokens + slide_usage.output_tokens,
+                total_tokens=stage_meta.usage_total.total_tokens + slide_usage.total_tokens,
             )
 
         # Store in cache (B2: include _text_hash + _pass1_hash)
+        # Finding 6: store actually-used provider/model, not primary
         if cache_dir:
             deep_cache[deep_key] = {
                 "evidence": new_evidence,
@@ -1145,9 +1171,13 @@ def analyze_slides_deep(
                 "pass2_framework": reassessed_framework,
                 "_text_hash": _text_hash(slide_texts.get(slide_num)),
                 "_pass1_hash": _pass1_context_hash(results[slide_num]),
-                "_provider": provider_name,
-                "_model": model,
+                "_provider": used_provider,
+                "_model": used_model,
             }
+
+            # Incremental flush every N misses (Finding 4)
+            if cache_dir and stats.misses % _CACHE_FLUSH_INTERVAL == 0:
+                _save_cache_deep(cache_dir, deep_cache, model=model, provider=provider_name)
 
         # Merge evidence
         if new_evidence:
@@ -1215,6 +1245,7 @@ def _run_depth_pass(
         images=(image_part,),
         max_tokens=1500,
         temperature=0.0,
+        require_store_false=settings.require_store_false,  # Finding 2
     )
 
     try:
@@ -1253,14 +1284,25 @@ def _run_depth_pass(
 def _run_depth_with_fallback(
     primary_provider, primary_client, image_path: Path, primary_model: str,
     prompt: str,
+    primary_name: str = "",
     slide_text: Optional["SlideText"] = None,
     fallback_chain: Optional[list] = None,
     settings: Optional[ProviderRuntimeSettings] = None,
     limiter: Optional[RateLimiter] = None,
-) -> tuple[list[dict], Optional[str], Optional[str], TokenUsage]:
-    """Run depth pass with transient-only fallback (spec §6.2)."""
+    all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
+) -> tuple[list[dict], Optional[str], Optional[str], str, str, TokenUsage]:
+    """Run depth pass with transient-only fallback (spec §6.2).
+
+    Finding 1: Each fallback uses its own settings and rate limiter.
+    Finding 6: Returns used_provider and used_model for accurate provenance.
+
+    Returns:
+        Tuple of (evidence, reassessed_type, reassessed_framework,
+                  used_provider_name, used_model, usage).
+    """
     _settings = settings or ProviderRuntimeSettings()
     _limiter = limiter or RateLimiter()
+    _all_settings = all_provider_settings or {}
 
     evidence, rt, rf, failure_kind, usage = _run_depth_pass(
         primary_provider, primary_client, image_path, primary_model, prompt,
@@ -1268,23 +1310,31 @@ def _run_depth_with_fallback(
         slide_text=slide_text,
     )
     if failure_kind == "success":
-        return evidence, rt, rf, usage
+        return evidence, rt, rf, primary_name, primary_model, usage
 
     # Only fallback on transient
     if failure_kind != "transient" or not fallback_chain:
-        return evidence, rt, rf, usage
+        return evidence, rt, rf, primary_name, primary_model, usage
 
     for fb_provider, fb_client, fb_model, fb_name in fallback_chain:
         logger.info("Pass 2: falling back to provider '%s'", fb_name)
+        # Finding 1: per-provider settings and rate limiter
+        fb_settings = _all_settings.get(fb_name, ProviderRuntimeSettings())
+        fb_limiter = RateLimiter(
+            rpm_limit=fb_settings.rate_limit_rpm,
+            tpm_limit=fb_settings.rate_limit_tpm,
+        )
         evidence, rt, rf, fb_failure, fb_usage = _run_depth_pass(
             fb_provider, fb_client, image_path, fb_model, prompt,
-            settings=_settings, limiter=_limiter,
+            settings=fb_settings, limiter=fb_limiter,
             slide_text=slide_text,
         )
         if fb_failure == "success":
-            return evidence, rt, rf, fb_usage
+            return evidence, rt, rf, fb_name, fb_model, fb_usage
 
-    return [], None, None, TokenUsage()
+    last_name = fallback_chain[-1][3] if fallback_chain else primary_name
+    last_model = fallback_chain[-1][2] if fallback_chain else primary_model
+    return [], None, None, last_name, last_model, TokenUsage()
 
 
 def _load_cache_deep(cache_dir: Path, model: str | None = None, provider: str | None = None) -> dict:

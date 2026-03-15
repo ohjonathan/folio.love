@@ -561,3 +561,144 @@ class TestRuntimeFallbackChain:
         assert used_provider == "anthropic"  # stayed on primary
         assert "rejected the request" in analysis.visual_description
         fallback.analyze.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Finding 5: Test coverage for new risk surfaces
+# ---------------------------------------------------------------------------
+
+
+class TestPerProviderFallbackSettings:
+    """Finding 1+5: Verify each fallback gets its own settings and rate limiter."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key", "OPENAI_API_KEY": "test-key"})
+    def test_fallback_uses_own_provider_settings(self, tmp_path):
+        """Fallback OpenAI provider must use OpenAI endpoint allowlist, not Anthropic's."""
+        from folio.pipeline.analysis import _analyze_with_fallback
+        from folio.llm.types import ProviderRuntimeSettings
+
+        # Primary fails transiently
+        primary = MagicMock()
+        primary.provider_name = "anthropic"
+        primary.endpoint_name = "messages"
+        primary.analyze.side_effect = RuntimeError("overloaded")
+        primary.classify_error.return_value = ErrorDisposition.transient()
+        primary_client = MagicMock()
+
+        # Fallback succeeds
+        fallback = MagicMock()
+        fallback.provider_name = "openai"
+        fallback.endpoint_name = "chat_completions"
+        fallback.analyze.return_value = ProviderOutput(
+            raw_text=make_pass1_json(), truncated=False,
+            provider_name="openai", model_name="gpt-4o",
+            usage=TokenUsage(input_tokens=100, output_tokens=50, total_tokens=150),
+        )
+        fallback_client = MagicMock()
+
+        # Provider-specific settings with different endpoint allowlists
+        all_settings = {
+            "anthropic": ProviderRuntimeSettings(
+                allowed_endpoints=("messages",),
+                rate_limit_rpm=50,
+            ),
+            "openai": ProviderRuntimeSettings(
+                allowed_endpoints=("chat_completions",),
+                rate_limit_rpm=60,
+            ),
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(40))
+
+            analysis, used_provider, used_model, usage = _analyze_with_fallback(
+                primary, primary_client, img, "claude-sonnet",
+                "anthropic",
+                fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],
+                settings=all_settings["anthropic"],
+                all_provider_settings=all_settings,
+            )
+
+        assert analysis.slide_type != "pending"
+        assert used_provider == "openai"
+        assert used_model == "gpt-4o"
+        # Verify fallback provider's analyze was actually called
+        fallback.analyze.assert_called_once()
+
+
+class TestRequireStoreFalsePropagation:
+    """Finding 2+5: Verify require_store_false reaches ProviderInput."""
+
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"})
+    def test_require_store_false_set_on_provider_input(self, tmp_path):
+        """When settings.require_store_false=True, ProviderInput must carry the flag."""
+        from folio.pipeline.analysis import _analyze_single_slide
+        from folio.llm.types import ProviderRuntimeSettings
+        from folio.llm.runtime import RateLimiter
+
+        provider = MagicMock()
+        provider.provider_name = "openai"
+        provider.endpoint_name = "chat_completions"
+        provider.analyze.return_value = ProviderOutput(
+            raw_text=make_pass1_json(), truncated=False,
+            provider_name="openai", model_name="gpt-4o",
+            usage=TokenUsage(input_tokens=100, output_tokens=50, total_tokens=150),
+        )
+        client = MagicMock()
+
+        settings = ProviderRuntimeSettings(
+            require_store_false=True,
+            allowed_endpoints=("chat_completions",),
+        )
+        limiter = RateLimiter(rpm_limit=60)
+
+        img = tmp_path / "test.png"
+        img.write_bytes(_make_unique_png(41))
+
+        # Patch execute_with_retry to capture the ProviderInput
+        captured_inputs = []
+        def capture_ewr(prov, cl, mod, inp, sett, lim):
+            captured_inputs.append(inp)
+            return prov.analyze(cl, mod, inp)
+
+        with patch("folio.pipeline.analysis.execute_with_retry", side_effect=capture_ewr):
+            _analyze_single_slide(
+                provider, client, img, "gpt-4o",
+                settings=settings, limiter=limiter,
+            )
+
+        assert len(captured_inputs) == 1
+        assert captured_inputs[0].require_store_false is True
+
+
+class TestTokenTotalAggregation:
+    """Finding 3+5: Verify total_tokens is accumulated correctly in StageLLMMetadata."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_usage_total_includes_total_tokens(self, tmp_path):
+        """stage_meta.usage_total.total_tokens must equal sum of per-slide totals."""
+        from folio.pipeline.analysis import analyze_slides
+        from folio.pipeline.text import SlideText
+
+        imgs = [tmp_path / f"slide-{i:03d}.png" for i in range(1, 4)]
+        for i, img in enumerate(imgs):
+            img.write_bytes(_make_unique_png(50 + i))
+
+        # Each call returns 150 total tokens
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = make_anthropic_response(
+            make_pass1_json()
+        )
+
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            _, stats, meta = analyze_slides(
+                imgs, model="test", cache_dir=tmp_path,
+            )
+
+        assert stats.misses == 3
+        # Each slide contributes 150 total tokens (100 input + 50 output)
+        assert meta.usage_total.total_tokens == 450
+        assert meta.usage_total.input_tokens == 300
+        assert meta.usage_total.output_tokens == 150
+
