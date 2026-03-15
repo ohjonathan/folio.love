@@ -339,6 +339,8 @@ class DiagramAnalysis(SlideAnalysis):
     graph: DiagramGraph | None = None
     mermaid: str | None = None
     description: str | None = None
+    component_table: str | None = None
+    connection_table: str | None = None
     uncertainties: list[str] = field(default_factory=list)
     extraction_confidence: float = 0.0  # D2: DEPRECATED alias, use diagram_confidence
     diagram_confidence: float = 0.0
@@ -369,6 +371,10 @@ class DiagramAnalysis(SlideAnalysis):
             d["mermaid"] = self.mermaid
         if self.description is not None:
             d["description"] = self.description
+        if self.component_table is not None:
+            d["component_table"] = self.component_table
+        if self.connection_table is not None:
+            d["connection_table"] = self.connection_table
         d["uncertainties"] = list(self.uncertainties)
         d["extraction_confidence"] = self.diagram_confidence  # backward compat
         d["diagram_confidence"] = self.diagram_confidence
@@ -415,6 +421,8 @@ class DiagramAnalysis(SlideAnalysis):
             graph=graph,
             mermaid=d.get("mermaid"),
             description=d.get("description"),
+            component_table=d.get("component_table"),
+            connection_table=d.get("connection_table"),
             uncertainties=uncertainties,
             extraction_confidence=extraction_conf,
             diagram_confidence=extraction_conf,

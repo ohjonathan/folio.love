@@ -1,0 +1,10 @@
+{
+  "name": "folio-mermaid-validator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Test-only Mermaid parser validation harness for folio",
+  "type": "module",
+  "dependencies": {
+    "mermaid": "^11.0.0"
+  }
+}
