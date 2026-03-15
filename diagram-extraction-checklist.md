@@ -3,7 +3,7 @@
 **Started:** 2026-03-14
 **Proposal:** Final — approved for implementation
 **Playbook:** LLM Development Playbook v3.3.1, Tier 1 Agent Team Review
-**Test suite:** 506 (baseline) → 621 (PR 1) → 693 (PR 2) → 777 (PR 3)
+**Test suite:** 506 (baseline) → 621 (PR 1) → 693 (PR 2) → 777 (PR 3) → 897 (PR 4)
 
 ---
 
@@ -44,19 +44,18 @@
   - [x] Merged — main at f9ac21f
   - **Outcome:** DiagramAnalysis schema, polymorphic deserialization, diagram/mixed Pass 2 exclusion, abstention handling, IoU-based node ID inheritance, stable edge-ID rewriting, cache version/invalidation markers merged on main
 
-- [ ] **PR 4:** Extraction Prompts + Pass A/B/C + Completeness Sweep + Confidence (5-7 days)
+- [x] **PR 4:** Extraction Prompts + Pass A/B/C + Completeness Sweep + Confidence (5-7 days) — **PR #22 MERGED**
   - [x] Pre-PR 4 readiness check completed (orchestrator → Codex CA)
   - [x] CA prompt generated (orchestrator)
-  - [ ] CA implementation prompt generated (Claude Code)
-  - [ ] Developer implements (may split by day 3: 4a = A+B, 4b = C+sweep+confidence)
-  - [ ] Review Team prompt generated (orchestrator)
-  - [ ] Review Team executes
-  - [ ] CA cross-check + fixes
-  - [ ] Tests pass, no regressions on 777-test suite
-  - [ ] Merged
-  - Branch: `codex/diagram-pr4-extraction`
-  - **Prerequisites:** Real corpus diagrams (external, not in repo)
-  - **Approved split boundary:** PR 4a (Pass A + Pass B + sanity check) / PR 4b (Pass C + Sweep + Confidence). Intermediate state: DiagramAnalysis with graph populated but no verification_evidence, confidence_reasoning, or review_questions.
+  - [x] CA implementation prompt generated (Claude Code)
+  - [x] Developer implements — PR #22 created
+  - [x] Review Team prompt generated (orchestrator)
+  - [x] Review Team executes
+  - [x] CA cross-check + fixes
+  - [x] Tests pass (894 passed, 3 skipped; 897 collected)
+  - [x] Merged — main at `97f03b9`
+  - **Outcome:** Diagram extraction runtime, separate diagram caches, Pass A/B/C plus dense sweep, confidence scoring, and dev iteration harness merged on main
+  - **Delivery shape:** Shipped as one PR; approved 4a/4b split boundary was not needed
 
 - [ ] **PR 5:** Deterministic Rendering + Mermaid + Entity Resolution (2-2.5 days)
   - [ ] CA prompt generated
@@ -89,8 +88,8 @@
 - [x] **PR 1:** Provide 5-10 real corpus PDFs for Set-of-Mark validation
   - Location: `/Users/Jonathan_Oh/tmp/diagram_som_corpus`
   - Validation set: 8 PDFs, 25 diagram/mixed pages
-- [ ] **PR 4:** Real corpus diagrams available for prompt iteration
-  - Status: external prerequisite, not a checked-in repo asset
+- [x] **PR 4:** Real corpus diagrams available for prompt iteration
+  - Status: used during PR 4 prompt tuning, but still an external prerequisite rather than a checked-in repo asset
   - Note: prior validation corpus path from PR 1 is recorded, but the PDFs are not assumed to be present on every machine
   - Minimum needed: 5-10 diagram pages covering simple, medium, and dense; at least 2 system architecture and 2 data flow
 - [ ] **Model Comparison:** 20-30 diagram pages from engagement materials
@@ -109,7 +108,9 @@
 | PR 3 | Data model / routing / cache foundation | **Merged** — DiagramAnalysis, factory deserialization, image-hash cache markers, abstention flow, Pass 2 exclusion | 2026-03-15 |
 | PR 3 | Cache contract for diagram work | **Image-hash keyed + invalidation markers** (`_schema_version`, `_pipeline_version`, `_image_strategy_version`); composite cache-key deferred | 2026-03-15 |
 | PR 4 | Pre-implementation readiness check | **Completed.** Six questions answered by Codex CA. Key findings shaped PR 4 prompt. | 2026-03-15 |
-| PR 4 | Split PR 4 by day 3? | ___ | ___ |
+| PR 4 | Diagram extraction runtime | **Merged** — separate diagram caches, Pass A/B/C, dense-only completeness sweep, confidence scoring, and `tools/diagram_iterate.py` shipped on main | 2026-03-15 |
+| PR 4 | Split PR 4 by day 3? | **No split needed** — shipped as a single PR (`#22`) | 2026-03-15 |
+| PR 4 | Supported diagram types for v1 extraction | **Strict allowlist** — `architecture` and `data-flow` only; all other types abstain | 2026-03-15 |
 
 ---
 
@@ -153,6 +154,16 @@ All findings from PR 1-3 reviews and the PR 4 readiness check that constrain dow
 10. **No eval harness exists.** Only `folio convert --no-cache` / `folio batch --no-cache`. PR 4 includes a lightweight iteration harness.
 11. **PR 4 split boundary validated.** 4a (A+B) / 4b (C+sweep+confidence) is the right cut. Intermediate object: DiagramAnalysis with graph populated, no verification data.
 
+### PR 4 Review Findings
+1. **V1 type gate is strict.** Only `architecture` and `data-flow` continue through extraction. All other detected types abstain.
+2. **Sanity short-circuit is mutation-accounting based.** Thresholds are no longer graph-size delta based; later PRs should preserve the accounting-driven thresholds and reasons.
+3. **Pass C highlights are claim-relevant and per-batch.** Dense-diagram verification should not revert to all-node overlays.
+4. **IoU inheritance depends on stale-cache lookup.** `diagram_cache.load_stale_entry()` intentionally bypasses marker validation so ID inheritance survives prompt/model drift.
+5. **Verification attempt and verification success are distinct.** `pass_c_attempted` and `pass_c_verdicts_parsed` are both needed; later PRs must not collapse them.
+6. **Abstention coverage expanded.** Unsupported types, empty graphs, and low-confidence outputs all abstain; supported diagrams may still carry `review_required` and `review_questions` without abstaining.
+7. **Sweep discoveries are weak signals.** Sweep-added edges are capped low-confidence (`<= 0.5`) and should stay review-flagged downstream.
+8. **Mixed-page behavior is now explicit.** Consulting-slide inherited fields remain for mixed pages and diagram evidence is appended rather than replacing them.
+
 ---
 
 ## Risks Realized
@@ -165,6 +176,7 @@ All findings from PR 1-3 reviews and the PR 4 readiness check that constrain dow
 | Rate-limit/runtime edge cases | PR 2 | Shared fallback throttling bugs, TPM limiter loop, partial-progress/cache-flush gaps | Fixed before merge in PR #20 follow-up commits |
 | Mixed-provider cache provenance under-reported | PR 2 | Warm-cache and mixed hit/miss runs drifted from actual per-slide provider usage | Fixed with narrow cache-hit provenance follow-up |
 | Stable edge identity and partial warm-cache payloads | PR 3 | Order-sensitive same-pair edge IDs and partial diagram payloads surfacing too cleanly | Fixed with deterministic parallel-edge disambiguation and pending/review-required coercion |
+| PR 4 first-integration runtime surfaced extraction-specific correctness gaps | PR 4 | Broad type gate, all-node highlight overlays, stale-cache ID inheritance loss, and weak abstention coverage produced inaccurate or overly clean outputs | Fixed before merge via strict type allowlist, per-batch claim-relevant highlights, `load_stale_entry()` for IoU inheritance, and broader abstention/review handling |
 
 ---
 
@@ -174,8 +186,7 @@ All findings from PR 1-3 reviews and the PR 4 readiness check that constrain dow
 |-------|----|--------|
 | `som_viable` is lexical-only, not spatial overlay validated | PR 1 | Known limitation; documented for any future SoM revisit |
 | `text_light` / `image_blank` classifications added during review; downstream must use merged runtime enums | PR 1 | Resolved; merged code is source of truth |
-| Tiles/highlights are infrastructure only; consulting-slide prompts still use one `global` image | PR 2 | Intentional scope boundary; PR 4 wires these into diagram passes |
-| `unsupported_diagram` routing exists but `inspect_pages()` doesn't emit it automatically | PR 3 | Known PR 4 integration item |
-| No separate diagram cache layer exists yet | PR 3 | Known PR 4 design constraint; needs dedicated diagram cache files |
-| Real-corpus diagram PDFs not in repo | PR 3 | Known PR 4 execution constraint; external prerequisite |
-| No eval harness beyond `folio convert --no-cache` | PR 3 | PR 4 adds lightweight iteration harness |
+| Real-corpus diagram PDFs are still not repo assets | PR 4 | Known execution constraint; prompt tuning depends on externally supplied corpus |
+| Diagram extraction v1 only supports `architecture` and `data-flow` | PR 4 | Intentional scope boundary; other diagram types abstain |
+| Supported diagrams can still be review-heavy | PR 4 | Expected runtime state; low-confidence nodes, sweep discoveries, and open questions must be handled by PR 5/PR 6 |
+| Diagram-specific output rendering is still not implemented | PR 4 | PR 5/PR 6 own Mermaid, prose, and standalone output assembly |

@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "name": "folio-mermaid-test-harness",
+  "description": "Test-only Mermaid parser validation",
+  "type": "module",
+  "dependencies": {
+    "mermaid": "^11.0.0",
+    "jsdom": "^25.0.0"
+  }
+}

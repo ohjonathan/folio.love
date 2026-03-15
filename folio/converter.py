@@ -299,6 +299,12 @@ class FolioConverter:
                 # Merge stats (diagram pass is additive, not replacing pass1)
                 pass1_stats = pass1_stats.merge(diagram_stats)
 
+                # PR 5: Deterministic diagram rendering
+                # Runs after PR 4 extraction and before assess_review_state()
+                # so render-time omit-and-flag behavior feeds review-state computation.
+                from .output import diagram_rendering
+                slide_analyses = diagram_rendering.render_diagram_analyses(slide_analyses)
+
             # Stage 4b: Optional depth pass
             effective_passes = passes if passes is not None else self.config.conversion.default_passes
             pass2_meta = None
