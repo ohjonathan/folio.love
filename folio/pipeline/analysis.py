@@ -42,6 +42,9 @@ _IMAGE_STRATEGY_VERSION = "global-only-v1"
 # Diagram marker fields — presence of ANY triggers DiagramAnalysis dispatch.
 # NOTE: "description" excluded (S2) — too generic, risks false-positive dispatch.
 # Any real diagram response will also contain diagram_type or graph.
+# This is an intentional deviation from the prompt spec which lists description
+# in the minimum marker set. Rationale: a hallucinated "description" key in a
+# standard SlideAnalysis response would silently promote to DiagramAnalysis.
 _DIAGRAM_MARKER_FIELDS = frozenset({
     "diagram_type", "graph", "mermaid",
     "uncertainties", "review_required", "abstained",
@@ -523,14 +526,17 @@ def _rewrite_edge_ids(
 ) -> list["DiagramEdge"]:
     """Rewrite edge source/target IDs and recompute edge IDs after node inheritance.
 
-    Uses original edge ID as disambiguator to prevent collisions when
-    multiple edges exist between the same node pair (S1 fix).
+    PROVISIONAL — stable edge-ID contract deferred to PR 4.
+
+    Uses index-based disambiguator to prevent collisions when multiple edges
+    exist between the same node pair. The index is positional within the edge
+    list, not derived from the prior transient edge ID.
     """
     result = []
-    for edge in edges:
+    for idx, edge in enumerate(edges):
         new_source = node_id_mapping.get(edge.source_id, edge.source_id)
         new_target = node_id_mapping.get(edge.target_id, edge.target_id)
-        new_id = f"{new_source}_{new_target}_{edge.id}"
+        new_id = f"{new_source}_{new_target}_{idx}"
         result.append(DiagramEdge(
             id=new_id,
             source_id=new_source,
@@ -557,6 +563,7 @@ _CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
 # Valid flag prefixes emitted by assess_review_state().
 # - analysis_unavailable: all reviewable slides pending (LLM failure / no analysis)
 # - partial_analysis_slide_{n}: reviewable slide n pending while others succeeded
+# - diagram_abstained_slide_{n}: slide n intentionally abstained (unsupported diagram)
 # - low_confidence_slide_{n}: slide n has low-confidence evidence
 # - unvalidated_claim_slide_{n}: slide n has unvalidated evidence
 # - high_density_unanalyzed: dense slides exist but pass 2 was not run
@@ -630,17 +637,29 @@ def assess_review_state(
         slide_num for slide_num in analyses
         if slide_num not in known_blank_slides
     }
+    # PR 3: Intentional diagram abstentions are not provider failures.
+    # Exclude them from the pending-failure buckets and emit a dedicated flag.
+    abstained_slides = {
+        slide_num for slide_num in reviewable_slides
+        if isinstance(analyses[slide_num], DiagramAnalysis)
+        and analyses[slide_num].abstained
+    }
     pending_reviewable_slides = {
         slide_num for slide_num in reviewable_slides
         if analyses[slide_num].slide_type == "pending"
+        and slide_num not in abstained_slides
     }
-    successful_reviewable_slides = reviewable_slides - pending_reviewable_slides
+    successful_reviewable_slides = reviewable_slides - pending_reviewable_slides - abstained_slides
     all_reviewable_pending = (
-        bool(reviewable_slides)
-        and pending_reviewable_slides == reviewable_slides
+        bool(reviewable_slides - abstained_slides)
+        and pending_reviewable_slides == (reviewable_slides - abstained_slides)
     )
     if all_reviewable_pending:
         flags.append("analysis_unavailable")
+
+    # Dedicated flags for intentional diagram abstentions
+    for slide_num in sorted(abstained_slides):
+        flags.append(f"diagram_abstained_slide_{slide_num}")
 
     # Per-slide flags: low-confidence, unvalidated
     for slide_num, analysis_item in analyses.items():
@@ -656,8 +675,8 @@ def assess_review_state(
             flags.append(f"unvalidated_claim_slide_{slide_num}")
 
     # Flag individual reviewable pending slides when other reviewable slides
-    # succeeded (partial failure). Known blank slides are intentionally pending
-    # and excluded by membership in known_blank_slides.
+    # succeeded (partial failure). Known blank slides and intentional
+    # abstentions are excluded from this check.
     if successful_reviewable_slides:
         for slide_num in sorted(pending_reviewable_slides):
             flags.append(f"partial_analysis_slide_{slide_num}")
@@ -1894,6 +1913,12 @@ def _load_cache_deep(cache_dir: Path, model: str | None = None, provider: str | 
     Invalidates on: format version mismatch (B3), prompt change (S1),
     model change (G1), extraction version change (G2), provider change,
     or schema/pipeline/image-strategy version drift.
+
+    Cache contract (PR 3): Entry identity is still image-hash based.
+    This PR extends top-level invalidation metadata (_schema_version,
+    _pipeline_version, _image_strategy_version) but does NOT change
+    per-entry cache keys. SHA-256 composite cache-key behavior is
+    deferred to PR 4.
     """
     cache_file = cache_dir / ".analysis_cache_deep.json"
     if cache_file.exists():
@@ -1977,6 +2002,11 @@ def _load_cache(cache_dir: Path, model: str | None = None, provider: str | None 
     Invalidates on: format version mismatch (B3), prompt change (S1),
     model change (G1), extraction version change (G2), provider change,
     or schema/pipeline/image-strategy version drift.
+
+    Cache contract (PR 3): Entry identity is still image-hash based.
+    This PR extends top-level invalidation metadata but does NOT change
+    per-entry cache keys. SHA-256 composite cache-key behavior is
+    deferred to PR 4.
     """
     cache_file = cache_dir / ".analysis_cache.json"
     if cache_file.exists():

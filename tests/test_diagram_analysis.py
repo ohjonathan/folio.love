@@ -437,7 +437,7 @@ class TestRewriteEdgeIds:
         mapping = {"n1": "inherited_1", "n2": "inherited_2"}
         result = _rewrite_edge_ids(edges, mapping)
         assert len(result) == 1
-        assert result[0].id == "inherited_1_inherited_2_old_e"
+        assert result[0].id == "inherited_1_inherited_2_0"
         assert result[0].source_id == "inherited_1"
         assert result[0].target_id == "inherited_2"
         assert result[0].label == "connects"
@@ -452,7 +452,7 @@ class TestRewriteEdgeIds:
     def test_empty_mapping(self):
         edges = [DiagramEdge(id="e1", source_id="a", target_id="b")]
         result = _rewrite_edge_ids(edges, {})
-        assert result[0].id == "a_b_e1"
+        assert result[0].id == "a_b_0"
         assert result[0].source_id == "a"
 
     def test_parallel_edges_get_unique_ids(self):
@@ -463,8 +463,8 @@ class TestRewriteEdgeIds:
         ]
         result = _rewrite_edge_ids(edges, {})
         assert result[0].id != result[1].id
-        assert result[0].id == "a_b_e1"
-        assert result[1].id == "a_b_e2"
+        assert result[0].id == "a_b_0"
+        assert result[1].id == "a_b_1"
 
 
 # ---------------------------------------------------------------------------
