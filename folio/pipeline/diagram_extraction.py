@@ -580,8 +580,13 @@ def _anchor_bboxes(
 # B1: Evidence-driven image selection
 # ---------------------------------------------------------------------------
 
-# B4: Diagram types that are out-of-scope for v1 graph extraction
-_UNSUPPORTED_DIAGRAM_TYPES = {"sequence", "gantt", "timeline"}
+# B4: v1-supported diagram types — all others abstain
+_SUPPORTED_DIAGRAM_TYPES = {
+    "architecture", "flowchart", "class", "entity-relationship",
+    "network", "org-chart", "mindmap", "concept-map", "state-machine",
+    "deployment", "hierarchy", "process", "data-flow", "comparison",
+    "venn", "swimlane", "matrix", "mixed", "unknown",
+}
 
 
 def _select_pass_a_images(
@@ -610,16 +615,27 @@ def _select_pass_a_images(
 def _select_pass_c_images(
     page_img: Image.Image,
     profile: "PageProfile",
+    node_bboxes: list[tuple[float, float, float, float]] | None = None,
 ) -> tuple[ImagePart, ...]:
     """Select image parts for Pass C claim verification.
 
-    Always global-only: verification needs full picture context,
-    not quadrant tiles.
+    Uses highlight_regions to overlay semi-transparent rectangles over
+    detected node bboxes, giving the verifier spatial evidence context.
+    Falls back to plain global image if no bboxes or overlay fails.
     """
     from .image_strategy import _resize_to_max_edge, _to_png_bytes, _MAX_LONG_EDGE
     escalation = getattr(profile, "escalation_level", "simple")
     detail = "high" if escalation in {"medium", "dense"} else "auto"
-    global_img = _resize_to_max_edge(page_img, _MAX_LONG_EDGE)
+
+    # Overlay node highlights if bboxes available
+    base_img = page_img
+    if node_bboxes:
+        try:
+            base_img = highlight_regions(page_img, node_bboxes)
+        except Exception:
+            base_img = page_img  # fallback to plain image
+
+    global_img = _resize_to_max_edge(base_img, _MAX_LONG_EDGE)
     return (ImagePart(
         image_data=_to_png_bytes(global_img),
         role="global",
@@ -1442,9 +1458,7 @@ def analyze_diagram_pages(
         stats.misses += 1
         logger.info("Diagram extraction slide %d...", slide_num)
 
-        # B1: Evidence-driven image selection
         pass_a_images = _select_pass_a_images(page_img, profile)
-        pass_c_images = _select_pass_c_images(page_img, profile)
 
         # --- Pass A: Extract ---
         pass_a_prompt = DIAGRAM_EXTRACTION_PROMPT.replace(
@@ -1482,9 +1496,9 @@ def analyze_diagram_pages(
             results[slide_num] = analysis
             continue
 
-        # B4: Abstain on unsupported diagram types
+        # B4: Abstain on unsupported diagram types (allowlist, not denylist)
         diagram_type = normalized.get("diagram_type", "unknown")
-        if diagram_type in _UNSUPPORTED_DIAGRAM_TYPES:
+        if diagram_type not in _SUPPORTED_DIAGRAM_TYPES:
             analysis.abstained = True
             analysis.diagram_type = diagram_type
             analysis.review_required = True
@@ -1546,6 +1560,16 @@ def analyze_diagram_pages(
         pass_c_verdicts_parsed = False
         claims = _generate_claims(post_b_graph)
 
+        # Issue #4: Generate highlight-backed Pass C images using post-B node bboxes
+        node_bboxes = []
+        for n in post_b_graph.get("nodes", []):
+            bbox = n.get("bbox")
+            if bbox and len(bbox) == 4:
+                node_bboxes.append(tuple(bbox))
+        pass_c_images = _select_pass_c_images(
+            page_img, profile, node_bboxes=node_bboxes or None
+        )
+
         if claims and not sanity_triggered:
             pass_c_attempted = True
             # Batch claims (target 18 per batch)
@@ -1581,6 +1605,16 @@ def analyze_diagram_pages(
 
             if all_verdicts:
                 post_b_graph = _apply_verdicts(post_b_graph, all_verdicts)
+
+        # Issue #1: If Pass C was attempted but produced no parseable verdicts,
+        # flag for review — the verification step effectively failed
+        if pass_c_attempted and not pass_c_verdicts_parsed:
+            analysis.review_required = True
+            if not analysis.review_questions:
+                analysis.review_questions = []
+            analysis.review_questions.append(
+                "Pass C verification attempted but returned no parseable verdicts"
+            )
 
         # --- Completeness sweep (B3: skip if sanity triggered) ---
         sweep_run = False
@@ -1691,20 +1725,23 @@ def analyze_diagram_pages(
             page_img.close()
             continue
 
-        # B2: IoU-based ID inheritance — check prior cached graph first,
-        # then fall back to in-memory analysis.graph
+        # Issue #2: IoU-based ID inheritance — check in-memory graph first,
+        # then read stale on-disk cache (bypasses marker validation)
         prior_graph = None
         if analysis.graph and analysis.graph.nodes:
             prior_graph = analysis.graph
-        elif cached_final is None:
-            # Look for prior graph in final cache (B2: stale-cache fallback)
-            prior_entry = diagram_cache.check_entry(
-                final_cache, image_hash, {"_image_hash": image_hash}
+        else:
+            # Load directly from disk, ignoring marker validation
+            stale_entry = diagram_cache.load_stale_entry(
+                cache_dir, "final", image_hash
             )
-            if prior_entry is not None:
-                prior_da = DiagramAnalysis.from_dict(prior_entry)
-                if prior_da.graph and prior_da.graph.nodes:
-                    prior_graph = prior_da.graph
+            if stale_entry is not None:
+                try:
+                    prior_da = DiagramAnalysis.from_dict(stale_entry)
+                    if prior_da.graph and prior_da.graph.nodes:
+                        prior_graph = prior_da.graph
+                except Exception:
+                    pass  # stale entry may not parse — skip gracefully
 
         if prior_graph and prior_graph.nodes:
             mapping = match_nodes_by_iou(graph.nodes, prior_graph.nodes)

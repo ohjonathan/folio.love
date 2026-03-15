@@ -194,6 +194,46 @@ def load_stage_cache(
     return cache
 
 
+def load_stale_entry(
+    cache_dir: Path | None,
+    stage: str,
+    image_hash: str,
+) -> dict | None:
+    """Load a single entry from disk WITHOUT marker validation.
+
+    Used for IoU-based ID inheritance when the active cache has been
+    invalidated by a marker change. Returns the raw entry dict or None.
+    """
+    if cache_dir is None:
+        return None
+
+    filenames = {
+        "pass_a": _PASS_A_FILENAME,
+        "post_b": _POST_B_FILENAME,
+        "final": _FINAL_FILENAME,
+    }
+    filename = filenames.get(stage)
+    if filename is None:
+        return None
+
+    path = _cache_path(cache_dir, filename)
+    if not path.exists():
+        return None
+
+    try:
+        cache = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    if not isinstance(cache, dict):
+        return None
+
+    entry = cache.get(image_hash)
+    if isinstance(entry, dict):
+        return entry
+    return None
+
+
 def save_stage_cache(
     cache_dir: Path | None,
     stage: str,
