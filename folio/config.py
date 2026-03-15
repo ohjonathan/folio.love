@@ -1,6 +1,7 @@
 """Configuration management for Folio."""
 
 from dataclasses import dataclass, field
+import logging
 from pathlib import Path
 import re
 from typing import Optional
@@ -8,6 +9,8 @@ from typing import Optional
 import yaml
 
 from .llm.types import ProviderRuntimeSettings
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +487,12 @@ class FolioConfig:
                     allowed_endpoints=tuple(pdata.get("allowed_endpoints", defaults.allowed_endpoints)),
                     excluded_endpoints=tuple(pdata.get("excluded_endpoints", defaults.excluded_endpoints)),
                     require_store_false=pdata.get("require_store_false", defaults.require_store_false),
+                )
+            elif isinstance(pdata, dict):
+                logger.warning(
+                    "Unknown provider '%s' in config — ignoring. "
+                    "Known providers: %s",
+                    pname, ", ".join(sorted(_DEFAULT_PROVIDER_SETTINGS)),
                 )
 
         config_dir = config_path.resolve().parent

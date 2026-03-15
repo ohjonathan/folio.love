@@ -48,6 +48,9 @@ def _mock_anthropic_response(text: str):
     mock_content.text = text
     mock_response.content = [mock_content]
     mock_response.stop_reason = "end_turn"
+    # Token usage must be real ints for RateLimiter.record_usage comparison
+    mock_response.usage.input_tokens = 100
+    mock_response.usage.output_tokens = 50
     return mock_response
 
 

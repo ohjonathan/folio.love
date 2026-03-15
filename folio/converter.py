@@ -202,6 +202,9 @@ class FolioConverter:
                 (fb.provider, fb.model, fb.api_key_env)
                 for fb in self.config.llm.get_fallbacks(override=llm_profile, task="convert")
             ]
+            # Look up provider runtime settings (B3: thread config.providers end-to-end)
+            provider_settings = self.config.providers.get(profile.provider)
+
             slide_analyses, pass1_stats, pass1_meta = analysis.analyze_slides(
                 image_paths,
                 model=profile.model,
@@ -211,6 +214,7 @@ class FolioConverter:
                 provider_name=profile.provider,
                 api_key_env=profile.api_key_env,
                 fallback_profiles=fallback_profiles_list,
+                provider_settings=provider_settings,
             )
 
             # Override blank slides with pending() (API call ran but result is unreliable)
@@ -235,6 +239,7 @@ class FolioConverter:
                     provider_name=profile.provider,
                     api_key_env=profile.api_key_env,
                     fallback_profiles=fallback_profiles_list,
+                    provider_settings=provider_settings,
                 )
                 combined_stats = pass1_stats.merge(pass2_stats)
             else:

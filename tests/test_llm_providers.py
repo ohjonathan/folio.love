@@ -467,7 +467,7 @@ class TestRuntimeFallbackChain:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(30))
 
-            analysis, used_provider, used_model = _analyze_with_fallback(
+            analysis, used_provider, used_model, _ = _analyze_with_fallback(
                 provider, mock_client, img, "claude-sonnet-4-20250514", "anthropic",
             )
         assert analysis.slide_type != "pending"
@@ -496,7 +496,7 @@ class TestRuntimeFallbackChain:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(31))
 
-            analysis, used_provider, used_model = _analyze_with_fallback(
+            analysis, used_provider, used_model, _ = _analyze_with_fallback(
                 primary, primary_client, img, "claude-sonnet",
                 "anthropic",
                 fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],
@@ -524,7 +524,7 @@ class TestRuntimeFallbackChain:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(32))
 
-            analysis, used_provider, _ = _analyze_with_fallback(
+            analysis, used_provider, _, _ = _analyze_with_fallback(
                 primary, primary_client, img, "claude-sonnet",
                 "anthropic",
                 fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],
@@ -551,7 +551,7 @@ class TestRuntimeFallbackChain:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(33))
 
-            analysis, used_provider, _ = _analyze_with_fallback(
+            analysis, used_provider, _, _ = _analyze_with_fallback(
                 primary, primary_client, img, "claude-sonnet",
                 "anthropic",
                 fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],

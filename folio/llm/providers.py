@@ -334,8 +334,11 @@ class GoogleAnalysisProvider:
             img.detail == "high" for img in inp.images
         )
         if any_high:
-            # Use request-level media resolution on stable API surface
-            config_kwargs["media_resolution"] = "high"
+            # Use SDK enum per Gemini API docs; string fallback for older SDK versions
+            try:
+                config_kwargs["media_resolution"] = types.MediaResolution.MEDIA_RESOLUTION_HIGH
+            except AttributeError:
+                config_kwargs["media_resolution"] = "MEDIA_RESOLUTION_HIGH"
 
         response = client.models.generate_content(
             model=model,
