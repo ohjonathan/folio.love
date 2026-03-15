@@ -90,6 +90,10 @@ class RateLimiter:
                     logger.debug("TPM limit reached (%d/%d), sleeping %.1fs",
                                  window_tokens, self.tpm_limit, sleep_time)
                     time.sleep(sleep_time)
+                    now = time.monotonic()
+                    # Re-prune after sleep (SF1: mirror RPM gate pattern)
+                    while self._token_records and (now - self._token_records[0][0]) >= _WINDOW_SECONDS:
+                        self._token_records.popleft()
 
     def record_request(self) -> None:
         """Record a request timestamp for RPM tracking."""

@@ -356,8 +356,11 @@ def _extract_json(raw_text: str) -> str | None:
     stripped = raw_text.strip()
     if stripped.startswith("```"):
         # Remove opening fence (with optional language tag)
-        first_newline = stripped.index("\n")
-        inner = stripped[first_newline + 1:]
+        newline_pos = stripped.find("\n")
+        if newline_pos == -1:
+            # Single-line fenced content — no newline after opening fence
+            return None
+        inner = stripped[newline_pos + 1:]
         # Remove closing fence
         if inner.rstrip().endswith("```"):
             inner = inner.rstrip()[:-3].rstrip()
@@ -557,13 +560,23 @@ def analyze_slides(
         except Exception as e:
             logger.warning("Fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
 
-    # Per-provider settings dict (Finding 1: each provider gets its own settings)
+    # Per-provider settings dict (B1: each provider gets its own settings)
     _all_settings = all_provider_settings or {}
     primary_settings = _all_settings.get(provider_name, ProviderRuntimeSettings())
     limiter = RateLimiter(
         rpm_limit=primary_settings.rate_limit_rpm,
         tpm_limit=primary_settings.rate_limit_tpm,
     )
+
+    # Pre-build fallback RateLimiters at pass level (B1: persist across slides)
+    fallback_limiters: dict[str, RateLimiter] = {}
+    for _, _, _, fb_name in fallback_chain:
+        if fb_name not in fallback_limiters:
+            fb_s = _all_settings.get(fb_name, ProviderRuntimeSettings())
+            fallback_limiters[fb_name] = RateLimiter(
+                rpm_limit=fb_s.rate_limit_rpm,
+                tpm_limit=fb_s.rate_limit_tpm,
+            )
 
     # Load cache (skip read when force_miss)
     cache = _load_cache(cache_dir, model=model, provider=provider_name) if cache_dir and not force_miss else {}
@@ -601,6 +614,7 @@ def analyze_slides(
             settings=primary_settings,
             limiter=limiter,
             all_provider_settings=_all_settings,
+            fallback_limiters=fallback_limiters,
         )
         results[i] = analysis
 
@@ -653,6 +667,7 @@ def _analyze_with_fallback(
     settings: Optional[ProviderRuntimeSettings] = None,
     limiter: Optional[RateLimiter] = None,
     all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
+    fallback_limiters: Optional[dict[str, RateLimiter]] = None,
 ) -> tuple[SlideAnalysis, str, str, TokenUsage]:
     """Try primary provider then fallback chain on transient failures only.
 
@@ -661,7 +676,8 @@ def _analyze_with_fallback(
     Fallback is ONLY triggered for transient failures, not permanent errors,
     truncation, or malformed output.
 
-    Each fallback provider uses its own settings and rate limiter (Finding 1).
+    Each fallback provider uses its own settings; fallback_limiters are shared
+    across slides within the pass (B1: correct cross-slide throttling).
 
     Returns:
         Tuple of (analysis, used_provider_name, used_model, usage).
@@ -669,6 +685,7 @@ def _analyze_with_fallback(
     _settings = settings or ProviderRuntimeSettings()
     _limiter = limiter or RateLimiter()
     _all_settings = all_provider_settings or {}
+    _fb_limiters = fallback_limiters or {}
 
     # Try primary
     analysis, failure_kind, usage = _analyze_single_slide(
@@ -686,9 +703,9 @@ def _analyze_with_fallback(
     # Primary exhausted transiently — try fallback chain
     for fb_provider, fb_client, fb_model, fb_name in fallback_chain:
         logger.info("Falling back to provider '%s' for slide analysis", fb_name)
-        # Finding 1: per-provider settings and rate limiter
+        # B1: per-provider settings, shared pass-level limiter
         fb_settings = _all_settings.get(fb_name, ProviderRuntimeSettings())
-        fb_limiter = RateLimiter(
+        fb_limiter = _fb_limiters.get(fb_name) or RateLimiter(
             rpm_limit=fb_settings.rate_limit_rpm,
             tpm_limit=fb_settings.rate_limit_tpm,
         )
@@ -792,7 +809,12 @@ def _analyze_single_slide(
     else:
         full_prompt = ANALYSIS_PROMPT + "\n\nNOTE: No extracted text available for this slide. Base analysis on visual content only."
 
-    image_part = _build_image_part(image_path)
+    try:
+        image_part = _build_image_part(image_path)
+    except (ValueError, OSError, Exception) as e:
+        logger.warning("Image preflight failed for %s: %s — treating as pending", image_path.name, e)
+        return SlideAnalysis.pending(f"Image preflight error: {e}"), "malformed", TokenUsage()
+
     inp = ProviderInput(
         prompt=full_prompt,
         images=(image_part,),
@@ -1071,13 +1093,23 @@ def analyze_slides_deep(
         except Exception as e:
             logger.warning("Pass 2 fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
 
-    # Per-provider settings dict (Finding 1)
+    # Per-provider settings dict (B1)
     _all_settings = all_provider_settings or {}
     primary_settings = _all_settings.get(provider_name, ProviderRuntimeSettings())
     limiter = RateLimiter(
         rpm_limit=primary_settings.rate_limit_rpm,
         tpm_limit=primary_settings.rate_limit_tpm,
     )
+
+    # Pre-build fallback RateLimiters at pass level (B1: persist across slides)
+    fallback_limiters: dict[str, RateLimiter] = {}
+    for _, _, _, fb_name in fallback_chain:
+        if fb_name not in fallback_limiters:
+            fb_s = _all_settings.get(fb_name, ProviderRuntimeSettings())
+            fallback_limiters[fb_name] = RateLimiter(
+                rpm_limit=fb_s.rate_limit_rpm,
+                tpm_limit=fb_s.rate_limit_tpm,
+            )
 
     stats = CacheStats(pass_name="pass2")
     results = dict(pass1_results)  # Copy
@@ -1151,6 +1183,7 @@ def analyze_slides_deep(
             settings=primary_settings,
             limiter=limiter,
             all_provider_settings=_all_settings,
+            fallback_limiters=fallback_limiters,
         )
 
         # Track token usage per-slide and total (Finding 3: include total_tokens)
@@ -1239,7 +1272,12 @@ def _run_depth_pass(
     else:
         full_prompt = prompt
 
-    image_part = _build_image_part(image_path)
+    try:
+        image_part = _build_image_part(image_path)
+    except (ValueError, OSError, Exception) as e:
+        logger.warning("Image preflight failed for %s: %s — treating as malformed", image_path.name, e)
+        return [], None, None, "malformed", TokenUsage()
+
     inp = ProviderInput(
         prompt=full_prompt,
         images=(image_part,),
@@ -1290,11 +1328,12 @@ def _run_depth_with_fallback(
     settings: Optional[ProviderRuntimeSettings] = None,
     limiter: Optional[RateLimiter] = None,
     all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
+    fallback_limiters: Optional[dict[str, RateLimiter]] = None,
 ) -> tuple[list[dict], Optional[str], Optional[str], str, str, TokenUsage]:
     """Run depth pass with transient-only fallback (spec §6.2).
 
-    Finding 1: Each fallback uses its own settings and rate limiter.
-    Finding 6: Returns used_provider and used_model for accurate provenance.
+    B1: fallback_limiters are shared across slides within the pass.
+    F6: Returns used_provider and used_model for accurate provenance.
 
     Returns:
         Tuple of (evidence, reassessed_type, reassessed_framework,
@@ -1303,6 +1342,7 @@ def _run_depth_with_fallback(
     _settings = settings or ProviderRuntimeSettings()
     _limiter = limiter or RateLimiter()
     _all_settings = all_provider_settings or {}
+    _fb_limiters = fallback_limiters or {}
 
     evidence, rt, rf, failure_kind, usage = _run_depth_pass(
         primary_provider, primary_client, image_path, primary_model, prompt,
@@ -1318,9 +1358,9 @@ def _run_depth_with_fallback(
 
     for fb_provider, fb_client, fb_model, fb_name in fallback_chain:
         logger.info("Pass 2: falling back to provider '%s'", fb_name)
-        # Finding 1: per-provider settings and rate limiter
+        # B1: per-provider settings, shared pass-level limiter
         fb_settings = _all_settings.get(fb_name, ProviderRuntimeSettings())
-        fb_limiter = RateLimiter(
+        fb_limiter = _fb_limiters.get(fb_name) or RateLimiter(
             rpm_limit=fb_settings.rate_limit_rpm,
             tpm_limit=fb_settings.rate_limit_tpm,
         )

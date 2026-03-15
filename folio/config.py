@@ -489,10 +489,10 @@ class FolioConfig:
                     require_store_false=pdata.get("require_store_false", defaults.require_store_false),
                 )
             elif isinstance(pdata, dict):
-                logger.warning(
-                    "Unknown provider '%s' in config — ignoring. "
-                    "Known providers: %s",
-                    pname, ", ".join(sorted(_DEFAULT_PROVIDER_SETTINGS)),
+                raise ValueError(
+                    f"Unknown provider '{pname}' in config. "
+                    f"Known providers: {', '.join(sorted(_DEFAULT_PROVIDER_SETTINGS))}. "
+                    f"Check for typos in folio.yaml."
                 )
 
         config_dir = config_path.resolve().parent

@@ -276,23 +276,46 @@ class FolioConverter:
 
         # Generate frontmatter
         # _llm_metadata per spec §7.4 — execution-derived from StageLLMMetadata
-        fallback_used = pass1_meta.fallback_activated if pass1_meta else False
-        actual_provider = pass1_meta.fallback_provider if fallback_used else (pass1_meta.provider if pass1_meta else profile.provider)
-        actual_model = pass1_meta.fallback_model if fallback_used else (pass1_meta.model if pass1_meta else profile.model)
+        # B2: merge both pass1 and pass2 provenance for accurate reporting
+        p1_fallback = pass1_meta.fallback_activated if pass1_meta else False
+        p1_provider = pass1_meta.fallback_provider if p1_fallback else (pass1_meta.provider if pass1_meta else profile.provider)
+        p1_model = pass1_meta.fallback_model if p1_fallback else (pass1_meta.model if pass1_meta else profile.model)
 
         pass2_ran = effective_passes >= 2 and pass2_meta is not None
+        p2_fallback = pass2_meta.fallback_activated if pass2_meta else False
+        p2_provider = pass2_meta.fallback_provider if p2_fallback else (pass2_meta.provider if pass2_meta else None)
+        p2_model = pass2_meta.fallback_model if p2_fallback else (pass2_meta.model if pass2_meta else None)
+
+        # Overall: if any pass used fallback, report it
+        any_fallback = p1_fallback or p2_fallback
+        # Use the most recently active provider as the "actual" provider
+        actual_provider = p2_provider if (pass2_ran and p2_provider) else p1_provider
+        actual_model = p2_model if (pass2_ran and p2_model) else p1_model
+
+        pass2_meta_dict: dict = {
+            "status": "executed" if pass2_ran else "skipped",
+        }
+        if not pass2_ran:
+            pass2_meta_dict["reason"] = "pass_disabled"
+        else:
+            pass2_meta_dict["provider"] = p2_provider
+            pass2_meta_dict["model"] = p2_model
+            pass2_meta_dict["fallback_used"] = p2_fallback
+
         llm_meta = {
             "convert": {
                 "requested_profile": llm_profile or profile.name,
                 "profile": profile.name,
                 "provider": actual_provider,
                 "model": actual_model,
-                "fallback_used": fallback_used,
+                "fallback_used": any_fallback,
                 "status": "executed",
-                "pass2": {
-                    "status": "executed" if pass2_ran else "skipped",
-                    **({"reason": "pass_disabled"} if not pass2_ran else {}),
+                "pass1": {
+                    "provider": p1_provider,
+                    "model": p1_model,
+                    "fallback_used": p1_fallback,
                 },
+                "pass2": pass2_meta_dict,
             },
         }
 
