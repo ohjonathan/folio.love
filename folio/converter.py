@@ -130,6 +130,7 @@ class FolioConverter:
                 image_results = images.extract_with_metadata(
                     pdf_path, deck_dir,
                     dpi=self.config.conversion.image_dpi,
+                    page_profiles=page_profiles,
                 )
             finally:
                 # Clean up intermediate PowerPoint PDF written into deck_dir.
@@ -201,6 +202,9 @@ class FolioConverter:
                 (fb.provider, fb.model, fb.api_key_env)
                 for fb in self.config.llm.get_fallbacks(override=llm_profile, task="convert")
             ]
+            # Pass full provider settings dict (Finding 1: each fallback needs its own settings)
+            all_provider_settings = self.config.providers
+
             slide_analyses, pass1_stats, pass1_meta = analysis.analyze_slides(
                 image_paths,
                 model=profile.model,
@@ -210,6 +214,7 @@ class FolioConverter:
                 provider_name=profile.provider,
                 api_key_env=profile.api_key_env,
                 fallback_profiles=fallback_profiles_list,
+                all_provider_settings=all_provider_settings,
             )
 
             # Override blank slides with pending() (API call ran but result is unreliable)
@@ -234,6 +239,7 @@ class FolioConverter:
                     provider_name=profile.provider,
                     api_key_env=profile.api_key_env,
                     fallback_profiles=fallback_profiles_list,
+                    all_provider_settings=all_provider_settings,
                 )
                 combined_stats = pass1_stats.merge(pass2_stats)
             else:
@@ -270,23 +276,60 @@ class FolioConverter:
 
         # Generate frontmatter
         # _llm_metadata per spec §7.4 — execution-derived from StageLLMMetadata
-        fallback_used = pass1_meta.fallback_activated if pass1_meta else False
-        actual_provider = pass1_meta.fallback_provider if fallback_used else (pass1_meta.provider if pass1_meta else profile.provider)
-        actual_model = pass1_meta.fallback_model if fallback_used else (pass1_meta.model if pass1_meta else profile.model)
+        # F2: use per_slide_providers for accurate mixed-provider provenance
+        p1_providers = set(pass1_meta.per_slide_providers.values()) if pass1_meta else set()
+        p1_primary = (pass1_meta.provider if pass1_meta else profile.provider,
+                      pass1_meta.model if pass1_meta else profile.model)
+        p1_fallback = pass1_meta.fallback_activated if pass1_meta else False
+        p1_provider = pass1_meta.fallback_provider if p1_fallback else p1_primary[0]
+        p1_model = pass1_meta.fallback_model if p1_fallback else p1_primary[1]
 
         pass2_ran = effective_passes >= 2 and pass2_meta is not None
+        p2_providers = set(pass2_meta.per_slide_providers.values()) if pass2_meta else set()
+        p2_fallback = pass2_meta.fallback_activated if pass2_meta else False
+        p2_provider = pass2_meta.fallback_provider if p2_fallback else (pass2_meta.provider if pass2_meta else None)
+        p2_model = pass2_meta.fallback_model if p2_fallback else (pass2_meta.model if pass2_meta else None)
+
+        # Overall: if any pass used fallback, report it
+        any_fallback = p1_fallback or p2_fallback
+        # Determine if run used multiple providers
+        all_providers = p1_providers | p2_providers
+        mixed_providers = len(set(p for p, _ in all_providers)) > 1 if all_providers else False
+        # Use the most recently active provider as the "actual" provider
+        actual_provider = p2_provider if (pass2_ran and p2_provider) else p1_provider
+        actual_model = p2_model if (pass2_ran and p2_model) else p1_model
+
+        pass1_meta_dict: dict = {
+            "provider": p1_provider,
+            "model": p1_model,
+            "fallback_used": p1_fallback,
+        }
+        if p1_providers and len(set(p for p, _ in p1_providers)) > 1:
+            pass1_meta_dict["providers_used"] = sorted(set(p for p, _ in p1_providers))
+
+        pass2_meta_dict: dict = {
+            "status": "executed" if pass2_ran else "skipped",
+        }
+        if not pass2_ran:
+            pass2_meta_dict["reason"] = "pass_disabled"
+        else:
+            pass2_meta_dict["provider"] = p2_provider
+            pass2_meta_dict["model"] = p2_model
+            pass2_meta_dict["fallback_used"] = p2_fallback
+            if p2_providers and len(set(p for p, _ in p2_providers)) > 1:
+                pass2_meta_dict["providers_used"] = sorted(set(p for p, _ in p2_providers))
+
         llm_meta = {
             "convert": {
                 "requested_profile": llm_profile or profile.name,
                 "profile": profile.name,
                 "provider": actual_provider,
                 "model": actual_model,
-                "fallback_used": fallback_used,
+                "fallback_used": any_fallback,
+                "mixed_providers": mixed_providers,
                 "status": "executed",
-                "pass2": {
-                    "status": "executed" if pass2_ran else "skipped",
-                    **({"reason": "pass_disabled"} if not pass2_ran else {}),
-                },
+                "pass1": pass1_meta_dict,
+                "pass2": pass2_meta_dict,
             },
         }
 

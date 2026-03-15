@@ -12,11 +12,13 @@ from folio.llm import get_provider, list_providers
 from folio.llm.types import (
     AnalysisProvider,
     ErrorDisposition,
+    ImagePart,
     ProviderInput,
     ProviderOutput,
     ResolvedLLMProfile,
     ResolvedLLMRoute,
     StageLLMMetadata,
+    TokenUsage,
 )
 from folio.llm.providers import AnthropicAnalysisProvider, OpenAIAnalysisProvider, GoogleAnalysisProvider
 from tests.llm_mocks import (
@@ -86,7 +88,7 @@ class TestAnthropicProvider:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(1))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze this", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze this", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             output = provider.analyze(mock_client, "test-model", inp)
 
         assert isinstance(output, ProviderOutput)
@@ -107,10 +109,39 @@ class TestAnthropicProvider:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(2))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             output = provider.analyze(mock_client, "test-model", inp)
 
         assert output.truncated is True
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_analyze_multiple_images(self):
+        """Multi-image support: provider embeds all images in request."""
+        provider = AnthropicAnalysisProvider()
+        mock_client = MagicMock()
+        response_text = json.dumps({"slide_type": "data", "framework": "none",
+                                     "evidence": [{"claim": "c", "quote": "q"}],
+                                     "visual_description": "v", "key_data": "k",
+                                     "main_insight": "i"})
+        mock_response = make_anthropic_response(response_text)
+        mock_client.messages.create.return_value = mock_response
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            imgs = []
+            for i in range(3):
+                img_path = Path(tmpdir) / f"test_{i}.png"
+                img_path.write_bytes(_make_unique_png(100 + i))
+                imgs.append(ImagePart(image_data=img_path.read_bytes(), role="global", media_type="image/png"))
+
+            inp = ProviderInput(prompt="Analyze these", images=tuple(imgs), max_tokens=2048)
+            output = provider.analyze(mock_client, "test-model", inp)
+
+        assert isinstance(output, ProviderOutput)
+        # Verify all 3 images were included in the API call
+        call_args = mock_client.messages.create.call_args
+        content_parts = call_args.kwargs.get("messages", [{}])[0].get("content", [])
+        image_parts = [p for p in content_parts if p.get("type") == "image"]
+        assert len(image_parts) == 3, f"Expected 3 images, got {len(image_parts)}"
 
     def test_classify_error_rate_limit(self):
         provider = AnthropicAnalysisProvider()
@@ -121,7 +152,7 @@ class TestAnthropicProvider:
                 response=MagicMock(status_code=429),
                 body=None,
             )
-            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+            assert provider.classify_error(exc).kind == "transient"
         except ImportError:
             pytest.skip("anthropic not installed")
 
@@ -134,13 +165,13 @@ class TestAnthropicProvider:
                 response=MagicMock(status_code=401),
                 body=None,
             )
-            assert provider.classify_error(exc) == ErrorDisposition.PERMANENT
+            assert provider.classify_error(exc).kind == "permanent"
         except ImportError:
             pytest.skip("anthropic not installed")
 
     def test_classify_error_generic(self):
         provider = AnthropicAnalysisProvider()
-        assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
+        assert provider.classify_error(RuntimeError("boom")).kind == "permanent"
 
     def test_classify_error_timeout(self):
         """B1: APITimeoutError must be transient."""
@@ -148,7 +179,7 @@ class TestAnthropicProvider:
         try:
             import anthropic
             exc = anthropic.APITimeoutError(request=MagicMock())
-            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+            assert provider.classify_error(exc).kind == "transient"
         except ImportError:
             pytest.skip("anthropic not installed")
 
@@ -162,7 +193,7 @@ class TestAnthropicProvider:
                 response=MagicMock(status_code=403),
                 body=None,
             )
-            assert provider.classify_error(exc) == ErrorDisposition.PERMANENT
+            assert provider.classify_error(exc).kind == "permanent"
         except ImportError:
             pytest.skip("anthropic not installed")
 
@@ -171,7 +202,7 @@ class TestContractTypes:
     """Test data types freeze correctly."""
 
     def test_provider_input_frozen(self):
-        inp = ProviderInput(image_path=Path("/tmp/test.png"), prompt="Test")
+        inp = ProviderInput(prompt="Test", images=())
         with pytest.raises(AttributeError):
             inp.prompt = "New"  # type: ignore
 
@@ -322,7 +353,7 @@ class TestOpenAIAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(10))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             output = provider.analyze(mock_client, "gpt-4o", inp)
 
         assert isinstance(output, ProviderOutput)
@@ -331,6 +362,30 @@ class TestOpenAIAdapter:
         assert not output.truncated
         data = json.loads(output.raw_text)
         assert data["slide_type"] == "data"
+
+    def test_analyze_multiple_images(self):
+        """Multi-image support: OpenAI embeds all images in request."""
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            imgs = []
+            for i in range(3):
+                img_path = Path(tmpdir) / f"test_{i}.png"
+                img_path.write_bytes(_make_unique_png(200 + i))
+                imgs.append(ImagePart(image_data=img_path.read_bytes(), role="global", media_type="image/png"))
+
+            inp = ProviderInput(prompt="Analyze", images=tuple(imgs), max_tokens=2048)
+            output = provider.analyze(mock_client, "gpt-4o", inp)
+
+        assert isinstance(output, ProviderOutput)
+        call_args = mock_client.chat.completions.create.call_args
+        content_parts = call_args.kwargs.get("messages", [{}])[0].get("content", [])
+        image_parts = [p for p in content_parts if p.get("type") == "image_url"]
+        assert len(image_parts) == 3, f"Expected 3 images, got {len(image_parts)}"
 
     def test_analyze_detects_truncation(self):
         provider = OpenAIAnalysisProvider()
@@ -343,14 +398,14 @@ class TestOpenAIAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(11))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             output = provider.analyze(mock_client, "gpt-4o", inp)
 
         assert output.truncated is True
 
     def test_classify_error_generic(self):
         provider = OpenAIAnalysisProvider()
-        assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
+        assert provider.classify_error(RuntimeError("boom")).kind == "permanent"
 
     def test_classify_error_timeout(self):
         """B2: APITimeoutError must be transient."""
@@ -358,7 +413,7 @@ class TestOpenAIAdapter:
         try:
             from openai import APITimeoutError
             exc = APITimeoutError(request=MagicMock())
-            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+            assert provider.classify_error(exc).kind == "transient"
         except ImportError:
             pytest.skip("openai not installed")
 
@@ -372,7 +427,7 @@ class TestOpenAIAdapter:
                 response=MagicMock(status_code=500),
                 body=None,
             )
-            assert provider.classify_error(exc) == ErrorDisposition.TRANSIENT
+            assert provider.classify_error(exc).kind == "transient"
         except ImportError:
             pytest.skip("openai not installed")
 
@@ -391,7 +446,7 @@ class TestGoogleAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(20))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             # Google adapter imports google.genai.types internally; mock it
             with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}):
                 import google.genai.types as mock_types
@@ -417,7 +472,7 @@ class TestGoogleAdapter:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(21))
 
-            inp = ProviderInput(image_path=img, prompt="Analyze", max_tokens=2048)
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048)
             with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}):
                 import google.genai.types as mock_types
                 mock_types.Part.from_bytes.return_value = MagicMock()
@@ -426,28 +481,57 @@ class TestGoogleAdapter:
 
         assert output.truncated is True
 
+    def test_analyze_multiple_images(self):
+        """Multi-image support: Google embeds all images via Part.from_bytes."""
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = make_google_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            imgs = []
+            for i in range(3):
+                img_path = Path(tmpdir) / f"test_{i}.png"
+                img_path.write_bytes(_make_unique_png((50 + i) % 256))
+                imgs.append(ImagePart(image_data=img_path.read_bytes(), role="global", media_type="image/png"))
+
+            inp = ProviderInput(prompt="Analyze", images=tuple(imgs), max_tokens=2048)
+            with patch.dict('sys.modules', {'google': MagicMock(), 'google.genai': MagicMock(), 'google.genai.types': MagicMock()}) as mocked:
+                import google.genai.types as mock_types
+                mock_types.Part.from_bytes.return_value = MagicMock()
+                mock_types.GenerateContentConfig.return_value = MagicMock()
+                output = provider.analyze(mock_client, "gemini-2.5-pro", inp)
+
+                assert isinstance(output, ProviderOutput)
+                # Verify generate_content was called with contents including image parts
+                call_args = mock_client.models.generate_content.call_args
+                contents = call_args.kwargs.get("contents", [])
+                # Contents should have 3 image parts + 1 text part = 4 total
+                assert len(contents) >= 4, f"Expected at least 4 content parts (3 images + prompt), got {len(contents)}"
+
     def test_classify_error_generic(self):
         provider = GoogleAnalysisProvider()
-        assert provider.classify_error(RuntimeError("boom")) == ErrorDisposition.PERMANENT
+        assert provider.classify_error(RuntimeError("boom")).kind == "permanent"
 
     def test_classify_error_internal_server(self):
         """B3: InternalServerError must be transient."""
         provider = GoogleAnalysisProvider()
         # Simulate Google's InternalServerError exception
         class InternalServerError(Exception): pass
-        assert provider.classify_error(InternalServerError("internal")) == ErrorDisposition.TRANSIENT
+        assert provider.classify_error(InternalServerError("internal")).kind == "transient"
 
     def test_classify_error_deadline_exceeded(self):
         """B3: DeadlineExceeded must be transient."""
         provider = GoogleAnalysisProvider()
         class DeadlineExceeded(Exception): pass
-        assert provider.classify_error(DeadlineExceeded("timeout")) == ErrorDisposition.TRANSIENT
+        assert provider.classify_error(DeadlineExceeded("timeout")).kind == "transient"
 
     def test_classify_error_permission_denied(self):
         """B3: PermissionDenied must be permanent."""
         provider = GoogleAnalysisProvider()
         class PermissionDenied(Exception): pass
-        assert provider.classify_error(PermissionDenied("forbidden")) == ErrorDisposition.PERMANENT
+        assert provider.classify_error(PermissionDenied("forbidden")).kind == "permanent"
 
 
 class TestRuntimeFallbackChain:
@@ -465,7 +549,7 @@ class TestRuntimeFallbackChain:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(30))
 
-            analysis, used_provider, used_model = _analyze_with_fallback(
+            analysis, used_provider, used_model, _ = _analyze_with_fallback(
                 provider, mock_client, img, "claude-sonnet-4-20250514", "anthropic",
             )
         assert analysis.slide_type != "pending"
@@ -478,7 +562,7 @@ class TestRuntimeFallbackChain:
         primary = MagicMock()
         primary.provider_name = "anthropic"
         primary.analyze.side_effect = RuntimeError("service unavailable")
-        primary.classify_error.return_value = ErrorDisposition.TRANSIENT
+        primary.classify_error.return_value = ErrorDisposition.transient()
         primary_client = MagicMock()
 
         # Fallback succeeds
@@ -494,7 +578,7 @@ class TestRuntimeFallbackChain:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(31))
 
-            analysis, used_provider, used_model = _analyze_with_fallback(
+            analysis, used_provider, used_model, _ = _analyze_with_fallback(
                 primary, primary_client, img, "claude-sonnet",
                 "anthropic",
                 fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],
@@ -509,20 +593,20 @@ class TestRuntimeFallbackChain:
         primary = MagicMock()
         primary.provider_name = "anthropic"
         primary.analyze.side_effect = RuntimeError("overloaded")
-        primary.classify_error.return_value = ErrorDisposition.TRANSIENT
+        primary.classify_error.return_value = ErrorDisposition.transient()
         primary_client = MagicMock()
 
         fallback = MagicMock()
         fallback.provider_name = "openai"
         fallback.analyze.side_effect = RuntimeError("overloaded")
-        fallback.classify_error.return_value = ErrorDisposition.TRANSIENT
+        fallback.classify_error.return_value = ErrorDisposition.transient()
         fallback_client = MagicMock()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(32))
 
-            analysis, used_provider, _ = _analyze_with_fallback(
+            analysis, used_provider, _, _ = _analyze_with_fallback(
                 primary, primary_client, img, "claude-sonnet",
                 "anthropic",
                 fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],
@@ -537,7 +621,7 @@ class TestRuntimeFallbackChain:
         primary = MagicMock()
         primary.provider_name = "anthropic"
         primary.analyze.side_effect = RuntimeError("auth failed")
-        primary.classify_error.return_value = ErrorDisposition.PERMANENT
+        primary.classify_error.return_value = ErrorDisposition.permanent()
         primary_client = MagicMock()
 
         # Fallback should NOT be called
@@ -549,7 +633,7 @@ class TestRuntimeFallbackChain:
             img = Path(tmpdir) / "test.png"
             img.write_bytes(_make_unique_png(33))
 
-            analysis, used_provider, _ = _analyze_with_fallback(
+            analysis, used_provider, _, _ = _analyze_with_fallback(
                 primary, primary_client, img, "claude-sonnet",
                 "anthropic",
                 fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],
@@ -559,3 +643,144 @@ class TestRuntimeFallbackChain:
         assert used_provider == "anthropic"  # stayed on primary
         assert "rejected the request" in analysis.visual_description
         fallback.analyze.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Finding 5: Test coverage for new risk surfaces
+# ---------------------------------------------------------------------------
+
+
+class TestPerProviderFallbackSettings:
+    """Finding 1+5: Verify each fallback gets its own settings and rate limiter."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key", "OPENAI_API_KEY": "test-key"})
+    def test_fallback_uses_own_provider_settings(self, tmp_path):
+        """Fallback OpenAI provider must use OpenAI endpoint allowlist, not Anthropic's."""
+        from folio.pipeline.analysis import _analyze_with_fallback
+        from folio.llm.types import ProviderRuntimeSettings
+
+        # Primary fails transiently
+        primary = MagicMock()
+        primary.provider_name = "anthropic"
+        primary.endpoint_name = "messages"
+        primary.analyze.side_effect = RuntimeError("overloaded")
+        primary.classify_error.return_value = ErrorDisposition.transient()
+        primary_client = MagicMock()
+
+        # Fallback succeeds
+        fallback = MagicMock()
+        fallback.provider_name = "openai"
+        fallback.endpoint_name = "chat_completions"
+        fallback.analyze.return_value = ProviderOutput(
+            raw_text=make_pass1_json(), truncated=False,
+            provider_name="openai", model_name="gpt-4o",
+            usage=TokenUsage(input_tokens=100, output_tokens=50, total_tokens=150),
+        )
+        fallback_client = MagicMock()
+
+        # Provider-specific settings with different endpoint allowlists
+        all_settings = {
+            "anthropic": ProviderRuntimeSettings(
+                allowed_endpoints=("messages",),
+                rate_limit_rpm=50,
+            ),
+            "openai": ProviderRuntimeSettings(
+                allowed_endpoints=("chat_completions",),
+                rate_limit_rpm=60,
+            ),
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(40))
+
+            analysis, used_provider, used_model, usage = _analyze_with_fallback(
+                primary, primary_client, img, "claude-sonnet",
+                "anthropic",
+                fallback_chain=[(fallback, fallback_client, "gpt-4o", "openai")],
+                settings=all_settings["anthropic"],
+                all_provider_settings=all_settings,
+            )
+
+        assert analysis.slide_type != "pending"
+        assert used_provider == "openai"
+        assert used_model == "gpt-4o"
+        # Verify fallback provider's analyze was actually called
+        fallback.analyze.assert_called_once()
+
+
+class TestRequireStoreFalsePropagation:
+    """Finding 2+5: Verify require_store_false reaches ProviderInput."""
+
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"})
+    def test_require_store_false_set_on_provider_input(self, tmp_path):
+        """When settings.require_store_false=True, ProviderInput must carry the flag."""
+        from folio.pipeline.analysis import _analyze_single_slide
+        from folio.llm.types import ProviderRuntimeSettings
+        from folio.llm.runtime import RateLimiter
+
+        provider = MagicMock()
+        provider.provider_name = "openai"
+        provider.endpoint_name = "chat_completions"
+        provider.analyze.return_value = ProviderOutput(
+            raw_text=make_pass1_json(), truncated=False,
+            provider_name="openai", model_name="gpt-4o",
+            usage=TokenUsage(input_tokens=100, output_tokens=50, total_tokens=150),
+        )
+        client = MagicMock()
+
+        settings = ProviderRuntimeSettings(
+            require_store_false=True,
+            allowed_endpoints=("chat_completions",),
+        )
+        limiter = RateLimiter(rpm_limit=60)
+
+        img = tmp_path / "test.png"
+        img.write_bytes(_make_unique_png(41))
+
+        # Patch execute_with_retry to capture the ProviderInput
+        captured_inputs = []
+        def capture_ewr(prov, cl, mod, inp, sett, lim):
+            captured_inputs.append(inp)
+            return prov.analyze(cl, mod, inp)
+
+        with patch("folio.pipeline.analysis.execute_with_retry", side_effect=capture_ewr):
+            _analyze_single_slide(
+                provider, client, img, "gpt-4o",
+                settings=settings, limiter=limiter,
+            )
+
+        assert len(captured_inputs) == 1
+        assert captured_inputs[0].require_store_false is True
+
+
+class TestTokenTotalAggregation:
+    """Finding 3+5: Verify total_tokens is accumulated correctly in StageLLMMetadata."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_usage_total_includes_total_tokens(self, tmp_path):
+        """stage_meta.usage_total.total_tokens must equal sum of per-slide totals."""
+        from folio.pipeline.analysis import analyze_slides
+        from folio.pipeline.text import SlideText
+
+        imgs = [tmp_path / f"slide-{i:03d}.png" for i in range(1, 4)]
+        for i, img in enumerate(imgs):
+            img.write_bytes(_make_unique_png(50 + i))
+
+        # Each call returns 150 total tokens
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = make_anthropic_response(
+            make_pass1_json()
+        )
+
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            _, stats, meta = analyze_slides(
+                imgs, model="test", cache_dir=tmp_path,
+            )
+
+        assert stats.misses == 3
+        # Each slide contributes 150 total tokens (100 input + 50 output)
+        assert meta.usage_total.total_tokens == 450
+        assert meta.usage_total.input_tokens == 300
+        assert meta.usage_total.output_tokens == 150
+

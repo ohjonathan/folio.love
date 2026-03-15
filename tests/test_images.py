@@ -10,6 +10,7 @@ from PIL import Image
 from folio.pipeline.images import (
     ImageExtractionError,
     ImageResult,
+    _contiguous_runs,
     extract,
     extract_with_metadata,
 )
@@ -347,3 +348,36 @@ class TestSpecRequiredCoverage:
              patch("folio.pipeline.images.convert_from_path", return_value=[]):
             with pytest.raises(ImageExtractionError, match="No images extracted"):
                 extract(pdf, tmp_path)
+
+
+class TestContiguousRuns:
+    """S1: tests for _contiguous_runs helper (pure function, no fixtures)."""
+
+    def test_empty_list(self):
+        assert _contiguous_runs([]) == []
+
+    def test_single_page(self):
+        assert _contiguous_runs([5]) == [(5, 5)]
+
+    def test_contiguous_sequence(self):
+        assert _contiguous_runs([1, 2, 3, 4, 5]) == [(1, 5)]
+
+    def test_two_runs(self):
+        assert _contiguous_runs([1, 2, 3, 7, 8]) == [(1, 3), (7, 8)]
+
+    def test_three_runs(self):
+        assert _contiguous_runs([1, 5, 6, 10]) == [(1, 1), (5, 6), (10, 10)]
+
+    def test_all_disjoint(self):
+        assert _contiguous_runs([1, 5, 9]) == [(1, 1), (5, 5), (9, 9)]
+
+    def test_unordered_input_sorted(self):
+        """Input doesn't need to be pre-sorted."""
+        assert _contiguous_runs([7, 1, 3, 2, 8]) == [(1, 3), (7, 8)]
+
+    def test_duplicate_pages(self):
+        """Duplicates handled gracefully (same as single)."""
+        result = _contiguous_runs([1, 1, 2, 2, 3])
+        # After sorting: [1, 1, 2, 2, 3] — duplicates break contiguity
+        assert result[0][0] == 1
+        assert result[-1][1] == 3

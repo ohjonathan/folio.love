@@ -1,12 +1,20 @@
-"""Stage 2: Image extraction. PDF → PNG images, one per page."""
+"""Stage 2: Image extraction. PDF → PNG images, one per page.
+
+Supports both single-DPI (legacy) and per-page DPI rendering
+driven by PR 1 PageProfile.render_dpi.
+"""
 
 import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PIL import Image
 from pdf2image import convert_from_path
+
+if TYPE_CHECKING:
+    from .inspect import PageProfile
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +32,7 @@ class ImageResult:
     is_tiny: bool = False
     width: int = 0
     height: int = 0
+    render_dpi: int = 0
 
 
 def extract(
@@ -134,12 +143,21 @@ def extract_with_metadata(
     output_dir: Path,
     dpi: int = 150,
     fmt: str = "png",
+    page_profiles: "dict[int, PageProfile] | None" = None,
 ) -> list[ImageResult]:
     """Extract slide images with blank/tiny/dimension metadata.
+
+    When page_profiles is provided, renders each page individually at
+    its PageProfile.render_dpi. Otherwise falls back to the single-DPI
+    code path.
 
     Wraps extract() and annotates each result. Use this when the caller
     needs image quality metadata (e.g., converter blank-slide detection).
     """
+    if page_profiles is not None:
+        return _extract_per_page_dpi(pdf_path, output_dir, dpi, fmt, page_profiles)
+
+    # Legacy single-DPI path
     paths = extract(pdf_path, output_dir, dpi=dpi, fmt=fmt)
     results = []
     for i, path in enumerate(paths, 1):
@@ -155,8 +173,182 @@ def extract_with_metadata(
             is_tiny=is_tiny,
             width=width,
             height=height,
+            render_dpi=dpi,
         ))
     return results
+
+
+def _extract_per_page_dpi(
+    pdf_path: Path,
+    output_dir: Path,
+    default_dpi: int,
+    fmt: str,
+    page_profiles: "dict[int, PageProfile]",
+) -> list[ImageResult]:
+    """Per-page DPI rendering: pages batched by DPI value.
+
+    Groups pages sharing the same render_dpi into single
+    convert_from_path calls, minimizing subprocess launches.
+    Preserves atomic swap semantics and slide-001.png naming.
+    """
+    output_dir = Path(output_dir)
+    slides_dir = output_dir / "slides"
+    tmp_dir = output_dir / ".slides_tmp"
+    old_dir = output_dir / ".slides_old"
+
+    if not shutil.which("pdftoppm"):
+        raise ImageExtractionError(
+            "Poppler not found (pdftoppm). Install with: "
+            "brew install poppler (macOS) or apt install poppler-utils (Linux)"
+        )
+
+    # Preflight recovery
+    if old_dir.exists():
+        if not slides_dir.exists():
+            old_dir.rename(slides_dir)
+            logger.warning("Recovered slides/ from interrupted swap: %s", old_dir)
+        else:
+            shutil.rmtree(old_dir)
+
+    # Derive page count from page_profiles when available (inspect_pages guarantees
+    # one profile per page). Only fall back to pdfinfo when profiles are empty.
+    if page_profiles:
+        total_pages = max(page_profiles)
+    else:
+        from pdf2image.pdf2image import pdfinfo_from_path
+        try:
+            info = pdfinfo_from_path(str(pdf_path))
+            total_pages = info.get("Pages", 0)
+        except Exception:
+            # Last resort: render all at minimum DPI
+            all_images = convert_from_path(pdf_path, dpi=72, fmt=fmt)
+            total_pages = len(all_images)
+            del all_images  # Free immediately
+
+    if total_pages == 0:
+        raise ImageExtractionError(f"No pages found in {pdf_path.name}")
+
+    # Group pages by DPI for batch rendering
+    dpi_to_pages: dict[int, list[int]] = {}
+    for page_num in range(1, total_pages + 1):
+        profile = page_profiles.get(page_num)
+        page_dpi = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
+        dpi_to_pages.setdefault(page_dpi, []).append(page_num)
+
+    try:
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir)
+        tmp_dir.mkdir(parents=True)
+
+        # Render batches: save-and-release per batch to limit memory
+        results = []
+
+        for batch_dpi, page_nums in sorted(dpi_to_pages.items()):
+            # Find contiguous runs to minimize subprocess calls
+            for run_start, run_end in _contiguous_runs(page_nums):
+                batch = convert_from_path(
+                    pdf_path,
+                    first_page=run_start,
+                    last_page=run_end,
+                    dpi=batch_dpi,
+                    fmt=fmt,
+                )
+                expected = run_end - run_start + 1
+                if len(batch) != expected:
+                    raise ImageExtractionError(
+                        f"Expected {expected} images for pages {run_start}-{run_end}, "
+                        f"got {len(batch)}"
+                    )
+                # Save each image immediately and release PIL object
+                for i, img in enumerate(batch):
+                    page_num = run_start + i
+                    profile = page_profiles.get(page_num)
+                    page_dpi_val = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
+
+                    filename = f"slide-{page_num:03d}.{fmt}"
+                    image_path = tmp_dir / filename
+                    img.save(str(image_path))
+
+                    _validate_image(image_path, img, slide_num=page_num)
+
+                    width, height = img.size
+                    is_blank = _is_mostly_blank(img, threshold=0.95)
+                    is_tiny = width < 100 or height < 100
+
+                    results.append(ImageResult(
+                        path=image_path,
+                        slide_num=page_num,
+                        is_blank=is_blank,
+                        is_tiny=is_tiny,
+                        width=width,
+                        height=height,
+                        render_dpi=page_dpi_val,
+                    ))
+                    img.close()  # Release PIL memory
+
+                del batch  # Free batch list
+
+            logger.info("  Rendered %d pages at %d DPI", len(page_nums), batch_dpi)
+
+        # Sort results by page number (batches may be interleaved)
+        results.sort(key=lambda r: r.slide_num)
+
+    except Exception as e:
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir)
+        if isinstance(e, ImageExtractionError):
+            raise
+        raise ImageExtractionError(f"Per-page rendering failed: {e}") from e
+
+    # Atomic swap
+    try:
+        if slides_dir.exists():
+            slides_dir.rename(old_dir)
+        try:
+            tmp_dir.rename(slides_dir)
+        except Exception:
+            if old_dir.exists():
+                old_dir.rename(slides_dir)
+            raise
+        finally:
+            if old_dir.exists() and slides_dir.exists():
+                shutil.rmtree(old_dir)
+    except ImageExtractionError:
+        raise
+    except Exception as e:
+        raise ImageExtractionError(f"Atomic swap failed: {e}") from e
+
+    # Rewrite paths to final location
+    for result in results:
+        result.path = slides_dir / result.path.name
+
+    logger.info(
+        "Extracted %d images from %s (per-page DPI, %d batches)",
+        len(results), pdf_path.name, len(dpi_to_pages),
+    )
+    return results
+
+
+def _contiguous_runs(pages: list[int]) -> list[tuple[int, int]]:
+    """Group sorted page numbers into contiguous (start, end) runs.
+
+    Example: [1, 2, 3, 7, 8] → [(1, 3), (7, 8)]
+    """
+    if not pages:
+        return []
+    sorted_pages = sorted(pages)
+    runs = []
+    start = sorted_pages[0]
+    prev = start
+    for p in sorted_pages[1:]:
+        if p == prev + 1:
+            prev = p
+        else:
+            runs.append((start, prev))
+            start = p
+            prev = p
+    runs.append((start, prev))
+    return runs
 
 
 def _validate_image(image_path: Path, image: Image.Image, slide_num: int) -> dict:
@@ -193,3 +385,4 @@ def _is_mostly_blank(image: Image.Image, threshold: float = 0.95) -> bool:
         return (white_count / total) > threshold
     except Exception:
         return False
+

@@ -13,6 +13,11 @@ def make_anthropic_response(text: str, stop_reason: str = "end_turn") -> MagicMo
     mock_content.text = text
     mock_response.content = [mock_content]
     mock_response.stop_reason = stop_reason
+    # Usage metadata for TokenUsage extraction
+    mock_usage = MagicMock()
+    mock_usage.input_tokens = 100
+    mock_usage.output_tokens = 50
+    mock_response.usage = mock_usage
     return mock_response
 
 
@@ -77,6 +82,12 @@ def make_openai_response(text: str, finish_reason: str = "stop") -> MagicMock:
     mock_choice.message = mock_message
     mock_choice.finish_reason = finish_reason
     mock_response.choices = [mock_choice]
+    # Usage metadata for TokenUsage extraction
+    mock_usage = MagicMock()
+    mock_usage.prompt_tokens = 100
+    mock_usage.completion_tokens = 50
+    mock_usage.total_tokens = 150
+    mock_response.usage = mock_usage
     return mock_response
 
 
@@ -92,4 +103,10 @@ def make_google_response(text: str, finish_reason: str = "STOP") -> MagicMock:
     mock_candidate = MagicMock()
     mock_candidate.finish_reason = finish_reason
     mock_response.candidates = [mock_candidate]
+    # Usage metadata for TokenUsage extraction
+    mock_usage_meta = MagicMock()
+    mock_usage_meta.prompt_token_count = 100
+    mock_usage_meta.candidates_token_count = 50
+    mock_usage_meta.total_token_count = 150
+    mock_response.usage_metadata = mock_usage_meta
     return mock_response
