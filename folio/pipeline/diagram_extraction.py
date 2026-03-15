@@ -920,11 +920,21 @@ def _apply_verdicts(
             edge["confidence"] = edge.get("confidence", 0.9) * 0.8
         surviving_edges.append(edge)
 
+    # M-NEW-1: Scrub refuted node IDs from groups.contains
+    groups = list(graph_dict.get("groups", []))
+    if refuted_node_ids:
+        for group in groups:
+            if "contains" in group:
+                group["contains"] = [
+                    nid for nid in group["contains"]
+                    if nid not in refuted_node_ids
+                ]
+
     return {
         "diagram_type": graph_dict.get("diagram_type", "unknown"),
         "nodes": surviving_nodes,
         "edges": surviving_edges,
-        "groups": graph_dict.get("groups", []),
+        "groups": groups,
     }
 
 
@@ -940,7 +950,7 @@ def _should_sweep(
 ) -> bool:
     """Determine if a completeness sweep is warranted.
 
-    S4: Only dense diagrams (>25 nodes or >150 words) trigger sweep,
+    S4: Only dense diagrams (>=25 nodes or >=150 words) trigger sweep,
     aligned with proposal thresholds.
     """
     num_nodes = len(graph_dict.get("nodes", []))
@@ -1008,13 +1018,15 @@ def _compute_diagram_confidence(
 ) -> tuple[float, str]:
     """Compute extraction confidence score.
 
-    Text-rich path (word_count >= 30):
+    Text-rich path (word_count >= 20):
         - Base from average node+edge confidence
+        - Bbox coverage bonus (up to +0.05)
+        - Uncertainty penalty (low-conf nodes)
         - Bonus for Pass C (+0.05)
         - Bonus for sweep (+0.03)
         - Penalty for sanity short-circuit (-0.15)
 
-    Text-poor path (word_count < 30):
+    Text-poor path (word_count < 20):
         - Base from average confidence * 0.8
         - Same bonuses/penalties
 
