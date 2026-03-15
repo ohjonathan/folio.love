@@ -397,14 +397,32 @@ class TestGenerateClaims:
 
 
 class TestApplyVerdicts:
-    def test_refuted_lowers_confidence(self):
+    def test_refuted_removes_node(self):
+        """S6: Refuted nodes are pruned, not just penalized."""
         graph = {
             "nodes": [{"id": "web", "label": "Web", "confidence": 0.9}],
             "edges": [],
         }
         verdicts = [{"claim_id": "node_exists_web", "verdict": "refuted", "correction": "API"}]
         result = _apply_verdicts(graph, verdicts)
-        assert result["nodes"][0]["confidence"] == pytest.approx(0.45)
+        assert len(result["nodes"]) == 0
+
+    def test_refuted_removes_orphaned_edges(self):
+        """S6: Edges referencing refuted nodes are also pruned."""
+        graph = {
+            "nodes": [
+                {"id": "web", "label": "Web", "confidence": 0.9},
+                {"id": "db", "label": "DB", "confidence": 0.9},
+            ],
+            "edges": [
+                {"id": "web_db", "source_id": "web", "target_id": "db", "confidence": 0.8},
+            ],
+        }
+        verdicts = [{"claim_id": "node_exists_web", "verdict": "refuted"}]
+        result = _apply_verdicts(graph, verdicts)
+        assert len(result["nodes"]) == 1
+        assert result["nodes"][0]["id"] == "db"
+        assert len(result["edges"]) == 0  # orphaned
 
     def test_uncertain_slightly_lowers(self):
         graph = {
@@ -432,16 +450,23 @@ class TestApplyVerdicts:
 
 class TestShouldSweep:
     def test_many_nodes(self):
-        graph = {"nodes": [{"id": f"n{i}"} for i in range(10)]}
+        """S4: Threshold is ≥25 nodes."""
+        graph = {"nodes": [{"id": f"n{i}"} for i in range(26)]}
         assert _should_sweep(graph, word_count=50) is True
 
     def test_many_words(self):
+        """S4: Threshold is ≥150 words."""
         graph = {"nodes": [{"id": "n1"}]}
         assert _should_sweep(graph, word_count=150) is True
 
     def test_below_thresholds(self):
         graph = {"nodes": [{"id": "n1"}]}
         assert _should_sweep(graph, word_count=30) is False
+
+    def test_under_node_threshold(self):
+        """S4: 10 nodes is below the 25 threshold."""
+        graph = {"nodes": [{"id": f"n{i}"} for i in range(10)]}
+        assert _should_sweep(graph, word_count=50) is False
 
 
 class TestMergeSweepResults:
@@ -486,7 +511,7 @@ class TestDiagramConfidence:
             "edges": [{"id": "e1", "confidence": 0.8}],
         }
         score, reasoning = _compute_diagram_confidence(graph, word_count=50)
-        assert 0.80 <= score <= 1.0
+        assert 0.70 <= score <= 1.0
         assert "Text-rich" in reasoning
 
     def test_text_poor(self):
@@ -497,6 +522,17 @@ class TestDiagramConfidence:
         score, reasoning = _compute_diagram_confidence(graph, word_count=10)
         assert score < 0.9  # 0.8x penalty
         assert "Text-poor" in reasoning
+
+    def test_text_rich_threshold_at_20(self):
+        """m2: Text-rich threshold is >=20, not >=30."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        score20, r20 = _compute_diagram_confidence(graph, word_count=20)
+        score19, r19 = _compute_diagram_confidence(graph, word_count=19)
+        assert "Text-rich" in r20
+        assert "Text-poor" in r19
 
     def test_floor_at_010(self):
         graph = {

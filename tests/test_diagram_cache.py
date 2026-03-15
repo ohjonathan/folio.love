@@ -172,7 +172,7 @@ class TestEntryOperations:
         store_entry(cache, "img1", {"diagram": "data"}, {"_dep": "v1"}, "anthropic", "claude")
         entry = cache["img1"]
         assert entry["diagram"] == "data"
-        assert entry["_dep"] == "v1"
+        assert entry["_dep__dep"] == "v1"  # m7: prefixed with _dep_
         assert entry["_provider"] == "anthropic"
         assert entry["_model"] == "claude"
 
@@ -182,6 +182,12 @@ class TestEntryOperations:
         store_entry(cache, "img1", original_data, {}, "p", "m")
         assert "key" in original_data
         assert "_provider" not in original_data
+
+    def test_check_entry_backward_compat(self):
+        """m7: check_entry reads both prefixed and legacy raw keys."""
+        cache = {"img1": {"_dep": "v1", "data": "ok"}}
+        result = check_entry(cache, "img1", {"_dep": "v1"})
+        assert result is not None
 
 
 # ---------------------------------------------------------------------------

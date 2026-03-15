@@ -240,13 +240,17 @@ def check_entry(
     """Check if a cache entry exists and all dependency hashes match.
 
     Returns the cached entry dict if valid, or None.
+    m7: Looks for both prefixed (_dep_) and raw dep keys for backward compat.
     """
     entry = cache.get(image_hash)
     if not isinstance(entry, dict):
         return None
 
     for key, expected in dependency_hashes.items():
-        if entry.get(key) != expected:
+        dep_key = key if key.startswith("_dep_") else f"_dep_{key}"
+        # Check both prefixed and legacy raw key
+        actual = entry.get(dep_key, entry.get(key))
+        if actual != expected:
             logger.debug(
                 "Diagram cache entry %s: dependency %s mismatch",
                 image_hash[:8], key,
@@ -264,9 +268,16 @@ def store_entry(
     provider: str,
     model: str,
 ) -> None:
-    """Store a cache entry with dependency hashes and provenance."""
+    """Store a cache entry with dependency hashes and provenance.
+
+    m7: Dep hash keys are stored with `_dep_` prefix to avoid collision
+    with data keys.
+    """
     entry = dict(data)
-    entry.update(dependency_hashes)
+    # m7: Prefix dep keys to prevent collision with data keys
+    for k, v in dependency_hashes.items():
+        dep_key = k if k.startswith("_dep_") else f"_dep_{k}"
+        entry[dep_key] = v
     entry["_provider"] = provider
     entry["_model"] = model
     cache[image_hash] = entry

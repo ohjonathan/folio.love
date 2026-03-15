@@ -7,7 +7,7 @@ Usage:
     python tools/diagram_iterate.py sample.pdf --page 3 --pass b --out-dir tmp/iter/
 
 Writes intermediate artifacts: raw LLM responses, parsed JSON, graph snapshots,
-mutation logs, highlight images, and final DiagramAnalysis.to_dict().
+mutation logs, and final DiagramAnalysis.to_dict().
 """
 
 import argparse
@@ -148,7 +148,7 @@ def main():
         if isinstance(result, DiagramAnalysis):
             print(
                 f"  Slide {slide_num}: type={result.diagram_type}, "
-                f"confidence={result.extraction_confidence:.2f}, "
+                f"confidence={result.diagram_confidence:.2f}, "
                 f"nodes={len(result.graph.nodes) if result.graph else 0}, "
                 f"edges={len(result.graph.edges) if result.graph else 0}"
             )

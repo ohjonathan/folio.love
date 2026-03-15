@@ -529,13 +529,18 @@ def _anchor_bboxes(
 
     For each node, searches bounded_texts for the closest label match.
     If found with >=80% word overlap, adopts the bounded_text's bbox.
+
+    Returns a new list of node dicts (m1: does not mutate input).
     """
     if not bounded_texts:
-        return nodes
+        return [dict(n) for n in nodes]
 
+    result = []
     for node in nodes:
+        node = dict(node)  # m1: copy to avoid mutating input
         label = node.get("label", "")
         if not label:
+            result.append(node)
             continue
 
         best_overlap = 0.0
@@ -543,6 +548,7 @@ def _anchor_bboxes(
 
         label_words = set(label.lower().split())
         if not label_words:
+            result.append(node)
             continue
 
         for bt in bounded_texts:
@@ -565,7 +571,9 @@ def _anchor_bboxes(
         if best_overlap >= 0.80 and best_bbox is not None:
             node["bbox"] = list(best_bbox)
 
-    return nodes
+        result.append(node)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -742,6 +750,7 @@ def _sanity_check(
 ) -> bool:
     """Return True if mutations exceed sanity thresholds.
 
+    Checks both count deltas AND structural deltas (m5: relabel ratio).
     If True, the original graph should be kept (sanity short-circuit).
     """
     orig_nodes = len(original_graph.get("nodes", []))
@@ -766,6 +775,24 @@ def _sanity_check(
                 edge_delta * 100, edge_threshold * 100,
             )
             return True
+
+    # m5: Structural delta — detect mass relabeling
+    if orig_nodes > 0:
+        orig_labels = {n.get("id"): n.get("label") for n in original_graph.get("nodes", [])}
+        mut_labels = {n.get("id"): n.get("label") for n in mutated_graph.get("nodes", [])}
+        common_ids = set(orig_labels) & set(mut_labels)
+        if common_ids:
+            relabeled = sum(
+                1 for nid in common_ids
+                if orig_labels[nid] != mut_labels[nid]
+            )
+            relabel_ratio = relabeled / len(common_ids)
+            if relabel_ratio > 0.50:
+                logger.warning(
+                    "Sanity check: %.0f%% of nodes relabeled (>50%% threshold)",
+                    relabel_ratio * 100,
+                )
+                return True
 
     return False
 
@@ -825,7 +852,28 @@ def _generate_claims(graph_dict: dict) -> list[dict]:
             "related_bbox": edge.get("evidence_bbox"),
         })
 
-    return claims
+    # S10: Group claims by entity so node existence + attributes stay together
+    # This ensures a node's claims are in the same batch and aren't split
+    node_claims_by_id: dict[str, list[dict]] = {}
+    edge_claims_list: list[dict] = []
+
+    for claim in claims:
+        cid = claim.get("claim_id", "")
+        if cid.startswith("node_exists_"):
+            nid = cid[len("node_exists_"):]
+            node_claims_by_id.setdefault(nid, []).insert(0, claim)
+        elif cid.startswith("node_tech_"):
+            nid = cid[len("node_tech_"):]
+            node_claims_by_id.setdefault(nid, []).append(claim)
+        else:
+            edge_claims_list.append(claim)
+
+    grouped: list[dict] = []
+    for group in node_claims_by_id.values():
+        grouped.extend(group)
+    grouped.extend(edge_claims_list)
+
+    return grouped
 
 
 def _apply_verdicts(
@@ -834,8 +882,8 @@ def _apply_verdicts(
 ) -> dict:
     """Apply verification verdicts to node/edge confidence scores.
 
-    - confirmed: confidence unchanged (already high)
-    - refuted: confidence *= 0.5
+    - confirmed: confidence unchanged
+    - refuted: node/edge REMOVED (S6: prune refuted elements)
     - uncertain: confidence *= 0.8
     """
     nodes = list(graph_dict.get("nodes", []))
@@ -843,30 +891,39 @@ def _apply_verdicts(
 
     verdict_map = {v["claim_id"]: v for v in verdicts if isinstance(v, dict)}
 
+    # S6: Collect refuted node IDs for pruning
+    refuted_node_ids: set[str] = set()
+
+    surviving_nodes = []
     for node in nodes:
         nid = node["id"]
         v = verdict_map.get(f"node_exists_{nid}")
-        if v:
-            if v.get("verdict") == "refuted":
-                node["confidence"] = node.get("confidence", 0.9) * 0.5
-                if v.get("correction"):
-                    node["verification_evidence"] = v["correction"]
-            elif v.get("verdict") == "uncertain":
-                node["confidence"] = node.get("confidence", 0.9) * 0.8
+        if v and v.get("verdict") == "refuted":
+            refuted_node_ids.add(nid)
+            continue  # S6: prune refuted node
+        if v and v.get("verdict") == "uncertain":
+            node["confidence"] = node.get("confidence", 0.9) * 0.8
+        surviving_nodes.append(node)
 
+    # S6: Prune edges referencing refuted nodes + refuted edges
+    surviving_edges = []
     for edge in edges:
         eid = edge["id"]
+        if edge.get("source_id") in refuted_node_ids:
+            continue  # orphaned by refuted source
+        if edge.get("target_id") in refuted_node_ids:
+            continue  # orphaned by refuted target
         v = verdict_map.get(f"edge_exists_{eid}")
-        if v:
-            if v.get("verdict") == "refuted":
-                edge["confidence"] = edge.get("confidence", 0.9) * 0.5
-            elif v.get("verdict") == "uncertain":
-                edge["confidence"] = edge.get("confidence", 0.9) * 0.8
+        if v and v.get("verdict") == "refuted":
+            continue  # S6: prune refuted edge
+        if v and v.get("verdict") == "uncertain":
+            edge["confidence"] = edge.get("confidence", 0.9) * 0.8
+        surviving_edges.append(edge)
 
     return {
         "diagram_type": graph_dict.get("diagram_type", "unknown"),
-        "nodes": nodes,
-        "edges": edges,
+        "nodes": surviving_nodes,
+        "edges": surviving_edges,
         "groups": graph_dict.get("groups", []),
     }
 
@@ -878,12 +935,13 @@ def _apply_verdicts(
 def _should_sweep(
     graph_dict: dict,
     word_count: int,
-    node_threshold: int = 8,
-    word_threshold: int = 100,
+    node_threshold: int = 25,
+    word_threshold: int = 150,
 ) -> bool:
     """Determine if a completeness sweep is warranted.
 
-    Dense pages: many nodes or many words.
+    S4: Only dense diagrams (>25 nodes or >150 words) trigger sweep,
+    aligned with proposal thresholds.
     """
     num_nodes = len(graph_dict.get("nodes", []))
     return num_nodes >= node_threshold or word_count >= word_threshold
@@ -910,6 +968,11 @@ def _merge_sweep_results(
         nid = _to_snake_case(str(new_node.get("label", "")))
         if nid and nid not in existing_node_ids:
             new_node["id"] = nid
+            # S7: Force low confidence and review flag on sweep discoveries
+            new_node["confidence"] = min(
+                float(new_node.get("confidence", 0.5)), 0.5
+            )
+            new_node["sweep_discovered"] = True
             nodes.append(new_node)
             existing_node_ids.add(nid)
 
@@ -969,14 +1032,39 @@ def _compute_diagram_confidence(
 
     avg_conf = sum(all_confidences) / len(all_confidences) if all_confidences else 0.5
 
-    text_rich = word_count >= 30
+    # S8: Enhanced confidence scoring with text inventory coverage
+    # and mutation magnitude
+    text_rich = word_count >= 20  # m2: aligned with proposal threshold
     base = avg_conf if text_rich else avg_conf * 0.8
+
+    # S8: Text inventory coverage factor — nodes with text matches score higher
+    nodes_with_bbox = sum(1 for n in nodes if n.get("bbox"))
+    if nodes:
+        coverage_ratio = nodes_with_bbox / len(nodes)
+        coverage_bonus = coverage_ratio * 0.05  # up to +0.05
+        base += coverage_bonus
+    else:
+        coverage_ratio = 0.0
+        coverage_bonus = 0.0
+
+    # S8: Uncertainty penalty — nodes with low confidence drag score down
+    low_conf_nodes = sum(1 for n in nodes if n.get("confidence", 0.9) < 0.6)
+    if nodes and low_conf_nodes > 0:
+        uncertainty_penalty = (low_conf_nodes / len(nodes)) * 0.1
+        base -= uncertainty_penalty
+    else:
+        uncertainty_penalty = 0.0
 
     reasons = []
     if text_rich:
         reasons.append(f"Text-rich ({word_count} words)")
     else:
         reasons.append(f"Text-poor ({word_count} words, 0.8x base)")
+
+    if coverage_bonus > 0:
+        reasons.append(f"Bbox coverage {coverage_ratio:.0%} (+{coverage_bonus:.3f})")
+    if uncertainty_penalty > 0:
+        reasons.append(f"{low_conf_nodes} low-conf nodes (-{uncertainty_penalty:.3f})")
 
     if pass_c_run:
         base += 0.05
@@ -1163,10 +1251,7 @@ def analyze_diagram_pages(
 
     provider, client = provider_client
 
-    # Load caches
-    pass_a_cache = {} if force_miss else diagram_cache.load_stage_cache(
-        cache_dir, "pass_a", provider_name, model, DIAGRAM_EXTRACTION_PROMPT
-    )
+    # Load caches (S-NEW-2/S1: removed dead pass_a_cache load)
     final_cache = {} if force_miss else diagram_cache.load_stage_cache(
         cache_dir, "final", provider_name, model, DIAGRAM_EXTRACTION_PROMPT
     )
@@ -1391,9 +1476,17 @@ def analyze_diagram_pages(
                     "$region_text_inventory", region_inv
                 )
 
-                # Crop region image
+                # Crop region image (m8: resize to max 2048px edge for provider limits)
                 try:
                     region_img = page_img.crop((qx0, qy0, qx1, qy1))
+                    max_edge = max(region_img.size)
+                    if max_edge > 2048:
+                        scale = 2048 / max_edge
+                        new_w = int(region_img.width * scale)
+                        new_h = int(region_img.height * scale)
+                        region_img = region_img.resize(
+                            (new_w, new_h), Image.LANCZOS
+                        )
                     buf = io.BytesIO()
                     region_img.save(buf, format="PNG")
                     region_part = ImagePart(
@@ -1456,13 +1549,22 @@ def analyze_diagram_pages(
         if confidence < 0.60:
             analysis.review_required = True
 
-        # Review questions from low-confidence nodes/edges
-        review_qs = []
-        for node in graph.nodes:
-            if node.confidence < 0.6:
-                review_qs.append(f"Low confidence node: {node.label}")
-        if review_qs:
-            analysis.review_questions = review_qs[:5]
+        # S-NEW-1: Review questions from low-confidence nodes
+        # (guard: don't overwrite sanity-triggered review_questions)
+        if not sanity_triggered:
+            review_qs = []
+            for node in graph.nodes:
+                if node.confidence < 0.6:
+                    review_qs.append(f"Low confidence node: {node.label}")
+            # S7: Flag sweep-discovered nodes
+            sweep_nodes = [
+                n for n in post_b_graph.get("nodes", [])
+                if n.get("sweep_discovered")
+            ]
+            for sn in sweep_nodes:
+                review_qs.append(f"Sweep-discovered node: {sn.get('label', '?')}")
+            if review_qs:
+                analysis.review_questions = review_qs[:5]
 
         analysis = _update_inherited_fields(analysis, post_b_graph, is_mixed)
 
