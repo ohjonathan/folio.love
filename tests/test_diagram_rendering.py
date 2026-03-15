@@ -223,7 +223,6 @@ class TestMermaidDirections:
         ("->", "-->"),
         ("<->", "<-->"),
         ("undirected", "---"),
-        ("unknown", "---"),
     ])
     def test_legacy_directions(self, legacy, expected_arrow):
         graph = _simple_graph(
@@ -232,6 +231,16 @@ class TestMermaidDirections:
         )
         mermaid, _ = graph_to_mermaid(graph)
         assert expected_arrow in mermaid
+
+    def test_unknown_direction_conservative(self):
+        """S3: Unrecognized directions render as undirected with uncertainty."""
+        graph = _simple_graph(
+            nodes=[_n("a", "A"), _n("b", "B")],
+            edges=[_e("a_b", "a", "b", direction="diagonal")],
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        assert "---" in mermaid
+        assert any("unknown direction" in u.lower() for u in uncertainties)
 
 
 # ---------------------------------------------------------------------------
@@ -410,8 +419,9 @@ class TestEmptyLabelFallback:
 
 
 class TestOmitAndFlag:
-    def test_unsanitizable_label_falls_back_to_id(self):
-        """Per spec: 'if label becomes empty after sanitization, fall back to node id'."""
+    def test_unsanitizable_label_falls_back_to_id_with_uncertainty(self):
+        """S1: When label sanitizes to empty, fall back to node ID and
+        emit an uncertainty (omit-and-flag contract)."""
         graph = _simple_graph(
             nodes=[
                 _n("good", "Good Node"),
@@ -422,7 +432,29 @@ class TestOmitAndFlag:
         mermaid, uncertainties = graph_to_mermaid(graph)
         assert "Good Node" in mermaid
         assert "bad" in mermaid
-        assert not any("omitted" in u.lower() for u in uncertainties)
+        # S1: Should flag the fallback
+        assert any("unsanitizable" in u.lower() or "using id" in u.lower()
+                   for u in uncertainties)
+
+    def test_unsanitizable_edge_label_flagged(self):
+        """S1: Edge label sanitized to nothing emits uncertainty."""
+        graph = _simple_graph(
+            nodes=[_n("a", "A"), _n("b", "B")],
+            edges=[_e("a_b", "a", "b", label="(|)")],
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        assert any("label" in u.lower() and "omitted" in u.lower()
+                   for u in uncertainties)
+
+    def test_unsanitizable_group_name_flagged(self):
+        """S1: Group name sanitized to nothing uses ID and emits uncertainty."""
+        graph = _simple_graph(
+            nodes=[_n("x", "X")],
+            groups=[_g("grp", "()", contains=["x"])],
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        assert any("group" in u.lower() and "unsanitizable" in u.lower()
+                   for u in uncertainties)
 
 
 # ---------------------------------------------------------------------------
@@ -758,21 +790,37 @@ class TestGroupDAGShape:
 
 class TestGroupCycleDetection:
     def test_mutual_group_containment_flagged(self):
-        """S2: Group cycle (A→B→A) → cycle detected, no crash."""
+        """Group cycle (A→B→A) with top-level wrapper → cycle detected."""
         graph = _simple_graph(
             nodes=[_n("x", "X")],
             groups=[
-                # A contains B, and B contains A → cycle
-                # Use a wrapper group W (top-level) to start traversal into A
                 _g("w", "Wrapper", contains_groups=["a"]),
                 _g("a", "Group A", contains=["x"], contains_groups=["b"]),
                 _g("b", "Group B", contains_groups=["a"]),
             ],
         )
         mermaid, uncertainties = graph_to_mermaid(graph)
-        # Should report cycle for the mutual A↔B reference
         assert any("cycle" in u.lower() for u in uncertainties)
-        # Should not crash
+        assert "graph TD" in mermaid
+
+    def test_rootless_cycle_detected(self):
+        """B2: When ALL groups are children of other groups (rootless),
+        no top-level entry point exists → uncertainty emitted and nodes
+        rendered ungrouped instead of silently vanishing."""
+        graph = _simple_graph(
+            nodes=[_n("x", "X"), _n("y", "Y")],
+            groups=[
+                _g("a", "Group A", contains=["x"], contains_groups=["b"]),
+                _g("b", "Group B", contains=["y"], contains_groups=["a"]),
+            ],
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        # B2: Should report rootless cycle
+        assert any("rootless" in u.lower() or "all groups" in u.lower()
+                   for u in uncertainties)
+        # Nodes must still appear (not silently erased)
+        assert "X" in mermaid
+        assert "Y" in mermaid
         assert "graph TD" in mermaid
 
 
@@ -817,7 +865,7 @@ class TestNonAsciiIdCollision:
 
 
 # ---------------------------------------------------------------------------
-# Table cell escaping
+# Table cell escaping and control character sanitization
 # ---------------------------------------------------------------------------
 
 
@@ -830,6 +878,82 @@ class TestTableCellEscaping:
 
     def test_no_pipe_unchanged(self):
         assert _escape_table_cell("Normal text") == "Normal text"
+
+    def test_control_chars_stripped(self):
+        """S4: Control characters stripped from table cells."""
+        assert _escape_table_cell("abc\x00def") == "abcdef"
+        assert _escape_table_cell("line1\nline2") == "line1 line2"
+        assert _escape_table_cell("tab\there") == "tab here"
+
+
+# ---------------------------------------------------------------------------
+# S2: node.group_id reconciliation
+# ---------------------------------------------------------------------------
+
+
+class TestGroupIdReconciliation:
+    def test_node_group_id_used_when_group_contains_missing(self):
+        """S2: Nodes with group_id but not in group.contains should still
+        render as grouped in component table."""
+        graph = _simple_graph(
+            nodes=[
+                _n("x", "NodeX", group_id="grp1"),
+            ],
+            groups=[_g("grp1", "My Group", contains=[])],  # contains is empty
+        )
+        table = graph_to_component_table(graph)
+        assert "My Group" in table
+
+
+# ---------------------------------------------------------------------------
+# S4: Multiline / control chars in prose and tables
+# ---------------------------------------------------------------------------
+
+
+class TestControlCharSanitization:
+    def test_prose_strips_control_chars(self):
+        """S4: Control characters in edge labels don't leak into prose."""
+        graph = _simple_graph(
+            nodes=[_n("a", "A"), _n("b", "B")],
+            edges=[_e("a_b", "a", "b", label="line1\nline2\x00")],
+        )
+        prose = graph_to_prose(graph)
+        assert "\n" not in prose
+        assert "\x00" not in prose
+        assert "line1" in prose
+        assert "line2" in prose
+
+    def test_prose_blank_label_uses_fallback(self):
+        """M1: Blank-label node with technology falls back to technology."""
+        graph = _simple_graph(
+            nodes=[_n("db", "", technology="PostgreSQL")],
+        )
+        prose = graph_to_prose(graph)
+        assert "PostgreSQL" in prose
+        assert prose != ""
+
+    def test_prose_orphaned_group_not_mentioned(self):
+        """M2: Group with no real nodes should not appear in prose summary."""
+        graph = _simple_graph(
+            nodes=[_n("x", "X")],
+            groups=[
+                _g("real", "Real Group", contains=["x"]),
+                _g("orphan", "Orphan Group", contains=["nonexistent"]),
+            ],
+        )
+        prose = graph_to_prose(graph)
+        assert "Real Group" in prose
+        assert "Orphan" not in prose
+
+    def test_table_newlines_collapsed(self):
+        """S4: Newlines in node labels don't break table rows."""
+        graph = _simple_graph(
+            nodes=[_n("x", "Line1\nLine2")],
+        )
+        table = graph_to_component_table(graph)
+        assert "\n" not in table.split("\n")[2]  # data row
+        assert "Line1" in table
+        assert "Line2" in table
 
 
 # ---------------------------------------------------------------------------

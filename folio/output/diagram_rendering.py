@@ -231,6 +231,9 @@ _RESERVED_WORDS = frozenset({"end", "subgraph", "graph", "direction"})
 # Characters that need escaping/removal in Mermaid labels.
 _UNSAFE_LABEL_RE = re.compile(r'[()\[\]{}<>"\|;`]')
 
+# Control characters and newlines that must be stripped from prose/table values.
+_CONTROL_CHAR_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+
 
 def _sanitize_label(label: str) -> str | None:
     """Sanitize a label for safe Mermaid rendering.
@@ -257,14 +260,20 @@ def _sanitize_label(label: str) -> str | None:
     return sanitized
 
 
-def _sanitize_edge_label(label: str | None) -> str:
-    """Sanitize an edge label for Mermaid. Returns empty string if unusable."""
+def _sanitize_edge_label(label: str | None) -> tuple[str, bool]:
+    """Sanitize an edge label for Mermaid.
+
+    Returns:
+        (sanitized_label, was_modified) — empty string + True if label
+        was present but sanitized to nothing.
+    """
     if not label or not label.strip():
-        return ""
+        return "", False
     sanitized = label.strip()
     sanitized = _UNSAFE_LABEL_RE.sub("", sanitized)
     sanitized = " ".join(sanitized.split())
-    return sanitized
+    was_modified = (sanitized != label.strip()) or not sanitized
+    return sanitized, was_modified and bool(label.strip())
 
 
 def _make_safe_id(node_id: str, registry: dict[str, str] | None = None) -> str:
@@ -329,11 +338,17 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
     node_map = {n.id: n for n in graph.nodes}
     group_map = {g.id: g for g in graph.groups}
 
-    # Determine which nodes belong to which group
+    # S2: Reconcile node.group_id with group.contains.
+    # PR4's regroup action updates node.group_id but not group.contains.
+    # Build the authoritative node→group mapping from BOTH sources.
     node_to_group: dict[str, str] = {}
     for group in graph.groups:
         for nid in group.contains:
             node_to_group[nid] = group.id
+    # Fallback: honor node.group_id if not already mapped via group.contains
+    for node in graph.nodes:
+        if node.id not in node_to_group and getattr(node, 'group_id', None):
+            node_to_group[node.id] = node.group_id
 
     # Identify top-level groups (not contained by another group)
     child_groups: set[str] = set()
@@ -344,6 +359,18 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
         g for g in sorted(graph.groups, key=lambda g: (g.name, g.id))
         if g.id not in child_groups
     ]
+
+    # B2: Rootless cycle detection — when all groups are children of other
+    # groups, top_level_groups is empty and all groups silently vanish.
+    # Detect and report this.
+    if graph.groups and not top_level_groups:
+        uncertainties.append(
+            "All groups are nested inside other groups (rootless cycle); "
+            "groups flattened and all nodes rendered at top level"
+        )
+        # Render all group nodes as ungrouped — they'll be picked up below
+        # Clear node_to_group so all nodes render as ungrouped
+        node_to_group.clear()
 
     # Render groups recursively.
     # S1 fix: use path-tracking set for cycle detection (pop after recursion)
@@ -388,7 +415,13 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
 
         if emit_wrapper:
             safe_gid = _make_safe_id(group.id, safe_id_registry)
-            sanitized_name = _sanitize_label(group.name) or safe_gid
+            sanitized_name = _sanitize_label(group.name)
+            # S1: Flag when group name falls back to ID
+            if sanitized_name is None:
+                sanitized_name = safe_gid
+                uncertainties.append(
+                    f"Group '{group.id}' name unsanitizable; using ID as label"
+                )
             lines.append(f"{indent}subgraph {safe_gid} [{sanitized_name}]")
             _render_group_nodes(group, indent + "    ")
 
@@ -423,7 +456,12 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
         label = _sanitize_label(node.label)
         if label is None:
             label = safe_id  # fallback to node id
-            if not label:
+            # S1: Flag the fallback as an uncertainty
+            if label:
+                uncertainties.append(
+                    f"Node '{node.id}' label unsanitizable; using ID as label"
+                )
+            else:
                 return None
 
         # B2: Use plain text technology in Mermaid (not wiki-linked).
@@ -479,8 +517,17 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
             )
             continue
 
-        direction = (edge.direction or "forward").lower()
-        arrow = _EDGE_DIRECTION_MAP.get(direction, "-->")
+        # S3: Treat truly unknown directions conservatively
+        direction = (edge.direction or "").lower()
+        if direction not in _EDGE_DIRECTION_MAP:
+            uncertainties.append(
+                f"Edge '{edge.id}' has unknown direction '{edge.direction}'; "
+                "rendering as undirected"
+            )
+            direction = "unknown"  # maps to "---"
+        elif not direction:
+            direction = "forward"  # default when absent
+        arrow = _EDGE_DIRECTION_MAP.get(direction, "---")
 
         source = edge.source_id
         target = edge.target_id
@@ -492,7 +539,12 @@ def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
         safe_source = _make_safe_id(source, safe_id_registry)
         safe_target = _make_safe_id(target, safe_id_registry)
 
-        edge_label = _sanitize_edge_label(edge.label)
+        # S1: Flag edge labels that were sanitized away
+        edge_label, edge_label_modified = _sanitize_edge_label(edge.label)
+        if edge_label_modified and not edge_label:
+            uncertainties.append(
+                f"Edge '{edge.id}' label '{edge.label}' unsanitizable; label omitted"
+            )
         if edge_label:
             lines.append(f"    {safe_source} {arrow}|{edge_label}| {safe_target}")
         else:
@@ -550,35 +602,57 @@ def graph_to_prose(graph: "DiagramGraph") -> str:
             tgt_label = _node_prose_label(tgt)
 
             if edge.label:
+                # S4: Clean control characters from edge label in prose
+                clean_label = _CONTROL_CHAR_RE.sub("", edge.label)
+                clean_label = clean_label.replace("\n", " ").strip()
                 sentences.append(
-                    f"{src_label} connects to {tgt_label} via {edge.label}."
+                    f"{src_label} connects to {tgt_label} via {clean_label}."
                 )
             else:
                 sentences.append(f"{src_label} connects to {tgt_label}.")
     else:
         # No edges: list components
-        labels = sorted(n.label for n in graph.nodes)
+        # M1: Use _node_prose_label for consistent blank-label fallback
+        labels = sorted(_node_prose_label(n) for n in graph.nodes)
         count = len(graph.nodes)
         noun = "component" if count == 1 else "components"
         sentences.append(
             f"{count} {noun} identified: {', '.join(labels)}."
         )
 
-    # Group summary
+    # Group summary — M2: only mention groups that were actually rendered
     if graph.groups:
-        group_names = sorted(g.name for g in graph.groups)
-        sentences.append(
-            f"Components are organized into {', '.join(group_names)} groups."
+        # Filter to groups that contain at least one real node
+        node_ids = {n.id for n in graph.nodes}
+        rendered_group_names = sorted(
+            g.name for g in graph.groups
+            if any(nid in node_ids for nid in g.contains)
         )
+        if rendered_group_names:
+            sentences.append(
+                f"Components are organized into {', '.join(rendered_group_names)} groups."
+            )
 
     return " ".join(sentences)
 
 
 def _node_prose_label(node: "DiagramNode") -> str:
-    """Format a node label for prose, including technology if present."""
+    """Format a node label for prose, including technology if present.
+
+    S4: Strips control characters and newlines from labels.
+    M1: Uses technology as fallback when label is blank.
+    """
+    label = (node.label or "").strip()
+    # S4: Strip control characters
+    label = _CONTROL_CHAR_RE.sub("", label)
+    label = label.replace("\n", " ").replace("\r", " ")
+    label = " ".join(label.split())
+    # M1: Fallback to technology or node ID for blank labels
+    if not label:
+        label = (node.technology or node.id or "unknown").strip()
     if node.technology:
-        return f"{node.label} ({node.technology})"
-    return node.label
+        return f"{label} ({node.technology})"
+    return label
 
 
 # ---------------------------------------------------------------------------
@@ -587,10 +661,14 @@ def _node_prose_label(node: "DiagramNode") -> str:
 
 
 def _escape_table_cell(value: str) -> str:
-    """Escape pipe characters in Markdown table cell values (S4)."""
+    """Escape pipe characters and strip control characters from Markdown table cell values."""
     if not value:
         return ""
-    return value.replace("|", "\\|")
+    # S4: Strip control characters and collapse newlines
+    cleaned = _CONTROL_CHAR_RE.sub("", value)
+    cleaned = cleaned.replace("\n", " ").replace("\r", " ")
+    cleaned = " ".join(cleaned.split())  # collapse whitespace
+    return cleaned.replace("|", "\\|")
 
 
 # ---------------------------------------------------------------------------
@@ -607,11 +685,18 @@ def graph_to_component_table(graph: "DiagramGraph") -> str:
     if graph is None or not graph.nodes:
         return "No components identified."
 
-    # Build group lookup
+    # S2: Build group lookup, reconciling group.contains and node.group_id
+    group_id_to_name = {g.id: g.name for g in graph.groups}
     node_to_group_name: dict[str, str] = {}
     for group in graph.groups:
         for nid in group.contains:
             node_to_group_name[nid] = group.name
+    # Fallback: honor node.group_id if not already mapped via group.contains
+    for node in graph.nodes:
+        if node.id not in node_to_group_name and getattr(node, 'group_id', None):
+            gname = group_id_to_name.get(node.group_id)
+            if gname:
+                node_to_group_name[node.id] = gname
 
     # Partition and sort
     grouped = sorted(
@@ -682,8 +767,11 @@ def graph_to_connection_table(graph: "DiagramGraph") -> str:
         from_label = _escape_table_cell(src.label if src else edge.source_id)
         to_label = _escape_table_cell(tgt.label if tgt else edge.target_id)
         label = _escape_table_cell(edge.label or "")
-        direction = (edge.direction or "forward").lower()
-        dir_display = _DIRECTION_DISPLAY.get(direction, "→")
+        # S3: Conservative direction handling in connection table
+        direction = (edge.direction or "").lower()
+        if not direction:
+            direction = "forward"
+        dir_display = _DIRECTION_DISPLAY.get(direction, "?")
         confidence = f"{edge.confidence:.2f}"
         lines.append(
             f"| {from_label} | {to_label} | {label} | {dir_display} | {confidence} |"
