@@ -20,6 +20,7 @@ from folio.output.diagram_rendering import (
     _sanitize_label,
     _sanitize_edge_label,
     _make_safe_id,
+    _escape_table_cell,
 )
 
 
@@ -76,32 +77,21 @@ class TestMermaidSimple:
             nodes=[_n("web", "Web App"), _n("db", "Database", kind="database")],
             edges=[_e("web_db", "web", "db", label="SQL")],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, uncertainties = graph_to_mermaid(graph)
         assert "graph TD" in mermaid
         assert "web" in mermaid
         assert "db" in mermaid
         assert "SQL" in mermaid
 
     def test_empty_graph_returns_empty(self):
-        graph = _simple_graph()
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, uncertainties = graph_to_mermaid(_simple_graph())
         assert mermaid == ""
+        assert uncertainties == []
 
     def test_none_graph_returns_empty(self):
-        result = graph_to_mermaid(None)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, uncertainties = graph_to_mermaid(None)
         assert mermaid == ""
+        assert uncertainties == []
 
 
 # ---------------------------------------------------------------------------
@@ -116,11 +106,7 @@ class TestMermaidGroups:
             edges=[_e("app_db", "app", "db")],
             groups=[_g("vpc", "VPC", contains=["app", "db"])],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert "subgraph" in mermaid
         assert "VPC" in mermaid
         assert "end" in mermaid
@@ -133,11 +119,7 @@ class TestMermaidGroups:
                 _g("outer", "Outer", contains_groups=["inner"]),
             ],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert "subgraph outer" in mermaid
         assert "subgraph inner" in mermaid
 
@@ -164,11 +146,7 @@ class TestMermaidDepthLimit:
             nodes=[_n("leaf", "Leaf Node")],
             groups=groups,
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, uncertainties = result
-        else:
-            mermaid, uncertainties = result, []
+        mermaid, uncertainties = graph_to_mermaid(graph)
         # Should report depth overflow — leaf may or may not appear
         # depending on flattening behavior, but no crash
         assert any("depth" in u.lower() or "flatten" in u.lower() for u in uncertainties)
@@ -196,12 +174,7 @@ class TestMermaidNodeKinds:
     ])
     def test_kind_mapping(self, kind, expected_char):
         graph = _simple_graph(nodes=[_n("n1", "Test", kind=kind)])
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
-        # The expected_char should appear after the node ID
+        mermaid, _ = graph_to_mermaid(graph)
         assert expected_char in mermaid
 
     @pytest.mark.parametrize("alias,expected_kind_char", [
@@ -212,11 +185,7 @@ class TestMermaidNodeKinds:
     ])
     def test_alias_mapping(self, alias, expected_kind_char):
         graph = _simple_graph(nodes=[_n("n1", "Test", kind=alias)])
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert expected_kind_char in mermaid
 
 
@@ -236,11 +205,7 @@ class TestMermaidDirections:
             nodes=[_n("a", "A"), _n("b", "B")],
             edges=[_e("a_b", "a", "b", direction=direction)],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert expected_arrow in mermaid
 
     def test_reverse_swaps_endpoints(self):
@@ -248,12 +213,7 @@ class TestMermaidDirections:
             nodes=[_n("a", "A"), _n("b", "B")],
             edges=[_e("a_b", "a", "b", direction="reverse")],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
-        # Reverse should render as b --> a
+        mermaid, _ = graph_to_mermaid(graph)
         assert "-->" in mermaid
         # b should come before a in the edge line
         edge_lines = [l for l in mermaid.split("\n") if "-->" in l]
@@ -271,16 +231,12 @@ class TestMermaidDirections:
             nodes=[_n("a", "A"), _n("b", "B")],
             edges=[_e("a_b", "a", "b", direction=legacy)],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert expected_arrow in mermaid
 
 
 # ---------------------------------------------------------------------------
-# 8. Technology second-line rendering
+# 8. Technology second-line rendering (B2: plain text, no wiki-links)
 # ---------------------------------------------------------------------------
 
 
@@ -289,13 +245,20 @@ class TestMermaidTechnology:
         graph = _simple_graph(
             nodes=[_n("app", "Web Application", technology="React")],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert "Web Application<br/>" in mermaid
         assert "React" in mermaid
+
+    def test_technology_no_wiki_links_in_mermaid(self):
+        """B2: Wiki-link brackets must NOT appear in Mermaid labels."""
+        graph = _simple_graph(
+            nodes=[_n("db", "Database", kind="database", technology="PostgreSQL")],
+        )
+        mermaid, _ = graph_to_mermaid(graph)
+        assert "PostgreSQL" in mermaid
+        # Must be plain text, NOT [[PostgreSQL]]
+        assert "[[" not in mermaid
+        assert "]]" not in mermaid
 
 
 # ---------------------------------------------------------------------------
@@ -309,11 +272,7 @@ class TestMermaidEdgeLabels:
             nodes=[_n("a", "A"), _n("b", "B")],
             edges=[_e("a_b", "a", "b", label="HTTPS")],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert "HTTPS" in mermaid
 
     def test_unlabeled_edge(self):
@@ -321,11 +280,7 @@ class TestMermaidEdgeLabels:
             nodes=[_n("a", "A"), _n("b", "B")],
             edges=[_e("a_b", "a", "b")],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert "|" not in mermaid.split("\n")[-1]  # no label pipes
 
 
@@ -346,16 +301,22 @@ class TestMermaidDeterminism:
             ],
             groups=[_g("grp", "Group", contains=["a", "b"])],
         )
-        r1 = graph_to_mermaid(graph)
-        r2 = graph_to_mermaid(graph)
-        if isinstance(r1, tuple):
-            assert r1[0] == r2[0]
-        else:
-            assert r1 == r2
+        r1, _ = graph_to_mermaid(graph)
+        r2, _ = graph_to_mermaid(graph)
+        assert r1 == r2
+
+    def test_determinism_across_reordered_inputs(self):
+        """m5 enhancement: reordered input lists produce identical output."""
+        nodes = [_n("c", "C"), _n("a", "A"), _n("b", "B")]
+        edges = [_e("b_c", "b", "c"), _e("a_b", "a", "b")]
+        g1 = _simple_graph(nodes=nodes, edges=edges)
+        g2 = _simple_graph(nodes=list(reversed(nodes)), edges=list(reversed(edges)))
+        r1, _ = graph_to_mermaid(g1)
+        r2, _ = graph_to_mermaid(g2)
+        assert r1 == r2
 
 
 # ---------------------------------------------------------------------------
-# 11. Empty graph handling (already covered above)
 # 12-18. Sanitization tests
 # ---------------------------------------------------------------------------
 
@@ -388,11 +349,17 @@ class TestSanitization:
         assert result is not None
         assert ";" not in result
 
+    def test_angle_brackets_removed(self):
+        """m8: Angle brackets must be removed from labels."""
+        result = _sanitize_label("A > B < C")
+        assert result is not None
+        assert "<" not in result
+        assert ">" not in result
+
     def test_reserved_word_end(self):
         """'end' must not break Mermaid statement."""
         result = _sanitize_label("end")
         assert result is not None
-        # Must be disambiguated (not literally 'end' without trailing space)
         assert result != "end" or result.endswith(" ")
 
     def test_reserved_word_subgraph(self):
@@ -420,50 +387,28 @@ class TestSanitization:
 class TestEmptyLabelFallback:
     def test_empty_label_uses_node_id(self):
         graph = _simple_graph(nodes=[_n("fallback_node", "")])
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
-        # Node ID should appear as fallback
+        mermaid, _ = graph_to_mermaid(graph)
         assert "fallback_node" in mermaid
 
 
 # ---------------------------------------------------------------------------
-# 20. Unsanitizable node/edge omitted while rest stays valid
+# 20. Omit-and-flag / fallback-to-ID behavior
 # ---------------------------------------------------------------------------
 
 
 class TestOmitAndFlag:
-    def test_unsanitizable_edge_flagged(self):
-        """Edge referencing a non-existent node is still rendered (Mermaid may
-        handle it), but if we want omit-and-flag we need a node that truly
-        can't render — where _make_safe_id returns 'node' and _sanitize_label
-        returns None, the fallback to 'node' still produces valid output.
-
-        Per spec: 'if label becomes empty after sanitization, fall back to node id'.
-        So truly unsanitizable = no valid label AND empty safe ID.
-
-        We verify: the fallback-to-ID behavior works when label sanitizes away.
-        """
-        from folio.pipeline.analysis import DiagramNode as DN
-        # Node with label "()" → sanitizes to None → falls back to safe_id "bad"
+    def test_unsanitizable_label_falls_back_to_id(self):
+        """Per spec: 'if label becomes empty after sanitization, fall back to node id'."""
         graph = _simple_graph(
             nodes=[
                 _n("good", "Good Node"),
-                DN(id="bad", label="()", kind="service"),
+                DiagramNode(id="bad", label="()", kind="service"),
             ],
             edges=[_e("good_bad", "good", "bad")],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, uncertainties = result
-        else:
-            mermaid, uncertainties = result, []
-        # Both nodes should render — bad falls back to its ID as label
+        mermaid, uncertainties = graph_to_mermaid(graph)
         assert "Good Node" in mermaid
         assert "bad" in mermaid
-        # No uncertainties because fallback-to-ID succeeded
         assert not any("omitted" in u.lower() for u in uncertainties)
 
 
@@ -475,7 +420,6 @@ class TestOmitAndFlag:
 def _mermaid_parser_available():
     """Check if Node.js Mermaid parser is available."""
     import shutil
-    import subprocess
     from pathlib import Path
     if not shutil.which("node"):
         return False
@@ -515,11 +459,7 @@ class TestMermaidParserValidation:
                 _e("api_db", "api", "db", label="SQL"),
             ],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert _validate_mermaid(mermaid), f"Mermaid parse failed:\n{mermaid}"
 
     def test_grouped_graph_parses(self):
@@ -528,22 +468,14 @@ class TestMermaidParserValidation:
             edges=[_e("svc_db", "svc", "db")],
             groups=[_g("vpc", "VPC", contains=["svc", "db"])],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert _validate_mermaid(mermaid), f"Mermaid parse failed:\n{mermaid}"
 
     def test_technology_label_parses(self):
         graph = _simple_graph(
             nodes=[_n("app", "Web App", technology="React")],
         )
-        result = graph_to_mermaid(graph)
-        if isinstance(result, tuple):
-            mermaid, _ = result
-        else:
-            mermaid = result
+        mermaid, _ = graph_to_mermaid(graph)
         assert _validate_mermaid(mermaid), f"Mermaid parse failed:\n{mermaid}"
 
 
@@ -583,13 +515,17 @@ class TestProseGeneration:
         assert "Alpha" in prose
         assert "Beta" in prose
 
+    def test_prose_single_component_grammar(self):
+        """m6: Singular 'component' for single-node graph."""
+        graph = _simple_graph(nodes=[_n("x", "Only")])
+        prose = graph_to_prose(graph)
+        assert "1 component identified" in prose
+        assert "components" not in prose
+
     def test_prose_graph_bound(self):
         """Prose should not infer semantics not in the graph."""
-        graph = _simple_graph(
-            nodes=[_n("svc", "Payment Service")],
-        )
+        graph = _simple_graph(nodes=[_n("svc", "Payment Service")])
         prose = graph_to_prose(graph)
-        # Should not contain interpretive claims
         assert "security" not in prose.lower()
         assert "purpose" not in prose.lower()
         assert "owns" not in prose.lower()
@@ -647,12 +583,21 @@ class TestComponentTable:
         table = graph_to_component_table(_simple_graph())
         assert "No components identified" in table
 
-    def test_technology_resolved(self):
+    def test_technology_resolved_with_wiki_links(self):
+        """Wiki-links ARE used in component table (unlike Mermaid)."""
         graph = _simple_graph(
             nodes=[_n("db", "DB", technology="PostgreSQL")],
         )
         table = graph_to_component_table(graph)
         assert "[[PostgreSQL]]" in table
+
+    def test_pipe_in_label_escaped(self):
+        """S4: Pipe in label value doesn't break table row."""
+        graph = _simple_graph(
+            nodes=[_n("x", "A | B")],
+        )
+        table = graph_to_component_table(graph)
+        assert "A \\| B" in table
 
 
 # ---------------------------------------------------------------------------
@@ -689,6 +634,15 @@ class TestConnectionTable:
         a_idx = table.index("| A |")
         c_idx = table.index("| C |")
         assert a_idx < c_idx  # A→B before C→A
+
+    def test_pipe_in_edge_label_escaped(self):
+        """S4: Pipe in edge label doesn't break table row."""
+        graph = _simple_graph(
+            nodes=[_n("a", "A"), _n("b", "B")],
+            edges=[_e("a_b", "a", "b", label="HTTP | gRPC")],
+        )
+        table = graph_to_connection_table(graph)
+        assert "HTTP \\| gRPC" in table
 
 
 # ---------------------------------------------------------------------------
@@ -748,11 +702,121 @@ class TestEntityResolution:
         assert resolve_entity("k8s") == "[[Kubernetes]]"
         assert resolve_entity("golang") == "[[Go]]"
 
+    def test_aws_lambda_alias(self):
+        """m7: 'AWS Lambda' should resolve as well as 'lambda'."""
+        assert resolve_entity("lambda") == "[[AWS Lambda]]"
+        assert resolve_entity("AWS Lambda") == "[[AWS Lambda]]"
+
     def test_generic_variants(self):
         """Various generic labels should not be linked."""
         for generic in ["service", "api", "gateway", "cache", "server"]:
             result = resolve_entity(generic)
             assert "[[" not in result, f"Generic '{generic}' should not be linked"
+
+
+# ---------------------------------------------------------------------------
+# S1: DAG-shape group hierarchy (diamond)
+# ---------------------------------------------------------------------------
+
+
+class TestGroupDAGShape:
+    def test_diamond_dag_no_false_cycle(self):
+        """S1: Diamond group hierarchy (A→B, A→C, B→D, C→D) must render D
+        without a false 'cycle detected' warning."""
+        graph = _simple_graph(
+            nodes=[_n("leaf", "Leaf")],
+            groups=[
+                _g("a", "A", contains_groups=["b", "c"]),
+                _g("b", "B", contains_groups=["d"]),
+                _g("c", "C", contains_groups=["d"]),
+                _g("d", "D", contains=["leaf"]),
+            ],
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        # D should be rendered (no false cycle)
+        assert "subgraph d" in mermaid
+        assert not any("cycle" in u.lower() for u in uncertainties)
+
+
+# ---------------------------------------------------------------------------
+# S2: Real cycle detection
+# ---------------------------------------------------------------------------
+
+
+class TestGroupCycleDetection:
+    def test_mutual_group_containment_flagged(self):
+        """S2: Group cycle (A→B→A) → cycle detected, no crash."""
+        graph = _simple_graph(
+            nodes=[_n("x", "X")],
+            groups=[
+                # A contains B, and B contains A → cycle
+                # Use a wrapper group W (top-level) to start traversal into A
+                _g("w", "Wrapper", contains_groups=["a"]),
+                _g("a", "Group A", contains=["x"], contains_groups=["b"]),
+                _g("b", "Group B", contains_groups=["a"]),
+            ],
+        )
+        mermaid, uncertainties = graph_to_mermaid(graph)
+        # Should report cycle for the mutual A↔B reference
+        assert any("cycle" in u.lower() for u in uncertainties)
+        # Should not crash
+        assert "graph TD" in mermaid
+
+
+# ---------------------------------------------------------------------------
+# S3: Empty subgraph elision
+# ---------------------------------------------------------------------------
+
+
+class TestEmptySubgraphElision:
+    def test_empty_subgraph_elided(self):
+        """S3: Group with no valid nodes or subgroups should not produce
+        an empty subgraph...end block."""
+        graph = _simple_graph(
+            nodes=[_n("x", "X")],
+            groups=[
+                _g("empty", "Empty Group", contains=["nonexistent"]),
+            ],
+        )
+        mermaid, _ = graph_to_mermaid(graph)
+        assert "subgraph" not in mermaid
+
+
+# ---------------------------------------------------------------------------
+# S5: Non-ASCII ID collision avoidance
+# ---------------------------------------------------------------------------
+
+
+class TestNonAsciiIdCollision:
+    def test_cjk_ids_dont_collide(self):
+        """S5: Two nodes with CJK IDs that collapse to the same safe form
+        should get unique Mermaid IDs."""
+        graph = _simple_graph(
+            nodes=[
+                _n("データ", "Data 1"),
+                _n("サービス", "Data 2"),
+            ],
+        )
+        mermaid, _ = graph_to_mermaid(graph)
+        # Both nodes should appear with unique IDs
+        assert "Data 1" in mermaid
+        assert "Data 2" in mermaid
+
+
+# ---------------------------------------------------------------------------
+# Table cell escaping
+# ---------------------------------------------------------------------------
+
+
+class TestTableCellEscaping:
+    def test_escape_pipe(self):
+        assert _escape_table_cell("A | B") == "A \\| B"
+
+    def test_escape_empty(self):
+        assert _escape_table_cell("") == ""
+
+    def test_no_pipe_unchanged(self):
+        assert _escape_table_cell("Normal text") == "Normal text"
 
 
 # ---------------------------------------------------------------------------
@@ -813,10 +877,7 @@ class TestRenderDiagramAnalyses:
         da = DiagramAnalysis.from_slide_analysis(
             sa, diagram_type="mixed",
         )
-        # Give it a graph so rendering runs
-        da.graph = _simple_graph(
-            nodes=[_n("a", "A")],
-        )
+        da.graph = _simple_graph(nodes=[_n("a", "A")])
         result = render_diagram_analyses({1: da})
         rendered = result[1]
         # Inherited fields preserved

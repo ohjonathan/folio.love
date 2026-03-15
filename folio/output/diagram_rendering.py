@@ -132,6 +132,7 @@ _TECHNOLOGY_WIKI_MAP: dict[str, str] = {
     "snowflake": "[[Snowflake]]",
     "bigquery": "[[BigQuery]]",
     "databricks": "[[Databricks]]",
+    "aws lambda": "[[AWS Lambda]]",
 }
 
 # Generic labels that must NOT receive wiki-links.
@@ -228,7 +229,7 @@ _DIRECTION_DISPLAY: dict[str, str] = {
 _RESERVED_WORDS = frozenset({"end", "subgraph", "graph", "direction"})
 
 # Characters that need escaping/removal in Mermaid labels.
-_UNSAFE_LABEL_RE = re.compile(r'[()\[\]{}"\|;`]')
+_UNSAFE_LABEL_RE = re.compile(r'[()\[\]{}<>"\|;`]')
 
 
 def _sanitize_label(label: str) -> str | None:
@@ -241,10 +242,8 @@ def _sanitize_label(label: str) -> str | None:
         return None
 
     sanitized = label.strip()
-    # Remove unsafe characters
+    # Remove unsafe characters (includes pipes, brackets, angle brackets)
     sanitized = _UNSAFE_LABEL_RE.sub("", sanitized)
-    # Remove pipes (interfere with edge labels)
-    sanitized = sanitized.replace("|", " ")
     # Collapse whitespace
     sanitized = " ".join(sanitized.split())
 
@@ -264,16 +263,37 @@ def _sanitize_edge_label(label: str | None) -> str:
         return ""
     sanitized = label.strip()
     sanitized = _UNSAFE_LABEL_RE.sub("", sanitized)
-    sanitized = sanitized.replace("|", " ")
     sanitized = " ".join(sanitized.split())
     return sanitized
 
 
+# Track assigned safe IDs to detect collisions (reset per graph_to_mermaid call).
+_safe_id_registry: dict[str, str] = {}
+
+
 def _make_safe_id(node_id: str) -> str:
-    """Ensure a node ID is safe for Mermaid (alphanumeric + underscore)."""
+    """Ensure a node ID is safe for Mermaid (alphanumeric + underscore).
+
+    Detects collisions from non-ASCII IDs that collapse to the same safe form
+    and appends a counter suffix to disambiguate.
+    """
     safe = re.sub(r"[^a-zA-Z0-9_]", "_", node_id)
     safe = re.sub(r"_+", "_", safe).strip("_")
-    return safe or "node"
+    base = safe or "node"
+
+    # Check for collision (different original ID → same safe ID)
+    if base in _safe_id_registry:
+        if _safe_id_registry[base] != node_id:
+            # Collision — find unique suffix
+            counter = 1
+            while f"{base}_{counter}" in _safe_id_registry:
+                counter += 1
+            safe = f"{base}_{counter}"
+            _safe_id_registry[safe] = node_id
+            return safe
+    else:
+        _safe_id_registry[base] = node_id
+    return base
 
 
 # ---------------------------------------------------------------------------
@@ -283,14 +303,19 @@ def _make_safe_id(node_id: str) -> str:
 _MAX_SUBGRAPH_DEPTH = 5
 
 
-def graph_to_mermaid(graph: "DiagramGraph") -> str:
+def graph_to_mermaid(graph: "DiagramGraph") -> tuple[str, list[str]]:
     """Generate deterministic Mermaid flowchart from a DiagramGraph.
 
-    Same DiagramGraph → byte-identical Mermaid output.
-    Returns empty string for empty/None graph.
+    Returns:
+        (mermaid_text, uncertainties) — mermaid_text is the Mermaid code,
+        uncertainties is a list of rendering warnings (omitted nodes, etc.).
+        Empty/None graph returns ("", []).
     """
     if graph is None or (not graph.nodes and not graph.edges):
-        return ""
+        return "", []
+
+    # Reset the safe-ID collision registry for this render
+    _safe_id_registry.clear()
 
     lines: list[str] = ["graph TD"]
     uncertainties: list[str] = []
@@ -316,15 +341,20 @@ def graph_to_mermaid(graph: "DiagramGraph") -> str:
         if g.id not in child_groups
     ]
 
-    # Render groups recursively
-    visited_groups: set[str] = set()
+    # Render groups recursively.
+    # S1 fix: use path-tracking set for cycle detection (pop after recursion)
+    # and separate rendered set to avoid re-rendering in DAG shapes.
+    recursion_path: set[str] = set()
+    rendered_groups: set[str] = set()
 
     def _render_group(group: "DiagramGroup", depth: int, indent: str) -> None:
-        if group.id in visited_groups:
+        if group.id in recursion_path:
             uncertainties.append(
                 f"Cycle detected in group '{group.name}' (id={group.id}); flattened"
             )
             return
+        if group.id in rendered_groups:
+            return  # DAG convergence — already rendered, skip silently
         if depth > _MAX_SUBGRAPH_DEPTH:
             uncertainties.append(
                 f"Max subgraph depth ({_MAX_SUBGRAPH_DEPTH}) exceeded for "
@@ -332,11 +362,21 @@ def graph_to_mermaid(graph: "DiagramGraph") -> str:
             )
             # Flatten: render contained nodes at current level
             _render_group_nodes(group, indent)
+            rendered_groups.add(group.id)
             return
 
-        visited_groups.add(group.id)
+        recursion_path.add(group.id)
+        rendered_groups.add(group.id)
         safe_gid = _make_safe_id(group.id)
         sanitized_name = _sanitize_label(group.name) or safe_gid
+
+        # S3: Check if group has any renderable content before emitting subgraph
+        has_nodes = any(nid in node_map for nid in group.contains)
+        has_subgroups = any(gid in group_map for gid in group.contains_groups)
+        if not has_nodes and not has_subgroups:
+            recursion_path.discard(group.id)
+            return  # Elide empty subgraph
+
         lines.append(f"{indent}subgraph {safe_gid} [{sanitized_name}]")
 
         # Render contained nodes
@@ -351,6 +391,7 @@ def graph_to_mermaid(graph: "DiagramGraph") -> str:
             _render_group(nested_group, depth + 1, indent + "    ")
 
         lines.append(f"{indent}end")
+        recursion_path.discard(group.id)
 
     def _render_group_nodes(group: "DiagramGroup", indent: str) -> None:
         nodes_in_group = sorted(
@@ -375,11 +416,14 @@ def graph_to_mermaid(graph: "DiagramGraph") -> str:
             if not label:
                 return None
 
-        # Technology second line
+        # B2: Use plain text technology in Mermaid (not wiki-linked).
+        # Wiki-links are reserved for component_table and prose.
         if node.technology:
-            resolved = resolve_entity(node.technology)
-            if resolved:
-                label = f"{label}<br/>{resolved}"
+            tech_plain = node.technology.strip()
+            if tech_plain:
+                # Sanitize the tech label too for Mermaid safety
+                tech_safe = _sanitize_label(tech_plain) or tech_plain
+                label = f"{label}<br/>{tech_safe}"
 
         kind = (node.kind or "other").lower()
         shape_fmt = _NODE_SHAPE_MAP.get(kind, _NODE_SHAPE_MAP["other"])
@@ -502,8 +546,10 @@ def graph_to_prose(graph: "DiagramGraph") -> str:
     else:
         # No edges: list components
         labels = sorted(n.label for n in graph.nodes)
+        count = len(graph.nodes)
+        noun = "component" if count == 1 else "components"
         sentences.append(
-            f"{len(graph.nodes)} components identified: {', '.join(labels)}."
+            f"{count} {noun} identified: {', '.join(labels)}."
         )
 
     # Group summary
@@ -521,6 +567,18 @@ def _node_prose_label(node: "DiagramNode") -> str:
     if node.technology:
         return f"{node.label} ({node.technology})"
     return node.label
+
+
+# ---------------------------------------------------------------------------
+# Table helpers
+# ---------------------------------------------------------------------------
+
+
+def _escape_table_cell(value: str) -> str:
+    """Escape pipe characters in Markdown table cell values (S4)."""
+    if not value:
+        return ""
+    return value.replace("|", "\\|")
 
 
 # ---------------------------------------------------------------------------
@@ -562,9 +620,15 @@ def graph_to_component_table(graph: "DiagramGraph") -> str:
         tech = resolve_entity(node.technology) if node.technology else ""
         group = node_to_group_name.get(node.id, "")
         confidence = f"{node.confidence:.2f}"
+        # S4: Escape pipes in cell values to prevent table breakage
+        label = _escape_table_cell(node.label)
+        kind = _escape_table_cell(node.kind or "")
+        tech = _escape_table_cell(tech)
+        group = _escape_table_cell(group)
+        source = _escape_table_cell(node.source_text or "")
         lines.append(
-            f"| {node.label} | {node.kind} | {tech} | {group} | "
-            f"{node.source_text} | {confidence} |"
+            f"| {label} | {kind} | {tech} | {group} | "
+            f"{source} | {confidence} |"
         )
 
     return "\n".join(lines)
@@ -602,9 +666,10 @@ def graph_to_connection_table(graph: "DiagramGraph") -> str:
     for edge in sorted_edges:
         src = node_map.get(edge.source_id)
         tgt = node_map.get(edge.target_id)
-        from_label = src.label if src else edge.source_id
-        to_label = tgt.label if tgt else edge.target_id
-        label = edge.label or ""
+        # S4: Escape pipes in cell values
+        from_label = _escape_table_cell(src.label if src else edge.source_id)
+        to_label = _escape_table_cell(tgt.label if tgt else edge.target_id)
+        label = _escape_table_cell(edge.label or "")
         direction = (edge.direction or "forward").lower()
         dir_display = _DIRECTION_DISPLAY.get(direction, "→")
         confidence = f"{edge.confidence:.2f}"
@@ -649,12 +714,7 @@ def render_diagram_analyses(
 
         # Render Mermaid
         try:
-            mermaid_result = graph_to_mermaid(analysis.graph)
-            if isinstance(mermaid_result, tuple):
-                mermaid_text, render_uncertainties = mermaid_result
-            else:
-                mermaid_text = mermaid_result
-                render_uncertainties = []
+            mermaid_text, render_uncertainties = graph_to_mermaid(analysis.graph)
 
             if mermaid_text:
                 analysis.mermaid = mermaid_text
