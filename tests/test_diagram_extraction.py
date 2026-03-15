@@ -22,6 +22,8 @@ from folio.pipeline.diagram_extraction import (
     _compute_diagram_confidence,
     _build_text_inventory,
     _update_inherited_fields,
+    _SUPPORTED_DIAGRAM_TYPES,
+    _select_pass_c_images,
 )
 from folio.pipeline.analysis import DiagramAnalysis
 
@@ -728,3 +730,125 @@ class TestExtractionMetadata:
         da = DiagramAnalysis(diagram_type="flowchart")
         d = da.to_dict()
         assert "_extraction_metadata" not in d
+
+
+# ---------------------------------------------------------------------------
+# Regression: v1 type gate (proposal L62)
+# ---------------------------------------------------------------------------
+
+
+class TestSupportedDiagramTypes:
+    """Regression tests for v1 type gate narrowing."""
+
+    def test_architecture_supported(self):
+        assert "architecture" in _SUPPORTED_DIAGRAM_TYPES
+
+    def test_data_flow_supported(self):
+        assert "data-flow" in _SUPPORTED_DIAGRAM_TYPES
+
+    def test_only_two_types_supported(self):
+        """v1 is strictly architecture + data-flow per proposal L62."""
+        assert len(_SUPPORTED_DIAGRAM_TYPES) == 2
+
+    @pytest.mark.parametrize("unsupported", [
+        "flowchart", "sequence", "class", "entity-relationship",
+        "network", "org-chart", "mindmap", "gantt", "timeline",
+        "unknown", "state-machine", "deployment",
+    ])
+    def test_other_types_abstain(self, unsupported):
+        """All non-v1 diagram types must NOT be in the supported set."""
+        assert unsupported not in _SUPPORTED_DIAGRAM_TYPES
+
+
+# ---------------------------------------------------------------------------
+# Regression: per-batch highlight bbox selection
+# ---------------------------------------------------------------------------
+
+
+class TestPerBatchHighlights:
+    """Regression tests for per-batch claim-relevant bbox extraction."""
+
+    def test_node_claim_extracts_related_bbox(self):
+        """Node claims should provide the node's related_bbox for highlighting."""
+        graph = {
+            "nodes": [
+                {"id": "web", "label": "Web", "kind": "service",
+                 "bbox": [10, 20, 100, 80], "confidence": 0.9},
+            ],
+            "edges": [],
+        }
+        claims = _generate_claims(graph)
+        node_claims = [c for c in claims if c["claim_id"].startswith("node_exists_")]
+        assert len(node_claims) == 1
+        assert node_claims[0]["related_bbox"] == [10, 20, 100, 80]
+
+    def test_edge_claim_bbox_lookup(self):
+        """Edge claims should enable source+target bbox lookup."""
+        graph = {
+            "nodes": [
+                {"id": "web", "label": "Web", "bbox": [10, 20, 100, 80]},
+                {"id": "db", "label": "DB", "bbox": [200, 200, 300, 280]},
+            ],
+            "edges": [
+                {"id": "web_db", "source_id": "web", "target_id": "db", "label": "SQL"},
+            ],
+        }
+        claims = _generate_claims(graph)
+        edge_claims = [c for c in claims if c["claim_id"].startswith("edge_exists_")]
+        assert len(edge_claims) == 1
+        # Edge claim should reference web_db
+        assert edge_claims[0]["claim_id"] == "edge_exists_web_db"
+        # Verify source+target bboxes are retrievable from node bbox map
+        node_bbox_map = {n["id"]: tuple(n["bbox"]) for n in graph["nodes"] if n.get("bbox")}
+        edge = graph["edges"][0]
+        src_bbox = node_bbox_map.get(edge["source_id"])
+        tgt_bbox = node_bbox_map.get(edge["target_id"])
+        assert src_bbox == (10, 20, 100, 80)
+        assert tgt_bbox == (200, 200, 300, 280)
+
+
+# ---------------------------------------------------------------------------
+# Regression: _select_pass_c_images with highlights
+# ---------------------------------------------------------------------------
+
+
+class TestSelectPassCImages:
+    """Regression: Pass C images use highlight_regions."""
+
+    def _mock_profile(self):
+        class FakeProfile:
+            escalation_level = "medium"
+        return FakeProfile()
+
+    def test_without_bboxes_returns_plain(self):
+        """No bboxes → plain global image (no highlights)."""
+        from PIL import Image
+        img = Image.new("RGB", (200, 200), color=(255, 255, 255))
+        parts = _select_pass_c_images(img, self._mock_profile(), node_bboxes=None)
+        assert len(parts) == 1
+        assert parts[0].role == "global"
+
+    def test_with_bboxes_returns_highlighted(self):
+        """With bboxes → image has highlight overlays (different bytes)."""
+        from PIL import Image
+        img = Image.new("RGB", (200, 200), color=(255, 255, 255))
+        plain = _select_pass_c_images(img, self._mock_profile(), node_bboxes=None)
+        highlighted = _select_pass_c_images(
+            img, self._mock_profile(),
+            node_bboxes=[(10, 10, 50, 50), (100, 100, 150, 150)],
+        )
+        assert len(highlighted) == 1
+        # Highlighted image should differ from plain (overlay changes pixels)
+        assert highlighted[0].image_data != plain[0].image_data
+
+    def test_single_image_returned(self):
+        """Pass C always returns exactly 1 global ImagePart."""
+        from PIL import Image
+        img = Image.new("RGB", (200, 200), color=(255, 255, 255))
+        parts = _select_pass_c_images(
+            img, self._mock_profile(),
+            node_bboxes=[(10, 10, 50, 50)],
+        )
+        assert len(parts) == 1
+        assert parts[0].role == "global"
+        assert parts[0].media_type == "image/png"

@@ -24,6 +24,7 @@ from folio.pipeline.diagram_cache import (
     pass_a_graph_hash,
     post_b_graph_hash,
     load_stage_cache,
+    load_stale_entry,
     save_stage_cache,
     check_entry,
     store_entry,
@@ -229,3 +230,38 @@ class TestNoCrossPollution:
         loaded2 = load_stage_cache(tmp_path, "pass_a", "p", "m", "prompt")
         assert loaded2.get("img1") is not None
         assert loaded2.get("img2") is not None
+
+
+# ---------------------------------------------------------------------------
+# Regression: load_stale_entry bypasses marker validation
+# ---------------------------------------------------------------------------
+
+
+class TestLoadStaleEntry:
+    """Regression for stale-cache IoU inheritance (Issue #2)."""
+
+    def test_stale_entry_bypasses_markers(self, tmp_path):
+        """load_stale_entry reads entry even after provider/model change."""
+        cache = {"img_abc": {"graph": {"nodes": [{"id": "stable_old"}]}}}
+        save_stage_cache(tmp_path, "final", cache, "anthropic", "old-model", "old-prompt")
+        # Normal load with different markers returns empty
+        normal = load_stage_cache(tmp_path, "final", "anthropic", "new-model", "new-prompt")
+        assert normal == {}
+        # Stale entry loader bypasses markers
+        stale = load_stale_entry(tmp_path, "final", "img_abc")
+        assert stale is not None
+        assert stale["graph"]["nodes"][0]["id"] == "stable_old"
+
+    def test_stale_entry_missing_key(self, tmp_path):
+        cache = {"img_abc": {"data": "ok"}}
+        save_stage_cache(tmp_path, "final", cache, "p", "m", "t")
+        assert load_stale_entry(tmp_path, "final", "nonexistent") is None
+
+    def test_stale_entry_no_file(self, tmp_path):
+        assert load_stale_entry(tmp_path, "final", "any") is None
+
+    def test_stale_entry_none_dir(self):
+        assert load_stale_entry(None, "final", "any") is None
+
+    def test_stale_entry_unknown_stage(self, tmp_path):
+        assert load_stale_entry(tmp_path, "unknown", "any") is None
