@@ -580,13 +580,9 @@ def _anchor_bboxes(
 # B1: Evidence-driven image selection
 # ---------------------------------------------------------------------------
 
-# B4: v1-supported diagram types — all others abstain
-_SUPPORTED_DIAGRAM_TYPES = {
-    "architecture", "flowchart", "class", "entity-relationship",
-    "network", "org-chart", "mindmap", "concept-map", "state-machine",
-    "deployment", "hierarchy", "process", "data-flow", "comparison",
-    "venn", "swimlane", "matrix", "mixed", "unknown",
-}
+# B4: v1-supported diagram types — system architecture and data flow only
+# Per proposal L62: "System architecture and data flow only. All other types abstain."
+_SUPPORTED_DIAGRAM_TYPES = {"architecture", "data-flow"}
 
 
 def _select_pass_a_images(
@@ -1561,20 +1557,21 @@ def analyze_diagram_pages(
         claims = _generate_claims(post_b_graph)
 
         # Issue #4: Generate highlight-backed Pass C images using post-B node bboxes
-        node_bboxes = []
+        # Build node bbox lookup for per-batch highlights
+        node_bbox_map: dict[str, tuple] = {}
         for n in post_b_graph.get("nodes", []):
             bbox = n.get("bbox")
             if bbox and len(bbox) == 4:
-                node_bboxes.append(tuple(bbox))
-        pass_c_images = _select_pass_c_images(
-            page_img, profile, node_bboxes=node_bboxes or None
-        )
+                node_bbox_map[n["id"]] = tuple(bbox)
 
         if claims and not sanity_triggered:
             pass_c_attempted = True
             # Batch claims (target 18 per batch)
             batch_size = 18
             all_verdicts = []
+
+            # Build node map for edge claim bbox lookups
+            node_map = {n["id"]: n for n in post_b_graph.get("nodes", [])}
 
             for batch_start in range(0, len(claims), batch_size):
                 batch = claims[batch_start:batch_start + batch_size]
@@ -1584,10 +1581,37 @@ def analyze_diagram_pages(
                     "$claims_json", claims_json
                 )
 
-                # B1: Pass C uses global-only images
+                # Per-batch highlights: only claim-relevant bboxes
+                batch_bboxes = []
+                for claim in batch:
+                    cid = claim.get("claim_id", "")
+                    # Node claims: highlight the node's bbox
+                    if cid.startswith("node_exists_") or cid.startswith("node_tech_"):
+                        rb = claim.get("related_bbox")
+                        if rb and len(rb) == 4:
+                            batch_bboxes.append(tuple(rb))
+                    # Edge claims: highlight source + target bboxes
+                    elif cid.startswith("edge_exists_"):
+                        eid = cid[len("edge_exists_"):]
+                        for edge in post_b_graph.get("edges", []):
+                            if edge["id"] == eid:
+                                src_id = edge.get("source_id", "")
+                                tgt_id = edge.get("target_id", "")
+                                if src_id in node_bbox_map:
+                                    batch_bboxes.append(node_bbox_map[src_id])
+                                if tgt_id in node_bbox_map:
+                                    batch_bboxes.append(node_bbox_map[tgt_id])
+                                break
+
+                # Generate per-batch highlight images
+                batch_images = _select_pass_c_images(
+                    page_img, profile,
+                    node_bboxes=batch_bboxes or None,
+                )
+
                 pass_c_out, pass_c_usage = _call_llm(
                     provider, client, model, pass_c_prompt,
-                    pass_c_images, primary_settings, limiter,
+                    batch_images, primary_settings, limiter,
                     max_tokens=2048,
                 )
                 total_usage = TokenUsage(
