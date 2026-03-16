@@ -14,11 +14,20 @@ venv/
 # Testing
 .pytest_cache/
 
-# Build artifacts
+# Build / distribution
+dist/
+build/
 mnt/
 
 # Tool artifacts
 .ontos/
+
+# Ontos artifacts (regeneratable)
+AGENTS.md
+Ontos_Context_Map.md
+
+# Temp review dirs
+.tmp-review-*/
 
 # Editor / OS
 .DS_Store
