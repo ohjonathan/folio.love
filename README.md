@@ -19,6 +19,8 @@ pip install folio-love
 
 The CLI command is `folio`.
 
+For agent-friendly setup (Cursor, Claude Code), see [Agentic Setup](https://github.com/ohjonathan/folio.love/blob/main/docs/guides/agentic_setup.md).
+
 Or install from source:
 
 ```bash
