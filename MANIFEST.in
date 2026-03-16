@@ -4,10 +4,7 @@ include folio.example.yaml
 include pyproject.toml
 
 recursive-include folio *.py
-recursive-include tests *.py
-
-prune tests/mermaid
-prune tests/validation
+prune tests
 
 global-exclude __pycache__
 global-exclude *.pyc
