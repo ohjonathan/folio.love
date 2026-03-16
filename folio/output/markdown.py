@@ -149,10 +149,14 @@ def _format_slide(
     # Diagram transclusion for pure diagram pages
     is_pure_diagram = classification == "diagram"
     is_mixed = classification == "mixed"
+    is_unsupported_diagram = classification == "unsupported_diagram"
 
-    if is_pure_diagram and diagram_note_ref:
-        # Pure diagram: suppress generic Analysis, add transclusion
+    if (is_pure_diagram or is_unsupported_diagram) and diagram_note_ref:
+        # Pure/unsupported diagram: suppress generic Analysis, add transclusion
         _append_diagram_transclusion(lines, diagram_note_ref)
+    elif (is_pure_diagram or is_unsupported_diagram) and not diagram_note_ref:
+        # B1 fix: unsupported diagram without note ref — show consulting analysis
+        _append_consulting_analysis(lines, analysis)
     elif is_mixed:
         # Mixed: keep consulting analysis, then append transclusion
         _append_consulting_analysis(lines, analysis)

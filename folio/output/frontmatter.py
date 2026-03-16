@@ -203,8 +203,12 @@ def _collect_unique(
             if field == "diagram_type":
                 dt = analysis.diagram_type
                 if dt and dt not in exclude:
-                    # C2 fix: include diagram_type for all DiagramAnalysis
-                    # (graph present, graphless abstained, or abstained-with-graph)
+                    # S1 fix: exclude graphless abstentions from deck-level
+                    # diagram_types (they haven't been extracted, so advertising
+                    # them is misleading). Include non-abstained and
+                    # abstained-with-graph (candidate extractions).
+                    if analysis.abstained and not analysis.graph:
+                        continue
                     values.add(dt)
             elif field == "diagram_component" and analysis.graph:
                 for node in analysis.graph.nodes:

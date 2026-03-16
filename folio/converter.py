@@ -249,6 +249,12 @@ class FolioConverter:
 
             # PR 3: Compute pass-1 slide numbers, excluding unsupported_diagram
             # PR 6: Also exclude frozen pure diagram slides from Pass 1
+            # S3 doc: Frozen MIXED slides intentionally remain in Pass 1 because
+            # the consulting analysis portion needs fresh extraction on each run.
+            # Only the diagram extraction/rendering is bypassed via frozen note.
+            # This is specified in CLAUDE_CODE_PROMPT_diagram_pr6_output_assembly.md
+            # §§ and overrides the proposal doc (which discussed freeze at slide
+            # level, before mixed-page semantics were fully designed).
             all_slide_nums = [r.slide_num for r in image_results]
             pass1_exclude = unsupported_diagram_slides | frozen_diagram_slides
             pass1_slide_numbers = [n for n in all_slide_nums if n not in pass1_exclude]

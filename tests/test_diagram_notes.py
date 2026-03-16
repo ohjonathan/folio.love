@@ -546,10 +546,11 @@ class TestC1PipeEscapeRoundTrip:
         assert rows[0]["Component"] == original
 
 
-class TestC2AbstainedDiagramType:
-    """C2 regression: abstained DiagramAnalysis with graph=None in diagram_types."""
+class TestC2S1DiagramTypeScopeing:
+    """C2+S1: diagram_types scope — graphless abstentions excluded, extracted types included."""
 
-    def test_abstained_graphless_in_diagram_types(self):
+    def test_graphless_abstained_excluded(self):
+        """S1 fix: graphless abstained should NOT appear in deck diagram_types."""
         from folio.output.frontmatter import _collect_unique
         analyses = {
             1: DiagramAnalysis(
@@ -560,7 +561,182 @@ class TestC2AbstainedDiagramType:
             ),
         }
         types = _collect_unique(analyses, "diagram_type", exclude={"unknown"})
-        assert "unsupported" in types
+        assert "unsupported" not in types
+
+    def test_abstained_with_graph_included(self):
+        """Abstained-with-graph (candidate) still appears in diagram_types."""
+        from folio.output.frontmatter import _collect_unique
+        analyses = {
+            1: DiagramAnalysis(
+                diagram_type="architecture",
+                graph=_make_graph(),
+                abstained=True,
+                diagram_confidence=0.4,
+            ),
+        }
+        types = _collect_unique(analyses, "diagram_type", exclude={"unknown"})
+        assert "architecture" in types
+
+    def test_normal_diagram_included(self):
+        """Non-abstained diagram should appear in diagram_types."""
+        from folio.output.frontmatter import _collect_unique
+        analyses = {1: _make_analysis()}
+        types = _collect_unique(analyses, "diagram_type", exclude={"unknown"})
+        assert "architecture" in types
+
+
+class TestB1UnsupportedDiagramEmission:
+    """B1: unsupported_diagram pages get standalone abstention notes."""
+
+    def test_unsupported_diagram_emits_note(self, tmp_path):
+        analysis = DiagramAnalysis(
+            diagram_type="unsupported",
+            graph=None,
+            abstained=True,
+            diagram_confidence=0.1,
+            confidence_reasoning="Diagram type not supported.",
+            review_required=True,
+        )
+        analyses = {5: analysis}
+        page_profiles = {5: MagicMock(classification="unsupported_diagram")}
+
+        refs = emit_diagram_notes(
+            tmp_path, "deck", "Test Deck", "20260314", analyses, page_profiles,
+        )
+        assert 5 in refs
+        content = refs[5].path.read_text()
+        assert "unsupported" in content
+        assert refs[5].has_diagram_section is False
+
+    def test_unsupported_diagram_frozen_discovery(self, tmp_path):
+        """Frozen notes for unsupported_diagram pages should be discovered."""
+        import yaml
+        basename = build_note_basename("20260314", "deck", 5)
+        fm = {
+            "type": "diagram",
+            "diagram_type": "unsupported",
+            "title": "Test — Unsupported (Page 5)",
+            "source_deck": "[[deck]]",
+            "source_page": 5,
+            "extraction_confidence": 0.1,
+            "confidence_reasoning": "Unsupported.",
+            "review_required": True,
+            "review_questions": [],
+            "abstained": True,
+            "folio_freeze": True,
+            "tags": ["diagram"],
+            "human_overrides": {},
+            "_review_history": [],
+            "_extraction_metadata": {},
+        }
+        yaml_str = yaml.dump(fm, default_flow_style=False, sort_keys=False)
+        body = "# Test\n\nAbstained — unsupported diagram type.\n\n---\n\n![[slides/slide-005.png]]"
+        note_path = tmp_path / f"{basename}.md"
+        note_path.write_text(f"---\n{yaml_str}---\n\n{body}\n")
+
+        page_profiles = {5: MagicMock(classification="unsupported_diagram")}
+        frozen = discover_frozen_notes(tmp_path, "deck", "20260314", page_profiles)
+        assert 5 in frozen
+        assert frozen[5].analysis.abstained is True
+
+
+class TestB2FreezeFailClosed:
+    """B2: emit_diagram_notes must never overwrite unparseable existing notes."""
+
+    def test_unparseable_note_preserved(self, tmp_path, caplog):
+        """Existing note with corrupt frontmatter should be preserved, not overwritten."""
+        import logging
+
+        basename = build_note_basename("20260314", "deck", 7)
+        note_path = tmp_path / f"{basename}.md"
+        # Write a file with corrupt YAML frontmatter
+        corrupt_content = "---\nfolio_freeze: true\ninvalid_yaml: [\n---\n\n# Human notes\n"
+        note_path.write_text(corrupt_content)
+
+        analysis = _make_analysis()
+        analyses = {7: analysis}
+        page_profiles = {7: MagicMock(classification="diagram")}
+
+        with caplog.at_level(logging.WARNING):
+            refs = emit_diagram_notes(
+                tmp_path, "deck", "Test Deck", "20260314", analyses, page_profiles,
+            )
+
+        # Page 7 should NOT have a ref (skipped, not overwritten)
+        assert 7 not in refs
+        # Original file must be preserved
+        assert note_path.read_text() == corrupt_content
+        assert "preserving file" in caplog.text
+
+
+class TestB3MalformedFrozenMetadata:
+    """B3: malformed frozen-note metadata must degrade, not crash."""
+
+    def test_non_dict_extraction_metadata(self, tmp_path):
+        """_extraction_metadata as a string should degrade to empty dict."""
+        import yaml
+        basename = build_note_basename("20260314", "deck", 7)
+        fm = {
+            "type": "diagram",
+            "diagram_type": "architecture",
+            "title": "Test — Architecture (Page 7)",
+            "source_deck": "[[deck]]",
+            "source_page": 7,
+            "extraction_confidence": 0.9,
+            "confidence_reasoning": "Clear.",
+            "review_required": False,
+            "review_questions": [],
+            "abstained": False,
+            "folio_freeze": True,
+            "tags": ["diagram"],
+            "human_overrides": {},
+            "_review_history": [],
+            "_extraction_metadata": "not_a_dict",  # malformed
+        }
+        body = "# Test\n\n## Diagram\n\n```mermaid\ngraph TD\n  A-->B\n```\n\n---\n\n![[slides/slide-007.png]]"
+        yaml_str = yaml.dump(fm, default_flow_style=False, sort_keys=False)
+        note_path = tmp_path / f"{basename}.md"
+        note_path.write_text(f"---\n{yaml_str}---\n\n{body}\n")
+
+        page_profiles = {7: MagicMock(classification="diagram")}
+        frozen = discover_frozen_notes(tmp_path, "deck", "20260314", page_profiles)
+
+        # Should not crash, and _extraction_metadata should be empty dict
+        assert 7 in frozen
+        assert frozen[7].analysis._extraction_metadata == {}
+
+    def test_non_list_review_questions(self, tmp_path):
+        """review_questions as a string should degrade to empty list."""
+        import yaml
+        basename = build_note_basename("20260314", "deck", 8)
+        fm = {
+            "type": "diagram",
+            "diagram_type": "sequence",
+            "title": "Test — Sequence (Page 8)",
+            "source_deck": "[[deck]]",
+            "source_page": 8,
+            "extraction_confidence": 0.8,
+            "confidence_reasoning": "OK.",
+            "review_required": False,
+            "review_questions": "not a list",  # malformed
+            "abstained": False,
+            "folio_freeze": True,
+            "tags": ["diagram"],
+            "human_overrides": {},
+            "_review_history": [],
+            "_extraction_metadata": {},
+        }
+        body = "# Test\n\n---\n\n![[slides/slide-008.png]]"
+        yaml_str = yaml.dump(fm, default_flow_style=False, sort_keys=False)
+        note_path = tmp_path / f"{basename}.md"
+        note_path.write_text(f"---\n{yaml_str}---\n\n{body}\n")
+
+        page_profiles = {8: MagicMock(classification="diagram")}
+        frozen = discover_frozen_notes(tmp_path, "deck", "20260314", page_profiles)
+
+        assert 8 in frozen
+        assert frozen[8].analysis.review_questions == []
+
 
 
 class TestM5CodeBlockHeadingImmunity:

@@ -46,6 +46,9 @@ _MANAGED_KEYS = {
 # Preserved keys that survive non-frozen reconversion
 _PRESERVED_KEYS = {"human_overrides", "_review_history", "folio_freeze"}
 
+# B1 fix: shared constant for diagram-like page classifications
+DIAGRAM_CLASSIFICATIONS = frozenset({"diagram", "mixed", "unsupported_diagram"})
+
 # Shared noise words for tag generation (m6 fix: single source of truth)
 NOISE_WORDS = frozenset({
     "the", "a", "an", "and", "or", "for", "of", "in", "to", "is", "by",
@@ -315,7 +318,11 @@ def _read_note_frontmatter(note_path: Path) -> dict | None:
 
 
 def _parse_frontmatter_from_content(content: str) -> dict | None:
-    """Parse YAML frontmatter from already-read markdown content."""
+    """Parse YAML frontmatter from already-read markdown content.
+
+    B3 fix: uses a robust fence scan that handles YAML scalars containing
+    ``---`` by requiring the closing fence to be a standalone line (stripped).
+    """
     lines = content.split("\n")
     if not lines or lines[0].strip() != "---":
         return None
@@ -331,8 +338,8 @@ def _parse_frontmatter_from_content(content: str) -> dict | None:
         fm = yaml.safe_load(yaml_block)
         if isinstance(fm, dict):
             return fm
-    except yaml.YAMLError:
-        pass
+    except yaml.YAMLError as exc:
+        logger.warning("YAML parse error in frontmatter: %s", exc)
     return None
 
 
@@ -559,7 +566,8 @@ def discover_frozen_notes(
 
     for page_num, profile in page_profiles.items():
         classification = getattr(profile, "classification", "text")
-        if classification not in ("diagram", "mixed"):
+        # B1 fix: include unsupported_diagram
+        if classification not in DIAGRAM_CLASSIFICATIONS:
             continue
 
         basename = build_note_basename(created_date, deck_slug, page_num)
@@ -605,6 +613,18 @@ def discover_frozen_notes(
         except (TypeError, ValueError):
             extraction_conf = 0.0
 
+        # B3 fix: defensive casting of _extraction_metadata
+        raw_meta = fm.get("_extraction_metadata", {})
+        try:
+            extraction_meta = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+        except (TypeError, ValueError):
+            extraction_meta = {}
+            logger.warning("Malformed _extraction_metadata in %s", note_path)
+
+        # B3 fix: defensive list coercion for review_questions
+        raw_questions = fm.get("review_questions", [])
+        review_questions = list(raw_questions) if isinstance(raw_questions, list) else []
+
         analysis = DiagramAnalysis(
             diagram_type=str(fm.get("diagram_type", "unknown")),
             graph=graph,
@@ -616,9 +636,9 @@ def discover_frozen_notes(
             diagram_confidence=extraction_conf,
             confidence_reasoning=str(fm.get("confidence_reasoning", "")),
             review_required=bool(fm.get("review_required", False)),
-            review_questions=list(fm.get("review_questions", [])),
+            review_questions=review_questions,
             abstained=bool(fm.get("abstained", False)),
-            _extraction_metadata=dict(fm.get("_extraction_metadata", {})),
+            _extraction_metadata=extraction_meta,
         )
 
         has_diagram = _has_section_heading(content, "Diagram")
@@ -667,7 +687,8 @@ def emit_diagram_notes(
 
     for page_num, profile in page_profiles.items():
         classification = getattr(profile, "classification", "text")
-        if classification not in ("diagram", "mixed"):
+        # B1 fix: include unsupported_diagram
+        if classification not in DIAGRAM_CLASSIFICATIONS:
             continue
 
         analysis = analyses.get(page_num)
@@ -686,7 +707,17 @@ def emit_diagram_notes(
                 existing_content = note_path.read_text(encoding="utf-8")
                 existing_fm = _parse_frontmatter_from_content(existing_content)
             except (OSError, UnicodeDecodeError):
-                pass
+                existing_content = None  # Keep as None to trigger B2 guard
+
+        # B2 fix: fail-closed. If file exists but frontmatter cannot be parsed,
+        # never overwrite — the file may be frozen and we can't verify.
+        if note_path.exists() and existing_content is not None and existing_fm is None:
+            logger.warning(
+                "Cannot parse frontmatter of existing note %s — preserving file",
+                note_path,
+            )
+            continue
+
         if isinstance(existing_fm, dict) and existing_fm.get("folio_freeze"):
             content = existing_content or ""
             refs[page_num] = DiagramNoteRef(
