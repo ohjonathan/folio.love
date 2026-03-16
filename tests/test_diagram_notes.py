@@ -857,3 +857,55 @@ class TestM7GenericTechFiltering:
         assert "review" in fm["tags"]
         # Noise words should NOT
         assert "the" not in fm["tags"]
+
+
+class TestP1MultilineFrontmatterRoundTrip:
+    """P1 blocker: confidence_reasoning with embedded --- must round-trip."""
+
+    def test_emit_then_discover_multiline_reasoning(self, tmp_path):
+        """Note emitted with multi-line confidence_reasoning containing '---'
+        must be discoverable as a frozen note after manual freeze."""
+        import yaml
+
+        # 1. Emit a note with multi-line confidence_reasoning
+        reasoning = "High confidence extraction.\n---\nSome additional notes here."
+        analysis = _make_analysis(confidence_reasoning=reasoning)
+        analyses = {7: analysis}
+        page_profiles = {7: MagicMock(classification="diagram")}
+
+        refs = emit_diagram_notes(
+            tmp_path, "deck", "Test Deck", "20260314", analyses, page_profiles,
+        )
+        assert 7 in refs
+        note_path = refs[7].path
+
+        # 2. Simulate user freezing the note
+        content = note_path.read_text()
+        content = content.replace("folio_freeze: false", "folio_freeze: true")
+        note_path.write_text(content)
+
+        # 3. Verify the frozen note is discoverable (this was the P1 failure)
+        frozen = discover_frozen_notes(tmp_path, "deck", "20260314", page_profiles)
+        assert 7 in frozen, "Frozen note with multi-line confidence_reasoning not discovered"
+        assert frozen[7].analysis.confidence_reasoning == reasoning
+
+    def test_parse_frontmatter_indented_dashes(self):
+        """_parse_frontmatter_from_content must not treat indented --- as fence."""
+        from folio.output.diagram_notes import _parse_frontmatter_from_content
+        content = (
+            "---\n"
+            "type: diagram\n"
+            "confidence_reasoning: |\n"
+            "  First line\n"
+            "  ---\n"
+            "  Second line\n"
+            "---\n"
+            "\n"
+            "# Body\n"
+        )
+        fm = _parse_frontmatter_from_content(content)
+        assert fm is not None
+        assert fm["type"] == "diagram"
+        assert "---" in fm["confidence_reasoning"]
+        assert "Second line" in fm["confidence_reasoning"]
+

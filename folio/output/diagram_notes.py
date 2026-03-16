@@ -320,15 +320,18 @@ def _read_note_frontmatter(note_path: Path) -> dict | None:
 def _parse_frontmatter_from_content(content: str) -> dict | None:
     """Parse YAML frontmatter from already-read markdown content.
 
-    B3 fix: uses a robust fence scan that handles YAML scalars containing
-    ``---`` by requiring the closing fence to be a standalone line (stripped).
+    The closing fence ``---`` must appear at column 0 (no leading whitespace).
+    ``yaml.dump()`` can produce block scalars containing indented ``---``
+    (e.g. for multi-line ``confidence_reasoning``). Using ``rstrip`` instead
+    of ``strip`` prevents treating those as the closing fence.
     """
     lines = content.split("\n")
     if not lines or lines[0].strip() != "---":
         return None
     end_idx = None
     for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
+        # P1 fix: only match unindented --- (column 0) as closing fence
+        if line.rstrip() == "---":
             end_idx = i
             break
     if end_idx is None:
