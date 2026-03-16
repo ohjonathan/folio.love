@@ -1,0 +1,58 @@
+---
+description: Use Folio correctly for deck conversion, diagram extraction, and library maintenance.
+alwaysApply: false
+---
+
+# Folio Workflow
+
+Use the Folio CLI for presentation-processing requests.
+
+## When To Use Folio
+
+Use Folio when the user asks to:
+- convert a PPTX, PPT, or PDF into Markdown
+- scan a folder of decks
+- extract diagrams from PDFs or decks
+- refresh stale converted decks
+- inspect deck/library status
+
+## Command Selection
+
+- One file:
+  - `folio convert <file>`
+- Folder of files:
+  - `folio batch <dir>` (default pattern: `*.pptx`)
+  - `folio batch <dir> --pattern "*.pdf"`
+- Library health:
+  - `folio status`
+- Source-root scan:
+  - `folio scan`
+- Re-convert stale decks:
+  - `folio refresh`
+- Promote curation:
+  - `folio promote <deck_id> <level>`
+
+## Diagram / Deep Analysis Rules
+
+- If the user mentions diagrams, extraction, or deeper review, prefer
+  `--passes 2`.
+- If the user asks for a clean rerun, add `--no-cache`.
+- Do not assume metadata flags like `--client` or `--engagement` unless the
+  user supplied them.
+
+## Preconditions
+
+- If `folio` is unavailable, bootstrap it first.
+- For PPTX/PPT, confirm LibreOffice or Microsoft PowerPoint is available.
+- On managed macOS machines, prefer the PowerPoint renderer path.
+- If no renderer is available, fall back to PDF conversion.
+- If the user requests LLM-backed analysis, verify an API key exists.
+
+## Response Pattern
+
+After each Folio run, state:
+- the exact command used
+- the output path
+- whether `--passes 2` was used
+- whether analysis ran or was skipped due to missing API credentials
+- any prerequisite problem that blocked the run
