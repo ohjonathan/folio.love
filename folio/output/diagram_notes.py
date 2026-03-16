@@ -330,8 +330,11 @@ def _parse_frontmatter_from_content(content: str) -> dict | None:
 
 def _has_section_heading(content: str, section_name: str) -> bool:
     """Check if a ## heading exists outside fenced code blocks."""
-    stripped = _strip_fenced_blocks(content)
-    return bool(re.search(rf"^## {re.escape(section_name)}\s*$", stripped, re.MULTILINE))
+    code_ranges = _fenced_block_ranges(content)
+    for m in re.finditer(rf"^## {re.escape(section_name)}\s*$", content, re.MULTILINE):
+        if not _is_inside_code_block(m.start(), code_ranges):
+            return True
+    return False
 
 
 def _split_table_cells(line: str) -> list[str]:
@@ -462,44 +465,58 @@ def _hydrate_graph_from_tables(
     return DiagramGraph(nodes=nodes, edges=edges, groups=groups)
 
 
-def _strip_fenced_blocks(content: str) -> str:
-    """Remove fenced code blocks to prevent heading matches inside them."""
-    return re.sub(r"^```[^\n]*\n.*?^```", "", content, flags=re.MULTILINE | re.DOTALL)
+def _fenced_block_ranges(content: str) -> list[tuple[int, int]]:
+    """Return (start, end) byte ranges of all fenced code blocks in content."""
+    ranges = []
+    for m in re.finditer(r"^```[^\n]*\n.*?^```", content, re.MULTILINE | re.DOTALL):
+        ranges.append((m.start(), m.end()))
+    return ranges
+
+
+def _is_inside_code_block(pos: int, ranges: list[tuple[int, int]]) -> bool:
+    """Check if a position falls inside any fenced code block range."""
+    for start, end in ranges:
+        if start <= pos < end:
+            return True
+    return False
 
 
 def _extract_section(content: str, section_name: str) -> str | None:
     """Extract the text under a ## section heading from markdown content.
 
     Headings inside fenced code blocks are ignored (M5 fix).
+    Uses direct boundary detection in original content (S-NEW-1 fix).
     """
-    # Work on a version with code blocks stripped for heading detection
-    stripped = _strip_fenced_blocks(content)
+    code_ranges = _fenced_block_ranges(content)
     pattern = rf"^## {re.escape(section_name)}\s*\n"
-    match = re.search(pattern, stripped, re.MULTILINE)
-    if not match:
+
+    # Find the target heading outside code blocks
+    target_match = None
+    for m in re.finditer(pattern, content, re.MULTILINE):
+        if not _is_inside_code_block(m.start(), code_ranges):
+            target_match = m
+            break
+    if not target_match:
         return None
-    start = match.end()
-    # Find the next ## heading or end of stripped content
-    next_heading = re.search(r"^## ", stripped[start:], re.MULTILINE)
-    if next_heading:
-        end = start + next_heading.start()
+
+    start = target_match.end()
+
+    # Find end boundary: next ## heading outside code blocks, or --- divider, or EOF
+    end = len(content)
+    for m in re.finditer(r"^## ", content[start:], re.MULTILINE):
+        abs_pos = start + m.start()
+        if not _is_inside_code_block(abs_pos, code_ranges):
+            end = abs_pos
+            break
     else:
-        # Check for --- divider
-        divider = re.search(r"^---\s*$", stripped[start:], re.MULTILINE)
-        if divider:
-            end = start + divider.start()
-        else:
-            end = len(stripped)
-    # Extract from original content at the same offsets
-    # Since we only used stripped for position detection, map back
-    # by finding the same heading in original content
-    orig_match = re.search(pattern, content, re.MULTILINE)
-    if not orig_match:
-        return None
-    orig_start = orig_match.end()
-    # Use the length delta to find the end in original
-    section_len = end - start
-    return content[orig_start:orig_start + section_len].strip()
+        # No next heading found — check for --- divider outside code blocks
+        for m in re.finditer(r"^---\s*$", content[start:], re.MULTILINE):
+            abs_pos = start + m.start()
+            if not _is_inside_code_block(abs_pos, code_ranges):
+                end = abs_pos
+                break
+
+    return content[start:end].strip()
 
 
 def discover_frozen_notes(
@@ -645,12 +662,17 @@ def emit_diagram_notes(
         note_path = deck_dir / f"{basename}.md"
 
         # Check for frozen note — return existing ref without rewriting
-        existing_fm = _read_note_frontmatter(note_path) if note_path.exists() else None
-        if isinstance(existing_fm, dict) and existing_fm.get("folio_freeze"):
+        # S-NEW-3 fix: single read for both frontmatter and content
+        existing_fm = None
+        existing_content = None
+        if note_path.exists():
             try:
-                content = note_path.read_text(encoding="utf-8")
+                existing_content = note_path.read_text(encoding="utf-8")
+                existing_fm = _parse_frontmatter_from_content(existing_content)
             except (OSError, UnicodeDecodeError):
-                content = ""
+                pass
+        if isinstance(existing_fm, dict) and existing_fm.get("folio_freeze"):
+            content = existing_content or ""
             refs[page_num] = DiagramNoteRef(
                 basename=basename,
                 path=note_path,
@@ -682,6 +704,8 @@ def emit_diagram_notes(
             dir=str(deck_dir), suffix=".md.tmp", prefix=".diagram-",
         )
         try:
+            # S-NEW-2 fix: set standard permissions (mkstemp creates 0o600)
+            os.fchmod(fd, 0o644)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(full_content)
             os.replace(tmp_path, str(note_path))

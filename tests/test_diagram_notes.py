@@ -381,6 +381,10 @@ System architecture overview.
         assert len(graph.groups) == 1
         assert graph.groups[0].name == "Backend"
 
+        # S-NEW-1 regression: frozen mermaid code must NOT be silently discarded
+        assert frozen[7].analysis.mermaid is not None
+        assert "A-->B" in frozen[7].analysis.mermaid
+
     def test_frozen_note_not_rewritten(self, tmp_path):
         """Frozen notes should not be rewritten by emit_diagram_notes."""
         basename = build_note_basename("20260314", "deck", 7)
@@ -581,4 +585,50 @@ class TestM5CodeBlockHeadingImmunity:
         assert section is not None
         assert "| API | service |" in section
         assert "subgraph" not in section
+
+
+class TestSNEW1SectionWithCodeBlock:
+    """S-NEW-1 regression: _extract_section on section containing a code block."""
+
+    def test_diagram_section_preserves_mermaid(self):
+        """The ## Diagram section contains mermaid; extraction must include it."""
+        content = (
+            "## Diagram\n\n"
+            "```mermaid\n"
+            "graph TD\n"
+            "  A-->B\n"
+            "```\n\n"
+            "## Components\n\n"
+            "| Component | Type |\n"
+            "|---|---|\n"
+            "| API | service |\n\n"
+            "---\n"
+        )
+        section = _extract_section(content, "Diagram")
+        assert section is not None
+        assert "```mermaid" in section
+        assert "A-->B" in section
+        # Must NOT include content from the Components section
+        assert "| API |" not in section
+
+    def test_components_section_after_mermaid(self):
+        """Components section extracted correctly when preceded by mermaid."""
+        content = (
+            "## Diagram\n\n"
+            "```mermaid\n"
+            "graph TD\n"
+            "  A-->B\n"
+            "```\n\n"
+            "## Components\n\n"
+            "| Component | Type |\n"
+            "|---|---|\n"
+            "| Gateway | service |\n\n"
+            "## Summary\n\n"
+            "A summary.\n"
+        )
+        section = _extract_section(content, "Components")
+        assert section is not None
+        assert "| Gateway | service |" in section
+        assert "A summary" not in section
+
 
