@@ -305,15 +305,11 @@ def _generate_tags(
     # Add frameworks as tags
     tags.update(frameworks)
 
-    # Extract meaningful words from title
+    # Extract meaningful words from title (m6 fix: shared noise words)
+    from .diagram_notes import NOISE_WORDS, _GENERIC_TECH_TERMS
     title_words = re.findall(r"[a-z][a-z-]+", title.lower().replace("_", "-"))
-    # Filter out noise words
-    noise = {
-        "the", "a", "an", "and", "or", "for", "of", "in", "to", "is", "by",
-        "v1", "v2", "v3", "v4", "v5", "final", "draft", "rev", "copy", "version",
-    }
     for word in title_words:
-        if word not in noise and len(word) > 2:
+        if word not in NOISE_WORDS and len(word) > 2:
             tags.add(word)
 
     # Diagram tags
@@ -325,8 +321,9 @@ def _generate_tags(
                 tags.add(slug)
     if diagram_technologies:
         for tech in diagram_technologies:
+            # m7 fix: filter generic technology terms
             slug = tech.strip("[]").lower().replace(" ", "-").replace("_", "-")
-            if slug:
+            if slug and slug not in _GENERIC_TECH_TERMS:
                 tags.add(slug)
 
     return sorted(tags)

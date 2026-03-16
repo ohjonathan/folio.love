@@ -46,6 +46,18 @@ _MANAGED_KEYS = {
 # Preserved keys that survive non-frozen reconversion
 _PRESERVED_KEYS = {"human_overrides", "_review_history", "folio_freeze"}
 
+# Shared noise words for tag generation (m6 fix: single source of truth)
+NOISE_WORDS = frozenset({
+    "the", "a", "an", "and", "or", "for", "of", "in", "to", "is", "by",
+    "v1", "v2", "v3", "v4", "v5", "final", "draft", "rev", "copy", "version",
+})
+
+# Generic terms filtered from technology tags (m7 fix)
+_GENERIC_TECH_TERMS = frozenset({
+    "service", "system", "component", "module", "layer", "server", "client",
+    "platform", "framework", "tool", "application", "app", "api",
+})
+
 
 @dataclass(frozen=True)
 class DiagramNoteRef:
@@ -118,19 +130,15 @@ def _build_note_frontmatter(
     tags: set[str] = {"diagram"}
     if analysis.diagram_type and analysis.diagram_type != "unknown":
         tags.add(analysis.diagram_type)
-    # Title words from deck_title
+    # Title words from deck_title (m6 fix: use shared NOISE_WORDS)
     title_words = re.findall(r"[a-z][a-z-]+", deck_title.lower().replace("_", "-"))
-    noise = {
-        "the", "a", "an", "and", "or", "for", "of", "in", "to", "is", "by",
-        "v1", "v2", "v3", "v4", "v5", "final", "draft", "rev", "copy", "version",
-    }
     for word in title_words:
-        if word not in noise and len(word) > 2:
+        if word not in NOISE_WORDS and len(word) > 2:
             tags.add(word)
-    # Technology slugs
+    # Technology slugs (m7 fix: filter generic terms)
     for tech in technologies:
         slug = tech.strip("[]").lower().replace(" ", "-").replace("_", "-")
-        if slug:
+        if slug and slug not in _GENERIC_TECH_TERMS:
             tags.add(slug)
 
     # Build ordered frontmatter
@@ -153,8 +161,8 @@ def _build_note_frontmatter(
         "_review_history": [],
     }
 
-    if analysis._extraction_metadata:
-        fm["_extraction_metadata"] = dict(analysis._extraction_metadata)
+    # m1 fix: always emit _extraction_metadata (even as {} when empty)
+    fm["_extraction_metadata"] = dict(analysis._extraction_metadata) if analysis._extraction_metadata else {}
 
     # Preserve user-authored keys from existing note
     if isinstance(existing_frontmatter, dict):
@@ -389,10 +397,17 @@ def _hydrate_graph_from_tables(
     if not comp_rows:
         return None
 
+    # m10 fix: dict for O(1) group lookup by ID
+    group_by_id: dict[str, DiagramGroup] = {}
+
     for i, row in enumerate(comp_rows):
         label = row.get("Component", "").strip()
         if not label:
             continue
+        # m5 note: IDs are sequential (node_0, node_1...) and may differ from
+        # original extraction IDs. human_overrides keyed by original IDs
+        # (e.g. node_3) will be orphaned. This is a known limitation of
+        # table-based hydration; original IDs are not preserved in tables.
         node_id = f"node_{i}"
         kind = row.get("Type", "unknown").strip() or "unknown"
         tech_raw = row.get("Technology", "").strip()
@@ -410,12 +425,12 @@ def _hydrate_graph_from_tables(
             if group_name not in group_names:
                 gid = f"group_{len(group_names)}"
                 group_names[group_name] = gid
-                groups.append(DiagramGroup(id=gid, name=group_name, contains=[]))
+                g = DiagramGroup(id=gid, name=group_name, contains=[])
+                groups.append(g)
+                group_by_id[gid] = g
             group_id = group_names[group_name]
-            # Add node to group's contains list
-            for g in groups:
-                if g.id == group_id:
-                    g.contains.append(node_id)
+            # m10 fix: O(1) dict lookup instead of O(n) list scan
+            group_by_id[group_id].contains.append(node_id)
 
         nodes.append(DiagramNode(
             id=node_id,
@@ -488,7 +503,8 @@ def _extract_section(content: str, section_name: str) -> str | None:
     Uses direct boundary detection in original content (S-NEW-1 fix).
     """
     code_ranges = _fenced_block_ranges(content)
-    pattern = rf"^## {re.escape(section_name)}\s*\n"
+    # m-NEW-1 fix: use \s*$ (like _has_section_heading) for consistency
+    pattern = rf"^## {re.escape(section_name)}\s*$"
 
     # Find the target heading outside code blocks
     target_match = None

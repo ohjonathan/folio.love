@@ -362,6 +362,19 @@ def _validate_diagram_note(fm: dict, result: dict):
                  f"Diagram note must not contain deck field: {deck_field}")
             )
 
+    # S-NEW-4 fix: warn on zero confidence with non-abstained (likely pipeline bug)
+    conf = fm.get("extraction_confidence")
+    abstained = fm.get("abstained", False)
+    if conf is not None and conf == 0.0 and not abstained:
+        result["warnings"].append(
+            "extraction_confidence is 0.0 on non-abstained diagram — may indicate pipeline failure"
+        )
+
+    # m9 doc: frozen mixed slides intentionally retain Pass 1 LLM cost because
+    # the consulting analysis portion still needs fresh extraction. This is
+    # documented behavior, not a bug. Only the diagram extraction/rendering
+    # portions are bypassed on frozen mixed pages.
+
 def validate_all() -> list[dict]:
     """Validate all converted markdown files in the output directory."""
     results = []

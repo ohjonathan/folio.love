@@ -747,25 +747,14 @@ def _read_existing_frontmatter(markdown_path: Path) -> Optional[dict]:
     Returns the parsed YAML dict, or None if the file doesn't exist,
     doesn't have valid frontmatter, or the parsed content is not a dict.
     """
+    # m8 fix: delegate to shared parser from diagram_notes
+    from .output.diagram_notes import _parse_frontmatter_from_content
+
     if not markdown_path.exists():
         return None
     try:
         content = markdown_path.read_text()
-        lines = content.split("\n")
-        if not lines or lines[0].strip() != "---":
-            return None
-        # Find closing fence (standalone --- on its own line)
-        end_idx = None
-        for i, line in enumerate(lines[1:], start=1):
-            if line.strip() == "---":
-                end_idx = i
-                break
-        if end_idx is None:
-            return None
-        yaml_block = "\n".join(lines[1:end_idx])
-        result = yaml_lib.safe_load(yaml_block)
-        if not isinstance(result, dict):
-            return None
-        return result
-    except (yaml_lib.YAMLError, OSError):
+        return _parse_frontmatter_from_content(content)
+    except (OSError, UnicodeDecodeError):
         return None
+

@@ -632,3 +632,52 @@ class TestSNEW1SectionWithCodeBlock:
         assert "A summary" not in section
 
 
+class TestM4NonDiagramAnalysisSkip:
+    """m4: non-DiagramAnalysis instances in analyses are silently skipped."""
+
+    def test_regular_slide_analysis_skipped(self, tmp_path):
+        from folio.pipeline.analysis import SlideAnalysis
+        # A regular SlideAnalysis should be ignored by emit_diagram_notes
+        regular = SlideAnalysis()
+        analyses = {1: regular, 2: _make_analysis()}
+        page_profiles = {
+            1: MagicMock(classification="diagram"),
+            2: MagicMock(classification="diagram"),
+        }
+        refs = emit_diagram_notes(
+            tmp_path, "deck", "Test", "20260314", analyses, page_profiles,
+        )
+        # Page 1 (regular SlideAnalysis) should be skipped
+        assert 1 not in refs
+        # Page 2 (DiagramAnalysis) should be emitted
+        assert 2 in refs
+
+
+class TestM7GenericTechFiltering:
+    """m7: generic technology terms filtered from tags."""
+
+    def test_generic_terms_excluded(self):
+        analysis = _make_analysis(
+            graph=DiagramGraph(
+                nodes=[
+                    DiagramNode(id="n1", label="App", kind="service", technology="Service"),
+                    DiagramNode(id="n2", label="DB", kind="database", technology="PostgreSQL"),
+                ],
+                edges=[], groups=[],
+            ),
+        )
+        fm = _build_note_frontmatter(analysis, "deck", "Test", 1)
+        # "service" is generic and should be filtered; "postgresql" should remain
+        assert "postgresql" in fm["tags"]
+        assert "service" not in fm["tags"]
+
+    def test_m2_tags_from_title_documented(self):
+        """m2: tags from deck_title is intentional (not diagram content)."""
+        analysis = _make_analysis()
+        fm = _build_note_frontmatter(analysis, "deck", "System Design Review", 1)
+        # Title words should appear in tags (by design)
+        assert "system" in fm["tags"]
+        assert "design" in fm["tags"]
+        assert "review" in fm["tags"]
+        # Noise words should NOT
+        assert "the" not in fm["tags"]
