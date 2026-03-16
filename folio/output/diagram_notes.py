@@ -1,7 +1,9 @@
 """Standalone diagram note assembly: emission, freeze detection, and hydration."""
 
 import logging
+import os
 import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -301,6 +303,11 @@ def _read_note_frontmatter(note_path: Path) -> dict | None:
         content = note_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
+    return _parse_frontmatter_from_content(content)
+
+
+def _parse_frontmatter_from_content(content: str) -> dict | None:
+    """Parse YAML frontmatter from already-read markdown content."""
     lines = content.split("\n")
     if not lines or lines[0].strip() != "---":
         return None
@@ -321,18 +328,40 @@ def _read_note_frontmatter(note_path: Path) -> dict | None:
     return None
 
 
+def _has_section_heading(content: str, section_name: str) -> bool:
+    """Check if a ## heading exists outside fenced code blocks."""
+    stripped = _strip_fenced_blocks(content)
+    return bool(re.search(rf"^## {re.escape(section_name)}\s*$", stripped, re.MULTILINE))
+
+
+def _split_table_cells(line: str) -> list[str]:
+    """Split a markdown table row on unescaped pipes, then unescape.
+
+    PR 5's ``_escape_table_cell()`` escapes literal ``|`` as ``\\|``.
+    A naive ``split('|')`` corrupts cells containing escaped pipes.
+    """
+    # Split on pipe NOT preceded by backslash
+    parts = re.split(r'(?<!\\)\|', line)
+    # Strip outer empty entries from leading/trailing | delimiters
+    if parts and not parts[0].strip():
+        parts = parts[1:]
+    if parts and not parts[-1].strip():
+        parts = parts[:-1]
+    # Unescape \| -> | in each cell
+    return [p.strip().replace('\\|', '|') for p in parts]
+
+
 def _parse_table_rows(table_text: str) -> list[dict[str, str]]:
     """Parse a markdown table into a list of header->value dicts."""
     lines = [line.strip() for line in table_text.strip().split("\n") if line.strip()]
     if len(lines) < 3:
         return []  # Need header, separator, at least one row
     # Parse header
-    header_line = lines[0]
-    headers = [h.strip() for h in header_line.strip("|").split("|")]
+    headers = _split_table_cells(lines[0])
     # Skip separator line (lines[1])
     rows = []
     for line in lines[2:]:
-        cells = [c.strip() for c in line.strip("|").split("|")]
+        cells = _split_table_cells(line)
         row = {}
         for j, h in enumerate(headers):
             row[h] = cells[j] if j < len(cells) else ""
@@ -433,25 +462,44 @@ def _hydrate_graph_from_tables(
     return DiagramGraph(nodes=nodes, edges=edges, groups=groups)
 
 
+def _strip_fenced_blocks(content: str) -> str:
+    """Remove fenced code blocks to prevent heading matches inside them."""
+    return re.sub(r"^```[^\n]*\n.*?^```", "", content, flags=re.MULTILINE | re.DOTALL)
+
+
 def _extract_section(content: str, section_name: str) -> str | None:
-    """Extract the text under a ## section heading from markdown content."""
+    """Extract the text under a ## section heading from markdown content.
+
+    Headings inside fenced code blocks are ignored (M5 fix).
+    """
+    # Work on a version with code blocks stripped for heading detection
+    stripped = _strip_fenced_blocks(content)
     pattern = rf"^## {re.escape(section_name)}\s*\n"
-    match = re.search(pattern, content, re.MULTILINE)
+    match = re.search(pattern, stripped, re.MULTILINE)
     if not match:
         return None
     start = match.end()
-    # Find the next ## heading or end of content
-    next_heading = re.search(r"^## ", content[start:], re.MULTILINE)
+    # Find the next ## heading or end of stripped content
+    next_heading = re.search(r"^## ", stripped[start:], re.MULTILINE)
     if next_heading:
         end = start + next_heading.start()
     else:
         # Check for --- divider
-        divider = re.search(r"^---\s*$", content[start:], re.MULTILINE)
+        divider = re.search(r"^---\s*$", stripped[start:], re.MULTILINE)
         if divider:
             end = start + divider.start()
         else:
-            end = len(content)
-    return content[start:end].strip()
+            end = len(stripped)
+    # Extract from original content at the same offsets
+    # Since we only used stripped for position detection, map back
+    # by finding the same heading in original content
+    orig_match = re.search(pattern, content, re.MULTILINE)
+    if not orig_match:
+        return None
+    orig_start = orig_match.end()
+    # Use the length delta to find the end in original
+    section_len = end - start
+    return content[orig_start:orig_start + section_len].strip()
 
 
 def discover_frozen_notes(
@@ -486,17 +534,17 @@ def discover_frozen_notes(
         if not note_path.exists():
             continue
 
-        fm = _read_note_frontmatter(note_path)
-        if not isinstance(fm, dict):
-            continue
-        if not fm.get("folio_freeze"):
-            continue
-
-        # Hydrate analysis from frozen note
+        # m3 fix: single file read for both frontmatter and content
         try:
             content = note_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
-            logger.warning("Cannot read frozen note %s", note_path)
+            logger.warning("Cannot read note %s", note_path)
+            continue
+
+        fm = _parse_frontmatter_from_content(content)
+        if not isinstance(fm, dict):
+            continue
+        if not fm.get("folio_freeze"):
             continue
 
         comp_table = _extract_section(content, "Components")
@@ -540,8 +588,8 @@ def discover_frozen_notes(
             _extraction_metadata=dict(fm.get("_extraction_metadata", {})),
         )
 
-        has_diagram = "## Diagram" in content
-        has_components = "## Components" in content
+        has_diagram = _has_section_heading(content, "Diagram")
+        has_components = _has_section_heading(content, "Components")
 
         note_ref = DiagramNoteRef(
             basename=basename,
@@ -606,8 +654,8 @@ def emit_diagram_notes(
             refs[page_num] = DiagramNoteRef(
                 basename=basename,
                 path=note_path,
-                has_diagram_section="## Diagram" in content,
-                has_components_section="## Components" in content,
+                has_diagram_section=_has_section_heading(content, "Diagram"),
+                has_components_section=_has_section_heading(content, "Components"),
             )
             continue
 
@@ -629,7 +677,21 @@ def emit_diagram_notes(
         )
         full_content = f"---\n{yaml_str}---\n\n{body}\n"
 
-        note_path.write_text(full_content, encoding="utf-8")
+        # M1 fix: atomic write (temp file + os.replace)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(deck_dir), suffix=".md.tmp", prefix=".diagram-",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(full_content)
+            os.replace(tmp_path, str(note_path))
+        except BaseException:
+            # Clean up temp file on failure
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
         refs[page_num] = DiagramNoteRef(
             basename=basename,

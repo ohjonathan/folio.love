@@ -203,9 +203,9 @@ def _collect_unique(
             if field == "diagram_type":
                 dt = analysis.diagram_type
                 if dt and dt not in exclude:
-                    # Include if graph present or abstained-with-graph
-                    if analysis.graph or (analysis.abstained and analysis.graph):
-                        values.add(dt)
+                    # C2 fix: include diagram_type for all DiagramAnalysis
+                    # (graph present, graphless abstained, or abstained-with-graph)
+                    values.add(dt)
             elif field == "diagram_component" and analysis.graph:
                 for node in analysis.graph.nodes:
                     if node.label and node.label not in exclude:

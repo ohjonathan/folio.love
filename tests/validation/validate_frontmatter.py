@@ -20,7 +20,7 @@ REQUIRED_FIELDS = [
     "version", "created", "modified", "converted", "slide_count",
 ]
 
-ALLOWED_TYPES = {"context", "analysis", "evidence", "deliverable", "reference", "interaction"}
+ALLOWED_TYPES = {"context", "analysis", "evidence", "deliverable", "reference", "interaction", "diagram"}
 ALLOWED_SUBTYPES_EVIDENCE = {"research", "data_extract", "external_report", "benchmark"}
 ALLOWED_STATUS = {"active", "draft", "archived", "superseded", "complete"}
 ALLOWED_AUTHORITY = {"captured", "analyzed", "aligned", "decided"}
@@ -234,9 +234,14 @@ def _validate_markdown_structure(content: str, expected_slides: int, result: dic
 
     analysis_blocks = re.findall(r"^### Analysis", content, re.MULTILINE)
     result["metrics"]["analysis_blocks"] = len(analysis_blocks)
-    if len(analysis_blocks) < actual_slides:
+    # M2 fix: diagram transclusions replace ### Analysis blocks;
+    # count them toward expected analysis coverage
+    transclusion_blocks = len(re.findall(r"^!\[\[.*?#Diagram\]\]", content, re.MULTILINE))
+    result["metrics"]["transclusion_blocks"] = transclusion_blocks
+    total_coverage = len(analysis_blocks) + transclusion_blocks
+    if total_coverage < actual_slides:
         result["warnings"].append(
-            f"Missing analysis blocks: {len(analysis_blocks)} of {actual_slides} slides"
+            f"Missing analysis blocks: {total_coverage} of {actual_slides} slides"
         )
 
     text_blocks = re.findall(r"^### Text \(Verbatim\)", content, re.MULTILINE)
@@ -323,6 +328,7 @@ def _validate_diagram_note(fm: dict, result: dict):
     """Validate a standalone diagram note (type: diagram)."""
     required = [
         "type", "diagram_type", "title", "source_deck", "source_page",
+        "extraction_confidence", "confidence_reasoning",
         "review_required", "review_questions", "abstained",
         "folio_freeze", "tags", "_review_history",
     ]

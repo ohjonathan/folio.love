@@ -16,6 +16,8 @@ from folio.output.diagram_notes import (
     _build_note_body,
     _hydrate_graph_from_tables,
     _parse_table_rows,
+    _split_table_cells,
+    _extract_section,
 )
 from folio.pipeline.analysis import (
     DiagramAnalysis,
@@ -504,3 +506,79 @@ class TestTableParsing:
         assert len(graph.edges) == 2
         assert graph.edges[0].direction == "forward"
         assert graph.edges[1].direction == "reverse"
+
+
+# --- Round 1 Review Regression Tests ---
+
+
+class TestC1PipeEscapeRoundTrip:
+    """C1 regression: _parse_table_rows must handle escaped pipes."""
+
+    def test_escaped_pipe_in_label(self):
+        """A label with escaped pipe must not split into phantom columns."""
+        table = (
+            "| Component | Type | Technology | Group | Source | Confidence |\n"
+            "|---|---|---|---|---|---|\n"
+            "| Config \\| Settings | service | Redis | Infra | vision | 0.9 |"
+        )
+        rows = _parse_table_rows(table)
+        assert len(rows) == 1
+        assert rows[0]["Component"] == "Config | Settings"
+        assert rows[0]["Type"] == "service"
+        assert rows[0]["Technology"] == "Redis"
+
+    def test_split_table_cells_unescape(self):
+        """_split_table_cells must unescape \\| -> |."""
+        cells = _split_table_cells("| foo \\| bar | baz |")
+        assert cells == ["foo | bar", "baz"]
+
+    def test_round_trip_escape_parse(self):
+        """Value with pipe: escape -> render -> parse must preserve."""
+        from folio.output.diagram_rendering import _escape_table_cell
+        original = "Config | Settings"
+        escaped = _escape_table_cell(original)
+        table = f"| Component |\n|---|\n| {escaped} |"
+        rows = _parse_table_rows(table)
+        assert rows[0]["Component"] == original
+
+
+class TestC2AbstainedDiagramType:
+    """C2 regression: abstained DiagramAnalysis with graph=None in diagram_types."""
+
+    def test_abstained_graphless_in_diagram_types(self):
+        from folio.output.frontmatter import _collect_unique
+        analyses = {
+            1: DiagramAnalysis(
+                diagram_type="unsupported",
+                graph=None,
+                abstained=True,
+                diagram_confidence=0.1,
+            ),
+        }
+        types = _collect_unique(analyses, "diagram_type", exclude={"unknown"})
+        assert "unsupported" in types
+
+
+class TestM5CodeBlockHeadingImmunity:
+    """M5 regression: headings inside code blocks ignored by _extract_section."""
+
+    def test_heading_inside_mermaid_ignored(self):
+        content = (
+            "## Diagram\n\n"
+            "```mermaid\n"
+            "graph TD\n"
+            "  subgraph \"## Components\"\n"
+            "    A-->B\n"
+            "  end\n"
+            "```\n\n"
+            "## Components\n\n"
+            "| Component | Type |\n"
+            "|---|---|\n"
+            "| API | service |\n\n"
+            "---\n"
+        )
+        section = _extract_section(content, "Components")
+        assert section is not None
+        assert "| API | service |" in section
+        assert "subgraph" not in section
+
