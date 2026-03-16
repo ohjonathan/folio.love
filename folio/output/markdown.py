@@ -1,11 +1,14 @@
 """Markdown assembly: combine all pipeline outputs into final document."""
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Optional, Union
 
 from ..pipeline.analysis import SlideAnalysis
 from ..pipeline.text import SlideText
 from ..tracking.versions import VersionInfo, ChangeSet
+from .diagram_notes import DiagramNoteRef
 
 
 def assemble(
@@ -17,6 +20,9 @@ def assemble(
     slide_analyses: dict[int, SlideAnalysis],
     slide_count: int,
     version_history: list[dict],
+    *,
+    slide_classifications: dict[int, str] | None = None,
+    diagram_note_refs: dict[int, DiagramNoteRef] | None = None,
 ) -> str:
     """Assemble the complete markdown document.
 
@@ -29,6 +35,8 @@ def assemble(
         slide_analyses: LLM analysis per slide.
         slide_count: Total number of slides (from images, the authoritative count).
         version_history: Full version history list.
+        slide_classifications: Optional page classification map (e.g. diagram, mixed, text).
+        diagram_note_refs: Optional diagram note references for transclusion.
 
     Returns:
         Complete markdown document as string.
@@ -60,6 +68,8 @@ def assemble(
     sections.append("")
 
     # Per-slide sections
+    classifications = slide_classifications or {}
+    note_refs = diagram_note_refs or {}
     for slide_num in range(1, slide_count + 1):
         slide_section = _format_slide(
             slide_num=slide_num,
@@ -67,6 +77,8 @@ def assemble(
             analysis=slide_analyses.get(slide_num),
             is_modified=slide_num in version_info.changes.modified,
             is_added=slide_num in version_info.changes.added,
+            classification=classifications.get(slide_num),
+            diagram_note_ref=note_refs.get(slide_num),
         )
         sections.append(slide_section)
 
@@ -103,6 +115,8 @@ def _format_slide(
     analysis: Optional[SlideAnalysis],
     is_modified: bool = False,
     is_added: bool = False,
+    classification: str | None = None,
+    diagram_note_ref: DiagramNoteRef | None = None,
 ) -> str:
     """Format a single slide section."""
     lines = []
@@ -132,7 +146,37 @@ def _format_slide(
             lines.append(f"> {line}" if line.strip() else ">")
         lines.append("")
 
-    # Analysis
+    # Diagram transclusion for pure diagram pages
+    is_pure_diagram = classification == "diagram"
+    is_mixed = classification == "mixed"
+    is_unsupported_diagram = classification == "unsupported_diagram"
+
+    if (is_pure_diagram or is_unsupported_diagram) and diagram_note_ref:
+        # Pure/unsupported diagram: suppress generic Analysis, add transclusion
+        _append_diagram_transclusion(lines, diagram_note_ref)
+    elif (is_pure_diagram or is_unsupported_diagram) and not diagram_note_ref:
+        # B1 fix: unsupported diagram without note ref — show consulting analysis
+        _append_consulting_analysis(lines, analysis)
+    elif is_mixed:
+        # Mixed: keep consulting analysis, then append transclusion
+        _append_consulting_analysis(lines, analysis)
+        if diagram_note_ref:
+            _append_diagram_transclusion(lines, diagram_note_ref)
+    else:
+        # Normal non-diagram slide
+        _append_consulting_analysis(lines, analysis)
+
+    lines.append("---")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _append_consulting_analysis(
+    lines: list[str],
+    analysis: Optional[SlideAnalysis],
+) -> None:
+    """Append the standard consulting-slide analysis block."""
     if analysis and analysis.slide_type != "pending":
         lines.append("### Analysis")
         lines.append("")
@@ -168,10 +212,20 @@ def _format_slide(
         lines.append(f"*[{analysis.visual_description}]*")
         lines.append("")
 
-    lines.append("---")
-    lines.append("")
 
-    return "\n".join(lines)
+def _append_diagram_transclusion(
+    lines: list[str],
+    note_ref: DiagramNoteRef,
+) -> None:
+    """Append Obsidian transclusion block for a diagram note."""
+    if note_ref.has_diagram_section:
+        lines.append(f"![[{note_ref.basename}#Diagram]]")
+        lines.append("")
+    if note_ref.has_components_section:
+        lines.append(f"![[{note_ref.basename}#Components]]")
+        lines.append("")
+    lines.append(f"*Full details: [[{note_ref.basename}]]*")
+    lines.append("")
 
 
 def _format_version_history(history: list[dict], max_display: int = 10) -> str:

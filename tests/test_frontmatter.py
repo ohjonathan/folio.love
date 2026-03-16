@@ -524,3 +524,72 @@ class TestReviewFields:
         assert fm["grounding_summary"]["low_confidence"] == 0
         assert fm["grounding_summary"]["validated"] == 0
         assert fm["grounding_summary"]["unvalidated"] == 0
+
+
+# --- PR 6: Diagram-aware frontmatter ---
+
+
+class TestDiagramFrontmatter:
+    """Tests for diagram_types, diagram_components in deck frontmatter."""
+
+    def test_diagram_types_populated(self):
+        from folio.pipeline.analysis import DiagramAnalysis, DiagramGraph, DiagramNode
+        analyses = {
+            1: SlideAnalysis(slide_type="title"),
+            2: DiagramAnalysis(
+                diagram_type="architecture",
+                graph=DiagramGraph(nodes=[DiagramNode(id="n1", label="API")]),
+                diagram_confidence=0.9,
+            ),
+        }
+        fm = _parse_frontmatter(_generate_simple(analyses=analyses))
+        assert "diagram_types" in fm
+        assert "architecture" in fm["diagram_types"]
+
+    def test_diagram_components_populated(self):
+        from folio.pipeline.analysis import DiagramAnalysis, DiagramGraph, DiagramNode
+        analyses = {
+            1: DiagramAnalysis(
+                diagram_type="architecture",
+                graph=DiagramGraph(nodes=[
+                    DiagramNode(id="n1", label="API Gateway"),
+                    DiagramNode(id="n2", label="Database"),
+                ]),
+                diagram_confidence=0.9,
+            ),
+        }
+        fm = _parse_frontmatter(_generate_simple(analyses=analyses))
+        assert "diagram_components" in fm
+        assert "API Gateway" in fm["diagram_components"]
+        assert "Database" in fm["diagram_components"]
+
+    def test_diagram_collect_unique_ignores_non_diagram(self):
+        from folio.output.frontmatter import _collect_unique
+        from folio.pipeline.analysis import DiagramAnalysis, DiagramGraph, DiagramNode
+        analyses = {
+            1: SlideAnalysis(slide_type="data"),
+            2: DiagramAnalysis(
+                diagram_type="data-flow",
+                graph=DiagramGraph(nodes=[DiagramNode(id="n1", label="Svc", technology="Go")]),
+                diagram_confidence=0.8,
+            ),
+        }
+        types = _collect_unique(analyses, "diagram_type", exclude={"unknown"})
+        assert types == ["data-flow"]
+        techs = _collect_unique(analyses, "diagram_technology")
+        assert techs == ["Go"]
+        comps = _collect_unique(analyses, "diagram_component")
+        assert comps == ["Svc"]
+
+    def test_diagram_generate_tags(self):
+        from folio.output.frontmatter import _generate_tags
+        tags = _generate_tags(
+            ["tam-sam-som"], [], "Market Report",
+            diagram_types=["architecture"],
+            diagram_technologies=["PostgreSQL"],
+        )
+        assert "diagram" in tags
+        assert "architecture" in tags
+        assert "postgresql" in tags
+        assert "tam-sam-som" in tags
+

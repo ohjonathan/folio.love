@@ -3,7 +3,7 @@
 **Started:** 2026-03-14
 **Proposal:** Final — approved for implementation
 **Playbook:** LLM Development Playbook v3.3.1, Tier 1 Agent Team Review
-**Test suite:** 506 (baseline) → 621 (PR 1) → 693 (PR 2) → 777 (PR 3) → 897 (PR 4)
+**Test suite:** 506 (baseline) → 621 (PR 1) → 693 (PR 2) → 777 (PR 3) → 897 (PR 4) → 1010 (PR 5)
 
 ---
 
@@ -57,15 +57,16 @@
   - **Outcome:** Diagram extraction runtime, separate diagram caches, Pass A/B/C plus dense sweep, confidence scoring, and dev iteration harness merged on main
   - **Delivery shape:** Shipped as one PR; approved 4a/4b split boundary was not needed
 
-- [ ] **PR 5:** Deterministic Rendering + Mermaid + Entity Resolution (2-2.5 days)
-  - [ ] CA prompt generated
-  - [ ] CA implementation prompt generated
-  - [ ] Developer implements
-  - [ ] Review Team prompt generated
-  - [ ] Review Team executes
-  - [ ] CA cross-check + fixes
-  - [ ] Tests pass, no regressions
-  - [ ] Merged
+- [x] **PR 5:** Deterministic Rendering + Mermaid + Entity Resolution (2-2.5 days) — **PR #23 MERGED**
+  - [x] CA prompt generated
+  - [x] CA implementation prompt generated
+  - [x] Developer implements — PR #23 created
+  - [x] Review Team prompt generated
+  - [x] Review Team executes
+  - [x] CA cross-check + fixes
+  - [x] Tests pass (1007 passed, 3 skipped; 1010 collected)
+  - [x] Merged — main at `bced524`
+  - **Outcome:** Deterministic Mermaid rendering, graph-bound prose, component/connection tables, entity resolution, and Mermaid parser validation merged on main
 
 - [ ] **PR 6:** Output Assembly + Standalone Notes + Freeze + Review History (3-3.5 days)
   - [ ] CA prompt generated
@@ -83,8 +84,9 @@
 
 ## Manual Action Items
 
-- [ ] **Week 1:** Test Obsidian transclusion with Mermaid blocks (15 min manual test)
-  - Result: ___  (works / fallback to inline Mermaid)
+- [x] **Week 1:** Test Obsidian transclusion with Mermaid blocks (15 min manual test)
+  - Result: works — PR 6 uses section transclusion (`![[note#section]]`)
+  - Validation artifact: `docs/validation/obsidian_transclusion_test_result.md`
 - [x] **PR 1:** Provide 5-10 real corpus PDFs for Set-of-Mark validation
   - Location: `/Users/Jonathan_Oh/tmp/diagram_som_corpus`
   - Validation set: 8 PDFs, 25 diagram/mixed pages
@@ -102,7 +104,7 @@
 | PR | Decision | Verdict | Date |
 |----|----------|---------|------|
 | PR 1 | Set-of-Mark viability (pypdfium2 bounding boxes) | **Not viable** — overall `0.76`, medium/dense `0.722`, systematic dense-page failures | 2026-03-14 |
-| PR 1 | Obsidian transclusion with Mermaid | Pending manual test | ___ |
+| PR 1 | Obsidian transclusion with Mermaid | **Pass** — use section transclusion (`![[note#section]]`) in PR 6 | 2026-03-16 |
 | PR 2 | Image strategy (SoM primary vs tiles fallback) | **Tiles** (global + quadrant crops) | 2026-03-14 |
 | PR 2 | Provider/runtime implementation | **Merged** — consulting-slide path uses multi-image provider contract with one `global` image; tiles/highlights remain PR 4 infrastructure | 2026-03-15 |
 | PR 3 | Data model / routing / cache foundation | **Merged** — DiagramAnalysis, factory deserialization, image-hash cache markers, abstention flow, Pass 2 exclusion | 2026-03-15 |
@@ -111,6 +113,8 @@
 | PR 4 | Diagram extraction runtime | **Merged** — separate diagram caches, Pass A/B/C, dense-only completeness sweep, confidence scoring, and `tools/diagram_iterate.py` shipped on main | 2026-03-15 |
 | PR 4 | Split PR 4 by day 3? | **No split needed** — shipped as a single PR (`#22`) | 2026-03-15 |
 | PR 4 | Supported diagram types for v1 extraction | **Strict allowlist** — `architecture` and `data-flow` only; all other types abstain | 2026-03-15 |
+| PR 5 | Deterministic rendering layer | **Merged** — Mermaid, prose, tables, and technology entity resolution generated from graph data only | 2026-03-15 |
+| PR 5 | Obsidian Mermaid transclusion gate for PR 6 | **Pass** — synthetic plus real PR 5 renderer output transcluded correctly in Obsidian `1.12.4` | 2026-03-16 |
 
 ---
 
@@ -164,6 +168,14 @@ All findings from PR 1-3 reviews and the PR 4 readiness check that constrain dow
 7. **Sweep discoveries are weak signals.** Sweep-added edges are capped low-confidence (`<= 0.5`) and should stay review-flagged downstream.
 8. **Mixed-page behavior is now explicit.** Consulting-slide inherited fields remain for mixed pages and diagram evidence is appended rather than replacing them.
 
+### PR 5 Review Findings
+1. **Mermaid parser validation is a real test-time dependency.** Preserve the Node-based Mermaid validation harness instead of bypassing it.
+2. **Group membership must reconcile `group.contains` and `node.group_id`.** Later output logic must not trust `group.contains` alone or regrouped nodes may disappear.
+3. **Render-time omit-and-flag is an invariant.** Unsafe labels or omitted Mermaid elements must surface through `uncertainties` and `review_required`, not fail silently.
+4. **Unknown or malformed edge directions render conservatively.** Later PRs must not re-infer direction semantics from rendered Mermaid text.
+5. **Converter ordering matters.** Deterministic rendering runs before `assess_review_state()` so render-time flags are visible to review/frontmatter logic.
+6. **Supported diagrams can still be review-heavy.** Abstained-with-graph, low-confidence, and sweep-discovered elements are expected runtime states and must be surfaced downstream.
+
 ---
 
 ## Risks Realized
@@ -177,6 +189,7 @@ All findings from PR 1-3 reviews and the PR 4 readiness check that constrain dow
 | Mixed-provider cache provenance under-reported | PR 2 | Warm-cache and mixed hit/miss runs drifted from actual per-slide provider usage | Fixed with narrow cache-hit provenance follow-up |
 | Stable edge identity and partial warm-cache payloads | PR 3 | Order-sensitive same-pair edge IDs and partial diagram payloads surfacing too cleanly | Fixed with deterministic parallel-edge disambiguation and pending/review-required coercion |
 | PR 4 first-integration runtime surfaced extraction-specific correctness gaps | PR 4 | Broad type gate, all-node highlight overlays, stale-cache ID inheritance loss, and weak abstention coverage produced inaccurate or overly clean outputs | Fixed before merge via strict type allowlist, per-batch claim-relevant highlights, `load_stale_entry()` for IoU inheritance, and broader abstention/review handling |
+| Deterministic rendering surfaced graph-shape/runtime mismatches | PR 5 | Regrouped nodes could be omitted if rendering trusted `group.contains` alone; malformed edge directions and unsafe Mermaid labels needed conservative handling | Fixed before merge with group-membership reconciliation, conservative direction normalization, omit-and-flag behavior, and Mermaid parser-backed validation |
 
 ---
 
@@ -189,4 +202,5 @@ All findings from PR 1-3 reviews and the PR 4 readiness check that constrain dow
 | Real-corpus diagram PDFs are still not repo assets | PR 4 | Known execution constraint; prompt tuning depends on externally supplied corpus |
 | Diagram extraction v1 only supports `architecture` and `data-flow` | PR 4 | Intentional scope boundary; other diagram types abstain |
 | Supported diagrams can still be review-heavy | PR 4 | Expected runtime state; low-confidence nodes, sweep discoveries, and open questions must be handled by PR 5/PR 6 |
-| Diagram-specific output rendering is still not implemented | PR 4 | PR 5/PR 6 own Mermaid, prose, and standalone output assembly |
+| Mermaid transclusion validation is environment-specific | PR 5 | Validated on macOS + Obsidian `1.12.4`; sufficient for current scope but not a cross-platform guarantee |
+| Standalone diagram notes and deck-level output assembly are still not implemented | PR 5 | PR 6 owns transclusion-based output assembly, review sections, and freeze/history behavior |

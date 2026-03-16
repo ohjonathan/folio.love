@@ -20,7 +20,7 @@ REQUIRED_FIELDS = [
     "version", "created", "modified", "converted", "slide_count",
 ]
 
-ALLOWED_TYPES = {"context", "analysis", "evidence", "deliverable", "reference", "interaction"}
+ALLOWED_TYPES = {"context", "analysis", "evidence", "deliverable", "reference", "interaction", "diagram"}
 ALLOWED_SUBTYPES_EVIDENCE = {"research", "data_extract", "external_report", "benchmark"}
 ALLOWED_STATUS = {"active", "draft", "archived", "superseded", "complete"}
 ALLOWED_AUTHORITY = {"captured", "analyzed", "aligned", "decided"}
@@ -59,6 +59,11 @@ def validate_deck(md_path: Path) -> dict:
     fm = _parse_frontmatter(content, result)
     if fm is None:
         result["errors"].append(("Silent-Invalid-YAML", "Failed to parse YAML frontmatter"))
+        return result
+
+    # PR 6: Diagram notes have different required fields
+    if fm.get("type") == "diagram":
+        _validate_diagram_note(fm, result)
         return result
 
     _validate_required_fields(fm, result)
@@ -229,9 +234,14 @@ def _validate_markdown_structure(content: str, expected_slides: int, result: dic
 
     analysis_blocks = re.findall(r"^### Analysis", content, re.MULTILINE)
     result["metrics"]["analysis_blocks"] = len(analysis_blocks)
-    if len(analysis_blocks) < actual_slides:
+    # M2 fix: diagram transclusions replace ### Analysis blocks;
+    # count them toward expected analysis coverage
+    transclusion_blocks = len(re.findall(r"^!\[\[.*?#Diagram\]\]", content, re.MULTILINE))
+    result["metrics"]["transclusion_blocks"] = transclusion_blocks
+    total_coverage = len(analysis_blocks) + transclusion_blocks
+    if total_coverage < actual_slides:
         result["warnings"].append(
-            f"Missing analysis blocks: {len(analysis_blocks)} of {actual_slides} slides"
+            f"Missing analysis blocks: {total_coverage} of {actual_slides} slides"
         )
 
     text_blocks = re.findall(r"^### Text \(Verbatim\)", content, re.MULTILINE)
@@ -313,6 +323,57 @@ def _detect_silent_failures(content: str, fm: dict, slides_in_body: int, result:
             f"body evidence count={evidence_in_body}"
         )
 
+
+def _validate_diagram_note(fm: dict, result: dict):
+    """Validate a standalone diagram note (type: diagram)."""
+    required = [
+        "type", "diagram_type", "title", "source_deck", "source_page",
+        "extraction_confidence", "confidence_reasoning",
+        "review_required", "review_questions", "abstained",
+        "folio_freeze", "tags", "_review_history",
+    ]
+    for field in required:
+        if field not in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter", f"Diagram note missing: {field}")
+            )
+        elif fm[field] is None and field not in ("review_questions", "_review_history"):
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter", f"Diagram note null field: {field}")
+            )
+    # Type-check optional fields when present
+    if "components" in fm and not isinstance(fm["components"], list):
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", "components must be list")
+        )
+    if "technologies" in fm and not isinstance(fm["technologies"], list):
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", "technologies must be list")
+        )
+    if "_extraction_metadata" in fm and not isinstance(fm["_extraction_metadata"], dict):
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", "_extraction_metadata must be dict")
+        )
+    # Must NOT have deck-only fields
+    for deck_field in ("source", "source_hash", "source_type"):
+        if deck_field in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter",
+                 f"Diagram note must not contain deck field: {deck_field}")
+            )
+
+    # S-NEW-4 fix: warn on zero confidence with non-abstained (likely pipeline bug)
+    conf = fm.get("extraction_confidence")
+    abstained = fm.get("abstained", False)
+    if conf is not None and conf == 0.0 and not abstained:
+        result["warnings"].append(
+            "extraction_confidence is 0.0 on non-abstained diagram — may indicate pipeline failure"
+        )
+
+    # m9 doc: frozen mixed slides intentionally retain Pass 1 LLM cost because
+    # the consulting analysis portion still needs fresh extraction. This is
+    # documented behavior, not a bug. Only the diagram extraction/rendering
+    # portions are bypassed on frozen mixed pages.
 
 def validate_all() -> list[dict]:
     """Validate all converted markdown files in the output directory."""

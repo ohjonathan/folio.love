@@ -1116,3 +1116,85 @@ class TestBatchBehavior:
         assert "folio batch" in result.output
         assert "*.pdf" in result.output
 
+
+# --- PR 6: Diagram transclusion in _format_slide ---
+
+
+class TestFormatSlideDiagram:
+    """Test _format_slide() diagram transclusion paths."""
+
+    def test_pure_diagram_transclusion(self):
+        """Pure diagram: suppress Analysis, add transclusion block."""
+        from folio.output.markdown import _format_slide
+        from folio.output.diagram_notes import DiagramNoteRef
+        from folio.pipeline.analysis import DiagramAnalysis
+
+        analysis = DiagramAnalysis(
+            slide_type="pending", diagram_type="architecture",
+        )
+        ref = DiagramNoteRef(
+            basename="20260314-deck-diagram-p007",
+            path=Path("/tmp/note.md"),
+            has_diagram_section=True,
+            has_components_section=True,
+        )
+        output = _format_slide(
+            slide_num=7, text=None, analysis=analysis,
+            classification="diagram", diagram_note_ref=ref,
+        )
+        assert "### Analysis" not in output
+        assert "![[20260314-deck-diagram-p007#Diagram]]" in output
+        assert "![[20260314-deck-diagram-p007#Components]]" in output
+        assert "*Full details: [[20260314-deck-diagram-p007]]*" in output
+
+    def test_mixed_slide_preserves_analysis_and_adds_transclusion(self):
+        """Mixed: keep consulting analysis, append diagram transclusion."""
+        from folio.output.markdown import _format_slide
+        from folio.output.diagram_notes import DiagramNoteRef
+        from folio.pipeline.analysis import DiagramAnalysis
+
+        analysis = DiagramAnalysis(
+            slide_type="data", framework="tam-sam-som",
+            visual_description="Revenue chart", key_data="$10M",
+            main_insight="Growing revenue",
+            diagram_type="data-flow",
+        )
+        ref = DiagramNoteRef(
+            basename="20260314-deck-diagram-p003",
+            path=Path("/tmp/note.md"),
+            has_diagram_section=True,
+            has_components_section=True,
+        )
+        output = _format_slide(
+            slide_num=3, text=None, analysis=analysis,
+            classification="mixed", diagram_note_ref=ref,
+        )
+        assert "### Analysis" in output
+        assert "**Slide Type:** data" in output
+        assert "![[20260314-deck-diagram-p003#Diagram]]" in output
+        assert "*Full details: [[20260314-deck-diagram-p003]]*" in output
+
+    def test_graphless_abstained_full_details_only(self):
+        """Graphless abstained: image + full-details link only."""
+        from folio.output.markdown import _format_slide
+        from folio.output.diagram_notes import DiagramNoteRef
+        from folio.pipeline.analysis import DiagramAnalysis
+
+        analysis = DiagramAnalysis(
+            slide_type="pending", diagram_type="unknown", abstained=True,
+        )
+        ref = DiagramNoteRef(
+            basename="20260314-deck-diagram-p005",
+            path=Path("/tmp/note.md"),
+            has_diagram_section=False,
+            has_components_section=False,
+        )
+        output = _format_slide(
+            slide_num=5, text=None, analysis=analysis,
+            classification="diagram", diagram_note_ref=ref,
+        )
+        assert "### Analysis" not in output
+        assert "![[" not in output or "#Diagram" not in output
+        assert "*Full details: [[20260314-deck-diagram-p005]]*" in output
+
+
