@@ -1,0 +1,25 @@
+[ontos]
+version = "3.0"
+
+[paths]
+docs_dir = "."
+logs_dir = "docs/logs"
+context_map = "Ontos_Context_Map.md"
+
+[scanning]
+skip_patterns = ["_template.md", "archive/*", ".git/*", "node_modules/*", "__pycache__/*", "*/.venv/*", "*/.pytest_cache/*", "*/*.egg-info/*"]
+scan_paths = []
+default_scope = "docs"
+
+[validation]
+max_dependency_depth = 5
+allowed_orphan_types = ["atom"]
+
+[workflow]
+log_retention_count = 20
+
+[hooks]
+pre_push = true
+pre_commit = true
+strict = false
+
