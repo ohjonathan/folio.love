@@ -14,11 +14,16 @@ venv/
 # Testing
 .pytest_cache/
 
-# Build artifacts
+# Build / distribution
+dist/
+build/
 mnt/
 
 # Tool artifacts
 .ontos/
+
+# Temp review dirs
+.tmp-review-*/
 
 # Editor / OS
 .DS_Store

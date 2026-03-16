@@ -49,6 +49,14 @@ PowerPoint and run `folio convert deck.pdf`.
 **Install**
 
 ```bash
+pip install folio-love
+```
+
+The installed CLI command remains `folio`.
+
+Or install from source:
+
+```bash
 git clone https://github.com/ohjonathan/folio.love.git
 cd folio.love
 pip install -e .
@@ -56,6 +64,12 @@ pip install -e .
 
 Anthropic support is included in the base install. If you want to use OpenAI or
 Google Gemini, install the optional provider SDKs too:
+
+```bash
+pip install "folio-love[llm]"
+```
+
+From source:
 
 ```bash
 pip install -e ".[llm]"
@@ -375,8 +389,8 @@ images render at 150 DPI, and analysis runs a single Anthropic-backed pass if
 | Environment Variable | Purpose |
 |---------------------|---------|
 | `ANTHROPIC_API_KEY` | Anthropic profile credentials |
-| `OPENAI_API_KEY` | OpenAI profile credentials (`pip install -e ".[llm]"`) |
-| `GEMINI_API_KEY` | Google Gemini profile credentials (`pip install -e ".[llm]"`) |
+| `OPENAI_API_KEY` | OpenAI profile credentials (`pip install "folio-love[llm]"` or source `pip install -e ".[llm]"`) |
+| `GEMINI_API_KEY` | Google Gemini profile credentials (`pip install "folio-love[llm]"` or source `pip install -e ".[llm]"`) |
 
 ## How It Works
 
@@ -432,6 +446,8 @@ Version history is recorded in both the markdown output and `version_history.jso
 
 ```bash
 pip install -e ".[dev]"
+.venv/bin/python -m build
+.venv/bin/python -m twine check dist/*
 .venv/bin/python -m pytest
 .venv/bin/python -m pytest --cov=folio
 ```
@@ -457,22 +473,9 @@ folio/
 ## Validation
 
 Folio has been validated against a 50-deck corpus of real consulting presentations
-(Tier 1 gate: 50/50 automated PPTX conversion, zero silent failures). The
-successful run requires the sandbox staging-dir fix in PR #12. Full
-documentation lives in `docs/validation/`:
-
-| Document | Purpose |
-|----------|---------|
-| [Validation Report](docs/validation/tier1_rerun_report.md) | Final metrics, gate decision, code changes |
-| [Session Log](docs/validation/tier1_rerun_session_log.md) | Chronological log of actions, findings, issues |
-| [Chat Log](docs/validation/tier1_chat_log.md) | Raw human–AI interaction transcript |
-| [Rerun Prompt](docs/validation/tier1_validation_rerun_prompt.md) | Task specification that drove the rerun |
-
-**Best practice:** Every validation run should produce all four artifacts. The
-chat log preserves the raw back-and-forth (including dead ends and real-time
-troubleshooting) so future contributors can trace decisions to their source.
-Session logs and reports are structured summaries; the chat log is the
-unfiltered ground truth.
+(Tier 1 gate: 50/50 automated PPTX conversion, zero silent failures).
+Validation reports, session logs, and chat logs are preserved on the
+[`docs-internal`](https://github.com/ohjonathan/folio.love/tree/docs-internal) branch.
 
 ## Roadmap
 
