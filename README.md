@@ -49,8 +49,10 @@ PowerPoint and run `folio convert deck.pdf`.
 **Install**
 
 ```bash
-pip install folio
+pip install folio-love
 ```
+
+The installed CLI command remains `folio`.
 
 Or install from source:
 
@@ -62,6 +64,12 @@ pip install -e .
 
 Anthropic support is included in the base install. If you want to use OpenAI or
 Google Gemini, install the optional provider SDKs too:
+
+```bash
+pip install "folio-love[llm]"
+```
+
+From source:
 
 ```bash
 pip install -e ".[llm]"
@@ -381,8 +389,8 @@ images render at 150 DPI, and analysis runs a single Anthropic-backed pass if
 | Environment Variable | Purpose |
 |---------------------|---------|
 | `ANTHROPIC_API_KEY` | Anthropic profile credentials |
-| `OPENAI_API_KEY` | OpenAI profile credentials (`pip install -e ".[llm]"`) |
-| `GEMINI_API_KEY` | Google Gemini profile credentials (`pip install -e ".[llm]"`) |
+| `OPENAI_API_KEY` | OpenAI profile credentials (`pip install "folio-love[llm]"` or source `pip install -e ".[llm]"`) |
+| `GEMINI_API_KEY` | Google Gemini profile credentials (`pip install "folio-love[llm]"` or source `pip install -e ".[llm]"`) |
 
 ## How It Works
 
@@ -438,6 +446,8 @@ Version history is recorded in both the markdown output and `version_history.jso
 
 ```bash
 pip install -e ".[dev]"
+.venv/bin/python -m build
+.venv/bin/python -m twine check dist/*
 .venv/bin/python -m pytest
 .venv/bin/python -m pytest --cov=folio
 ```

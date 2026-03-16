@@ -22,10 +22,6 @@ mnt/
 # Tool artifacts
 .ontos/
 
-# Ontos artifacts (regeneratable)
-AGENTS.md
-Ontos_Context_Map.md
-
 # Temp review dirs
 .tmp-review-*/
 

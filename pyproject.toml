@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "folio"
+name = "folio-love"
 version = "0.1.0"
 description = "Your consulting portfolio, searchable and AI-ready."
 readme = "README.md"
@@ -15,10 +15,13 @@ authors = [
 keywords = ["consulting", "portfolio", "pptx", "pdf", "markdown", "obsidian", "llm"]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Environment :: Console",
     "Topic :: Text Processing :: Markup :: Markdown",
 ]
 dependencies = [
@@ -39,11 +42,13 @@ Issues = "https://github.com/ohjonathan/folio.love/issues"
 
 [project.optional-dependencies]
 dev = [
+    "build>=1.2",
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "python-pptx>=0.6",
     "reportlab>=4.4",
     "pypdf>=6.8",
+    "twine>=6.0",
 ]
 llm = [
     "openai>=1.0",
