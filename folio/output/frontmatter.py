@@ -6,7 +6,7 @@ from typing import Optional
 
 import yaml
 
-from ..pipeline.analysis import SlideAnalysis
+from ..pipeline.analysis import DiagramAnalysis, SlideAnalysis
 from ..tracking.versions import VersionInfo
 
 
@@ -64,8 +64,17 @@ def generate(
     frameworks = _collect_unique(analyses, "framework", exclude={"none", "pending"})
     slide_types = _collect_unique(analyses, "slide_type", exclude={"unknown", "pending"})
 
+    # Collect diagram-specific fields
+    diagram_types = _collect_unique(analyses, "diagram_type", exclude={"unknown"})
+    diagram_components = _collect_unique(analyses, "diagram_component")
+    diagram_technologies = _collect_unique(analyses, "diagram_technology")
+
     # Auto-generate tags from frameworks and slide types, merge manual tags
-    tags = _generate_tags(frameworks, slide_types, title)
+    tags = _generate_tags(
+        frameworks, slide_types, title,
+        diagram_types=diagram_types or None,
+        diagram_technologies=diagram_technologies or None,
+    )
     if extra_tags:
         tags = sorted(set(tags) | set(extra_tags))
 
@@ -144,6 +153,12 @@ def generate(
     if reconciliation_metadata:
         frontmatter.update(reconciliation_metadata)
 
+    # Diagram metadata (deck-level)
+    if diagram_types:
+        frontmatter["diagram_types"] = sorted(diagram_types)
+    if diagram_components:
+        frontmatter["diagram_components"] = sorted(diagram_components)
+
     # Grounding summary from evidence — always emit to prevent
     # registry/frontmatter drift (Finding 4 / round 1 + Finding 2 / round 2).
     grounding = _compute_grounding_summary(analyses)
@@ -176,13 +191,39 @@ def _collect_unique(
     """
     exclude = exclude or set()
     values = set()
+
+    # Diagram virtual fields: aggregate from DiagramAnalysis.graph directly
+    is_diagram_virtual = field in ("diagram_type", "diagram_component", "diagram_technology")
+
     for analysis in analyses.values():
-        evidence = [ev for ev in getattr(analysis, "evidence", []) if isinstance(ev, dict)]
-        if evidence and not any(ev.get("validated", False) for ev in evidence):
-            continue  # All evidence unvalidated — skip
-        value = getattr(analysis, field, "")
-        if value and value not in exclude:
-            values.add(value)
+        if is_diagram_virtual:
+            # Skip non-diagram analyses entirely
+            if not isinstance(analysis, DiagramAnalysis):
+                continue
+            if field == "diagram_type":
+                dt = analysis.diagram_type
+                if dt and dt not in exclude:
+                    # Include if graph present or abstained-with-graph
+                    if analysis.graph or (analysis.abstained and analysis.graph):
+                        values.add(dt)
+            elif field == "diagram_component" and analysis.graph:
+                for node in analysis.graph.nodes:
+                    if node.label and node.label not in exclude:
+                        values.add(node.label)
+            elif field == "diagram_technology" and analysis.graph:
+                for node in analysis.graph.nodes:
+                    if node.technology:
+                        tech = node.technology.strip("[]")
+                        if tech and tech not in exclude:
+                            values.add(tech)
+        else:
+            # Standard evidence-gated behavior
+            evidence = [ev for ev in getattr(analysis, "evidence", []) if isinstance(ev, dict)]
+            if evidence and not any(ev.get("validated", False) for ev in evidence):
+                continue  # All evidence unvalidated — skip
+            value = getattr(analysis, field, "")
+            if value and value not in exclude:
+                values.add(value)
     return sorted(values)
 
 
@@ -244,6 +285,9 @@ def _generate_tags(
     frameworks: list[str],
     slide_types: list[str],
     title: str,
+    *,
+    diagram_types: list[str] | None = None,
+    diagram_technologies: list[str] | None = None,
 ) -> list[str]:
     """Auto-generate tags from analysis results and title.
 
@@ -253,6 +297,8 @@ def _generate_tags(
         frameworks: Framework labels extracted from analyses.
         slide_types: Slide type labels (reserved for future tag extraction).
         title: Deck title for keyword extraction.
+        diagram_types: Diagram type labels for tag generation.
+        diagram_technologies: Raw technology names for slugified tags.
     """
     tags = set()
 
@@ -269,5 +315,18 @@ def _generate_tags(
     for word in title_words:
         if word not in noise and len(word) > 2:
             tags.add(word)
+
+    # Diagram tags
+    if diagram_types:
+        tags.add("diagram")
+        for dt in diagram_types:
+            slug = dt.lower().replace(" ", "-").replace("_", "-")
+            if slug:
+                tags.add(slug)
+    if diagram_technologies:
+        for tech in diagram_technologies:
+            slug = tech.strip("[]").lower().replace(" ", "-").replace("_", "-")
+            if slug:
+                tags.add(slug)
 
     return sorted(tags)

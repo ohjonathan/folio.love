@@ -187,6 +187,30 @@ class FolioConverter:
             if diagram_like_slides:
                 logger.info("Diagram-like slides: %s", sorted(diagram_like_slides))
 
+            # PR 6: Frozen-note detection
+            # Derive created_date for stable note naming
+            created_date = datetime.now(timezone.utc).strftime("%Y%m%d")
+            if isinstance(existing_fm, dict):
+                prev_created = existing_fm.get("created", "")
+                if isinstance(prev_created, str) and len(prev_created) >= 10:
+                    created_date = prev_created[:10].replace("-", "")
+
+            from .output.diagram_notes import discover_frozen_notes, emit_diagram_notes
+            frozen_payloads = discover_frozen_notes(
+                deck_dir, deck_name, created_date, page_profiles,
+            )
+            frozen_diagram_slides = {
+                p for p, payload in frozen_payloads.items()
+                if page_profiles.get(p) and page_profiles[p].classification == "diagram"
+            }
+            frozen_mixed_slides = {
+                p for p, payload in frozen_payloads.items()
+                if page_profiles.get(p) and page_profiles[p].classification == "mixed"
+            }
+            all_frozen_diagram_slides = frozen_diagram_slides | frozen_mixed_slides
+            if all_frozen_diagram_slides:
+                logger.info("Frozen diagram slides: %s", sorted(all_frozen_diagram_slides))
+
             # Stage 3: Extract text
             logger.info("  Extracting text...")
             slide_texts = text.extract_structured(source_path)
@@ -224,10 +248,12 @@ class FolioConverter:
             all_provider_settings = self.config.providers
 
             # PR 3: Compute pass-1 slide numbers, excluding unsupported_diagram
+            # PR 6: Also exclude frozen pure diagram slides from Pass 1
             all_slide_nums = [r.slide_num for r in image_results]
-            pass1_slide_numbers = [n for n in all_slide_nums if n not in unsupported_diagram_slides]
+            pass1_exclude = unsupported_diagram_slides | frozen_diagram_slides
+            pass1_slide_numbers = [n for n in all_slide_nums if n not in pass1_exclude]
             pass1_image_paths = [
-                r.path for r in image_results if r.slide_num not in unsupported_diagram_slides
+                r.path for r in image_results if r.slide_num not in pass1_exclude
             ]
 
             slide_analyses, pass1_stats, pass1_meta = analysis.analyze_slides(
@@ -281,7 +307,9 @@ class FolioConverter:
                     )
 
             # PR 4: Diagram extraction for diagram/mixed slides
-            if diagram_or_mixed_slides:
+            # PR 6: Exclude frozen slides from diagram extraction and rendering
+            diagram_extract_slides = diagram_or_mixed_slides - all_frozen_diagram_slides
+            if diagram_extract_slides:
                 from .pipeline import diagram_extraction as diag_ext
                 slide_analyses, diagram_stats, diagram_meta = diag_ext.analyze_diagram_pages(
                     pass1_results=slide_analyses,
@@ -294,7 +322,7 @@ class FolioConverter:
                     model=profile.model,
                     api_key_env=profile.api_key_env,
                     all_provider_settings=all_provider_settings,
-                    slide_numbers=sorted(diagram_or_mixed_slides),
+                    slide_numbers=sorted(diagram_extract_slides),
                 )
                 # Merge stats (diagram pass is additive, not replacing pass1)
                 pass1_stats = pass1_stats.merge(diagram_stats)
@@ -304,6 +332,33 @@ class FolioConverter:
                 # so render-time omit-and-flag behavior feeds review-state computation.
                 from .output import diagram_rendering
                 slide_analyses = diagram_rendering.render_diagram_analyses(slide_analyses)
+
+            # PR 6: Hydrate frozen diagram analyses
+            for slide_num, payload in frozen_payloads.items():
+                classification = page_profiles.get(slide_num)
+                if not classification:
+                    continue
+                if classification.classification == "diagram":
+                    # Pure diagram: use frozen analysis directly
+                    slide_analyses[slide_num] = payload.analysis
+                elif classification.classification == "mixed":
+                    # Mixed: overlay diagram fields onto fresh Pass 1 result
+                    existing_analysis = slide_analyses.get(slide_num)
+                    if existing_analysis and isinstance(existing_analysis, analysis.DiagramAnalysis):
+                        frozen_a = payload.analysis
+                        existing_analysis.diagram_type = frozen_a.diagram_type
+                        existing_analysis.graph = frozen_a.graph
+                        existing_analysis.mermaid = frozen_a.mermaid
+                        existing_analysis.description = frozen_a.description
+                        existing_analysis.component_table = frozen_a.component_table
+                        existing_analysis.connection_table = frozen_a.connection_table
+                        existing_analysis.diagram_confidence = frozen_a.diagram_confidence
+                        existing_analysis.extraction_confidence = frozen_a.extraction_confidence
+                        existing_analysis.confidence_reasoning = frozen_a.confidence_reasoning
+                        existing_analysis.review_required = frozen_a.review_required
+                        existing_analysis.review_questions = frozen_a.review_questions
+                        existing_analysis.abstained = frozen_a.abstained
+                        existing_analysis._extraction_metadata = frozen_a._extraction_metadata
 
             # Stage 4b: Optional depth pass
             effective_passes = passes if passes is not None else self.config.conversion.default_passes
@@ -430,6 +485,16 @@ class FolioConverter:
             known_blank_slides=blank_slides,
         )
 
+        # PR 6: Emit standalone diagram notes (after review state, before frontmatter)
+        diagram_note_refs = emit_diagram_notes(
+            deck_dir=deck_dir,
+            deck_slug=deck_name,
+            deck_title=_title_from_name(deck_name),
+            created_date=created_date,
+            analyses=slide_analyses,
+            page_profiles=page_profiles,
+        )
+
         fm = frontmatter.generate(
             title=_title_from_name(deck_name),
             deck_id=deck_id,
@@ -451,6 +516,12 @@ class FolioConverter:
             extraction_confidence=review_assessment.extraction_confidence,
         )
 
+        # PR 6: Build slide classification map for markdown assembly
+        slide_classifications = {
+            p: prof.classification
+            for p, prof in page_profiles.items()
+        }
+
         # Assemble markdown
         md_content = markdown.assemble(
             title=_title_from_name(deck_name),
@@ -461,6 +532,8 @@ class FolioConverter:
             slide_analyses=slide_analyses,
             slide_count=slide_count,
             version_history=version_history,
+            slide_classifications=slide_classifications,
+            diagram_note_refs=diagram_note_refs,
         )
 
         # Write output (atomic)

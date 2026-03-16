@@ -61,6 +61,11 @@ def validate_deck(md_path: Path) -> dict:
         result["errors"].append(("Silent-Invalid-YAML", "Failed to parse YAML frontmatter"))
         return result
 
+    # PR 6: Diagram notes have different required fields
+    if fm.get("type") == "diagram":
+        _validate_diagram_note(fm, result)
+        return result
+
     _validate_required_fields(fm, result)
     _validate_field_types(fm, result)
     _validate_enum_values(fm, result)
@@ -313,6 +318,43 @@ def _detect_silent_failures(content: str, fm: dict, slides_in_body: int, result:
             f"body evidence count={evidence_in_body}"
         )
 
+
+def _validate_diagram_note(fm: dict, result: dict):
+    """Validate a standalone diagram note (type: diagram)."""
+    required = [
+        "type", "diagram_type", "title", "source_deck", "source_page",
+        "review_required", "review_questions", "abstained",
+        "folio_freeze", "tags", "_review_history",
+    ]
+    for field in required:
+        if field not in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter", f"Diagram note missing: {field}")
+            )
+        elif fm[field] is None and field not in ("review_questions", "_review_history"):
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter", f"Diagram note null field: {field}")
+            )
+    # Type-check optional fields when present
+    if "components" in fm and not isinstance(fm["components"], list):
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", "components must be list")
+        )
+    if "technologies" in fm and not isinstance(fm["technologies"], list):
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", "technologies must be list")
+        )
+    if "_extraction_metadata" in fm and not isinstance(fm["_extraction_metadata"], dict):
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", "_extraction_metadata must be dict")
+        )
+    # Must NOT have deck-only fields
+    for deck_field in ("source", "source_hash", "source_type"):
+        if deck_field in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter",
+                 f"Diagram note must not contain deck field: {deck_field}")
+            )
 
 def validate_all() -> list[dict]:
     """Validate all converted markdown files in the output directory."""

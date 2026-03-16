@@ -481,3 +481,50 @@ class TestReviewFieldsRegistry:
         result = reconcile_from_frontmatter(library, data)
         assert result["decks"]["test_deck"]["review_status"] == "reviewed"
         assert result["decks"]["test_deck"]["review_flags"] == []
+
+
+# --- PR 6: Standalone diagram notes excluded from registry ---
+
+
+class TestDiagramNoteRegistryExclusion:
+    """Standalone diagram notes must be ignored by rebuild_registry."""
+
+    def test_diagram_note_ignored_by_rebuild(self, tmp_path):
+        """Diagram notes lack source/source_hash, so rebuild skips them."""
+        library = tmp_path / "library"
+        source = tmp_path / "sources" / "deck.pptx"
+        _make_source(source)
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(source)
+
+        # Write a real deck note
+        deck_dir = library / "Client" / "deck"
+        md_path = deck_dir / "deck.md"
+        _make_folio_markdown(md_path, {
+            "id": "test_deck",
+            "title": "Test Deck",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": h,
+            "source_type": "deck",
+            "version": 1,
+            "converted": "2026-03-10T02:15:00Z",
+        })
+
+        # Write a standalone diagram note (no source, source_hash)
+        diagram_path = deck_dir / "20260310-deck-diagram-p007.md"
+        _make_folio_markdown(diagram_path, {
+            "type": "diagram",
+            "diagram_type": "architecture",
+            "title": "Test — Architecture (Page 7)",
+            "source_deck": "[[deck]]",
+            "source_page": 7,
+            "folio_freeze": False,
+            "tags": ["diagram"],
+        })
+
+        data = rebuild_registry(library)
+        # Only the deck note should be indexed
+        assert len(data["decks"]) == 1
+        assert "test_deck" in data["decks"]
+
