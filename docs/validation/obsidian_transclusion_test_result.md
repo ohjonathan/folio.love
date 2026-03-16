@@ -40,7 +40,7 @@ created: 2026-03-16
 
 ## Test Details
 
-### Corpus
+### Synthetic Test
 
 Two synthetic files placed in an existing Obsidian vault:
 
@@ -58,3 +58,23 @@ Components table in `diagram-note.md`. Both changes appeared immediately in
 
 Quit Obsidian entirely and reopened. All transclusions rendered correctly on
 restart with no degradation.
+
+### Real PR 5 Renderer Test
+
+Generated a diagram note using the actual `graph_to_mermaid()` renderer from
+`folio/output/diagram_rendering.py` with a realistic graph:
+
+- 8 nodes across 5 nested subgroups (Frontend Tier, Backend Services,
+  Data Layer, Messaging, External Systems)
+- Multiple node shapes (database, cache, queue, external, service)
+- 7 edges including one bidirectional (`<->`)
+- Sanitized labels (parentheses, brackets, special chars stripped by renderer)
+- Technology annotations on each node
+
+Result: both the source `real-diagram-note.md` and the transclusion in
+`real-deck-note.md` rendered the full complex Mermaid diagram correctly,
+including all subgroups and node shapes. No raw code, no blank areas, no
+rendering glitches.
+
+This addresses the P3 residual risk that synthetic-only testing did not cover
+nested groups and sanitized labels from real PR 5 output.
