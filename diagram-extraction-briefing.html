@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diagram Extraction Engine — folio.love Technical Briefing</title>
+  <meta name="description" content="Architecture diagram extraction pipeline for folio.love — multi-pass LLM system with claim-level verification">
+  <style>
+/* === Design Tokens === */
+:root {
+  --bg-primary: #0a0e1a;
+  --bg-card: rgba(255,255,255,0.04);
+  --bg-card-hover: rgba(255,255,255,0.07);
+  --border-subtle: rgba(255,255,255,0.08);
+  --text-primary: #e8eaf0;
+  --text-secondary: #8b90a0;
+  --text-muted: #5a5f70;
+  --accent-blue: #4f8cff;
+  --accent-purple: #a87cff;
+  --accent-teal: #2dd4bf;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f472b6;
+  --gradient-hero: linear-gradient(135deg, #4f8cff 0%, #a87cff 50%, #f472b6 100%);
+  --gradient-card: linear-gradient(135deg, rgba(79,140,255,0.08), rgba(168,124,255,0.08));
+  --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.3);
+  --shadow-glow: 0 0 40px rgba(79,140,255,0.1);
+}
+
+/* === Reset & Base === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+  font-family: var(--font-display);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* === Utility === */
+.container { max-width: 1100px; margin: 0 auto; padding: 0 2rem; }
+.gradient-text {
+  background: var(--gradient-hero);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.tag {
+  display: inline-block; font-size: 0.7rem; font-weight: 600;
+  padding: 0.2em 0.7em; border-radius: 99px; letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tag-blue { background: rgba(79,140,255,0.15); color: var(--accent-blue); }
+.tag-teal { background: rgba(45,212,191,0.15); color: var(--accent-teal); }
+.tag-purple { background: rgba(168,124,255,0.15); color: var(--accent-purple); }
+.tag-amber { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
+.tag-rose { background: rgba(244,114,182,0.15); color: var(--accent-rose); }
+
+/* === Animated Background === */
+.bg-grid {
+  position: fixed; inset: 0; z-index: -1;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(79,140,255,0.06) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(168,124,255,0.05) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(45,212,191,0.03) 0%, transparent 60%);
+  animation: bgPulse 12s ease-in-out infinite alternate;
+}
+@keyframes bgPulse {
+  0% { opacity: 0.7; } 100% { opacity: 1; }
+}
+
+/* === Navigation === */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,14,26,0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 1rem 0;
+}
+nav .container { display: flex; justify-content: space-between; align-items: center; }
+nav .logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; }
+nav .nav-links { display: flex; gap: 1.5rem; list-style: none; flex-wrap: wrap; }
+nav .nav-links a {
+  color: var(--text-secondary); text-decoration: none; font-size: 0.8rem;
+  font-weight: 500; transition: color 0.2s;
+}
+nav .nav-links a:hover { color: var(--text-primary); }
+
+/* === Hero === */
+.hero {
+  padding: 6rem 0 4rem; text-align: center;
+}
+.hero .eyebrow {
+  font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent-blue); margin-bottom: 1.5rem;
+}
+.hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.5rem); font-weight: 800;
+  letter-spacing: -0.03em; line-height: 1.15; margin-bottom: 1.5rem;
+}
+.hero .subtitle {
+  font-size: 1.1rem; color: var(--text-secondary); max-width: 720px;
+  margin: 0 auto 2.5rem; line-height: 1.7;
+}
+
+/* === KPI Strip === */
+.kpi-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1.2rem; margin: 3rem 0;
+}
+.kpi {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); padding: 1.5rem; text-align: center;
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+.kpi:hover { transform: translateY(-3px); box-shadow: var(--shadow-glow); }
+.kpi .value {
+  font-size: 2rem; font-weight: 800; letter-spacing: -0.03em;
+  margin-bottom: 0.3rem;
+}
+.kpi .label { font-size: 0.78rem; color: var(--text-secondary); font-weight: 500; }
+
+/* === Section Headers === */
+section { padding: 4rem 0; }
+.section-label {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent-purple); margin-bottom: 0.8rem;
+}
+.section-title {
+  font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+}
+.section-desc {
+  font-size: 1rem; color: var(--text-secondary); max-width: 680px;
+  margin-bottom: 2.5rem; line-height: 1.7;
+}
+
+/* === Cards === */
+.card-grid { display: grid; gap: 1.2rem; }
+.card-grid-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.card-grid-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+.card {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); padding: 1.8rem;
+  transition: transform 0.25s, background 0.25s, box-shadow 0.3s;
+  position: relative; overflow: hidden;
+}
+.card:hover {
+  background: var(--bg-card-hover); transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--gradient-hero); opacity: 0; transition: opacity 0.3s;
+}
+.card:hover::before { opacity: 1; }
+.card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.6rem; }
+.card p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.7; }
+
+/* === Monogram Badge === */
+.badge {
+  width: 2.4rem; height: 2.4rem; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 0.85rem; margin-bottom: 1rem;
+  border: 2px solid; flex-shrink: 0;
+}
+.badge-blue { background: rgba(79,140,255,0.15); border-color: var(--accent-blue); color: var(--accent-blue); }
+.badge-purple { background: rgba(168,124,255,0.15); border-color: var(--accent-purple); color: var(--accent-purple); }
+.badge-teal { background: rgba(45,212,191,0.15); border-color: var(--accent-teal); color: var(--accent-teal); }
+.badge-amber { background: rgba(245,158,11,0.15); border-color: var(--accent-amber); color: var(--accent-amber); }
+.badge-rose { background: rgba(244,114,182,0.15); border-color: var(--accent-rose); color: var(--accent-rose); }
+
+/* === Pipeline Diagram === */
+.pipeline {
+  display: flex; flex-direction: column; gap: 0; margin: 2rem 0;
+  position: relative;
+}
+.pipeline::before { display: none; }
+.pipe-step {
+  display: flex; gap: 1.2rem; padding: 1rem 0; position: relative;
+  align-items: flex-start;
+}
+.pipe-dot {
+  width: 3rem; height: 3rem; min-width: 3rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 0.85rem; z-index: 1;
+  border: 2px solid; transition: transform 0.3s, box-shadow 0.3s;
+}
+.pipe-dot:hover { transform: scale(1.15); }
+.pipe-step:nth-child(1) .pipe-dot { background: rgba(79,140,255,0.15); border-color: var(--accent-blue); color: var(--accent-blue); }
+.pipe-step:nth-child(2) .pipe-dot { background: rgba(168,124,255,0.15); border-color: var(--accent-purple); color: var(--accent-purple); }
+.pipe-step:nth-child(3) .pipe-dot { background: rgba(45,212,191,0.15); border-color: var(--accent-teal); color: var(--accent-teal); }
+.pipe-step:nth-child(4) .pipe-dot { background: rgba(245,158,11,0.15); border-color: var(--accent-amber); color: var(--accent-amber); }
+.pipe-step:nth-child(5) .pipe-dot { background: rgba(244,114,182,0.15); border-color: var(--accent-rose); color: var(--accent-rose); }
+.pipe-content h4 { font-size: 1rem; font-weight: 700; margin-bottom: 0.3rem; }
+.pipe-content p { font-size: 0.88rem; color: var(--text-secondary); line-height: 1.65; }
+
+/* === Two-Column Layout === */
+.two-col {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+  margin: 2rem 0;
+}
+.col-card {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); padding: 1.8rem;
+}
+.col-card h4 {
+  font-size: 0.95rem; font-weight: 700; margin-bottom: 0.8rem;
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.col-card ul {
+  list-style: none; padding: 0;
+}
+.col-card li {
+  font-size: 0.88rem; color: var(--text-secondary); line-height: 1.7;
+  padding: 0.3rem 0; padding-left: 1.2rem; position: relative;
+}
+.col-card li::before {
+  content: ''; position: absolute; left: 0; top: 0.75rem;
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.col-before li::before { background: var(--accent-teal); }
+.col-after li::before { background: var(--accent-amber); }
+
+/* === PR Timeline === */
+.timeline { position: relative; margin: 2rem 0; }
+.tl-item {
+  display: grid; grid-template-columns: 80px 1fr;
+  gap: 1.5rem; padding: 1.2rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.2s;
+}
+.tl-item:hover { background: var(--bg-card); border-radius: var(--radius-sm); }
+.tl-pr {
+  font-family: var(--font-mono); font-size: 0.85rem; font-weight: 700;
+  padding-top: 0.2rem;
+}
+.tl-body h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.3rem; }
+.tl-body p { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; }
+.tl-tests {
+  font-family: var(--font-mono); font-size: 0.75rem;
+  color: var(--accent-teal); margin-top: 0.4rem;
+}
+
+/* === Test Growth Bar Chart === */
+.test-chart {
+  margin: 2.5rem 0 1rem; display: flex; flex-direction: column; gap: 0.5rem;
+}
+.test-bar {
+  display: grid; grid-template-columns: 70px 1fr 80px; gap: 1rem;
+  align-items: center; font-size: 0.8rem;
+}
+.test-bar-label {
+  font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);
+  text-align: right;
+}
+.test-bar-track {
+  height: 24px; background: rgba(255,255,255,0.03); border-radius: 4px;
+  overflow: hidden; position: relative;
+}
+.test-bar-fill {
+  height: 100%; border-radius: 4px;
+  transition: width 1.5s ease-out;
+  min-width: 2px;
+}
+.test-bar-value {
+  font-family: var(--font-mono); font-weight: 700; font-size: 0.8rem;
+}
+
+/* === Data Table === */
+.data-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.88rem; }
+.data-table th {
+  text-align: left; padding: 0.8rem 1rem;
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.data-table td {
+  padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.data-table tbody tr:hover { background: var(--bg-card); }
+.data-table .met { color: var(--accent-teal); }
+.data-table .pending { color: var(--accent-amber); }
+
+/* === Callout === */
+.callout {
+  background: var(--gradient-card); border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-blue); border-radius: var(--radius-sm);
+  padding: 1.5rem 1.8rem; margin: 2rem 0;
+}
+.callout h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
+.callout p { font-size: 0.9rem; color: var(--text-secondary); }
+.callout-data {
+  border-left-color: var(--accent-teal);
+}
+
+/* === Output Example Layout === */
+.output-split {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+  margin: 2rem 0; align-items: start;
+}
+.output-diagram {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); padding: 2rem; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  position: sticky; top: 6rem;
+}
+.output-diagram-label {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 1.2rem;
+}
+
+/* === Code Block (Output Example) === */
+.code-block {
+  background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); padding: 1.2rem 1.5rem;
+  font-family: var(--font-mono); font-size: 0.78rem;
+  color: var(--text-secondary); overflow-x: auto; line-height: 1.7;
+  white-space: pre; max-height: 700px; overflow-y: auto;
+}
+.code-block .kw { color: var(--accent-purple); }
+.code-block .fn { color: var(--accent-blue); }
+.code-block .str { color: var(--accent-teal); }
+.code-block .cm { color: var(--text-muted); }
+
+/* === Use Case Cards === */
+.uc-card {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); overflow: hidden;
+  transition: transform 0.25s, background 0.25s, box-shadow 0.3s;
+  position: relative;
+}
+.uc-card:hover {
+  background: var(--bg-card-hover); transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+.uc-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--gradient-hero); opacity: 0; transition: opacity 0.3s;
+}
+.uc-card:hover::before { opacity: 1; }
+.uc-visual {
+  padding: 1.5rem 1.5rem 0.5rem; display: flex; justify-content: center;
+}
+.uc-body {
+  padding: 0.8rem 1.8rem 1.8rem;
+}
+.uc-body h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; }
+.uc-body p { font-size: 0.88rem; color: var(--text-secondary); line-height: 1.7; }
+.uc-grid {
+  display: grid; gap: 1.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+/* === Executive Summary === */
+.exec-summary {
+  background: var(--gradient-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); padding: 2.2rem 2.5rem; margin: 2rem 0;
+  font-size: 1.05rem; color: var(--text-primary); line-height: 1.85;
+}
+.exec-summary strong { color: var(--accent-blue); }
+
+/* === Footer === */
+footer {
+  padding: 3rem 0; text-align: center; border-top: 1px solid var(--border-subtle);
+  margin-top: 2rem;
+}
+footer p { font-size: 0.82rem; color: var(--text-muted); }
+
+/* === Scroll Animation === */
+.fade-in {
+  opacity: 0; transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+/* === Responsive === */
+@media (max-width: 768px) {
+  .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .card-grid-2, .card-grid-3 { grid-template-columns: 1fr; }
+  .two-col { grid-template-columns: 1fr; }
+  .output-split { grid-template-columns: 1fr; }
+  .output-diagram { position: static; }
+  .hero { padding: 4rem 0 2rem; }
+  .tl-item { grid-template-columns: 60px 1fr; gap: 1rem; }
+  nav .nav-links { gap: 0.8rem; }
+  .test-bar { grid-template-columns: 55px 1fr 65px; }
+  .exec-summary { padding: 1.5rem; font-size: 0.95rem; }
+}
+@media (max-width: 480px) {
+  .kpi-strip { grid-template-columns: 1fr; }
+  nav .nav-links { display: none; }
+  .hero h1 { font-size: 1.8rem; }
+  .section-title { font-size: 1.4rem; }
+}
+
+/* === Print === */
+@media print {
+  :root {
+    --bg-primary: #ffffff;
+    --bg-card: #f8f9fa;
+    --bg-card-hover: #f0f1f3;
+    --border-subtle: #dee2e6;
+    --text-primary: #1a1a2e;
+    --text-secondary: #495057;
+    --text-muted: #868e96;
+  }
+  body {
+    background: white; color: #1a1a2e;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .bg-grid { display: none; }
+  nav { display: none; }
+  .hero { padding: 2rem 0 1.5rem; }
+  .gradient-text {
+    background: none; -webkit-text-fill-color: #4f8cff;
+    color: #4f8cff;
+  }
+  .fade-in { opacity: 1; transform: none; }
+  .kpi { border: 1px solid #dee2e6; }
+  .kpi .value { color: #1a1a2e !important; -webkit-text-fill-color: #1a1a2e !important; background: none !important; }
+  .card { border: 1px solid #dee2e6; break-inside: avoid; }
+  .pipe-dot, .rt-num, .badge {
+    border: 2px solid #495057; color: #495057 !important;
+    background: #f0f1f3 !important;
+  }
+  .pipeline::before, .research-timeline::before { background: #adb5bd; }
+  .callout { border-left-color: #495057; background: #f8f9fa; }
+  .code-block { background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; }
+  .code-block .kw, .code-block .fn, .code-block .str { color: #495057; }
+  .data-table th { color: #495057; }
+  .data-table .met { color: #2b8a3e; }
+  .data-table .pending { color: #e67700; }
+  .tag { border: 1px solid #adb5bd; background: #f0f1f3; color: #495057; }
+  .test-bar-fill { print-color-adjust: exact; }
+  .exec-summary { background: #f8f9fa; border: 1px solid #dee2e6; }
+  .exec-summary strong { color: #1a1a2e; }
+  .output-split { grid-template-columns: 1fr; }
+  .output-diagram { position: static; background: #f8f9fa; border: 1px solid #dee2e6; }
+  section { padding: 2rem 0; }
+  footer { border-top: 1px solid #dee2e6; }
+  a { color: #495057; text-decoration: none; }
+}
+  </style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<!-- Nav -->
+<nav>
+  <div class="container">
+    <div class="logo"><span class="gradient-text">folio.love</span></div>
+    <ul class="nav-links">
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#output">Output</a></li>
+      <li><a href="#usecases">Unlocks</a></li>
+      <li><a href="#delivery">Delivery</a></li>
+      <li><a href="#economics">Economics</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="container">
+    <p class="eyebrow">folio.love &middot; Diagram Extraction Engine &middot; Technical Briefing</p>
+    <h1>Turning Architecture Diagrams<br>into <span class="gradient-text">Structured Knowledge</span></h1>
+    <p class="subtitle">A research-driven, multi-pass LLM pipeline that extracts nodes, edges, and groupings from PDF architecture diagrams &mdash; then verifies every claim at the element level before deterministic rendering to Mermaid, prose, and tables.</p>
+
+    <div class="kpi-strip">
+      <div class="kpi fade-in"><div class="value gradient-text">5</div><div class="label">LLM Passes</div></div>
+      <div class="kpi fade-in"><div class="value" style="color:var(--accent-teal)">14K+</div><div class="label">Lines of Code</div></div>
+      <div class="kpi fade-in"><div class="value" style="color:var(--accent-purple)">3</div><div class="label">Output Formats</div></div>
+      <div class="kpi fade-in"><div class="value" style="color:var(--accent-rose)">$1&ndash;4</div><div class="label">Per Diagram Page</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- Executive Summary -->
+<section id="summary">
+  <div class="container">
+    <p class="section-label">Executive Summary</p>
+    <h2 class="section-title">What We Built and Why</h2>
+    <div class="exec-summary fade-in">
+      Architecture diagrams are the most information-dense artifacts in any consulting engagement &mdash; and PDF extraction tools destroy them. We designed and built a <strong>5-pass extraction pipeline</strong> that converts PDF architecture diagrams into structured, verifiable knowledge graphs: Mermaid diagram-as-code, component tables with technology wiki-links, and graph-bound prose summaries. Every extracted element is <strong>individually verified</strong> against the source image. The system was validated through a <strong>7-layer evidence stack</strong> &mdash; three independent blind research reports, three rounds of adversarial pressure testing, and six execution-level trap resolutions &mdash; all before writing a single line of production code.
+    </div>
+  </div>
+</section>
+
+<!-- Architecture -->
+<section id="architecture">
+  <div class="container">
+    <p class="section-label">The Problem</p>
+    <h2 class="section-title">Architecture Diagrams Are Invisible to the Pipeline</h2>
+    <p class="section-desc">PDF diagrams are the most information-dense artifacts in consulting decks. Four fundamental gaps made them invisible to folio.love's processing pipeline.</p>
+
+    <div class="card-grid card-grid-2 fade-in">
+      <div class="card">
+        <div class="badge badge-blue">T</div>
+        <h3>Text in Shapes Is Lost</h3>
+        <p><code>pdfplumber.extract_text()</code> captures flowing paragraph text. Component labels inside vector shapes &mdash; "API Gateway", "Auth Service" &mdash; are silently dropped.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-rose">D</div>
+        <h3>Sparse Diagrams Are Destroyed</h3>
+        <p>Pixel-histogram blank detection fires on line-on-white diagrams. Valid LLM results are overridden with <code>pending()</code> and excluded from downstream passes.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-purple">S</div>
+        <h3>Schema Doesn't Fit</h3>
+        <p><code>SlideAnalysis</code> has consulting-slide types and framework options. No fields exist for nodes, edges, groupings, or Mermaid diagrams.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-amber">P</div>
+        <h3>Prompts Don't Ask the Right Questions</h3>
+        <p>The analysis prompt asks for consulting classification &mdash; not nodes, edges, flow direction, or component technologies.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Evidence-Driven Escalation -->
+<section id="escalation">
+  <div class="container">
+    <p class="section-label">Core Principle</p>
+    <h2 class="section-title">Evidence-Driven Escalation</h2>
+    <p class="section-desc">More multimodal context is not monotonically better. Sending 5 images to a simple 5-box flowchart introduces binding noise. The system starts simple and escalates only when evidence indicates insufficiency.</p>
+
+    <div class="two-col fade-in">
+      <div class="col-card col-before">
+        <h4><span class="badge badge-teal" style="width:1.6rem;height:1.6rem;font-size:0.65rem;margin-bottom:0">1</span> Before Pass A <span class="tag tag-teal">Deterministic signals</span></h4>
+        <ul>
+          <li>Uses Stage 1 data only &mdash; cannot use Pass A output to judge Pass A input</li>
+          <li>pypdfium2 &gt;30 bounded words OR pdfplumber &gt;200 vector lines &rarr; escalate to global + tiles</li>
+          <li>Otherwise &rarr; global image only (simple path)</li>
+          <li>A dense diagram with only global image may hallucinate 8 large boxes and miss 40 small ones</li>
+        </ul>
+      </div>
+      <div class="col-card col-after">
+        <h4><span class="badge badge-amber" style="width:1.6rem;height:1.6rem;font-size:0.65rem;margin-bottom:0">2</span> Before Pass B/C <span class="tag tag-amber">Pass A output drives</span></h4>
+        <ul>
+          <li>Pass A node count refines escalation for verification depth</li>
+          <li>Simple (&le;10 nodes): claim-level verification with global image</li>
+          <li>Medium (11&ndash;25): claim-level verification with local highlights</li>
+          <li>Dense (&gt;25): full verification + regional completeness sweep</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture Pipeline -->
+<section id="pipeline">
+  <div class="container">
+    <p class="section-label">The Architecture</p>
+    <h2 class="section-title">Extract &rarr; Mutate &rarr; Verify &rarr; Sweep &rarr; Render</h2>
+    <p class="section-desc">A five-stage LLM pipeline with deterministic escalation. Each pass builds on the verified output of the previous, with safety checks preventing error propagation.</p>
+
+    <div class="pipeline fade-in">
+      <div class="pipe-step">
+        <div class="pipe-dot">A</div>
+        <div class="pipe-content">
+          <h4>Pass A &mdash; Extract <span class="tag tag-blue">LLM</span></h4>
+          <p>Global 300 DPI image + PDF text inventory &rarr; LLM extracts a canonical graph JSON with nodes, edges, groups, and arbitrary stable IDs. Escalates to tiles for medium/dense diagrams based on deterministic Stage 1 signals (word count + vector count), not the LLM's own assessment.</p>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-dot">B</div>
+        <div class="pipe-content">
+          <h4>Pass B &mdash; Mutate <span class="tag tag-purple">LLM + Python</span></h4>
+          <p>A second LLM acts as visual critic: receives the graph + global image, outputs targeted mutations (add/remove/relabel/regroup/change direction). Python applies mutations deterministically &mdash; untouched elements are mathematically protected. If &gt;40% elements change &rarr; sanity short-circuit: skip verification, mark for human review.</p>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-dot">C</div>
+        <div class="pipe-content">
+          <h4>Pass C &mdash; Claim-Level Verification <span class="tag tag-teal">LLM Batched</span></h4>
+          <p>Every node and edge becomes a verifiable claim. Batched 15&ndash;20 per LLM call with PIL-generated visual highlights (semi-transparent bounding boxes on the source image). Per-claim: confirmed / rejected / uncertain. Rejected elements removed; uncertain ones generate specific review questions.</p>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-dot">S</div>
+        <div class="pipe-content">
+          <h4>Completeness Sweep <span class="tag tag-amber">Dense Only</span></h4>
+          <p>For dense diagrams (&gt;25 nodes): per-cluster regional prompt asks "what components or connections in this region are NOT in the current graph?" Discovers elements all prior passes missed. Added with low confidence + review flag.</p>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-dot">R</div>
+        <div class="pipe-content">
+          <h4>Deterministic Rendering <span class="tag tag-rose">Pure Python</span></h4>
+          <p>Verified graph &rarr; Mermaid (with recursive nesting + sanitization), graph-bound prose (no inferred semantics), component tables, connection tables, and technology wiki-links. Generated deterministically &mdash; never by the LLM.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Key Technical Decisions -->
+<section id="decisions">
+  <div class="container">
+    <p class="section-label">Key Technical Decisions</p>
+    <h2 class="section-title">Design Decisions That Emerged from Evidence</h2>
+    <p class="section-desc">Each decision was pressure-tested across three blind review rounds. Six execution-level traps were caught and resolved before writing a single line of code.</p>
+
+    <div class="card-grid card-grid-3 fade-in">
+      <div class="card">
+        <div class="badge badge-blue">I</div>
+        <h3>Spatial IoU for Stable IDs</h3>
+        <p>Node IDs are arbitrary (not hash-based). Cross-run stability via bounding box IoU &gt; 0.80 &mdash; robust to label changes and tolerant of positional shifts. Human overrides survive re-extraction.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-teal">V</div>
+        <h3>Claim-Level Highlights</h3>
+        <p>Rectangular crops spanning source/target cut routing lines. Solution: PIL draws colored bounding boxes directly on the global image. "Look at the highlighted boxes. Is there a continuous line?"</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-purple">M</div>
+        <h3>Mutations, Not Rewrites</h3>
+        <p>Pass B outputs a targeted mutation list &mdash; not a full JSON rewrite. Untouched nodes and edges are mathematically protected. Prevents hallucination regressions in verified elements.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-amber">F</div>
+        <h3>Freeze / Override System</h3>
+        <p><code>folio_freeze: true</code> bypasses the entire pipeline. Frozen Markdown is parsed to hydrate a graph for deck-level aggregation &mdash; no LLM calls, no cost, no risk of overwriting human edits.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-rose">H</div>
+        <h3>Honest Framing</h3>
+        <p>"Extracts at high quality and flags what needs checking." Confidence reasoning, actionable review questions, and abstention when the system doesn't trust its own output. System learns from corrections.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-blue">E</div>
+        <h3>Endpoint-Level Privacy</h3>
+        <p>Not just provider-level controls. Retention policies vary by API endpoint within the same provider. <code>folio.yaml</code> governs allowed API surfaces with per-endpoint restrictions.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Output Example -->
+<section id="output">
+  <div class="container">
+    <p class="section-label">Output Example</p>
+    <h2 class="section-title">What the Pipeline Produces</h2>
+    <p class="section-desc">Each diagram page generates a standalone Obsidian note with YAML frontmatter (extraction metadata, confidence, review flags) and a structured Markdown body (Mermaid diagram, component/connection tables, prose summary).</p>
+
+    <div class="output-split fade-in">
+      <!-- Source Diagram (SVG) -->
+      <div class="output-diagram">
+        <div class="output-diagram-label">Source PDF Diagram (Page 7)</div>
+        <svg viewBox="0 0 420 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px">
+          <!-- Background -->
+          <rect width="420" height="520" rx="8" fill="#f8f9fc"/>
+
+          <!-- Frontend Group -->
+          <rect x="30" y="30" width="360" height="110" rx="8" fill="none" stroke="#4f8cff" stroke-width="1.5" stroke-dasharray="6 3"/>
+          <text x="48" y="52" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="11" fill="#4f8cff" font-weight="600">Frontend</text>
+          <rect x="100" y="62" width="220" height="60" rx="8" fill="#e8f0ff" stroke="#4f8cff" stroke-width="1.5"/>
+          <text x="210" y="88" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="14" fill="#1a1a2e" font-weight="600" text-anchor="middle">Web Application</text>
+          <text x="210" y="108" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="11" fill="#6b7280" text-anchor="middle">React</text>
+
+          <!-- Arrow 1 -->
+          <line x1="210" y1="122" x2="210" y2="198" stroke="#6b7280" stroke-width="1.5"/>
+          <polygon points="204,192 210,202 216,192" fill="#6b7280"/>
+          <rect x="142" y="148" width="136" height="22" rx="4" fill="#fff" stroke="#dee2e6" stroke-width="1"/>
+          <text x="210" y="163" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">HTTPS / REST</text>
+
+          <!-- Infrastructure Group -->
+          <rect x="30" y="190" width="360" height="110" rx="8" fill="none" stroke="#a87cff" stroke-width="1.5" stroke-dasharray="6 3"/>
+          <text x="48" y="212" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="11" fill="#a87cff" font-weight="600">Infrastructure</text>
+          <rect x="100" y="222" width="220" height="60" rx="8" fill="#f3edff" stroke="#a87cff" stroke-width="1.5"/>
+          <text x="210" y="248" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="14" fill="#1a1a2e" font-weight="600" text-anchor="middle">API Gateway</text>
+          <text x="210" y="268" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="11" fill="#6b7280" text-anchor="middle">Kong</text>
+
+          <!-- Arrow 2 -->
+          <line x1="210" y1="282" x2="210" y2="358" stroke="#6b7280" stroke-width="1.5"/>
+          <polygon points="204,352 210,362 216,352" fill="#6b7280"/>
+          <rect x="148" y="308" width="124" height="22" rx="4" fill="#fff" stroke="#dee2e6" stroke-width="1"/>
+          <text x="210" y="323" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">SQL queries</text>
+
+          <!-- Data Layer Group -->
+          <rect x="30" y="350" width="360" height="130" rx="8" fill="none" stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="6 3"/>
+          <text x="48" y="372" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="11" fill="#2dd4bf" font-weight="600">Data Layer</text>
+          <!-- Cylinder shape for datastore -->
+          <ellipse cx="210" cy="398" rx="110" ry="14" fill="#e6faf7" stroke="#2dd4bf" stroke-width="1.5"/>
+          <rect x="100" y="398" width="220" height="50" fill="#e6faf7" stroke="none"/>
+          <line x1="100" y1="398" x2="100" y2="448" stroke="#2dd4bf" stroke-width="1.5"/>
+          <line x1="320" y1="398" x2="320" y2="448" stroke="#2dd4bf" stroke-width="1.5"/>
+          <ellipse cx="210" cy="448" rx="110" ry="14" fill="#e6faf7" stroke="#2dd4bf" stroke-width="1.5"/>
+          <text x="210" y="424" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="14" fill="#1a1a2e" font-weight="600" text-anchor="middle">Order Database</text>
+          <text x="210" y="443" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="11" fill="#6b7280" text-anchor="middle">PostgreSQL</text>
+
+          <!-- Page label -->
+          <text x="380" y="505" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="10" fill="#adb5bd" text-anchor="end">Page 7</text>
+        </svg>
+      </div>
+
+      <!-- Extracted Output -->
+      <div>
+        <div class="code-block"><span class="cm">---</span>
+<span class="kw">type</span>: <span class="str">diagram</span>
+<span class="kw">diagram_type</span>: <span class="str">system_architecture</span>
+<span class="kw">title</span>: <span class="str">"Order Processing System Architecture"</span>
+<span class="kw">source_deck</span>: <span class="str">"[[20260314-system-design-review]]"</span>
+<span class="kw">source_page</span>: <span class="str">7</span>
+<span class="kw">extraction_confidence</span>: <span class="str">0.93</span>
+<span class="kw">confidence_reasoning</span>: <span class="str">&gt;</span>
+  <span class="cm">Pass A extracted 3 nodes and 2 edges.</span>
+  <span class="cm">Pass B made no mutations.</span>
+  <span class="cm">Claim-level verification confirmed 3/3 nodes, 2/2 edges.</span>
+<span class="kw">review_required</span>: <span class="str">false</span>
+<span class="kw">components</span>: <span class="str">[Web Application, API Gateway, Order Database]</span>
+<span class="kw">technologies</span>: <span class="str">[React, Kong, PostgreSQL]</span>
+<span class="cm">---</span>
+
+<span class="fn"># Order Processing System Architecture</span>
+
+<span class="fn">## Diagram</span>
+
+```mermaid
+<span class="kw">graph TD</span>
+  <span class="kw">subgraph</span> <span class="str">Frontend</span>
+    node_1[<span class="str">Web Application</span>&lt;br/&gt;<span class="cm">React</span>]
+  <span class="kw">end</span>
+  <span class="kw">subgraph</span> <span class="str">Infrastructure</span>
+    node_2[<span class="str">API Gateway</span>&lt;br/&gt;<span class="cm">Kong</span>]
+  <span class="kw">end</span>
+  <span class="kw">subgraph</span> <span class="str">"Data Layer"</span>
+    node_3[(<span class="str">Order Database</span>&lt;br/&gt;<span class="cm">PostgreSQL</span>)]
+  <span class="kw">end</span>
+  node_1 --&gt;|<span class="str">HTTPS/REST</span>| node_2
+  node_2 --&gt;|<span class="str">SQL queries</span>| node_3
+```
+
+<span class="fn">## Components</span>
+
+| Component        | Technology   | Group          | Confidence |
+|------------------|------------|----------------|------------|
+| Web Application  | [[React]]    | Frontend       | 0.98       |
+| API Gateway      | [[Kong]]     | Infrastructure | 0.97       |
+| Order Database   | [[PostgreSQL]] | Data Layer   | 0.93       |
+
+<span class="fn">## Connections</span>
+
+| From             | To              | Label       | Confidence |
+|------------------|-----------------|-------------|------------|
+| Web Application  | API Gateway     | HTTPS/REST  | 0.96       |
+| API Gateway      | Order Database  | SQL queries | 0.94       |
+
+<span class="fn">## Summary</span>
+
+Web Application connects to API Gateway via HTTPS/REST.
+API Gateway connects to Order Database via SQL queries.
+Components organized into Frontend, Infrastructure,
+and Data Layer groups.
+
+<span class="cm">&gt; All claims confirmed at claim level.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Use Cases -->
+<section id="usecases">
+  <div class="container">
+    <p class="section-label">What This Enables</p>
+    <h2 class="section-title">From Machine-Opaque to Queryable Data</h2>
+    <p class="section-desc">Today, architecture diagrams are human-readable but machine-opaque &mdash; locked in PDFs that no tool can search, join, or compare. Once folio.love extracts them into structured data (nodes, edges, technologies, groups), they become a data source that can be combined with everything else.</p>
+
+    <div class="uc-grid fade-in">
+
+      <!-- 1. Due Diligence -->
+      <div class="uc-card">
+        <div class="uc-visual">
+          <svg viewBox="0 0 340 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:320px">
+            <!-- PDF Diagram -->
+            <rect x="2" y="10" width="90" height="110" rx="4" fill="rgba(79,140,255,0.08)" stroke="var(--accent-blue)" stroke-width="1"/>
+            <text x="47" y="26" font-family="-apple-system,sans-serif" font-size="7" fill="#8b90a0" text-anchor="middle" font-weight="600">PDF DIAGRAM</text>
+            <rect x="14" y="34" width="66" height="18" rx="3" fill="rgba(79,140,255,0.12)" stroke="var(--accent-blue)" stroke-width="0.8"/>
+            <text x="47" y="46" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-blue)" text-anchor="middle">Kafka</text>
+            <rect x="14" y="58" width="66" height="18" rx="3" fill="rgba(168,124,255,0.12)" stroke="var(--accent-purple)" stroke-width="0.8"/>
+            <text x="47" y="70" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-purple)" text-anchor="middle">PostgreSQL</text>
+            <rect x="14" y="82" width="66" height="18" rx="3" fill="rgba(45,212,191,0.12)" stroke="var(--accent-teal)" stroke-width="0.8"/>
+            <text x="47" y="94" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-teal)" text-anchor="middle">Redis</text>
+            <line x="22" y1="52" x2="22" y2="58" stroke="#5a5f70" stroke-width="0.6"/>
+            <line x="47" y1="76" x2="47" y2="82" stroke="#5a5f70" stroke-width="0.6"/>
+            <!-- Arrow -->
+            <line x1="100" y1="65" x2="130" y2="65" stroke="var(--accent-blue)" stroke-width="1.5"/>
+            <polygon points="128,61 135,65 128,69" fill="var(--accent-blue)"/>
+            <!-- Structured Data -->
+            <rect x="140" y="20" width="60" height="90" rx="4" fill="rgba(45,212,191,0.06)" stroke="var(--accent-teal)" stroke-width="1"/>
+            <text x="170" y="34" font-family="-apple-system,sans-serif" font-size="6.5" fill="#8b90a0" text-anchor="middle" font-weight="600">EXTRACTED</text>
+            <text x="155" y="50" font-family="monospace" font-size="7" fill="var(--text-secondary)">Kafka</text>
+            <text x="155" y="64" font-family="monospace" font-size="7" fill="var(--text-secondary)">PostgreSQL</text>
+            <text x="155" y="78" font-family="monospace" font-size="7" fill="var(--text-secondary)">Redis</text>
+            <!-- Join arrow -->
+            <text x="215" y="52" font-family="-apple-system,sans-serif" font-size="9" fill="var(--accent-purple)" text-anchor="middle" font-weight="700">JOIN</text>
+            <line x1="205" y1="56" x2="205" y2="90" stroke="var(--accent-purple)" stroke-width="0.8" stroke-dasharray="3 2"/>
+            <line x1="225" y1="56" x2="225" y2="90" stroke="var(--accent-purple)" stroke-width="0.8" stroke-dasharray="3 2"/>
+            <!-- CMDB -->
+            <rect x="240" y="20" width="90" height="90" rx="4" fill="rgba(245,158,11,0.06)" stroke="var(--accent-amber)" stroke-width="1"/>
+            <text x="285" y="34" font-family="-apple-system,sans-serif" font-size="6.5" fill="#8b90a0" text-anchor="middle" font-weight="600">CMDB</text>
+            <text x="255" y="50" font-family="monospace" font-size="7" fill="var(--text-secondary)">RabbitMQ</text>
+            <circle cx="316" cy="47" r="5" fill="rgba(244,114,182,0.2)" stroke="var(--accent-rose)" stroke-width="1"/>
+            <text x="316" y="50" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-rose)" text-anchor="middle" font-weight="700">!</text>
+            <text x="255" y="64" font-family="monospace" font-size="7" fill="var(--text-secondary)">PostgreSQL</text>
+            <circle cx="316" cy="61" r="5" fill="rgba(45,212,191,0.2)" stroke="var(--accent-teal)" stroke-width="1"/>
+            <text x="316" y="64" font-family="-apple-system,sans-serif" font-size="8" fill="var(--accent-teal)" text-anchor="middle">&#10003;</text>
+            <text x="255" y="78" font-family="monospace" font-size="7" fill="var(--text-secondary)">Redis</text>
+            <circle cx="316" cy="75" r="5" fill="rgba(45,212,191,0.2)" stroke="var(--accent-teal)" stroke-width="1"/>
+            <text x="316" y="78" font-family="-apple-system,sans-serif" font-size="8" fill="var(--accent-teal)" text-anchor="middle">&#10003;</text>
+            <!-- Mismatch callout -->
+            <rect x="240" y="95" width="90" height="14" rx="3" fill="rgba(244,114,182,0.1)"/>
+            <text x="285" y="104" font-family="-apple-system,sans-serif" font-size="6" fill="var(--accent-rose)" text-anchor="middle">Kafka &#8800; RabbitMQ</text>
+          </svg>
+        </div>
+        <div class="uc-body">
+          <h3>Due Diligence at Machine Speed</h3>
+          <p>Today, an analyst stares at a PDF diagram and manually cross-references against CMDB exports. folio.love makes every component, connection, and technology a structured field &mdash; enabling teams to join extracted architecture data against CMDB/ServiceNow and surface discrepancies like "diagram says Kafka, CMDB shows RabbitMQ" across hundreds of pages. The extraction is the unlock; the join becomes straightforward.</p>
+        </div>
+      </div>
+
+      <!-- 2. Triangulated Transformation Assessment -->
+      <div class="uc-card">
+        <div class="uc-visual">
+          <svg viewBox="0 0 340 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:320px">
+            <!-- Current State -->
+            <rect x="2" y="8" width="100" height="125" rx="4" fill="rgba(79,140,255,0.06)" stroke="var(--accent-blue)" stroke-width="1"/>
+            <text x="52" y="22" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-blue)" text-anchor="middle" font-weight="600">CURRENT STATE</text>
+            <rect x="14" y="30" width="76" height="16" rx="3" fill="rgba(79,140,255,0.1)" stroke="var(--accent-blue)" stroke-width="0.6"/>
+            <text x="52" y="41" font-family="-apple-system,sans-serif" font-size="7" fill="var(--text-secondary)" text-anchor="middle">Monolith</text>
+            <line x1="52" y1="46" x2="52" y2="54" stroke="#5a5f70" stroke-width="0.6"/>
+            <rect x="14" y="54" width="76" height="16" rx="3" fill="rgba(79,140,255,0.1)" stroke="var(--accent-blue)" stroke-width="0.6"/>
+            <text x="52" y="65" font-family="-apple-system,sans-serif" font-size="7" fill="var(--text-secondary)" text-anchor="middle">Oracle DB</text>
+            <line x1="52" y1="70" x2="52" y2="78" stroke="#5a5f70" stroke-width="0.6"/>
+            <rect x="14" y="78" width="76" height="16" rx="3" fill="rgba(79,140,255,0.1)" stroke="var(--accent-blue)" stroke-width="0.6"/>
+            <text x="52" y="89" font-family="-apple-system,sans-serif" font-size="7" fill="var(--text-secondary)" text-anchor="middle">On-Prem</text>
+            <!-- Delta Arrow -->
+            <line x1="110" y1="65" x2="128" y2="65" stroke="var(--accent-amber)" stroke-width="1.5"/>
+            <polygon points="126,61 133,65 126,69" fill="var(--accent-amber)"/>
+            <!-- Delta box -->
+            <rect x="135" y="18" width="70" height="105" rx="6" fill="rgba(245,158,11,0.08)" stroke="var(--accent-amber)" stroke-width="1.2" stroke-dasharray="4 2"/>
+            <text x="170" y="33" font-family="-apple-system,sans-serif" font-size="7.5" fill="var(--accent-amber)" text-anchor="middle" font-weight="700">DELTA</text>
+            <text x="148" y="50" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-rose)">- Monolith</text>
+            <text x="148" y="64" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-teal)">+ 4 Services</text>
+            <text x="148" y="78" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-rose)">- Oracle</text>
+            <text x="148" y="92" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-teal)">+ PostgreSQL</text>
+            <text x="148" y="106" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-teal)">+ AWS EKS</text>
+            <!-- Target State -->
+            <line x1="208" y1="65" x2="226" y2="65" stroke="var(--accent-amber)" stroke-width="1.5"/>
+            <polygon points="224,61 231,65 224,69" fill="var(--accent-amber)"/>
+            <rect x="233" y="8" width="105" height="125" rx="4" fill="rgba(45,212,191,0.06)" stroke="var(--accent-teal)" stroke-width="1"/>
+            <text x="285" y="22" font-family="-apple-system,sans-serif" font-size="7" fill="var(--accent-teal)" text-anchor="middle" font-weight="600">TARGET STATE</text>
+            <rect x="243" y="30" width="40" height="14" rx="3" fill="rgba(45,212,191,0.1)" stroke="var(--accent-teal)" stroke-width="0.6"/>
+            <text x="263" y="40" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-secondary)" text-anchor="middle">Auth</text>
+            <rect x="289" y="30" width="40" height="14" rx="3" fill="rgba(45,212,191,0.1)" stroke="var(--accent-teal)" stroke-width="0.6"/>
+            <text x="309" y="40" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-secondary)" text-anchor="middle">Orders</text>
+            <rect x="243" y="50" width="40" height="14" rx="3" fill="rgba(45,212,191,0.1)" stroke="var(--accent-teal)" stroke-width="0.6"/>
+            <text x="263" y="60" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-secondary)" text-anchor="middle">Users</text>
+            <rect x="289" y="50" width="40" height="14" rx="3" fill="rgba(45,212,191,0.1)" stroke="var(--accent-teal)" stroke-width="0.6"/>
+            <text x="309" y="60" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-secondary)" text-anchor="middle">Events</text>
+            <line x1="285" y1="64" x2="285" y2="74" stroke="#5a5f70" stroke-width="0.6"/>
+            <rect x="255" y="74" width="60" height="14" rx="3" fill="rgba(45,212,191,0.1)" stroke="var(--accent-teal)" stroke-width="0.6"/>
+            <text x="285" y="84" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-secondary)" text-anchor="middle">PostgreSQL</text>
+            <line x1="285" y1="88" x2="285" y2="98" stroke="#5a5f70" stroke-width="0.6"/>
+            <rect x="255" y="98" width="60" height="14" rx="3" fill="rgba(45,212,191,0.1)" stroke="var(--accent-teal)" stroke-width="0.6"/>
+            <text x="285" y="108" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-secondary)" text-anchor="middle">AWS EKS</text>
+          </svg>
+        </div>
+        <div class="uc-body">
+          <h3>Triangulated Transformation Assessment</h3>
+          <p>folio.love can extract both current-state and target-state architecture diagrams into structured component lists. Because the output is structured YAML &mdash; not pixels &mdash; teams can diff them, map components against CMDB records and interview findings, and express migration scope as structured deltas rather than slide annotations. Before extraction, this triangulation is manual; after, it's data work.</p>
+        </div>
+      </div>
+
+      <!-- 3. LLM-Powered Architecture Analysis -->
+      <div class="uc-card">
+        <div class="uc-visual">
+          <svg viewBox="0 0 340 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:320px">
+            <!-- Multiple diagram thumbnails -->
+            <rect x="8" y="20" width="50" height="40" rx="3" fill="rgba(79,140,255,0.08)" stroke="var(--accent-blue)" stroke-width="0.8"/>
+            <rect x="16" y="28" width="14" height="8" rx="1.5" fill="rgba(79,140,255,0.15)"/>
+            <rect x="34" y="28" width="14" height="8" rx="1.5" fill="rgba(79,140,255,0.15)"/>
+            <line x1="23" y1="36" x2="41" y2="28" stroke="#5a5f70" stroke-width="0.5"/>
+            <rect x="16" y="42" width="34" height="8" rx="1.5" fill="rgba(79,140,255,0.08)"/>
+            <text x="33" y="14" font-family="-apple-system,sans-serif" font-size="6" fill="#5a5f70" text-anchor="middle">Deck 1</text>
+
+            <rect x="8" y="72" width="50" height="40" rx="3" fill="rgba(168,124,255,0.08)" stroke="var(--accent-purple)" stroke-width="0.8"/>
+            <rect x="16" y="80" width="14" height="8" rx="1.5" fill="rgba(168,124,255,0.15)"/>
+            <rect x="34" y="80" width="14" height="8" rx="1.5" fill="rgba(168,124,255,0.15)"/>
+            <line x1="23" y1="88" x2="41" y2="80" stroke="#5a5f70" stroke-width="0.5"/>
+            <rect x="16" y="94" width="34" height="8" rx="1.5" fill="rgba(168,124,255,0.08)"/>
+            <text x="33" y="66" font-family="-apple-system,sans-serif" font-size="6" fill="#5a5f70" text-anchor="middle">Deck 2</text>
+
+            <rect x="66" y="46" width="50" height="40" rx="3" fill="rgba(45,212,191,0.08)" stroke="var(--accent-teal)" stroke-width="0.8"/>
+            <rect x="74" y="54" width="14" height="8" rx="1.5" fill="rgba(45,212,191,0.15)"/>
+            <rect x="92" y="54" width="14" height="8" rx="1.5" fill="rgba(45,212,191,0.15)"/>
+            <line x1="81" y1="62" x2="99" y2="54" stroke="#5a5f70" stroke-width="0.5"/>
+            <rect x="74" y="68" width="34" height="8" rx="1.5" fill="rgba(45,212,191,0.08)"/>
+            <text x="91" y="40" font-family="-apple-system,sans-serif" font-size="6" fill="#5a5f70" text-anchor="middle">...47 decks</text>
+
+            <!-- Funnel lines -->
+            <line x1="58" y1="40" x2="138" y2="58" stroke="var(--accent-blue)" stroke-width="0.8" opacity="0.5"/>
+            <line x1="58" y1="92" x2="138" y2="78" stroke="var(--accent-purple)" stroke-width="0.8" opacity="0.5"/>
+            <line x1="116" y1="66" x2="138" y2="68" stroke="var(--accent-teal)" stroke-width="0.8" opacity="0.5"/>
+
+            <!-- Prompt bubble -->
+            <rect x="140" y="30" width="190" height="42" rx="8" fill="rgba(168,124,255,0.1)" stroke="var(--accent-purple)" stroke-width="1"/>
+            <text x="155" y="47" font-family="-apple-system,sans-serif" font-size="8" fill="var(--text-secondary)" font-style="italic">"What are the single points of</text>
+            <text x="155" y="60" font-family="-apple-system,sans-serif" font-size="8" fill="var(--text-secondary)" font-style="italic"> failure across all 47 diagrams?"</text>
+            <!-- Small triangle for chat bubble -->
+            <polygon points="145,72 140,78 152,72" fill="rgba(168,124,255,0.1)" stroke="var(--accent-purple)" stroke-width="1"/>
+
+            <!-- Answer bubble -->
+            <rect x="140" y="85" width="190" height="50" rx="8" fill="rgba(45,212,191,0.08)" stroke="var(--accent-teal)" stroke-width="1"/>
+            <text x="155" y="100" font-family="monospace" font-size="7" fill="var(--accent-teal)">3 SPOFs identified:</text>
+            <text x="155" y="112" font-family="monospace" font-size="7" fill="var(--text-secondary)">1. Shared Oracle DB (12 decks)</text>
+            <text x="155" y="124" font-family="monospace" font-size="7" fill="var(--text-secondary)">2. API Gateway (8 decks)</text>
+          </svg>
+        </div>
+        <div class="uc-body">
+          <h3>LLM-Powered Architecture Analysis</h3>
+          <p>An LLM cannot meaningfully read a PDF architecture diagram &mdash; it sees pixels, not structure. folio.love's Markdown output changes this: extracted diagrams can be fed directly to an LLM for cross-cutting analysis. "What are the single points of failure across all 47 system diagrams?" becomes a prompt over structured data rather than a week of analyst review. The extraction makes the corpus LLM-readable.</p>
+        </div>
+      </div>
+
+      <!-- 4. Knowledge Reuse -->
+      <div class="uc-card">
+        <div class="uc-visual">
+          <svg viewBox="0 0 340 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:320px">
+            <!-- Search bar -->
+            <rect x="40" y="8" width="260" height="28" rx="14" fill="rgba(255,255,255,0.04)" stroke="var(--border-subtle)" stroke-width="1"/>
+            <circle cx="58" cy="22" r="7" fill="none" stroke="var(--accent-blue)" stroke-width="1.2"/>
+            <line x1="63" y1="27" x2="67" y2="31" stroke="var(--accent-blue)" stroke-width="1.2"/>
+            <text x="74" y="26" font-family="-apple-system,sans-serif" font-size="8.5" fill="var(--text-secondary)">microservices architecture financial services</text>
+
+            <!-- Result cards grid -->
+            <rect x="20" y="46" width="92" height="44" rx="4" fill="rgba(79,140,255,0.06)" stroke="var(--accent-blue)" stroke-width="0.8"/>
+            <text x="30" y="58" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--accent-blue)" font-weight="600">PAYMENTS PLATFORM</text>
+            <text x="30" y="70" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-muted)">12 services, Kafka, K8s</text>
+            <text x="30" y="80" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-muted)">FSI &middot; 2025</text>
+            <rect x="98" y="82" width="8" height="4" rx="2" fill="var(--accent-teal)"/>
+
+            <rect x="124" y="46" width="92" height="44" rx="4" fill="rgba(168,124,255,0.06)" stroke="var(--accent-purple)" stroke-width="0.8"/>
+            <text x="134" y="58" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--accent-purple)" font-weight="600">TRADING ENGINE</text>
+            <text x="134" y="70" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-muted)">8 services, gRPC, AWS</text>
+            <text x="134" y="80" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-muted)">FSI &middot; 2024</text>
+            <rect x="202" y="82" width="8" height="4" rx="2" fill="var(--accent-teal)"/>
+
+            <rect x="228" y="46" width="92" height="44" rx="4" fill="rgba(45,212,191,0.06)" stroke="var(--accent-teal)" stroke-width="0.8"/>
+            <text x="238" y="58" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--accent-teal)" font-weight="600">CORE BANKING</text>
+            <text x="238" y="70" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-muted)">22 services, Event Mesh</text>
+            <text x="238" y="80" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-muted)">FSI &middot; 2025</text>
+            <rect x="306" y="82" width="8" height="4" rx="2" fill="var(--accent-teal)"/>
+
+            <!-- More results faded -->
+            <rect x="20" y="100" width="92" height="36" rx="4" fill="rgba(245,158,11,0.04)" stroke="var(--border-subtle)" stroke-width="0.6" opacity="0.5"/>
+            <text x="30" y="112" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--text-muted)" opacity="0.5">INSURANCE CLAIMS</text>
+            <text x="30" y="124" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-muted)" opacity="0.4">15 services, Azure</text>
+
+            <rect x="124" y="100" width="92" height="36" rx="4" fill="rgba(244,114,182,0.04)" stroke="var(--border-subtle)" stroke-width="0.6" opacity="0.5"/>
+            <text x="134" y="112" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--text-muted)" opacity="0.5">WEALTH MGMT</text>
+            <text x="134" y="124" font-family="-apple-system,sans-serif" font-size="6" fill="var(--text-muted)" opacity="0.4">6 services, REST</text>
+
+            <rect x="228" y="100" width="92" height="36" rx="4" fill="rgba(79,140,255,0.04)" stroke="var(--border-subtle)" stroke-width="0.6" opacity="0.3"/>
+            <text x="274" y="118" font-family="-apple-system,sans-serif" font-size="7" fill="var(--text-muted)" text-anchor="middle" opacity="0.4">+14 more</text>
+          </svg>
+        </div>
+        <div class="uc-body">
+          <h3>Knowledge Reuse Across Engagements</h3>
+          <p>folio.love outputs structured YAML frontmatter with tagged components and technologies for every diagram. This enables teams to query across past engagements &mdash; "show me every microservices architecture we've seen in financial services" &mdash; using Obsidian's Dataview plugin or any tool that reads Markdown + YAML. Architecture knowledge shifts from tribal memory to a searchable, structured library.</p>
+        </div>
+      </div>
+
+      <!-- 5. Cross-Deck Consistency -->
+      <div class="uc-card">
+        <div class="uc-visual">
+          <svg viewBox="0 0 340 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:320px">
+            <!-- Timeline axis -->
+            <line x1="30" y1="130" x2="310" y2="130" stroke="var(--border-subtle)" stroke-width="1"/>
+            <!-- Q1 marker -->
+            <circle cx="70" cy="130" r="4" fill="var(--accent-blue)" stroke="var(--accent-blue)" stroke-width="1"/>
+            <text x="70" y="145" font-family="-apple-system,sans-serif" font-size="7" fill="var(--text-muted)" text-anchor="middle" font-weight="600">Q1</text>
+            <!-- Q1 diagram -->
+            <rect x="30" y="25" width="80" height="90" rx="4" fill="rgba(79,140,255,0.06)" stroke="var(--accent-blue)" stroke-width="1"/>
+            <text x="70" y="38" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--accent-blue)" text-anchor="middle" font-weight="600">Q1 ARCHITECTURE</text>
+            <rect x="40" y="46" width="60" height="12" rx="2" fill="rgba(79,140,255,0.1)"/>
+            <text x="70" y="55" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--text-secondary)" text-anchor="middle">API Gateway</text>
+            <line x1="70" y1="58" x2="70" y2="64" stroke="#5a5f70" stroke-width="0.5"/>
+            <rect x="40" y="64" width="60" height="12" rx="2" fill="rgba(79,140,255,0.1)"/>
+            <text x="70" y="73" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--text-secondary)" text-anchor="middle">Auth Service</text>
+            <line x1="70" y1="76" x2="70" y2="82" stroke="#5a5f70" stroke-width="0.5"/>
+            <rect x="40" y="82" width="60" height="12" rx="2" fill="rgba(79,140,255,0.1)"/>
+            <text x="70" y="91" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--text-secondary)" text-anchor="middle">Order Svc</text>
+            <text x="70" y="108" font-family="-apple-system,sans-serif" font-size="8" fill="var(--accent-blue)" text-anchor="middle" font-weight="700">3 services</text>
+            <line x1="70" y1="115" x2="70" y2="126" stroke="var(--accent-blue)" stroke-width="0.6"/>
+
+            <!-- Delta indicator -->
+            <text x="170" y="18" font-family="-apple-system,sans-serif" font-size="8" fill="var(--accent-amber)" text-anchor="middle" font-weight="700">+4 services added</text>
+            <line x1="115" y1="70" x2="225" y2="70" stroke="var(--accent-amber)" stroke-width="1" stroke-dasharray="4 2"/>
+            <polygon points="222,67 228,70 222,73" fill="var(--accent-amber)"/>
+
+            <!-- Q3 marker -->
+            <circle cx="270" cy="130" r="4" fill="var(--accent-teal)" stroke="var(--accent-teal)" stroke-width="1"/>
+            <text x="270" y="145" font-family="-apple-system,sans-serif" font-size="7" fill="var(--text-muted)" text-anchor="middle" font-weight="600">Q3</text>
+            <!-- Q3 diagram -->
+            <rect x="230" y="25" width="80" height="90" rx="4" fill="rgba(45,212,191,0.06)" stroke="var(--accent-teal)" stroke-width="1"/>
+            <text x="270" y="38" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--accent-teal)" text-anchor="middle" font-weight="600">Q3 ARCHITECTURE</text>
+            <rect x="237" y="44" width="28" height="10" rx="2" fill="rgba(45,212,191,0.1)"/>
+            <text x="251" y="52" font-family="-apple-system,sans-serif" font-size="5.5" fill="var(--text-secondary)" text-anchor="middle">Gateway</text>
+            <rect x="270" y="44" width="28" height="10" rx="2" fill="rgba(45,212,191,0.1)"/>
+            <text x="284" y="52" font-family="-apple-system,sans-serif" font-size="5.5" fill="var(--text-secondary)" text-anchor="middle">Auth</text>
+            <rect x="237" y="58" width="28" height="10" rx="2" fill="rgba(45,212,191,0.1)"/>
+            <text x="251" y="66" font-family="-apple-system,sans-serif" font-size="5.5" fill="var(--text-secondary)" text-anchor="middle">Orders</text>
+            <rect x="270" y="58" width="28" height="10" rx="2" fill="rgba(45,212,191,0.1)"/>
+            <text x="284" y="66" font-family="-apple-system,sans-serif" font-size="5.5" fill="var(--text-secondary)" text-anchor="middle">Users</text>
+            <rect x="237" y="72" width="28" height="10" rx="2" fill="rgba(244,114,182,0.15)" stroke="var(--accent-rose)" stroke-width="0.6"/>
+            <text x="251" y="80" font-family="-apple-system,sans-serif" font-size="5.5" fill="var(--accent-rose)" text-anchor="middle">Events</text>
+            <rect x="270" y="72" width="28" height="10" rx="2" fill="rgba(244,114,182,0.15)" stroke="var(--accent-rose)" stroke-width="0.6"/>
+            <text x="284" y="80" font-family="-apple-system,sans-serif" font-size="5.5" fill="var(--accent-rose)" text-anchor="middle">Search</text>
+            <rect x="253" y="86" width="28" height="10" rx="2" fill="rgba(244,114,182,0.15)" stroke="var(--accent-rose)" stroke-width="0.6"/>
+            <text x="267" y="94" font-family="-apple-system,sans-serif" font-size="5.5" fill="var(--accent-rose)" text-anchor="middle">Notify</text>
+            <text x="270" y="108" font-family="-apple-system,sans-serif" font-size="8" fill="var(--accent-teal)" text-anchor="middle" font-weight="700">7 services</text>
+            <line x1="270" y1="115" x2="270" y2="126" stroke="var(--accent-teal)" stroke-width="0.6"/>
+
+            <!-- Question -->
+            <rect x="130" y="100" width="80" height="24" rx="4" fill="rgba(245,158,11,0.08)" stroke="var(--accent-amber)" stroke-width="0.8"/>
+            <text x="170" y="114" font-family="-apple-system,sans-serif" font-size="6.5" fill="var(--accent-amber)" text-anchor="middle" font-style="italic">Cost model updated?</text>
+          </svg>
+        </div>
+        <div class="uc-body">
+          <h3>Cross-Deck Consistency &amp; QA</h3>
+          <p>When architecture diagrams are structured data, comparing them across workstreams or time periods becomes possible. "The Q1 deck shows 3 microservices, the Q3 deck shows 7 &mdash; what changed and does the cost model reflect it?" Today this requires manual slide-by-slide review. With structured extraction, the component lists exist as diffable data.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Implementation Journey -->
+<section id="delivery">
+  <div class="container">
+    <p class="section-label">Implementation</p>
+    <h2 class="section-title">Six Production PRs, All Merged</h2>
+    <p class="section-desc">Each PR independently testable, reviewed by a 3-persona agent team (peer, alignment, adversarial), and merged with zero regressions on the base test suite.</p>
+
+    <!-- Test Growth Bar Chart -->
+    <div class="test-chart fade-in">
+      <div class="test-bar">
+        <div class="test-bar-label">PR #19</div>
+        <div class="test-bar-track">
+          <div class="test-bar-fill" style="width:58.9%;background:linear-gradient(90deg,var(--accent-blue),rgba(79,140,255,0.6))"></div>
+        </div>
+        <div class="test-bar-value" style="color:var(--accent-blue)">621</div>
+      </div>
+      <div class="test-bar">
+        <div class="test-bar-label">PR #20</div>
+        <div class="test-bar-track">
+          <div class="test-bar-fill" style="width:65.7%;background:linear-gradient(90deg,var(--accent-purple),rgba(168,124,255,0.6))"></div>
+        </div>
+        <div class="test-bar-value" style="color:var(--accent-purple)">693</div>
+      </div>
+      <div class="test-bar">
+        <div class="test-bar-label">PR #21</div>
+        <div class="test-bar-track">
+          <div class="test-bar-fill" style="width:73.7%;background:linear-gradient(90deg,var(--accent-teal),rgba(45,212,191,0.6))"></div>
+        </div>
+        <div class="test-bar-value" style="color:var(--accent-teal)">777</div>
+      </div>
+      <div class="test-bar">
+        <div class="test-bar-label">PR #22</div>
+        <div class="test-bar-track">
+          <div class="test-bar-fill" style="width:85.1%;background:linear-gradient(90deg,var(--accent-amber),rgba(245,158,11,0.6))"></div>
+        </div>
+        <div class="test-bar-value" style="color:var(--accent-amber)">897</div>
+      </div>
+      <div class="test-bar">
+        <div class="test-bar-label">PR #23</div>
+        <div class="test-bar-track">
+          <div class="test-bar-fill" style="width:95.8%;background:linear-gradient(90deg,var(--accent-rose),rgba(244,114,182,0.6))"></div>
+        </div>
+        <div class="test-bar-value" style="color:var(--accent-rose)">1,010</div>
+      </div>
+      <div class="test-bar">
+        <div class="test-bar-label">PR #24</div>
+        <div class="test-bar-track">
+          <div class="test-bar-fill" style="width:100%;background:var(--gradient-hero)"></div>
+        </div>
+        <div class="test-bar-value" style="color:var(--accent-teal)">1,054</div>
+      </div>
+    </div>
+    <p style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-bottom:2.5rem">Test count progression: 506 baseline &rarr; 1,054 final (2.08x growth)</p>
+
+    <div class="timeline fade-in">
+      <div class="tl-item">
+        <div class="tl-pr" style="color:var(--accent-blue)">PR #19</div>
+        <div class="tl-body">
+          <h4>Page Inspection + Blank Fix + Coordinates + SoM Validation</h4>
+          <p>Classification engine, affine coordinate transforms, pypdfium2 adapter, blank detection overhaul, Set-of-Mark corpus validation.</p>
+          <div class="tl-tests">506 &rarr; 621 tests</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-pr" style="color:var(--accent-purple)">PR #20</div>
+        <div class="tl-body">
+          <h4>Provider Abstraction + DPI + Rate Limiting + Tiles</h4>
+          <p>Multi-provider runtime (Anthropic/OpenAI/Google), per-page DPI rendering, tile and highlight infrastructure, exponential backoff with jitter.</p>
+          <div class="tl-tests">621 &rarr; 693 tests</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-pr" style="color:var(--accent-teal)">PR #21</div>
+        <div class="tl-body">
+          <h4>Schema + Routing + Cache + Deserialization Factory</h4>
+          <p><code>DiagramAnalysis</code> data model, polymorphic deserialization, IoU-based ID inheritance, stable edge IDs, cache versioning with SHA-256.</p>
+          <div class="tl-tests">693 &rarr; 777 tests</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-pr" style="color:var(--accent-amber)">PR #22</div>
+        <div class="tl-body">
+          <h4>Extraction Runtime &mdash; Pass A/B/C + Sweep + Confidence</h4>
+          <p>The core extraction pipeline. Separate diagram caches, claim-level verification, completeness sweep, dual-path confidence scoring, and dev harness for iteration.</p>
+          <div class="tl-tests">777 &rarr; 897 tests</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-pr" style="color:var(--accent-rose)">PR #23</div>
+        <div class="tl-body">
+          <h4>Deterministic Rendering + Mermaid + Entity Resolution</h4>
+          <p>Recursive nested subgraph rendering, sanitization with omit-and-flag, graph-bound prose, component/connection tables, Mermaid parser CI validation.</p>
+          <div class="tl-tests">897 &rarr; 1,010 tests</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-pr" style="color:var(--accent-blue)">PR #24</div>
+        <div class="tl-body">
+          <h4>Output Assembly + Standalone Notes + Freeze + Review History</h4>
+          <p>Standalone diagram notes as single source of truth, deck-note transclusion, freeze bypass with frozen-note hydration, diagram-aware deck metadata, review history initialization.</p>
+          <div class="tl-tests">1,010 &rarr; 1,054 tests</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Economics + What's Next -->
+<section id="economics">
+  <div class="container">
+    <p class="section-label">Economics &amp; Next Steps</p>
+    <h2 class="section-title">Cost-Quality Posture</h2>
+    <p class="section-desc">Quality-first, no cost gating. Expected $1&ndash;4 per diagram page depending on complexity tier. 100-page batch: ~$100&ndash;250 in LLM costs, 2&ndash;5 hours processing.</p>
+
+    <table class="data-table fade-in">
+      <thead><tr><th>Complexity</th><th>Pass A</th><th>Pass B</th><th>Pass C</th><th>Sweep</th><th>Total</th></tr></thead>
+      <tbody>
+        <tr><td>Simple (&le;10 nodes)</td><td>$0.20&ndash;0.40</td><td>$0.10&ndash;0.20</td><td>$0.15&ndash;0.30</td><td>&mdash;</td><td><strong>$0.50&ndash;0.90</strong></td></tr>
+        <tr><td>Medium (11&ndash;25)</td><td>$0.30&ndash;0.60</td><td>$0.15&ndash;0.25</td><td>$0.40&ndash;0.80</td><td>&mdash;</td><td><strong>$0.85&ndash;1.65</strong></td></tr>
+        <tr><td>Dense (25+)</td><td>$0.40&ndash;0.80</td><td>$0.15&ndash;0.30</td><td>$0.80&ndash;2.00</td><td>$0.20&ndash;0.50</td><td><strong>$1.55&ndash;3.60</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-size:1.2rem;margin-top:3rem;margin-bottom:1rem">What's Next: Model Comparison Testing</h3>
+    <p class="section-desc">The pipeline infrastructure is complete. Next phase: rigorous model evaluation on annotated ground-truth corpus.</p>
+
+    <div class="card-grid card-grid-3 fade-in">
+      <div class="card">
+        <div class="badge badge-blue">G</div>
+        <h3>Ground-Truth Corpus</h3>
+        <p>20&ndash;30 diagram pages from engagement materials. Two annotators with inter-annotator agreement on 5-page subset. Annotation rules defined before starting.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-purple">R</div>
+        <h3>75+ Pipeline Runs</h3>
+        <p>25 diagrams &times; 3 models (Claude Sonnet, GPT-4o, Gemini Pro). 13-metric weighted operational rubric covering quality, cost, latency, and compliance.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-teal">S</div>
+        <h3>Model Selection</h3>
+        <p>Quality primary: node recall, edge recall, direction accuracy, confidence calibration. Cost, latency, and compliance as secondary selection criteria.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>folio.love &middot; Diagram Extraction Engine &middot; Technical Briefing &middot; March 2026</p>
+    <p style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted)">Authored by Johnny Oh &middot; Pipeline complete, model comparison pending</p>
+  </div>
+</footer>
+
+<!-- Scroll Animation -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+});
+</script>
+</body>
+</html>
