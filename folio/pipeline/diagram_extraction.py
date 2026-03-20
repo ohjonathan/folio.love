@@ -1124,6 +1124,7 @@ def _compute_diagram_confidence(
     pass_c_run: bool = False,
     sweep_run: bool = False,
     sanity_triggered: bool = False,
+    text_validation_unavailable: bool = False,
 ) -> tuple[float, str]:
     """Compute extraction confidence score.
 
@@ -1155,7 +1156,10 @@ def _compute_diagram_confidence(
 
     # S8: Enhanced confidence scoring with text inventory coverage
     # and mutation magnitude
-    text_rich = word_count >= 20  # m2: aligned with proposal threshold
+    # Stage 1: when source text is unavailable (scanned PDF), skip the
+    # text-poor penalty — the diagram was extracted from vision alone and
+    # the word_count metric is meaningless.
+    text_rich = text_validation_unavailable or word_count >= 20
     base = avg_conf if text_rich else avg_conf * 0.8
 
     # S8: Text inventory coverage factor — nodes with text matches score higher
@@ -1322,6 +1326,7 @@ def analyze_diagram_pages(
     api_key_env: str = "",
     all_provider_settings: dict[str, ProviderRuntimeSettings] | None = None,
     slide_numbers: list[int] | None = None,
+    diagram_max_tokens: int = 16384,
 ) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
     """Run diagram extraction on diagram/mixed slides.
 
@@ -1461,26 +1466,83 @@ def analyze_diagram_pages(
             "$text_inventory", text_inventory
         )
 
+        # Stage 1: Use explicit token budget from config
+        pass_a_requested_tokens = diagram_max_tokens
         pass_a_out, pass_a_usage = _call_llm(
             provider, client, model, pass_a_prompt,
             pass_a_images, primary_settings, limiter,
+            max_tokens=pass_a_requested_tokens,
         )
 
         total_usage = pass_a_usage
 
+        # Stage 1: Track Pass A metadata for diagnostics
+        pass_a_truncated = pass_a_out.truncated if pass_a_out else False
+        pass_a_raw_len = len(pass_a_out.raw_text) if pass_a_out and pass_a_out.raw_text else 0
+        pass_a_escalation_attempted = False
+        pass_a_escalation_succeeded = False
+        pass_a_parse_outcome = "unknown"
+
         if pass_a_out is None or not pass_a_out.raw_text:
+            pass_a_parse_outcome = "provider_failure"
             analysis.review_required = True
-            analysis.review_questions = ["Pass A extraction failed"]
+            analysis.review_questions = ["Pass A extraction failed (provider returned no output)"]
+            analysis._extraction_metadata.update({
+                "pass_a_requested_max_tokens": pass_a_requested_tokens,
+                "pass_a_truncated": pass_a_truncated,
+                "pass_a_raw_response_length": pass_a_raw_len,
+                "pass_a_escalation_retry_attempted": False,
+                "pass_a_escalation_retry_succeeded": False,
+                "pass_a_parse_outcome": pass_a_parse_outcome,
+            })
             results[slide_num] = analysis
             continue
 
         pass_a_raw = _extract_diagram_json(pass_a_out.raw_text)
+
+        # Stage 1: Retry once on truncation with doubled budget capped at 32768
+        if pass_a_raw is None and pass_a_truncated:
+            escalated_tokens = min(pass_a_requested_tokens * 2, 32768)
+            pass_a_escalation_attempted = True
+            logger.info(
+                "Slide %d: Pass A truncated at %d tokens, retrying with %d",
+                slide_num, pass_a_requested_tokens, escalated_tokens,
+            )
+            retry_out, retry_usage = _call_llm(
+                provider, client, model, pass_a_prompt,
+                pass_a_images, primary_settings, limiter,
+                max_tokens=escalated_tokens,
+            )
+            total_usage = TokenUsage(
+                input_tokens=total_usage.input_tokens + retry_usage.input_tokens,
+                output_tokens=total_usage.output_tokens + retry_usage.output_tokens,
+                total_tokens=total_usage.total_tokens + retry_usage.total_tokens,
+            )
+            if retry_out and retry_out.raw_text:
+                pass_a_raw_len = len(retry_out.raw_text)
+                pass_a_truncated = retry_out.truncated
+                pass_a_raw = _extract_diagram_json(retry_out.raw_text)
+                if pass_a_raw is not None:
+                    pass_a_escalation_succeeded = True
+
         if pass_a_raw is None:
+            pass_a_parse_outcome = "truncated_invalid_json" if pass_a_truncated else "invalid_json"
             analysis.review_required = True
-            analysis.review_questions = ["Pass A returned invalid JSON"]
+            analysis.review_questions = [
+                f"Pass A returned invalid JSON ({pass_a_parse_outcome})"
+            ]
+            analysis._extraction_metadata.update({
+                "pass_a_requested_max_tokens": pass_a_requested_tokens,
+                "pass_a_truncated": pass_a_truncated,
+                "pass_a_raw_response_length": pass_a_raw_len,
+                "pass_a_escalation_retry_attempted": pass_a_escalation_attempted,
+                "pass_a_escalation_retry_succeeded": False,
+                "pass_a_parse_outcome": pass_a_parse_outcome,
+            })
             results[slide_num] = analysis
             continue
 
+        pass_a_parse_outcome = "success"
         normalized = _normalize_pass_a(pass_a_raw)
 
         # Unsupported diagram detection
@@ -1724,12 +1786,18 @@ def analyze_diagram_pages(
                         post_b_graph = _merge_sweep_results(post_b_graph, sweep_data)
 
         # --- Confidence scoring ---
+        # Stage 1: Determine if source text validation was unavailable
+        _text_validation_unavailable = (
+            slide_text is None or not slide_text.full_text
+            or not slide_text.full_text.strip()
+        )
         # B5: Only award Pass C bonus if verdicts were actually parsed
         confidence, reasoning = _compute_diagram_confidence(
             post_b_graph, word_count,
             pass_c_run=pass_c_verdicts_parsed,
             sweep_run=sweep_run,
             sanity_triggered=sanity_triggered,
+            text_validation_unavailable=_text_validation_unavailable,
         )
 
         # --- Build final DiagramAnalysis ---
@@ -1819,12 +1887,19 @@ def analyze_diagram_pages(
         analysis._extraction_metadata = {
             "pass_a_model": model,
             "pass_a_provider": provider_name,
+            "pass_a_requested_max_tokens": pass_a_requested_tokens,
+            "pass_a_truncated": pass_a_truncated,
+            "pass_a_raw_response_length": pass_a_raw_len,
+            "pass_a_escalation_retry_attempted": pass_a_escalation_attempted,
+            "pass_a_escalation_retry_succeeded": pass_a_escalation_succeeded,
+            "pass_a_parse_outcome": pass_a_parse_outcome,
             "pass_b_mutations": mutation_accounting,
             "pass_b_sanity_triggered": sanity_triggered,
             "pass_c_attempted": pass_c_attempted,
             "pass_c_verdicts_parsed": pass_c_verdicts_parsed,
             "pass_c_claims_count": len(claims),
             "sweep_run": sweep_run,
+            "text_validation_unavailable": _text_validation_unavailable,
             "total_usage": {
                 "input_tokens": total_usage.input_tokens,
                 "output_tokens": total_usage.output_tokens,

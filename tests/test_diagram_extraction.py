@@ -852,3 +852,54 @@ class TestSelectPassCImages:
         assert len(parts) == 1
         assert parts[0].role == "global"
         assert parts[0].media_type == "image/png"
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: Pass A token hardening & zero-text confidence
+# ---------------------------------------------------------------------------
+
+
+class TestPassATruncationRetry:
+    """Stage 1 tests for Pass A truncation-based retry logic."""
+
+    def test_text_validation_unavailable_skips_text_poor_penalty(self):
+        """When source text is unavailable, text-poor penalty is skipped."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        # word_count=5 → normally text-poor (0.8x penalty)
+        score_normal, r_normal = _compute_diagram_confidence(graph, word_count=5)
+        score_unavail, r_unavail = _compute_diagram_confidence(
+            graph, word_count=5, text_validation_unavailable=True,
+        )
+        assert "Text-poor" in r_normal
+        assert "Text-rich" in r_unavail  # unavailable → treated as rich
+        assert score_unavail > score_normal
+
+    def test_text_validation_unavailable_does_not_inflate_beyond_quality(self):
+        """Unavailable text bypasses penalty but doesn't inflate beyond graph quality."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.5}],  # low quality
+            "edges": [],
+        }
+        score_unavail, _ = _compute_diagram_confidence(
+            graph, word_count=5, text_validation_unavailable=True,
+        )
+        score_rich, _ = _compute_diagram_confidence(
+            graph, word_count=50,
+        )
+        # Both should give similar scores — unavailable treated same as text-rich
+        assert abs(score_unavail - score_rich) < 0.05
+
+    def test_text_validation_unavailable_false_preserves_penalty(self):
+        """When text_validation_unavailable=False, text-poor penalty still applies."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        score, reasoning = _compute_diagram_confidence(
+            graph, word_count=5, text_validation_unavailable=False,
+        )
+        assert "Text-poor" in reasoning
+
