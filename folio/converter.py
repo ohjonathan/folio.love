@@ -131,6 +131,7 @@ class FolioConverter:
                     pdf_path, deck_dir,
                     dpi=self.config.conversion.image_dpi,
                     page_profiles=page_profiles,
+                    max_image_pixels=self.config.conversion.max_image_pixels,
                 )
             finally:
                 # Clean up intermediate PowerPoint PDF written into deck_dir.
@@ -329,6 +330,7 @@ class FolioConverter:
                     api_key_env=profile.api_key_env,
                     all_provider_settings=all_provider_settings,
                     slide_numbers=sorted(diagram_extract_slides),
+                    diagram_max_tokens=self.config.conversion.diagram_max_tokens,
                 )
                 # Merge stats (diagram pass is additive, not replacing pass1)
                 pass1_stats = pass1_stats.merge(diagram_stats)
