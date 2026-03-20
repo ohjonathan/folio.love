@@ -292,13 +292,30 @@ def _extract_per_page_dpi(
         page_dpi = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
 
         # Stage 1: DPI backoff for oversized pages
+        # B-4 fix: use conservative US Letter fallback when crop_box unavailable
+        effective_crop_box = None
         if profile and profile.crop_box:
+            cb = profile.crop_box
+            # S-4 fix: zero-area crop_box treated as unavailable
+            if abs(cb[2] - cb[0]) > 0 and abs(cb[3] - cb[1]) > 0:
+                effective_crop_box = cb
+
+        if effective_crop_box is None and profile:
+            # Conservative fallback: US Letter at intended DPI
+            effective_crop_box = (0.0, 0.0, 612.0, 792.0)
+            logger.warning(
+                "Page %d: crop_box unavailable or zero-area; using US Letter "
+                "fallback for DPI backoff estimation",
+                page_num,
+            )
+
+        if effective_crop_box:
             safe_dpi = _find_safe_dpi(
-                profile.crop_box, page_dpi, max_image_pixels,
+                effective_crop_box, page_dpi, max_image_pixels,
             )
             if safe_dpi != page_dpi:
-                est_pixels = _estimate_page_pixels(profile.crop_box, page_dpi)
-                safe_pixels = _estimate_page_pixels(profile.crop_box, safe_dpi)
+                est_pixels = _estimate_page_pixels(effective_crop_box, page_dpi)
+                safe_pixels = _estimate_page_pixels(effective_crop_box, safe_dpi)
                 logger.warning(
                     "Page %d: intended DPI %d would produce %s pixels "
                     "(limit %s); backing off to %d DPI (%s pixels)",
@@ -337,8 +354,9 @@ def _extract_per_page_dpi(
                 # Save each image immediately and release PIL object
                 for i, img in enumerate(batch):
                     page_num = run_start + i
-                    profile = page_profiles.get(page_num)
-                    page_dpi_val = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
+                    # S-3 fix: use actual batch DPI (post-backoff), not
+                    # profile.render_dpi which may be the pre-backoff value
+                    page_dpi_val = batch_dpi
 
                     filename = f"slide-{page_num:03d}.{fmt}"
                     image_path = tmp_dir / filename

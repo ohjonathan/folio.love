@@ -1055,6 +1055,38 @@ class TestBatchBehavior:
         assert _classify_outcome(NormalizationError("something unknown")) == "unknown"
         assert _classify_outcome(RuntimeError("generic error")) == "unknown"
 
+        # Stage 1: New outcome categories
+        from folio.pipeline.images import ImageExtractionError
+
+        # oversized_image
+        assert _classify_outcome(
+            ImageExtractionError("Page too large for rendering: exceeds limit")
+        ) == "oversized_image"
+        assert _classify_outcome(
+            ValueError("decompression bomb warning for large image")
+        ) == "oversized_image"
+
+        # model_error
+        assert _classify_outcome(RuntimeError("API error from OpenAI")) == "model_error"
+        assert _classify_outcome(RuntimeError("model not found: gpt-5")) == "model_error"
+
+        # rate_limited
+        assert _classify_outcome(RuntimeError("rate limit exceeded")) == "rate_limited"
+        assert _classify_outcome(RuntimeError("429 Too Many Requests")) == "rate_limited"
+
+        # pdf_render_error (generic ImageExtractionError)
+        assert _classify_outcome(
+            ImageExtractionError("Per-page rendering failed")
+        ) == "pdf_render_error"
+
+        # missing_dependency (S-2: ImageExtractionError with "not found")
+        assert _classify_outcome(
+            ImageExtractionError("Poppler not found (pdftoppm). Install with: brew install poppler")
+        ) == "missing_dependency"
+
+        # pdf_corrupt
+        assert _classify_outcome(RuntimeError("corrupt PDF structure")) == "pdf_corrupt"
+
     def test_no_dedicated_session_skips_restart(self, tmp_path):
         """--no-dedicated-session disables restart automation."""
         from click.testing import CliRunner
@@ -1196,5 +1228,175 @@ class TestFormatSlideDiagram:
         assert "### Analysis" not in output
         assert "![[" not in output or "#Diagram" not in output
         assert "*Full details: [[20260314-deck-diagram-p005]]*" in output
+
+
+# ---------------------------------------------------------------------------
+# Stage 1 §9.1: Required zero-text / validation-unavailable tests
+# ---------------------------------------------------------------------------
+
+
+class TestValidateEvidenceEmptyText:
+    """§9.1: _validate_evidence with empty source text."""
+
+    def test_empty_text_marks_validation_unavailable(self):
+        """Empty slide text → all evidence items get validation_unavailable=True."""
+        from folio.pipeline.analysis import _validate_evidence
+
+        evidence = [
+            {"claim": "Revenue", "quote": "$10M", "confidence": "high"},
+            {"claim": "Growth", "quote": "12% CAGR", "confidence": "medium"},
+        ]
+        empty_slide = SlideText(slide_num=1, full_text="", elements=[])
+        _validate_evidence(evidence, empty_slide)
+
+        for ev in evidence:
+            assert ev["validated"] is False
+            assert ev["validation_unavailable"] is True
+
+    def test_whitespace_only_text_treated_as_empty(self):
+        """Whitespace-only text → same as empty."""
+        from folio.pipeline.analysis import _validate_evidence
+
+        evidence = [{"claim": "X", "quote": "Y", "confidence": "high"}]
+        ws_slide = SlideText(slide_num=1, full_text="   \n  \t  ", elements=[])
+        _validate_evidence(evidence, ws_slide)
+        assert evidence[0]["validation_unavailable"] is True
+
+    def test_normal_text_does_not_set_unavailable(self):
+        """Normal text: validated=True/False but no validation_unavailable."""
+        from folio.pipeline.analysis import _validate_evidence
+
+        evidence = [{"claim": "Rev", "quote": "Revenue is $10M", "confidence": "high"}]
+        slide = SlideText(slide_num=1, full_text="Revenue is $10M this quarter", elements=[])
+        _validate_evidence(evidence, slide)
+        assert evidence[0]["validated"] is True
+        assert evidence[0].get("validation_unavailable") is not True
+
+
+class TestComputeExtractionConfidenceZeroText:
+    """§9.1: _compute_extraction_confidence cap bypass for validation_unavailable."""
+
+    def test_unavailable_evidence_skips_059_cap(self):
+        """Evidence with validation_unavailable=True should NOT trigger 0.59 cap."""
+        from folio.pipeline.analysis import _compute_extraction_confidence
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                framework="none",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                ],
+            ),
+        }
+        score = _compute_extraction_confidence(analyses)
+        assert score is not None
+        assert score > 0.59
+
+    def test_truly_unvalidated_still_gets_059_cap(self):
+        """Evidence without validation_unavailable should still trigger 0.59 cap."""
+        from folio.pipeline.analysis import _compute_extraction_confidence
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False},
+                ],
+            ),
+        }
+        score = _compute_extraction_confidence(analyses)
+        assert score is not None
+        assert score <= 0.59
+
+    def test_mixed_unavailable_and_unvalidated(self):
+        """Mix of unavailable and truly unvalidated → cap still applies."""
+        from folio.pipeline.analysis import _compute_extraction_confidence
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                    {"confidence": "high", "validated": False},
+                ],
+            ),
+        }
+        score = _compute_extraction_confidence(analyses)
+        assert score is not None
+        assert score <= 0.59
+
+
+class TestAssessReviewStateZeroText:
+    """§9.1: assess_review_state flag emission for validation_unavailable."""
+
+    def test_emits_text_validation_unavailable_flag(self):
+        """All-unavailable slide emits text_validation_unavailable_slide_N."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                ],
+            ),
+        }
+        result = assess_review_state(
+            analyses, {},
+            effective_passes=1, density_threshold=3.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "text_validation_unavailable_slide_1" in result.review_flags
+        assert "text_validation_unavailable" in result.review_flags
+        assert "unvalidated_claim_slide_1" not in result.review_flags
+
+    def test_truly_unvalidated_emits_unvalidated_claim(self):
+        """Truly unvalidated slide emits unvalidated_claim_slide_N."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False},
+                ],
+            ),
+        }
+        result = assess_review_state(
+            analyses, {},
+            effective_passes=1, density_threshold=3.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "unvalidated_claim_slide_1" in result.review_flags
+        assert "text_validation_unavailable_slide_1" not in result.review_flags
+
+    def test_mixed_slides_correct_flags(self):
+        """Slide 1 unavailable, slide 2 truly unvalidated → distinct flags."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                ],
+            ),
+            2: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False},
+                ],
+            ),
+        }
+        result = assess_review_state(
+            analyses, {},
+            effective_passes=1, density_threshold=3.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "text_validation_unavailable_slide_1" in result.review_flags
+        assert "unvalidated_claim_slide_2" in result.review_flags
+        assert "text_validation_unavailable" in result.review_flags
 
 

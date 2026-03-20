@@ -1181,7 +1181,12 @@ def _compute_diagram_confidence(
         uncertainty_penalty = 0.0
 
     reasons = []
-    if text_rich:
+    if text_validation_unavailable:
+        reasons.append(
+            f"Text validation unavailable (no source text, {word_count} words); "
+            f"text-poor penalty bypassed"
+        )
+    elif text_rich:
         reasons.append(f"Text-rich ({word_count} words)")
     else:
         reasons.append(f"Text-poor ({word_count} words, 0.8x base)")
@@ -1503,27 +1508,35 @@ def analyze_diagram_pages(
         # Stage 1: Retry once on truncation with doubled budget capped at 32768
         if pass_a_raw is None and pass_a_truncated:
             escalated_tokens = min(pass_a_requested_tokens * 2, 32768)
-            pass_a_escalation_attempted = True
-            logger.info(
-                "Slide %d: Pass A truncated at %d tokens, retrying with %d",
-                slide_num, pass_a_requested_tokens, escalated_tokens,
-            )
-            retry_out, retry_usage = _call_llm(
-                provider, client, model, pass_a_prompt,
-                pass_a_images, primary_settings, limiter,
-                max_tokens=escalated_tokens,
-            )
-            total_usage = TokenUsage(
-                input_tokens=total_usage.input_tokens + retry_usage.input_tokens,
-                output_tokens=total_usage.output_tokens + retry_usage.output_tokens,
-                total_tokens=total_usage.total_tokens + retry_usage.total_tokens,
-            )
-            if retry_out and retry_out.raw_text:
-                pass_a_raw_len = len(retry_out.raw_text)
-                pass_a_truncated = retry_out.truncated
-                pass_a_raw = _extract_diagram_json(retry_out.raw_text)
-                if pass_a_raw is not None:
-                    pass_a_escalation_succeeded = True
+            # B-3 fix: skip retry when budget can't actually increase
+            if escalated_tokens > pass_a_requested_tokens:
+                pass_a_escalation_attempted = True
+                logger.info(
+                    "Slide %d: Pass A truncated at %d tokens, retrying with %d",
+                    slide_num, pass_a_requested_tokens, escalated_tokens,
+                )
+                retry_out, retry_usage = _call_llm(
+                    provider, client, model, pass_a_prompt,
+                    pass_a_images, primary_settings, limiter,
+                    max_tokens=escalated_tokens,
+                )
+                total_usage = TokenUsage(
+                    input_tokens=total_usage.input_tokens + retry_usage.input_tokens,
+                    output_tokens=total_usage.output_tokens + retry_usage.output_tokens,
+                    total_tokens=total_usage.total_tokens + retry_usage.total_tokens,
+                )
+                if retry_out and retry_out.raw_text:
+                    pass_a_raw_len = len(retry_out.raw_text)
+                    pass_a_truncated = retry_out.truncated
+                    pass_a_raw = _extract_diagram_json(retry_out.raw_text)
+                    if pass_a_raw is not None:
+                        pass_a_escalation_succeeded = True
+            else:
+                logger.warning(
+                    "Slide %d: Pass A truncated but already at max budget (%d); "
+                    "skipping retry",
+                    slide_num, pass_a_requested_tokens,
+                )
 
         if pass_a_raw is None:
             pass_a_parse_outcome = "truncated_invalid_json" if pass_a_truncated else "invalid_json"

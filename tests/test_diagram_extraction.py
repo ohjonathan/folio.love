@@ -853,14 +853,13 @@ class TestSelectPassCImages:
         assert parts[0].role == "global"
         assert parts[0].media_type == "image/png"
 
-
 # ---------------------------------------------------------------------------
 # Stage 1: Pass A token hardening & zero-text confidence
 # ---------------------------------------------------------------------------
 
 
-class TestPassATruncationRetry:
-    """Stage 1 tests for Pass A truncation-based retry logic."""
+class TestDiagramConfidenceTextValidation:
+    """Stage 1 tests for _compute_diagram_confidence text_validation_unavailable."""
 
     def test_text_validation_unavailable_skips_text_poor_penalty(self):
         """When source text is unavailable, text-poor penalty is skipped."""
@@ -874,7 +873,7 @@ class TestPassATruncationRetry:
             graph, word_count=5, text_validation_unavailable=True,
         )
         assert "Text-poor" in r_normal
-        assert "Text-rich" in r_unavail  # unavailable → treated as rich
+        assert "Text validation unavailable" in r_unavail
         assert score_unavail > score_normal
 
     def test_text_validation_unavailable_does_not_inflate_beyond_quality(self):
@@ -902,4 +901,16 @@ class TestPassATruncationRetry:
             graph, word_count=5, text_validation_unavailable=False,
         )
         assert "Text-poor" in reasoning
+
+    def test_unavailable_reasoning_string_per_spec(self):
+        """§6.3: reasoning must state 'validation unavailable' and 'penalty bypassed'."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        _, reasoning = _compute_diagram_confidence(
+            graph, word_count=5, text_validation_unavailable=True,
+        )
+        assert "Text validation unavailable" in reasoning
+        assert "penalty bypassed" in reasoning
 

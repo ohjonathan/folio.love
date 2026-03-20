@@ -84,6 +84,9 @@ def _classify_outcome(exc: Exception) -> str:
 
     # Stage 1: PDF corruption / rendering failure
     if isinstance(exc, ImageExtractionError):
+        # S-2 fix: distinguish dependency/environment errors
+        if "not found" in msg or "install" in msg:
+            return "missing_dependency"
         return "pdf_render_error"
     if any(kw in msg for kw in ("corrupt", "invalid pdf", "unable to open")):
         return "pdf_corrupt"
