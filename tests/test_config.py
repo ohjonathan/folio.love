@@ -360,3 +360,64 @@ class TestReviewConfidenceThreshold:
         with pytest.raises(ValueError, match="review_confidence_threshold"):
             FolioConfig(conversion=ConversionConfig(review_confidence_threshold="high"))
 
+
+class TestDiagramMaxTokensConfig:
+    """Test diagram_max_tokens config field."""
+
+    def test_default_value(self):
+        config = FolioConfig()
+        assert config.conversion.diagram_max_tokens == 16384
+
+    def test_explicit_yaml_load(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("conversion:\n  diagram_max_tokens: 8192\n")
+            f.flush()
+            config = FolioConfig.load(Path(f.name))
+        assert config.conversion.diagram_max_tokens == 8192
+
+    def test_zero_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="diagram_max_tokens"):
+            FolioConfig(conversion=ConversionConfig(diagram_max_tokens=0))
+
+    def test_negative_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="diagram_max_tokens"):
+            FolioConfig(conversion=ConversionConfig(diagram_max_tokens=-100))
+
+    def test_non_int_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="diagram_max_tokens"):
+            FolioConfig(conversion=ConversionConfig(diagram_max_tokens="auto"))
+
+
+class TestMaxImagePixelsConfig:
+    """Test max_image_pixels config field."""
+
+    def test_default_is_none(self):
+        config = FolioConfig()
+        assert config.conversion.max_image_pixels is None
+
+    def test_explicit_yaml_load(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("conversion:\n  max_image_pixels: 89478485\n")
+            f.flush()
+            config = FolioConfig.load(Path(f.name))
+        assert config.conversion.max_image_pixels == 89478485
+
+    def test_none_is_valid(self):
+        from folio.config import ConversionConfig
+        # Should not raise
+        config = FolioConfig(conversion=ConversionConfig(max_image_pixels=None))
+        assert config.conversion.max_image_pixels is None
+
+    def test_zero_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="max_image_pixels"):
+            FolioConfig(conversion=ConversionConfig(max_image_pixels=0))
+
+    def test_negative_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="max_image_pixels"):
+            FolioConfig(conversion=ConversionConfig(max_image_pixels=-1))
+
