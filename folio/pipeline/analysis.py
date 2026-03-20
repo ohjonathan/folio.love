@@ -645,7 +645,9 @@ _CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
 # - partial_analysis_slide_{n}: reviewable slide n pending while others succeeded
 # - diagram_abstained_slide_{n}: slide n intentionally abstained (unsupported diagram)
 # - low_confidence_slide_{n}: slide n has low-confidence evidence
-# - unvalidated_claim_slide_{n}: slide n has unvalidated evidence
+# - unvalidated_claim_slide_{n}: slide n has unvalidated evidence (text was present)
+# - text_validation_unavailable_slide_{n}: slide n has unavailable text validation
+# - text_validation_unavailable: document-level — at least one slide had no source text
 # - high_density_unanalyzed: dense slides exist but pass 2 was not run
 # - confidence_below_threshold: document-level confidence < threshold
 
@@ -673,9 +675,17 @@ def _compute_extraction_confidence(analyses: dict[int, SlideAnalysis]) -> float 
     # confidence items pull the average up.  The equal penalty is intentional:
     # an unvalidated high-confidence claim is no more trustworthy than a
     # validated low-confidence one — both need human review.
+    #
+    # Stage 1: Skip the unvalidated cap for items where validation was
+    # unavailable (empty source text / scanned PDF).  These items are not
+    # "failed validation" — they simply had no text to validate against.
     if any(ev.get("confidence") == "low" for ev in evidence):
         score = min(score, 0.59)
-    if any(not ev.get("validated", False) for ev in evidence):
+    truly_unvalidated = [
+        ev for ev in evidence
+        if not ev.get("validated", False) and not ev.get("validation_unavailable", False)
+    ]
+    if truly_unvalidated:
         score = min(score, 0.59)
 
     return round(score, 2)
@@ -750,7 +760,7 @@ def assess_review_state(
             if analysis_item.review_questions:
                 flags.append(f"diagram_open_questions_slide_{slide_num}")
 
-    # Per-slide flags: low-confidence, unvalidated
+    # Per-slide flags: low-confidence, unvalidated / validation unavailable
     for slide_num, analysis_item in analyses.items():
         if analysis_item.slide_type == "pending":
             continue  # No evidence to check on pending slides
@@ -760,8 +770,23 @@ def assess_review_state(
         ]
         if any(ev.get("confidence") == "low" for ev in evidence):
             flags.append(f"low_confidence_slide_{slide_num}")
-        if any(not ev.get("validated", False) for ev in evidence):
-            flags.append(f"unvalidated_claim_slide_{slide_num}")
+
+        # Stage 1: Distinguish unavailable validation from true invalidation
+        unvalidated = [
+            ev for ev in evidence if not ev.get("validated", False)
+        ]
+        if unvalidated:
+            all_unavailable = all(
+                ev.get("validation_unavailable", False) for ev in unvalidated
+            )
+            if all_unavailable:
+                flags.append(f"text_validation_unavailable_slide_{slide_num}")
+            else:
+                flags.append(f"unvalidated_claim_slide_{slide_num}")
+
+    # Stage 1: Document-level flag when any slide had unavailable text validation
+    if any(f.startswith("text_validation_unavailable_slide_") for f in flags):
+        flags.append("text_validation_unavailable")
 
     # Flag individual reviewable pending slides when other reviewable slides
     # succeeded (partial failure). Known blank slides and intentional
@@ -1475,8 +1500,19 @@ def _validate_evidence(evidence: list[dict], slide_text: "SlideText") -> None:
     """Validate evidence items against extracted slide text.
 
     Sets 'validated' to True/False on each evidence dict in place.
+    When source text is empty (scanned PDF / zero-text slide), sets
+    'validation_unavailable' to True instead of 'validated' = False.
     """
-    full_text_normalized = _normalize_for_matching(slide_text.full_text)
+    source_text = slide_text.full_text if slide_text else ""
+
+    # Stage 1: empty source text → mark all items as unavailable
+    if not source_text or not source_text.strip():
+        for item in evidence:
+            item["validated"] = False
+            item["validation_unavailable"] = True
+        return
+
+    full_text_normalized = _normalize_for_matching(source_text)
 
     for item in evidence:
         quote = item.get("quote", "")
