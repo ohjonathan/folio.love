@@ -23,6 +23,59 @@ class ImageExtractionError(Exception):
     """Raised when image extraction fails."""
 
 
+# Stage 1: DPI backoff ladder for oversized pages
+_DPI_LADDER = [300, 240, 200, 150, 120, 96]
+
+
+def _estimate_page_pixels(
+    crop_box: tuple[float, float, float, float],
+    dpi: int,
+) -> int:
+    """Estimate rendered pixel count from PDF crop_box geometry and DPI.
+
+    crop_box is in PDF points (1/72 inch). Converts to pixel dimensions
+    at the given DPI and returns width * height.
+    """
+    width_pts = abs(crop_box[2] - crop_box[0])
+    height_pts = abs(crop_box[3] - crop_box[1])
+    scale = dpi / 72.0
+    width_px = int(width_pts * scale)
+    height_px = int(height_pts * scale)
+    return width_px * height_px
+
+
+def _find_safe_dpi(
+    crop_box: tuple[float, float, float, float],
+    intended_dpi: int,
+    max_image_pixels: int | None = None,
+) -> int:
+    """Find the highest DPI from the ladder that fits under the pixel limit.
+
+    Walks the ladder [300, 240, 200, 150, 120, 96] and returns the highest
+    value ≤ intended_dpi whose estimated pixel count is under the limit.
+    Uses Pillow's MAX_IMAGE_PIXELS as the default warning threshold.
+
+    Raises ImageExtractionError if no DPI on the ladder fits.
+    """
+    limit = max_image_pixels if max_image_pixels is not None else Image.MAX_IMAGE_PIXELS
+    if limit is None:  # Pillow safety check disabled
+        return intended_dpi
+
+    for candidate_dpi in _DPI_LADDER:
+        if candidate_dpi > intended_dpi:
+            continue
+        pixels = _estimate_page_pixels(crop_box, candidate_dpi)
+        if pixels <= limit:
+            return candidate_dpi
+
+    # Nothing on the ladder fits
+    raise ImageExtractionError(
+        f"Page too large for rendering: even at 96 DPI, estimated "
+        f"{_estimate_page_pixels(crop_box, 96):,} pixels exceeds limit "
+        f"{limit:,}. crop_box={crop_box}"
+    )
+
+
 @dataclass
 class ImageResult:
     """Result of extracting a single slide image."""
@@ -144,6 +197,7 @@ def extract_with_metadata(
     dpi: int = 150,
     fmt: str = "png",
     page_profiles: "dict[int, PageProfile] | None" = None,
+    max_image_pixels: int | None = None,
 ) -> list[ImageResult]:
     """Extract slide images with blank/tiny/dimension metadata.
 
@@ -155,7 +209,9 @@ def extract_with_metadata(
     needs image quality metadata (e.g., converter blank-slide detection).
     """
     if page_profiles is not None:
-        return _extract_per_page_dpi(pdf_path, output_dir, dpi, fmt, page_profiles)
+        return _extract_per_page_dpi(
+            pdf_path, output_dir, dpi, fmt, page_profiles, max_image_pixels,
+        )
 
     # Legacy single-DPI path
     paths = extract(pdf_path, output_dir, dpi=dpi, fmt=fmt)
@@ -184,6 +240,7 @@ def _extract_per_page_dpi(
     default_dpi: int,
     fmt: str,
     page_profiles: "dict[int, PageProfile]",
+    max_image_pixels: int | None = None,
 ) -> list[ImageResult]:
     """Per-page DPI rendering: pages batched by DPI value.
 
@@ -233,6 +290,24 @@ def _extract_per_page_dpi(
     for page_num in range(1, total_pages + 1):
         profile = page_profiles.get(page_num)
         page_dpi = (profile.render_dpi if profile and profile.render_dpi else default_dpi)
+
+        # Stage 1: DPI backoff for oversized pages
+        if profile and profile.crop_box:
+            safe_dpi = _find_safe_dpi(
+                profile.crop_box, page_dpi, max_image_pixels,
+            )
+            if safe_dpi != page_dpi:
+                est_pixels = _estimate_page_pixels(profile.crop_box, page_dpi)
+                safe_pixels = _estimate_page_pixels(profile.crop_box, safe_dpi)
+                logger.warning(
+                    "Page %d: intended DPI %d would produce %s pixels "
+                    "(limit %s); backing off to %d DPI (%s pixels)",
+                    page_num, page_dpi, f"{est_pixels:,}",
+                    f"{max_image_pixels or Image.MAX_IMAGE_PIXELS:,}",
+                    safe_dpi, f"{safe_pixels:,}",
+                )
+                page_dpi = safe_dpi
+
         dpi_to_pages.setdefault(page_dpi, []).append(page_num)
 
     try:
