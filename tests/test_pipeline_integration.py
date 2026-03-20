@@ -1400,3 +1400,73 @@ class TestAssessReviewStateZeroText:
         assert "text_validation_unavailable" in result.review_flags
 
 
+class TestCrossWorkstreamZeroTextInteraction:
+    """R-2 §9.1: Cross-workstream zero-text + diagram confidence interaction."""
+
+    def test_zero_text_bypasses_both_consulting_and_diagram_penalties(self):
+        """Zero-text deck: consulting 0.59 cap bypassed AND diagram text-poor penalty bypassed.
+
+        Verifies both paths activate independently without interference:
+        - _compute_extraction_confidence skips 0.59 cap for validation_unavailable
+        - _compute_diagram_confidence skips text-poor 0.8x for text_validation_unavailable
+        """
+        from folio.pipeline.analysis import _compute_extraction_confidence
+        from folio.pipeline.diagram_extraction import _compute_diagram_confidence
+
+        # Consulting path: evidence with validation_unavailable → skip 0.59 cap
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                ],
+            ),
+        }
+        consulting_score = _compute_extraction_confidence(analyses)
+        assert consulting_score is not None
+        assert consulting_score > 0.59, (
+            f"Expected consulting score > 0.59 but got {consulting_score}"
+        )
+
+        # Diagram path: same zero-text scenario → skip text-poor penalty
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        diagram_score, reasoning = _compute_diagram_confidence(
+            graph, word_count=3, text_validation_unavailable=True,
+        )
+        diagram_score_penalized, _ = _compute_diagram_confidence(
+            graph, word_count=3, text_validation_unavailable=False,
+        )
+        assert diagram_score > diagram_score_penalized, (
+            f"Expected unpenalized {diagram_score} > penalized {diagram_score_penalized}"
+        )
+        assert "Text validation unavailable" in reasoning
+        assert "penalty bypassed" in reasoning
+
+    def test_with_text_available_both_penalties_apply(self):
+        """Control: with available text, both penalties apply normally."""
+        from folio.pipeline.analysis import _compute_extraction_confidence
+        from folio.pipeline.diagram_extraction import _compute_diagram_confidence
+
+        # Consulting path: truly unvalidated → 0.59 cap applies
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False},
+                ],
+            ),
+        }
+        consulting_score = _compute_extraction_confidence(analyses)
+        assert consulting_score is not None
+        assert consulting_score <= 0.59
+
+        # Diagram path: text-poor → 0.8x penalty applies
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        _, reasoning = _compute_diagram_confidence(graph, word_count=3)
+        assert "Text-poor" in reasoning
