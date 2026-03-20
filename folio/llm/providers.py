@@ -207,11 +207,15 @@ class OpenAIAnalysisProvider:
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "max_tokens": inp.max_tokens,
             "timeout": 120.0,
             "messages": [{"role": "user", "content": content}],
-            "temperature": inp.temperature,
         }
+        # GPT-5.x: uses max_completion_tokens, does not accept temperature
+        if model.startswith("gpt-5"):
+            kwargs["max_completion_tokens"] = inp.max_tokens
+        else:
+            kwargs["max_tokens"] = inp.max_tokens
+            kwargs["temperature"] = inp.temperature
         if inp.require_store_false:
             kwargs["store"] = False
 
