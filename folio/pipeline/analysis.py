@@ -784,9 +784,19 @@ def assess_review_state(
             else:
                 flags.append(f"unvalidated_claim_slide_{slide_num}")
 
-    # Stage 1: Document-level flag when any slide had unavailable text validation
-    if any(f.startswith("text_validation_unavailable_slide_") for f in flags):
-        flags.append("text_validation_unavailable")
+    # Stage 1 #2 fix: Document-level flag only when ALL reviewable
+    # non-pending pages have unavailable text validation.
+    # Mixed decks with only some zero-text pages keep page-scoped flags only.
+    unavailable_flags = [f for f in flags if f.startswith("text_validation_unavailable_slide_")]
+    if unavailable_flags:
+        # Count reviewable non-pending pages that have evidence
+        pages_with_evidence = {
+            slide_num for slide_num, a in analyses.items()
+            if a.slide_type != "pending"
+            and any(isinstance(ev, dict) for ev in getattr(a, "evidence", []))
+        }
+        if pages_with_evidence and len(unavailable_flags) >= len(pages_with_evidence):
+            flags.append("text_validation_unavailable")
 
     # Flag individual reviewable pending slides when other reviewable slides
     # succeeded (partial failure). Known blank slides and intentional
@@ -1486,7 +1496,9 @@ def _analyze_single_slide(
     analysis = _normalize_pass1_json(data)
 
     # Validate evidence against extracted text
-    if slide_text and analysis.evidence:
+    # #3 fix: call _validate_evidence even when slide_text is None
+    # so evidence items get validation_unavailable=True
+    if analysis.evidence:
         _validate_evidence(analysis.evidence, slide_text)
 
     return analysis, "success", output.usage
@@ -1968,7 +1980,8 @@ def _run_depth_pass(
     evidence, reassessed_type, reassessed_framework = _normalize_pass2_json(data)
 
     # Validate against source text
-    if slide_text and evidence:
+    # #3 fix: call _validate_evidence even when slide_text is None
+    if evidence:
         _validate_evidence(evidence, slide_text)
 
     return evidence, reassessed_type, reassessed_framework, "success", output.usage

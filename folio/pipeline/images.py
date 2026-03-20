@@ -301,10 +301,12 @@ def _extract_per_page_dpi(
                 effective_crop_box = cb
 
         if effective_crop_box is None and profile:
-            # Conservative fallback: US Letter at intended DPI
-            effective_crop_box = (0.0, 0.0, 612.0, 792.0)
+            # #6 fix: Conservative fallback: A0 (841mm × 1189mm = 2383.94 × 3370.39 pts)
+            # previously US Letter which underestimated large pages.
+            # A0 at 300 DPI = ~95M pixels, safely triggering backoff for oversized pages.
+            effective_crop_box = (0.0, 0.0, 2383.94, 3370.39)
             logger.warning(
-                "Page %d: crop_box unavailable or zero-area; using US Letter "
+                "Page %d: crop_box unavailable or zero-area; using A0 "
                 "fallback for DPI backoff estimation",
                 page_num,
             )

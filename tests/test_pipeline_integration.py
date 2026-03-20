@@ -1397,8 +1397,46 @@ class TestAssessReviewStateZeroText:
         )
         assert "text_validation_unavailable_slide_1" in result.review_flags
         assert "unvalidated_claim_slide_2" in result.review_flags
+        # #2 fix: deck-level flag NOT emitted for mixed decks
+        assert "text_validation_unavailable" not in result.review_flags
+
+    def test_all_unavailable_emits_deck_level_flag(self):
+        """All reviewable pages unavailable → deck-level flag IS emitted."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                ],
+            ),
+            2: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                ],
+            ),
+        }
+        result = assess_review_state(
+            analyses, {},
+            effective_passes=1, density_threshold=3.0,
+            review_confidence_threshold=0.6,
+        )
         assert "text_validation_unavailable" in result.review_flags
 
+
+class TestSlideTextNoneHandling:
+    """#3: slide_text=None triggers validation_unavailable, not skipped."""
+
+    def test_none_slide_text_marks_validation_unavailable(self):
+        """When slide_text is None, evidence should get validation_unavailable=True."""
+        from folio.pipeline.analysis import _validate_evidence
+
+        evidence = [{"claim": "Rev", "quote": "$10M", "confidence": "high"}]
+        _validate_evidence(evidence, None)
+        assert evidence[0]["validated"] is False
+        assert evidence[0]["validation_unavailable"] is True
 
 class TestCrossWorkstreamZeroTextInteraction:
     """R-2 §9.1: Cross-workstream zero-text + diagram confidence interaction."""

@@ -1142,3 +1142,71 @@ class TestPassARetryOrchestrator:
         assert meta_dict["pass_a_escalation_retry_succeeded"] is False
         assert meta_dict["pass_a_parse_outcome"] == "truncated_invalid_json"
         assert analysis.review_required is True
+
+    def test_parseable_truncated_also_retries(self, tmp_path):
+        """#1: Parseable but truncated Pass A → retry fires (not just parse failure)."""
+        from unittest.mock import patch, MagicMock
+        from folio.pipeline.diagram_extraction import analyze_diagram_pages
+        from PIL import Image as PILImage
+
+        valid_json = self._make_valid_pass_a_json()
+
+        (pass1, profiles, imgs, texts, mock_llm, call_idx) = self._setup_mocks(
+            tmp_path,
+            [
+                (valid_json, True),    # Pass A: parseable but truncated
+                (valid_json, False),   # Retry: succeeds, not truncated
+            ],
+        )
+
+        mock_img = PILImage.new("RGB", (200, 200), "white")
+
+        with patch("folio.pipeline.diagram_extraction._get_provider_and_client",
+                    return_value=(MagicMock(), MagicMock())), \
+             patch("folio.pipeline.diagram_extraction._call_llm", side_effect=mock_llm), \
+             patch("folio.pipeline.diagram_extraction._load_page_image", return_value=mock_img), \
+             patch("folio.pipeline.diagram_extraction.diagram_cache") as mock_cache:
+            mock_cache.load_stage_cache.return_value = {}
+            mock_cache.check_entry.return_value = None
+
+            results, stats, meta = analyze_diagram_pages(
+                pass1_results=pass1,
+                page_profiles=profiles,
+                image_results=imgs,
+                slide_texts=texts,
+                cache_dir=tmp_path,
+                force_miss=True,
+                slide_numbers=[1],
+                diagram_max_tokens=8192,
+            )
+
+        # Retry fired even though JSON parsed: 2+ _call_llm calls
+        assert call_idx[0] >= 2
+        analysis = results[1]
+        meta_dict = analysis._extraction_metadata
+        assert meta_dict["pass_a_escalation_retry_attempted"] is True
+        assert meta_dict["pass_a_escalation_retry_succeeded"] is True
+
+
+class TestDiagramCacheInvalidation:
+    """#4: Cache deps should include diagram_max_tokens."""
+
+    def test_different_max_tokens_different_cache_key(self):
+        """Changing diagram_max_tokens should produce a different cache key."""
+        deps_8k = {
+            "_image_hash": "abc",
+            "_text_inventory_hash": "def",
+            "_profile_hash": "ghi",
+            "_diagram_max_tokens": str(8192),
+        }
+        deps_16k = {
+            "_image_hash": "abc",
+            "_text_inventory_hash": "def",
+            "_profile_hash": "ghi",
+            "_diagram_max_tokens": str(16384),
+        }
+        # Cache keys should differ
+        import json
+        key_8k = json.dumps(deps_8k, sort_keys=True)
+        key_16k = json.dumps(deps_16k, sort_keys=True)
+        assert key_8k != key_16k

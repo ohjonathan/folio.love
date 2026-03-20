@@ -1448,10 +1448,12 @@ def analyze_diagram_pages(
         )
 
         # Check final cache with expanded deps
+        # #4 fix: include diagram_max_tokens so config changes invalidate cache
         final_deps = {
             "_image_hash": image_hash,
             "_text_inventory_hash": text_inv_hash,
             "_profile_hash": profile_hash,
+            "_diagram_max_tokens": str(diagram_max_tokens),
         }
         cached_final = diagram_cache.check_entry(final_cache, image_hash, final_deps)
         if cached_final is not None and not force_miss:
@@ -1490,6 +1492,11 @@ def analyze_diagram_pages(
 
         if pass_a_out is None or not pass_a_out.raw_text:
             pass_a_parse_outcome = "provider_failure"
+            # #5 fix: explicit log for provider failure
+            logger.warning(
+                "Slide %d: Pass A provider failure (no output returned)",
+                slide_num,
+            )
             analysis.review_required = True
             analysis.review_questions = ["Pass A extraction failed (provider returned no output)"]
             analysis._extraction_metadata.update({
@@ -1505,15 +1512,18 @@ def analyze_diagram_pages(
 
         pass_a_raw = _extract_diagram_json(pass_a_out.raw_text)
 
-        # Stage 1: Retry once on truncation with doubled budget capped at 32768
-        if pass_a_raw is None and pass_a_truncated:
+        # Stage 1 #1 fix: Retry on ANY truncated=True, not just parse failure.
+        # A parseable but truncated response is still incomplete data.
+        if pass_a_truncated:
             escalated_tokens = min(pass_a_requested_tokens * 2, 32768)
             # B-3 fix: skip retry when budget can't actually increase
             if escalated_tokens > pass_a_requested_tokens:
                 pass_a_escalation_attempted = True
                 logger.info(
-                    "Slide %d: Pass A truncated at %d tokens, retrying with %d",
-                    slide_num, pass_a_requested_tokens, escalated_tokens,
+                    "Slide %d: Pass A truncated at %d tokens "
+                    "(json_parsed=%s), retrying with %d",
+                    slide_num, pass_a_requested_tokens,
+                    pass_a_raw is not None, escalated_tokens,
                 )
                 retry_out, retry_usage = _call_llm(
                     provider, client, model, pass_a_prompt,
@@ -1528,9 +1538,17 @@ def analyze_diagram_pages(
                 if retry_out and retry_out.raw_text:
                     pass_a_raw_len = len(retry_out.raw_text)
                     pass_a_truncated = retry_out.truncated
-                    pass_a_raw = _extract_diagram_json(retry_out.raw_text)
-                    if pass_a_raw is not None:
-                        pass_a_escalation_succeeded = True
+                    retry_parsed = _extract_diagram_json(retry_out.raw_text)
+                    if retry_parsed is not None:
+                        pass_a_raw = retry_parsed
+                        if not pass_a_truncated:
+                            pass_a_escalation_succeeded = True
+                elif retry_out is None:
+                    # #5 fix: explicit log for retry provider failure
+                    logger.warning(
+                        "Slide %d: Pass A retry provider failure (no output)",
+                        slide_num,
+                    )
             else:
                 logger.warning(
                     "Slide %d: Pass A truncated but already at max budget (%d); "
@@ -1539,7 +1557,15 @@ def analyze_diagram_pages(
                 )
 
         if pass_a_raw is None:
-            pass_a_parse_outcome = "truncated_invalid_json" if pass_a_truncated else "invalid_json"
+            if pass_a_truncated:
+                pass_a_parse_outcome = "truncated_invalid_json"
+            else:
+                pass_a_parse_outcome = "invalid_json"
+            # #5 fix: distinct log for non-truncated invalid JSON
+            logger.warning(
+                "Slide %d: Pass A failed (%s, response_len=%d)",
+                slide_num, pass_a_parse_outcome, pass_a_raw_len,
+            )
             analysis.review_required = True
             analysis.review_questions = [
                 f"Pass A returned invalid JSON ({pass_a_parse_outcome})"
@@ -1555,7 +1581,16 @@ def analyze_diagram_pages(
             results[slide_num] = analysis
             continue
 
-        pass_a_parse_outcome = "success"
+        # #1 fix: if retry succeeded but output is still truncated, mark provenance
+        if pass_a_truncated:
+            pass_a_parse_outcome = "truncated_success"
+            logger.warning(
+                "Slide %d: Pass A parsed but still truncated after retry; "
+                "proceeding with partial data",
+                slide_num,
+            )
+        else:
+            pass_a_parse_outcome = "success"
         normalized = _normalize_pass_a(pass_a_raw)
 
         # Unsupported diagram detection
