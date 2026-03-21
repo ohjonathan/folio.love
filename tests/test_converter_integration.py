@@ -969,6 +969,56 @@ class TestEnterpriseOperabilityStage2:
             primary_provider.preflight.assert_called_once()
             fallback_provider.preflight.assert_called_once()
 
+    def test_preflight_warns_on_client_initialization_failures(self, caplog):
+        from folio.config import LLMConfig, LLMProfile, LLMRoute
+        import logging
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source, target_dir, image_results, slide_texts, pass1_results, pass1_meta = (
+                self._basic_fixture_bundle(tmpdir_path)
+            )
+
+            config = FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "primary": LLMProfile(
+                            name="primary",
+                            provider="anthropic",
+                            model="claude-sonnet-4-20250514",
+                            api_key_env="ANTHROPIC_API_KEY",
+                        ),
+                    },
+                    routing={
+                        "default": LLMRoute(primary="primary"),
+                        "convert": LLMRoute(primary="primary"),
+                    },
+                )
+            )
+
+            primary_provider = MagicMock()
+            primary_provider.create_client.side_effect = RuntimeError("invalid gateway URL")
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(
+                         pass1_results,
+                         CacheStats(hits=0, misses=1, pass_name="pass1"),
+                         pass1_meta,
+                     ),
+                 ), \
+                 patch("folio.converter.get_provider", return_value=primary_provider), \
+                 caplog.at_level(logging.WARNING):
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            assert result.slide_count == 1
+            assert "failed to initialize client for preflight: invalid gateway URL" in caplog.text
+            primary_provider.preflight.assert_not_called()
+
     def test_llm_profile_override_disables_fallback_preflight(self):
         from folio.config import LLMConfig, LLMProfile, LLMRoute
 

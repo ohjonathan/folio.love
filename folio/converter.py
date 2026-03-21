@@ -59,7 +59,15 @@ class FolioConverter:
                 # Existing pass-level warnings remain the source of truth for
                 # missing SDKs and credentials. Preflight is for model usability.
                 continue
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "LLM profile '%s' (%s/%s) may be unavailable: failed to "
+                    "initialize client for preflight: %s",
+                    profile.name,
+                    profile.provider,
+                    profile.model,
+                    str(exc) or type(exc).__name__,
+                )
                 continue
 
             try:

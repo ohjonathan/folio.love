@@ -225,11 +225,10 @@ class OpenAIAnalysisProvider:
         return OpenAI(**kwargs)
 
     def preflight(self, client: Any, model: str) -> str | None:
-        """Probe OpenAI model availability before the first expensive call."""
+        """Probe OpenAI model availability and execution capability."""
         lookup_error: Exception | None = None
         try:
             client.models.retrieve(model)
-            return None
         except Exception as exc:
             lookup_error = exc
 
@@ -384,7 +383,7 @@ class GoogleAnalysisProvider:
         model_getter = getattr(models_api, "get", None)
         if callable(model_getter):
             try:
-                model_getter(model=model)
+                model_getter(name=model)
                 return None
             except Exception as exc:
                 lookup_error = exc

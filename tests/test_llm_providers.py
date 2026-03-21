@@ -555,15 +555,16 @@ class TestOpenAIAdapter:
         except ImportError:
             pytest.skip("openai not installed")
 
-    def test_preflight_prefers_model_lookup(self):
+    def test_preflight_checks_lookup_and_chat_execution(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response("ok")
 
         reason = provider.preflight(mock_client, "gpt-4o")
 
         assert reason is None
         mock_client.models.retrieve.assert_called_once_with("gpt-4o")
-        mock_client.chat.completions.create.assert_not_called()
+        mock_client.chat.completions.create.assert_called_once()
 
     def test_preflight_falls_back_to_chat_when_lookup_fails(self):
         provider = OpenAIAnalysisProvider()
@@ -587,6 +588,17 @@ class TestOpenAIAdapter:
 
         assert "chat blocked" in reason
         assert "lookup also failed: lookup blocked" in reason
+
+    def test_preflight_warns_when_lookup_succeeds_but_chat_is_blocked(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError("chat blocked")
+
+        reason = provider.preflight(mock_client, "gpt-4o")
+
+        assert reason == "chat blocked"
+        mock_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_client.chat.completions.create.assert_called_once()
 
 
 class TestGoogleAdapter:
@@ -698,7 +710,7 @@ class TestGoogleAdapter:
         reason = provider.preflight(mock_client, "gemini-2.5-pro")
 
         assert reason is None
-        mock_client.models.get.assert_called_once_with(model="gemini-2.5-pro")
+        mock_client.models.get.assert_called_once_with(name="gemini-2.5-pro")
         mock_client.models.generate_content.assert_not_called()
 
     def test_preflight_falls_back_to_generate_content_when_lookup_fails(self):
@@ -722,7 +734,7 @@ class TestGoogleAdapter:
             reason = provider.preflight(mock_client, "gemini-2.5-pro")
 
         assert reason is None
-        mock_client.models.get.assert_called_once_with(model="gemini-2.5-pro")
+        mock_client.models.get.assert_called_once_with(name="gemini-2.5-pro")
         mock_client.models.generate_content.assert_called_once()
 
     def test_preflight_without_model_get_uses_generate_content(self):
