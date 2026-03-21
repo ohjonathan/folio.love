@@ -572,23 +572,24 @@ class TestNoCacheConverterIntegration:
 
                 converter = FolioConverter(config)
 
-                # Run 1: populate cache (no_cache=False)
+                # Run 1: populate cache (no_cache=False).
+                # Stage 2 adds one warning-only preflight call per conversion run.
                 r1 = converter.convert(source_path=source, target=target_dir, passes=1)
                 calls_run1 = len(api_calls)
-                assert calls_run1 == 2  # 2 slides analyzed
+                assert calls_run1 == 3  # 1 preflight + 2 slides analyzed
 
-                # Run 2: cached (no_cache=False) — should NOT call API
+                # Run 2: cached (no_cache=False) — only preflight should call API
                 api_calls.clear()
                 r2 = converter.convert(source_path=source, target=target_dir, passes=1)
-                assert len(api_calls) == 0  # All cache hits
+                assert len(api_calls) == 1  # Preflight only; analysis is all cache hits
                 assert r2.cache_stats is not None
                 assert r2.cache_stats.hits == 2
                 assert r2.cache_stats.misses == 0
 
-                # Run 3: forced re-analysis (no_cache=True) — MUST call API
+                # Run 3: forced re-analysis (no_cache=True) — preflight + both slides
                 api_calls.clear()
                 r3 = converter.convert(source_path=source, target=target_dir, passes=1, no_cache=True)
-                assert len(api_calls) == 2  # Both slides re-analyzed
+                assert len(api_calls) == 3  # 1 preflight + both slides re-analyzed
                 assert r3.cache_stats is not None
                 assert r3.cache_stats.misses == 2
                 assert r3.cache_stats.hits == 0
@@ -858,6 +859,257 @@ class TestPptxOutputDirPlumbing:
 
             # Intermediate PDF should STILL be cleaned up (try/finally)
             assert not ppt_pdf.exists()
+
+
+class TestEnterpriseOperabilityStage2:
+    """Stage 2 integration: preflight is warning-only and base_url_env is threaded."""
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    def _basic_fixture_bundle(self, tmpdir_path: Path):
+        source = tmpdir_path / "test.pdf"
+        source.write_bytes(b"fake")
+
+        target_dir = tmpdir_path / "output"
+        target_dir.mkdir()
+
+        img = target_dir / "slide-001.png"
+        img.write_bytes(self._make_unique_png(91))
+        image_results = [
+            ImageResult(path=img, slide_num=1, width=200, height=200),
+        ]
+        slide_texts = {
+            1: SlideText(slide_num=1, full_text="Slide text", elements=[]),
+        }
+        pass1_results = {
+            1: SlideAnalysis(
+                slide_type="title",
+                framework="none",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+        }
+        pass1_meta = StageLLMMetadata(
+            provider="anthropic",
+            model="claude-sonnet-4-20250514",
+        )
+        pass1_meta.per_slide_providers[1] = (
+            "anthropic",
+            "claude-sonnet-4-20250514",
+        )
+        return source, target_dir, image_results, slide_texts, pass1_results, pass1_meta
+
+    def test_preflight_warns_once_per_selected_profile_and_does_not_block(self, caplog):
+        from folio.config import LLMConfig, LLMProfile, LLMRoute
+        import logging
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source, target_dir, image_results, slide_texts, pass1_results, pass1_meta = (
+                self._basic_fixture_bundle(tmpdir_path)
+            )
+
+            config = FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "primary": LLMProfile(
+                            name="primary",
+                            provider="anthropic",
+                            model="claude-sonnet-4-20250514",
+                            api_key_env="ANTHROPIC_API_KEY",
+                        ),
+                        "fallback": LLMProfile(
+                            name="fallback",
+                            provider="openai",
+                            model="gpt-4o",
+                            api_key_env="OPENAI_API_KEY",
+                        ),
+                    },
+                    routing={
+                        "default": LLMRoute(primary="primary"),
+                        "convert": LLMRoute(primary="primary", fallbacks=["fallback"]),
+                    },
+                )
+            )
+
+            primary_provider = MagicMock()
+            primary_provider.create_client.return_value = object()
+            primary_provider.preflight.return_value = None
+            fallback_provider = MagicMock()
+            fallback_provider.create_client.return_value = object()
+            fallback_provider.preflight.return_value = "model blocked by gateway"
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(
+                         pass1_results,
+                         CacheStats(hits=0, misses=1, pass_name="pass1"),
+                         pass1_meta,
+                     ),
+                 ), \
+                 patch("folio.converter.get_provider", side_effect=lambda name: {
+                     "anthropic": primary_provider,
+                     "openai": fallback_provider,
+                 }[name]), \
+                 caplog.at_level(logging.WARNING):
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            assert result.slide_count == 1
+            assert "LLM profile 'fallback' (openai/gpt-4o) may be unavailable" in caplog.text
+            primary_provider.preflight.assert_called_once()
+            fallback_provider.preflight.assert_called_once()
+
+    def test_llm_profile_override_disables_fallback_preflight(self):
+        from folio.config import LLMConfig, LLMProfile, LLMRoute
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source, target_dir, image_results, slide_texts, pass1_results, pass1_meta = (
+                self._basic_fixture_bundle(tmpdir_path)
+            )
+
+            config = FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "primary": LLMProfile(name="primary"),
+                        "fallback": LLMProfile(name="fallback", provider="openai", model="gpt-4o"),
+                    },
+                    routing={
+                        "default": LLMRoute(primary="primary"),
+                        "convert": LLMRoute(primary="primary", fallbacks=["fallback"]),
+                    },
+                )
+            )
+
+            primary_provider = MagicMock()
+            primary_provider.create_client.return_value = object()
+            primary_provider.preflight.return_value = None
+            fallback_provider = MagicMock()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(
+                         pass1_results,
+                         CacheStats(hits=0, misses=1, pass_name="pass1"),
+                         pass1_meta,
+                     ),
+                 ), \
+                 patch("folio.converter.get_provider", side_effect=lambda name: {
+                     "anthropic": primary_provider,
+                     "openai": fallback_provider,
+                 }[name]):
+                converter = FolioConverter(config)
+                converter.convert(
+                    source_path=source,
+                    target=target_dir,
+                    passes=1,
+                    llm_profile="primary",
+                )
+
+            primary_provider.preflight.assert_called_once()
+            fallback_provider.preflight.assert_not_called()
+
+    def test_base_url_env_is_threaded_to_all_stage_calls(self):
+        from folio.config import LLMConfig, LLMProfile, LLMRoute
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source = tmpdir_path / "diagram.pdf"
+            source.write_bytes(b"fake")
+
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+
+            img = target_dir / "slide-001.png"
+            img.write_bytes(self._make_unique_png(92))
+            image_results = [ImageResult(path=img, slide_num=1, width=200, height=200)]
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Diagram slide", elements=[]),
+            }
+            pass1_results = {
+                1: SlideAnalysis(
+                    slide_type="framework",
+                    framework="2x2",
+                    evidence=[{"confidence": "high", "validated": True}],
+                ),
+            }
+            pass1_meta = StageLLMMetadata(provider="openai", model="gpt-4o")
+            pass1_meta.per_slide_providers[1] = ("openai", "gpt-4o")
+            diagram_meta = StageLLMMetadata(provider="openai", model="gpt-4o")
+            diagram_meta.per_slide_providers[1] = ("openai", "gpt-4o")
+            pass2_meta = StageLLMMetadata(provider="openai", model="gpt-4o")
+            pass2_meta.per_slide_providers[1] = ("openai", "gpt-4o")
+
+            config = FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "gateway_openai": LLMProfile(
+                            name="gateway_openai",
+                            provider="openai",
+                            model="gpt-4o",
+                            api_key_env="OPENAI_API_KEY",
+                            base_url_env="OPENAI_BASE_URL",
+                        ),
+                    },
+                    routing={
+                        "default": LLMRoute(primary="gateway_openai"),
+                        "convert": LLMRoute(primary="gateway_openai"),
+                    },
+                )
+            )
+
+            provider = MagicMock()
+            provider.create_client.return_value = object()
+            provider.preflight.return_value = None
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={1: MagicMock(classification="diagram")}), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(
+                         pass1_results,
+                         CacheStats(hits=0, misses=1, pass_name="pass1"),
+                         pass1_meta,
+                     ),
+                 ) as mock_pass1, \
+                 patch(
+                     "folio.pipeline.diagram_extraction.analyze_diagram_pages",
+                     return_value=(
+                         pass1_results,
+                         CacheStats(hits=0, misses=1, pass_name="diagram"),
+                         diagram_meta,
+                     ),
+                 ) as mock_diagram, \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides_deep",
+                     return_value=(
+                         pass1_results,
+                         CacheStats(hits=0, misses=0, pass_name="pass2"),
+                         pass2_meta,
+                     ),
+                 ) as mock_pass2, \
+                 patch("folio.converter.get_provider", return_value=provider):
+                converter = FolioConverter(config)
+                converter.convert(source_path=source, target=target_dir, passes=2)
+
+            assert mock_pass1.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
+            assert mock_diagram.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
+            assert mock_pass2.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
 
 
 # ---------------------------------------------------------------------------

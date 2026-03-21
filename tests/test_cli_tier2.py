@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from click.testing import CliRunner
-from folio.cli import cli
+from folio.cli import _configure_logging, cli
 from folio.tracking.registry import (
     RegistryEntry,
     load_registry,
@@ -165,6 +165,24 @@ class TestScanCommand:
         result = runner.invoke(cli, ["--config", str(config_path), "scan"])
         assert result.exit_code == 0
         assert "New: 1" in result.output
+
+
+class TestVerboseLoggingConfig:
+    def test_verbose_clamps_pdfminer_to_warning(self):
+        import logging
+
+        logging.getLogger("pdfminer").setLevel(logging.NOTSET)
+        _configure_logging(verbose=True)
+
+        assert logging.getLogger("pdfminer").level == logging.WARNING
+
+    def test_non_verbose_resets_pdfminer_override(self):
+        import logging
+
+        logging.getLogger("pdfminer").setLevel(logging.WARNING)
+        _configure_logging(verbose=False)
+
+        assert logging.getLogger("pdfminer").level == logging.NOTSET
 
 
 # ---------------------------------------------------------------------------
@@ -1175,5 +1193,4 @@ class TestStatusRefreshReconcilesFlagged:
         # After reconciliation, frontmatter's "flagged" should win
         assert "Flagged: 1" in result.output
         assert "partial_analysis_slide_2" in result.output
-
 

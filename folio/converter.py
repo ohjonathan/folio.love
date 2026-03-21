@@ -10,7 +10,8 @@ from typing import Optional
 
 import yaml as yaml_lib
 
-from .config import FolioConfig
+from .config import FolioConfig, LLMProfile
+from .llm import get_provider
 from .pipeline import normalize, images, text, analysis, inspect
 from .tracking import sources, versions
 from .tracking import registry
@@ -39,6 +40,41 @@ class FolioConverter:
 
     def __init__(self, config: Optional[FolioConfig] = None):
         self.config = config or FolioConfig.load()
+
+    def _run_profile_preflight(self, profiles: list[LLMProfile]) -> None:
+        """Warn once per selected profile if the configured model looks unusable."""
+        seen: set[str] = set()
+        for profile in profiles:
+            if profile.name in seen:
+                continue
+            seen.add(profile.name)
+
+            try:
+                provider = get_provider(profile.provider)
+                client = provider.create_client(
+                    api_key_env=profile.api_key_env,
+                    base_url_env=profile.base_url_env,
+                )
+            except (ImportError, ValueError):
+                # Existing pass-level warnings remain the source of truth for
+                # missing SDKs and credentials. Preflight is for model usability.
+                continue
+            except Exception:
+                continue
+
+            try:
+                warning_reason = provider.preflight(client, profile.model)
+            except Exception as exc:
+                warning_reason = str(exc) or type(exc).__name__
+
+            if warning_reason:
+                logger.warning(
+                    "LLM profile '%s' (%s/%s) may be unavailable: %s",
+                    profile.name,
+                    profile.provider,
+                    profile.model,
+                    warning_reason,
+                )
 
     def convert(
         self,
@@ -241,12 +277,17 @@ class FolioConverter:
             # Stage 4: LLM analysis
             logger.info("  Running LLM analysis...")
             profile = self.config.llm.resolve_profile(llm_profile, task="convert")
+            fallback_profiles = self.config.llm.get_fallbacks(
+                override=llm_profile,
+                task="convert",
+            )
             fallback_profiles_list = [
-                (fb.provider, fb.model, fb.api_key_env)
-                for fb in self.config.llm.get_fallbacks(override=llm_profile, task="convert")
+                (fb.provider, fb.model, fb.api_key_env, fb.base_url_env)
+                for fb in fallback_profiles
             ]
             # Pass full provider settings dict (Finding 1: each fallback needs its own settings)
             all_provider_settings = self.config.providers
+            self._run_profile_preflight([profile, *fallback_profiles])
 
             # PR 3: Compute pass-1 slide numbers, excluding unsupported_diagram
             # PR 6: Also exclude frozen pure diagram slides from Pass 1
@@ -271,6 +312,7 @@ class FolioConverter:
                 force_miss=no_cache,
                 provider_name=profile.provider,
                 api_key_env=profile.api_key_env,
+                base_url_env=profile.base_url_env,
                 fallback_profiles=fallback_profiles_list,
                 all_provider_settings=all_provider_settings,
                 slide_numbers=pass1_slide_numbers,
@@ -328,6 +370,7 @@ class FolioConverter:
                     provider_name=profile.provider,
                     model=profile.model,
                     api_key_env=profile.api_key_env,
+                    base_url_env=profile.base_url_env,
                     all_provider_settings=all_provider_settings,
                     slide_numbers=sorted(diagram_extract_slides),
                     diagram_max_tokens=self.config.conversion.diagram_max_tokens,
@@ -384,6 +427,7 @@ class FolioConverter:
                     force_miss=no_cache,
                     provider_name=profile.provider,
                     api_key_env=profile.api_key_env,
+                    base_url_env=profile.base_url_env,
                     fallback_profiles=fallback_profiles_list,
                     all_provider_settings=all_provider_settings,
                 )
@@ -765,4 +809,3 @@ def _read_existing_frontmatter(markdown_path: Path) -> Optional[dict]:
         return _parse_frontmatter_from_content(content)
     except (OSError, UnicodeDecodeError):
         return None
-

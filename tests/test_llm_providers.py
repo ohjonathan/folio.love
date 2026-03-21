@@ -2,6 +2,7 @@
 
 import os
 import json
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -268,6 +269,69 @@ class TestBYOCredentialWiring:
             provider.create_client(api_key_env="MY_CUSTOM_KEY")
             mock_cls.assert_called_once_with(api_key="custom-test-key", max_retries=0)
 
+    @patch.dict(os.environ, {
+        "MY_CUSTOM_KEY": "custom-test-key",
+        "ANTHROPIC_BASE_URL": "https://gateway.example/anthropic",
+    })
+    def test_anthropic_base_url_env(self):
+        provider = get_provider("anthropic")
+        with patch("anthropic.Anthropic") as mock_cls:
+            provider.create_client(
+                api_key_env="MY_CUSTOM_KEY",
+                base_url_env="ANTHROPIC_BASE_URL",
+            )
+            mock_cls.assert_called_once_with(
+                api_key="custom-test-key",
+                base_url="https://gateway.example/anthropic",
+                max_retries=0,
+            )
+
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "openai-test-key"})
+    def test_openai_base_url_env_ignored_when_unset(self):
+        provider = get_provider("openai")
+        openai_module = MagicMock()
+        openai_ctor = MagicMock()
+        openai_module.OpenAI = openai_ctor
+        with patch.dict(sys.modules, {"openai": openai_module}):
+            provider.create_client(base_url_env="OPENAI_BASE_URL")
+        openai_ctor.assert_called_once_with(
+            api_key="openai-test-key",
+            max_retries=0,
+        )
+
+    @patch.dict(os.environ, {
+        "OPENAI_API_KEY": "openai-test-key",
+        "OPENAI_BASE_URL": "https://gateway.example/openai/v1",
+    })
+    def test_openai_base_url_env(self):
+        provider = get_provider("openai")
+        openai_module = MagicMock()
+        openai_ctor = MagicMock()
+        openai_module.OpenAI = openai_ctor
+        with patch.dict(sys.modules, {"openai": openai_module}):
+            provider.create_client(base_url_env="OPENAI_BASE_URL")
+        openai_ctor.assert_called_once_with(
+            api_key="openai-test-key",
+            base_url="https://gateway.example/openai/v1",
+            max_retries=0,
+        )
+
+    @patch.dict(os.environ, {
+        "GEMINI_API_KEY": "gemini-test-key",
+        "GEMINI_BASE_URL": "https://gateway.example/google",
+    })
+    def test_google_base_url_env(self):
+        provider = get_provider("google")
+        google_module = MagicMock()
+        genai_module = MagicMock()
+        google_module.genai = genai_module
+        with patch.dict(sys.modules, {"google": google_module, "google.genai": genai_module}):
+            provider.create_client(base_url_env="GEMINI_BASE_URL")
+        genai_module.Client.assert_called_once_with(
+            api_key="gemini-test-key",
+            http_options={"base_url": "https://gateway.example/google"},
+        )
+
     def test_anthropic_custom_env_var_missing_raises(self):
         provider = get_provider("anthropic")
         with patch.dict(os.environ, {}, clear=True):
@@ -491,6 +555,39 @@ class TestOpenAIAdapter:
         except ImportError:
             pytest.skip("openai not installed")
 
+    def test_preflight_prefers_model_lookup(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+
+        reason = provider.preflight(mock_client, "gpt-4o")
+
+        assert reason is None
+        mock_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_client.chat.completions.create.assert_not_called()
+
+    def test_preflight_falls_back_to_chat_when_lookup_fails(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.retrieve.side_effect = RuntimeError("models endpoint unavailable")
+        mock_client.chat.completions.create.return_value = make_openai_response("ok")
+
+        reason = provider.preflight(mock_client, "gpt-4o")
+
+        assert reason is None
+        mock_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_client.chat.completions.create.assert_called_once()
+
+    def test_preflight_returns_warning_reason_when_lookup_and_chat_fail(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.retrieve.side_effect = RuntimeError("lookup blocked")
+        mock_client.chat.completions.create.side_effect = RuntimeError("chat blocked")
+
+        reason = provider.preflight(mock_client, "gpt-4o")
+
+        assert "chat blocked" in reason
+        assert "lookup also failed: lookup blocked" in reason
+
 
 class TestGoogleAdapter:
     """Test Google Gemini adapter request/response normalization."""
@@ -592,6 +689,87 @@ class TestGoogleAdapter:
         provider = GoogleAnalysisProvider()
         class PermissionDenied(Exception): pass
         assert provider.classify_error(PermissionDenied("forbidden")).kind == "permanent"
+
+    def test_preflight_uses_model_get_when_available(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.get.return_value = {"name": "gemini-2.5-pro"}
+
+        reason = provider.preflight(mock_client, "gemini-2.5-pro")
+
+        assert reason is None
+        mock_client.models.get.assert_called_once_with(model="gemini-2.5-pro")
+        mock_client.models.generate_content.assert_not_called()
+
+    def test_preflight_falls_back_to_generate_content_when_lookup_fails(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.get.side_effect = RuntimeError("lookup unsupported")
+        mock_client.models.generate_content.return_value = make_google_response("ok")
+
+        google_module = MagicMock()
+        genai_module = MagicMock()
+        types_module = MagicMock()
+        google_module.genai = genai_module
+        genai_module.types = types_module
+        types_module.Part.from_bytes.return_value = MagicMock()
+        types_module.GenerateContentConfig.return_value = MagicMock()
+
+        with patch.dict(
+            sys.modules,
+            {"google": google_module, "google.genai": genai_module, "google.genai.types": types_module},
+        ):
+            reason = provider.preflight(mock_client, "gemini-2.5-pro")
+
+        assert reason is None
+        mock_client.models.get.assert_called_once_with(model="gemini-2.5-pro")
+        mock_client.models.generate_content.assert_called_once()
+
+    def test_preflight_without_model_get_uses_generate_content(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        del mock_client.models.get
+        mock_client.models.generate_content.return_value = make_google_response("ok")
+
+        google_module = MagicMock()
+        genai_module = MagicMock()
+        types_module = MagicMock()
+        google_module.genai = genai_module
+        genai_module.types = types_module
+        types_module.Part.from_bytes.return_value = MagicMock()
+        types_module.GenerateContentConfig.return_value = MagicMock()
+
+        with patch.dict(
+            sys.modules,
+            {"google": google_module, "google.genai": genai_module, "google.genai.types": types_module},
+        ):
+            reason = provider.preflight(mock_client, "gemini-2.5-pro")
+
+        assert reason is None
+        mock_client.models.generate_content.assert_called_once()
+
+
+class TestAnthropicPreflight:
+    """Test Anthropic warning-only preflight behavior."""
+
+    def test_preflight_uses_messages_path(self):
+        provider = AnthropicAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = make_anthropic_response("ok")
+
+        reason = provider.preflight(mock_client, "claude-sonnet-4-20250514")
+
+        assert reason is None
+        mock_client.messages.create.assert_called_once()
+
+    def test_preflight_returns_warning_reason(self):
+        provider = AnthropicAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = RuntimeError("model blocked")
+
+        reason = provider.preflight(mock_client, "claude-sonnet-4-20250514")
+
+        assert reason == "model blocked"
 
 
 class TestRuntimeFallbackChain:
@@ -843,4 +1021,3 @@ class TestTokenTotalAggregation:
         assert meta.usage_total.total_tokens == 450
         assert meta.usage_total.input_tokens == 300
         assert meta.usage_total.output_tokens == 150
-

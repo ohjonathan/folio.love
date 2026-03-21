@@ -74,6 +74,7 @@ class LLMProfile:
     provider: str = "anthropic"
     model: str = "claude-sonnet-4-20250514"
     api_key_env: str = ""  # Defaults via _DEFAULT_API_KEY_ENV
+    base_url_env: str = ""
 
     def __post_init__(self):
         if not self.api_key_env:
@@ -322,6 +323,11 @@ class FolioConfig:
                     f"LLM profile '{pname}' uses unsupported provider "
                     f"'{profile.provider}'. Supported: {', '.join(sorted(_SUPPORTED_PROVIDERS))}"
                 )
+            if not isinstance(profile.base_url_env, str):
+                raise ValueError(
+                    f"LLM profile '{pname}' base_url_env must be a string, "
+                    f"got {profile.base_url_env!r}"
+                )
 
         # Validate routing.default exists
         if "default" not in self.llm.routing:
@@ -438,6 +444,7 @@ class FolioConfig:
                         provider=pdata.get("provider", "anthropic"),
                         model=pdata.get("model", "claude-sonnet-4-20250514"),
                         api_key_env=pdata.get("api_key_env", ""),
+                        base_url_env=pdata.get("base_url_env", ""),
                     )
             if not profiles:
                 profiles = {"default": LLMProfile(name="default")}

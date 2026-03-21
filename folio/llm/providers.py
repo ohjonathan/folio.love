@@ -38,13 +38,41 @@ def _parse_retry_after(headers) -> float | None:
         return None
 
 
+def _resolve_base_url(base_url_env: str) -> str | None:
+    """Resolve an optional custom gateway base URL from the environment."""
+    if not base_url_env:
+        return None
+    value = os.environ.get(base_url_env, "").strip()
+    return value or None
+
+
+def _preflight_input() -> ProviderInput:
+    """Build a minimal text-only request for warning-only preflight probes."""
+    return ProviderInput(
+        prompt="ping",
+        images=(),
+        max_tokens=1,
+        temperature=0.0,
+    )
+
+
+def _format_preflight_error(exc: Exception) -> str:
+    """Render a compact warning reason for model preflight failures."""
+    message = str(exc).strip()
+    return message or type(exc).__name__
+
+
 class AnthropicAnalysisProvider:
     """Anthropic Claude provider adapter."""
 
     provider_name: str = "anthropic"
     endpoint_name: str = "messages"
 
-    def create_client(self, api_key_env: str = "") -> Any:
+    def create_client(
+        self,
+        api_key_env: str = "",
+        base_url_env: str = "",
+    ) -> Any:
         """Create an Anthropic client with SDK auto-retry disabled."""
         import anthropic
 
@@ -53,10 +81,23 @@ class AnthropicAnalysisProvider:
         if not api_key:
             raise ValueError(f"{env_var} environment variable not set")
 
-        return anthropic.Anthropic(
-            api_key=api_key,
-            max_retries=0,  # Folio manages retries
-        )
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "max_retries": 0,  # Folio manages retries
+        }
+        resolved_base_url = _resolve_base_url(base_url_env)
+        if resolved_base_url:
+            kwargs["base_url"] = resolved_base_url
+
+        return anthropic.Anthropic(**kwargs)
+
+    def preflight(self, client: Any, model: str) -> str | None:
+        """Probe Anthropic model availability with a minimal text-only call."""
+        try:
+            self.analyze(client, model, _preflight_input())
+            return None
+        except Exception as exc:
+            return _format_preflight_error(exc)
 
     def analyze(
         self,
@@ -160,7 +201,11 @@ class OpenAIAnalysisProvider:
     provider_name: str = "openai"
     endpoint_name: str = "chat_completions"
 
-    def create_client(self, api_key_env: str = "") -> Any:
+    def create_client(
+        self,
+        api_key_env: str = "",
+        base_url_env: str = "",
+    ) -> Any:
         """Create an OpenAI client."""
         from openai import OpenAI
 
@@ -169,10 +214,33 @@ class OpenAIAnalysisProvider:
         if not api_key:
             raise ValueError(f"{env_var} environment variable not set")
 
-        return OpenAI(
-            api_key=api_key,
-            max_retries=0,
-        )
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "max_retries": 0,
+        }
+        resolved_base_url = _resolve_base_url(base_url_env)
+        if resolved_base_url:
+            kwargs["base_url"] = resolved_base_url
+
+        return OpenAI(**kwargs)
+
+    def preflight(self, client: Any, model: str) -> str | None:
+        """Probe OpenAI model availability before the first expensive call."""
+        lookup_error: Exception | None = None
+        try:
+            client.models.retrieve(model)
+            return None
+        except Exception as exc:
+            lookup_error = exc
+
+        try:
+            self.analyze(client, model, _preflight_input())
+            return None
+        except Exception as exc:
+            reason = _format_preflight_error(exc)
+            if lookup_error is not None:
+                reason = f"{reason} (lookup also failed: {_format_preflight_error(lookup_error)})"
+            return reason
 
     def analyze(
         self,
@@ -287,7 +355,11 @@ class GoogleAnalysisProvider:
     provider_name: str = "google"
     endpoint_name: str = "generate_content"
 
-    def create_client(self, api_key_env: str = "") -> Any:
+    def create_client(
+        self,
+        api_key_env: str = "",
+        base_url_env: str = "",
+    ) -> Any:
         """Create a Google GenAI client."""
         from google import genai
 
@@ -296,7 +368,35 @@ class GoogleAnalysisProvider:
         if not api_key:
             raise ValueError(f"{env_var} environment variable not set")
 
-        return genai.Client(api_key=api_key)
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+        }
+        resolved_base_url = _resolve_base_url(base_url_env)
+        if resolved_base_url:
+            kwargs["http_options"] = {"base_url": resolved_base_url}
+
+        return genai.Client(**kwargs)
+
+    def preflight(self, client: Any, model: str) -> str | None:
+        """Probe Google model availability with lookup when supported."""
+        lookup_error: Exception | None = None
+        models_api = getattr(client, "models", None)
+        model_getter = getattr(models_api, "get", None)
+        if callable(model_getter):
+            try:
+                model_getter(model=model)
+                return None
+            except Exception as exc:
+                lookup_error = exc
+
+        try:
+            self.analyze(client, model, _preflight_input())
+            return None
+        except Exception as exc:
+            reason = _format_preflight_error(exc)
+            if lookup_error is not None:
+                reason = f"{reason} (lookup also failed: {_format_preflight_error(lookup_error)})"
+            return reason
 
     def analyze(
         self,

@@ -37,6 +37,18 @@ _RESTART_CADENCE = 15
 _APPLESCRIPT_ERROR_RE = re.compile(r"error\s+(?:number\s+)?(-\d{4,})")
 
 
+def _configure_logging(verbose: bool) -> None:
+    """Configure CLI logging without adding new user-facing flags."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(message)s" if not verbose else "%(name)s: %(message)s",
+    )
+    logging.getLogger("pdfminer").setLevel(
+        logging.WARNING if verbose else logging.NOTSET
+    )
+
+
 @dataclass
 class BatchOutcome:
     """Per-file batch outcome record."""
@@ -133,11 +145,7 @@ def _restart_powerpoint() -> None:
 @click.pass_context
 def cli(ctx, verbose: bool, config: Optional[str]):
     """Folio: Your consulting portfolio, searchable and AI-ready."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(message)s" if not verbose else "%(name)s: %(message)s",
-    )
+    _configure_logging(verbose)
 
     config_path = Path(config) if config else None
     ctx.ensure_object(dict)

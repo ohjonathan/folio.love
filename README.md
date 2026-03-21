@@ -54,7 +54,7 @@ sudo apt install libreoffice poppler-utils
 <details>
 <summary>Managed macOS (no LibreOffice)</summary>
 
-If your machine blocks LibreOffice, Folio can use Microsoft PowerPoint as the renderer. Set `pptx_renderer: powerpoint` in `folio.yaml`, run batch jobs from Terminal.app, and keep a dedicated PowerPoint session with no unrelated presentations open. See [docs/guides/managed_mac_workflow.md](docs/guides/managed_mac_workflow.md) for the full workflow.
+If your machine blocks LibreOffice, Folio can use Microsoft PowerPoint as the renderer. Set `pptx_renderer: powerpoint` in `folio.yaml`, run batch jobs from Terminal.app, and keep a dedicated PowerPoint session with no unrelated presentations open. See [Managed Mac workflow](https://github.com/ohjonathan/folio.love/blob/main/docs/guides/managed_mac_workflow.md) for the full workflow.
 
 If neither renderer is available, export the deck to PDF manually and run `folio convert deck.pdf`.
 
@@ -270,16 +270,19 @@ llm:
       provider: anthropic
       model: claude-sonnet-4-20250514
       api_key_env: ANTHROPIC_API_KEY
+      base_url_env: ANTHROPIC_BASE_URL   # Optional enterprise gateway
 
     fast_openai:
       provider: openai
       model: gpt-4o-mini
       api_key_env: OPENAI_API_KEY
+      base_url_env: OPENAI_BASE_URL      # Optional enterprise gateway
 
     backup_google:
       provider: google
       model: gemini-2.5-pro
       api_key_env: GEMINI_API_KEY
+      base_url_env: GEMINI_BASE_URL      # Optional enterprise gateway
 
   routing:
     default:
@@ -305,6 +308,27 @@ With no `folio.yaml`, Folio uses sensible defaults: output goes to `./library`, 
 | `ANTHROPIC_API_KEY` | Anthropic credentials (included in base install) |
 | `OPENAI_API_KEY` | OpenAI credentials (requires `folio-love[llm]`) |
 | `GEMINI_API_KEY` | Google Gemini credentials (requires `folio-love[llm]`) |
+| `ANTHROPIC_BASE_URL` | Optional Anthropic-compatible gateway URL |
+| `OPENAI_BASE_URL` | Optional OpenAI-compatible gateway URL |
+| `GEMINI_BASE_URL` | Optional Gemini-compatible gateway URL |
+
+### Enterprise Gateways and Preflight Warnings
+
+If you route Folio through an enterprise AI gateway, keep the gateway URL in an
+environment variable and reference it from the profile with `base_url_env`.
+If the env var is unset or blank, Folio silently falls back to the SDK default
+endpoint.
+
+Folio now runs a warning-only model preflight once per selected profile per
+conversion run. This checks whether the configured model appears usable before
+the first expensive pass. A warning does **not** block conversion; it simply
+surfaces blocked or unavailable models earlier.
+
+Two Stage 1 hardening behaviors are also part of current `main`:
+
+- scanned or image-only PDFs keep honest review flags without the old blanket
+  `0.59` confidence cap when text validation is unavailable
+- oversized PDF pages automatically back off DPI before Pillow limits are hit
 
 ## How It Works
 
