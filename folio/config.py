@@ -237,6 +237,10 @@ class FolioConfig:
             raise ValueError(
                 f"diagram_max_tokens must be a positive integer, got {c.diagram_max_tokens!r}"
             )
+        if c.diagram_max_tokens > 32768:
+            raise ValueError(
+                f"diagram_max_tokens must be <= 32768 (proposal ceiling), got {c.diagram_max_tokens!r}"
+            )
         if c.max_image_pixels is not None:
             if not isinstance(c.max_image_pixels, int) or c.max_image_pixels <= 0:
                 raise ValueError(

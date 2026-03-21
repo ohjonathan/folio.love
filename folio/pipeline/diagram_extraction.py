@@ -1473,8 +1473,8 @@ def analyze_diagram_pages(
             "$text_inventory", text_inventory
         )
 
-        # Stage 1: Use explicit token budget from config
-        pass_a_requested_tokens = diagram_max_tokens
+        # Stage 1: Use explicit token budget from config, clamped to proposal ceiling
+        pass_a_requested_tokens = min(diagram_max_tokens, 32768)
         pass_a_out, pass_a_usage = _call_llm(
             provider, client, model, pass_a_prompt,
             pass_a_images, primary_settings, limiter,
