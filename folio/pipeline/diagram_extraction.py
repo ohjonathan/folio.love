@@ -1588,16 +1588,32 @@ def analyze_diagram_pages(
             results[slide_num] = analysis
             continue
 
-        # #1 fix: if retry succeeded but output is still truncated, mark provenance
+        # R5-#1 fix: If pass_a_raw exists but output is still truncated after
+        # retry, the proposal §6.1 requires this to be a failure, not a continue.
+        # Discard the partial data and enter the failure path.
         if pass_a_truncated:
-            pass_a_parse_outcome = "truncated_success"
             logger.warning(
-                "Slide %d: Pass A parsed but still truncated after retry; "
-                "proceeding with partial data",
+                "Slide %d: Pass A still truncated after retry; "
+                "discarding partial data per §6.1",
                 slide_num,
             )
-        else:
-            pass_a_parse_outcome = "success"
+            pass_a_parse_outcome = "truncated_invalid_json"
+            analysis.review_required = True
+            analysis.review_questions = [
+                "Pass A still truncated after retry (§6.1 failure)"
+            ]
+            analysis._extraction_metadata.update({
+                "pass_a_requested_max_tokens": pass_a_requested_tokens,
+                "pass_a_truncated": True,
+                "pass_a_raw_response_length": pass_a_raw_len,
+                "pass_a_escalation_retry_attempted": pass_a_escalation_attempted,
+                "pass_a_escalation_retry_succeeded": False,
+                "pass_a_parse_outcome": pass_a_parse_outcome,
+            })
+            results[slide_num] = analysis
+            continue
+
+        pass_a_parse_outcome = "success"
         normalized = _normalize_pass_a(pass_a_raw)
 
         # Unsupported diagram detection
@@ -1841,9 +1857,11 @@ def analyze_diagram_pages(
                         post_b_graph = _merge_sweep_results(post_b_graph, sweep_data)
 
         # --- Confidence scoring ---
-        # Stage 1: Determine if source text validation was unavailable
+        # R5-#2 fix: Also check is_empty per proposal §6.3 detection rule
         _text_validation_unavailable = (
-            slide_text is None or not slide_text.full_text
+            slide_text is None
+            or getattr(slide_text, 'is_empty', False)
+            or not slide_text.full_text
             or not slide_text.full_text.strip()
         )
         # B5: Only award Pass C bonus if verdicts were actually parsed

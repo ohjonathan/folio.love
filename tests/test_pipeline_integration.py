@@ -1364,8 +1364,10 @@ class TestAssessReviewStateZeroText:
                 ],
             ),
         }
+        # R5-#3: must supply slide_texts with actual text so it's not flagged as unavailable
+        slide_texts = {1: SlideText(slide_num=1, full_text="Real content here", elements=[])}
         result = assess_review_state(
-            analyses, {},
+            analyses, slide_texts,
             effective_passes=1, density_threshold=3.0,
             review_confidence_threshold=0.6,
         )
@@ -1390,8 +1392,13 @@ class TestAssessReviewStateZeroText:
                 ],
             ),
         }
+        # R5-#3: slide 1 has no text (unavailable), slide 2 has text (truly unvalidated)
+        slide_texts = {
+            1: SlideText(slide_num=1, full_text="", is_empty=True, elements=[]),
+            2: SlideText(slide_num=2, full_text="Real text", elements=[]),
+        }
         result = assess_review_state(
-            analyses, {},
+            analyses, slide_texts,
             effective_passes=1, density_threshold=3.0,
             review_confidence_threshold=0.6,
         )
@@ -1418,11 +1425,38 @@ class TestAssessReviewStateZeroText:
                 ],
             ),
         }
+        # R5-#3: both slides have empty text
+        slide_texts = {
+            1: SlideText(slide_num=1, full_text="", is_empty=True, elements=[]),
+            2: SlideText(slide_num=2, full_text="", is_empty=True, elements=[]),
+        }
         result = assess_review_state(
-            analyses, {},
+            analyses, slide_texts,
             effective_passes=1, density_threshold=3.0,
             review_confidence_threshold=0.6,
         )
+        assert "text_validation_unavailable" in result.review_flags
+
+    def test_zero_text_no_evidence_still_flags(self):
+        """R5-#3: All-zero-text deck with no evidence must NOT return clean."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(slide_type="data", evidence=[]),
+            2: SlideAnalysis(slide_type="data", evidence=[]),
+        }
+        slide_texts = {
+            1: SlideText(slide_num=1, full_text="", is_empty=True, elements=[]),
+            2: SlideText(slide_num=2, full_text="", is_empty=True, elements=[]),
+        }
+        result = assess_review_state(
+            analyses, slide_texts,
+            effective_passes=1, density_threshold=3.0,
+            review_confidence_threshold=0.6,
+        )
+        # Must have unavailable flags, NOT return clean
+        assert "text_validation_unavailable_slide_1" in result.review_flags
+        assert "text_validation_unavailable_slide_2" in result.review_flags
         assert "text_validation_unavailable" in result.review_flags
 
 

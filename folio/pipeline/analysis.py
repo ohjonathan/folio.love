@@ -771,18 +771,33 @@ def assess_review_state(
         if any(ev.get("confidence") == "low" for ev in evidence):
             flags.append(f"low_confidence_slide_{slide_num}")
 
-        # Stage 1: Distinguish unavailable validation from true invalidation
-        unvalidated = [
-            ev for ev in evidence if not ev.get("validated", False)
-        ]
-        if unvalidated:
-            all_unavailable = all(
-                ev.get("validation_unavailable", False) for ev in unvalidated
-            )
-            if all_unavailable:
-                flags.append(f"text_validation_unavailable_slide_{slide_num}")
-            else:
-                flags.append(f"unvalidated_claim_slide_{slide_num}")
+        # R5-#3 fix: Derive unavailable from slide_texts directly,
+        # not just from evidence flags. A zero-text slide with no
+        # evidence must still get the unavailable flag.
+        st = slide_texts.get(slide_num)
+        slide_text_unavailable = (
+            st is None
+            or getattr(st, 'is_empty', False)
+            or not getattr(st, 'full_text', '')
+            or not getattr(st, 'full_text', '').strip()
+        )
+
+        if slide_text_unavailable:
+            # Source text unavailable for this slide — flag it
+            flags.append(f"text_validation_unavailable_slide_{slide_num}")
+        else:
+            # Stage 1: Distinguish unavailable validation from true invalidation
+            unvalidated = [
+                ev for ev in evidence if not ev.get("validated", False)
+            ]
+            if unvalidated:
+                all_unavailable = all(
+                    ev.get("validation_unavailable", False) for ev in unvalidated
+                )
+                if all_unavailable:
+                    flags.append(f"text_validation_unavailable_slide_{slide_num}")
+                else:
+                    flags.append(f"unvalidated_claim_slide_{slide_num}")
 
     # R4-#2 fix: Document-level flag only when ALL reviewable
     # non-pending pages have unavailable text validation AND there are
@@ -1513,13 +1528,19 @@ def _validate_evidence(evidence: list[dict], slide_text: "SlideText") -> None:
     """Validate evidence items against extracted slide text.
 
     Sets 'validated' to True/False on each evidence dict in place.
-    When source text is empty (scanned PDF / zero-text slide), sets
-    'validation_unavailable' to True instead of 'validated' = False.
+    When source text is empty/unavailable (scanned PDF / zero-text slide),
+    sets 'validation_unavailable' to True instead of 'validated' = False.
     """
     source_text = slide_text.full_text if slide_text else ""
 
-    # Stage 1: empty source text → mark all items as unavailable
-    if not source_text or not source_text.strip():
+    # R5-#2 fix: Also check is_empty per proposal §6.3 detection rule
+    text_unavailable = (
+        not source_text or not source_text.strip()
+        or (slide_text is not None and getattr(slide_text, 'is_empty', False))
+    )
+
+    # Stage 1: empty/unavailable source text → mark all items as unavailable
+    if text_unavailable:
         for item in evidence:
             item["validated"] = False
             item["validation_unavailable"] = True

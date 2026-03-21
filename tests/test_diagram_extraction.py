@@ -1325,7 +1325,7 @@ class TestPassARetryDiscardSemantics:
         assert analysis.review_required is True
 
     def test_parseable_truncated_retry_still_truncated_parseable(self, tmp_path):
-        """Parseable truncated + retry parseable-truncated → truncated_success, not succeeded."""
+        """R5-#1: Parseable truncated + retry parseable-truncated → failure per §6.1."""
         valid_json = self._make_valid_json()
 
         results, num_calls = self._run_orchestrator(tmp_path, [
@@ -1338,7 +1338,9 @@ class TestPassARetryDiscardSemantics:
         meta = analysis._extraction_metadata
         assert meta["pass_a_escalation_retry_attempted"] is True
         assert meta["pass_a_escalation_retry_succeeded"] is False
-        assert meta["pass_a_parse_outcome"] == "truncated_success"
+        # R5-#1: truncated retry is a failure, not truncated_success
+        assert meta["pass_a_parse_outcome"] == "truncated_invalid_json"
+        assert analysis.review_required is True
 
 
 class TestAnalysisCacheVersion:
