@@ -1512,9 +1512,13 @@ def analyze_diagram_pages(
 
         pass_a_raw = _extract_diagram_json(pass_a_out.raw_text)
 
-        # Stage 1 #1 fix: Retry on ANY truncated=True, not just parse failure.
+        # Stage 1 R4-#1 fix: Retry on ANY truncated=True, not just parse failure.
         # A parseable but truncated response is still incomplete data.
+        # CRITICAL: discard original truncated pass_a_raw before retry so
+        # retry failure doesn't silently preserve partial data.
         if pass_a_truncated:
+            pre_retry_raw = pass_a_raw  # save for logging only
+            pass_a_raw = None  # discard: retry must produce the authoritative result
             escalated_tokens = min(pass_a_requested_tokens * 2, 32768)
             # B-3 fix: skip retry when budget can't actually increase
             if escalated_tokens > pass_a_requested_tokens:
@@ -1523,7 +1527,7 @@ def analyze_diagram_pages(
                     "Slide %d: Pass A truncated at %d tokens "
                     "(json_parsed=%s), retrying with %d",
                     slide_num, pass_a_requested_tokens,
-                    pass_a_raw is not None, escalated_tokens,
+                    pre_retry_raw is not None, escalated_tokens,
                 )
                 retry_out, retry_usage = _call_llm(
                     provider, client, model, pass_a_prompt,
@@ -1543,8 +1547,11 @@ def analyze_diagram_pages(
                         pass_a_raw = retry_parsed
                         if not pass_a_truncated:
                             pass_a_escalation_succeeded = True
-                elif retry_out is None:
-                    # #5 fix: explicit log for retry provider failure
+                        # else: parseable but still truncated — pass_a_raw set
+                        # but escalation_succeeded stays False
+                    # else: retry returned unparseable — pass_a_raw stays None
+                else:
+                    # Retry returned no output — pass_a_raw stays None
                     logger.warning(
                         "Slide %d: Pass A retry provider failure (no output)",
                         slide_num,

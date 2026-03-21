@@ -1508,3 +1508,40 @@ class TestCrossWorkstreamZeroTextInteraction:
         }
         _, reasoning = _compute_diagram_confidence(graph, word_count=3)
         assert "Text-poor" in reasoning
+
+
+class TestDeckFlagPendingSlides:
+    """R4-#2: Deck flag must not overstate when pending slides exist."""
+
+    def test_unavailable_plus_pending_no_deck_flag(self):
+        """1 unavailable analyzed slide + 1 pending reviewable → no deck flag."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                ],
+            ),
+            2: SlideAnalysis(slide_type="pending"),  # Pending reviewable
+        }
+        result = assess_review_state(
+            analyses, {},
+            effective_passes=1, density_threshold=3.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "text_validation_unavailable_slide_1" in result.review_flags
+        # Deck-level flag should NOT be emitted: slide 2 is pending, not analyzed
+        assert "text_validation_unavailable" not in result.review_flags
+
+
+class TestEndpointBlockedClassification:
+    """R4-#4: EndpointNotAllowedError classified as endpoint_blocked."""
+
+    def test_endpoint_not_allowed_error(self):
+        from folio.cli import _classify_outcome
+        from folio.llm.runtime import EndpointNotAllowedError
+
+        exc = EndpointNotAllowedError("Endpoint not allowed for model X")
+        assert _classify_outcome(exc) == "endpoint_blocked"

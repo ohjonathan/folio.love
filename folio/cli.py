@@ -14,6 +14,7 @@ import click
 from .config import FolioConfig
 from .converter import FolioConverter, PPTX_EXTENSIONS
 from .pipeline.images import ImageExtractionError
+from .llm.runtime import EndpointNotAllowedError
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,10 @@ def _classify_outcome(exc: Exception) -> str:
         return "pdf_render_error"
     if any(kw in msg for kw in ("corrupt", "invalid pdf", "unable to open")):
         return "pdf_corrupt"
+
+    # R4-#4: Provider endpoint blocked / misconfigured
+    if isinstance(exc, EndpointNotAllowedError):
+        return "endpoint_blocked"
 
     return "unknown"
 

@@ -31,7 +31,7 @@ _MAX_IMAGE_BYTES = 20_000_000  # 20 MB
 
 # Cache format version. Increment when the cache data shape changes.
 # On mismatch, the cache is fully invalidated (one-time re-analysis).
-_ANALYSIS_CACHE_VERSION = 3
+_ANALYSIS_CACHE_VERSION = 4  # R4-#3: bump for validation_unavailable semantics
 
 # PR 3: Diagram schema and pipeline versioning.
 # Used for deterministic cache invalidation when diagram dimensions change.
@@ -784,18 +784,19 @@ def assess_review_state(
             else:
                 flags.append(f"unvalidated_claim_slide_{slide_num}")
 
-    # Stage 1 #2 fix: Document-level flag only when ALL reviewable
-    # non-pending pages have unavailable text validation.
-    # Mixed decks with only some zero-text pages keep page-scoped flags only.
+    # R4-#2 fix: Document-level flag only when ALL reviewable
+    # non-pending pages have unavailable text validation AND there are
+    # no pending reviewable slides (which haven't been analyzed yet).
+    # Uses reviewable_slides (excluding pending and abstained), not just
+    # pages_with_evidence, so pending+unavailable doesn't overstate.
     unavailable_flags = [f for f in flags if f.startswith("text_validation_unavailable_slide_")]
-    if unavailable_flags:
-        # Count reviewable non-pending pages that have evidence
-        pages_with_evidence = {
-            slide_num for slide_num, a in analyses.items()
-            if a.slide_type != "pending"
-            and any(isinstance(ev, dict) for ev in getattr(a, "evidence", []))
+    if unavailable_flags and not pending_reviewable_slides:
+        # All reviewable non-pending, non-abstained pages
+        non_pending_reviewable = {
+            s for s in reviewable_slides - abstained_slides
+            if analyses[s].slide_type != "pending"
         }
-        if pages_with_evidence and len(unavailable_flags) >= len(pages_with_evidence):
+        if non_pending_reviewable and len(unavailable_flags) >= len(non_pending_reviewable):
             flags.append("text_validation_unavailable")
 
     # Flag individual reviewable pending slides when other reviewable slides
