@@ -799,19 +799,19 @@ def assess_review_state(
                 else:
                     flags.append(f"unvalidated_claim_slide_{slide_num}")
 
-    # R4-#2 fix: Document-level flag only when ALL reviewable
-    # non-pending pages have unavailable text validation AND there are
-    # no pending reviewable slides (which haven't been analyzed yet).
-    # Uses reviewable_slides (excluding pending and abstained), not just
-    # pages_with_evidence, so pending+unavailable doesn't overstate.
-    unavailable_flags = [f for f in flags if f.startswith("text_validation_unavailable_slide_")]
-    if unavailable_flags and not pending_reviewable_slides:
-        # All reviewable non-pending, non-abstained pages
-        non_pending_reviewable = {
-            s for s in reviewable_slides - abstained_slides
-            if analyses[s].slide_type != "pending"
-        }
-        if non_pending_reviewable and len(unavailable_flags) >= len(non_pending_reviewable):
+    # R6 fix: Document-level flag derived from slide_texts for ALL reviewable
+    # (non-blank, non-abstained) slides, regardless of analysis completion.
+    # §6.3: if every reviewable page's slide_text is unavailable, emit deck flag.
+    all_reviewable_non_abstained = reviewable_slides - abstained_slides
+    if all_reviewable_non_abstained:
+        all_text_unavailable = True
+        for s in all_reviewable_non_abstained:
+            st = slide_texts.get(s)
+            if st is not None and not getattr(st, 'is_empty', False) \
+               and getattr(st, 'full_text', '') and getattr(st, 'full_text', '').strip():
+                all_text_unavailable = False
+                break
+        if all_text_unavailable:
             flags.append("text_validation_unavailable")
 
     # Flag individual reviewable pending slides when other reviewable slides

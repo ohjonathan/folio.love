@@ -1545,10 +1545,10 @@ class TestCrossWorkstreamZeroTextInteraction:
 
 
 class TestDeckFlagPendingSlides:
-    """R4-#2: Deck flag must not overstate when pending slides exist."""
+    """R6: Deck flag derived from slide_texts for all reviewable slides."""
 
-    def test_unavailable_plus_pending_no_deck_flag(self):
-        """1 unavailable analyzed slide + 1 pending reviewable → no deck flag."""
+    def test_all_zero_text_with_pending_emits_deck_flag(self):
+        """R6: All-zero-text deck with 1 pending → deck flag emitted (§6.3)."""
         from folio.pipeline.analysis import assess_review_state
 
         analyses = {
@@ -1560,13 +1560,45 @@ class TestDeckFlagPendingSlides:
             ),
             2: SlideAnalysis(slide_type="pending"),  # Pending reviewable
         }
+        # Both slides have no text
+        slide_texts = {
+            1: SlideText(slide_num=1, full_text="", is_empty=True, elements=[]),
+            2: SlideText(slide_num=2, full_text="", is_empty=True, elements=[]),
+        }
         result = assess_review_state(
-            analyses, {},
+            analyses, slide_texts,
             effective_passes=1, density_threshold=3.0,
             review_confidence_threshold=0.6,
         )
         assert "text_validation_unavailable_slide_1" in result.review_flags
-        # Deck-level flag should NOT be emitted: slide 2 is pending, not analyzed
+        # R6: Deck-level flag SHOULD be emitted — slide_texts say all text unavailable
+        assert "text_validation_unavailable" in result.review_flags
+
+    def test_pending_with_available_text_no_deck_flag(self):
+        """R6: 1 unavailable + 1 pending with actual text → no deck flag."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[
+                    {"confidence": "high", "validated": False, "validation_unavailable": True},
+                ],
+            ),
+            2: SlideAnalysis(slide_type="pending"),
+        }
+        # Slide 1 has no text, slide 2 has text
+        slide_texts = {
+            1: SlideText(slide_num=1, full_text="", is_empty=True, elements=[]),
+            2: SlideText(slide_num=2, full_text="Real text here", elements=[]),
+        }
+        result = assess_review_state(
+            analyses, slide_texts,
+            effective_passes=1, density_threshold=3.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "text_validation_unavailable_slide_1" in result.review_flags
+        # Deck flag suppressed: slide 2 has actual text
         assert "text_validation_unavailable" not in result.review_flags
 
 
