@@ -13,6 +13,8 @@ import click
 
 from .config import FolioConfig
 from .converter import FolioConverter, PPTX_EXTENSIONS
+from .pipeline.images import ImageExtractionError
+from .llm.runtime import EndpointNotAllowedError
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +48,54 @@ class BatchOutcome:
 
 
 def _classify_outcome(exc: Exception) -> str:
-    """Classify an exception into an allowed outcome bucket."""
-    msg = str(exc)
-    if "timed out" in msg.lower():
+    """Classify an exception into an allowed outcome bucket.
+
+    Stage 1 additions: recognizes oversized image, model API, PDF
+    corruption, and rate-limiting failures for better batch reports.
+    """
+    msg = str(exc).lower()
+    exc_type = type(exc).__name__
+
+    # Timeout
+    if "timed out" in msg or "timeout" in msg:
         return "timeout"
-    # Match AppleScript-style error codes (e.g., "error number -9074")
-    match = _APPLESCRIPT_ERROR_RE.search(msg)
+
+    # AppleScript error codes (e.g., "error number -9074")
+    match = _APPLESCRIPT_ERROR_RE.search(str(exc))
     if match:
         return f"applescript_{match.group(1)}"
+
+    # Stage 1: Oversized image (Pillow MAX_IMAGE_PIXELS or DPI backoff failure)
+    if isinstance(exc, ImageExtractionError) and (
+        "too large" in msg or "exceeds limit" in msg
+    ):
+        return "oversized_image"
+    if "decompression bomb" in msg or "max_image_pixels" in msg:
+        return "oversized_image"
+
+    # Stage 1: Model / LLM API errors
+    if any(kw in exc_type.lower() for kw in ("apierror", "apiconnection", "apistatus")):
+        return "model_error"
+    if any(kw in msg for kw in ("api error", "model not found", "invalid api key")):
+        return "model_error"
+
+    # Stage 1: Rate limiting
+    if "rate limit" in msg or "429" in msg or "too many requests" in msg:
+        return "rate_limited"
+
+    # Stage 1: PDF corruption / rendering failure
+    if isinstance(exc, ImageExtractionError):
+        # S-2 fix: distinguish dependency/environment errors
+        if "not found" in msg or "install" in msg:
+            return "missing_dependency"
+        return "pdf_render_error"
+    if any(kw in msg for kw in ("corrupt", "invalid pdf", "unable to open")):
+        return "pdf_corrupt"
+
+    # R4-#4: Provider endpoint blocked / misconfigured
+    if isinstance(exc, EndpointNotAllowedError):
+        return "endpoint_blocked"
+
     return "unknown"
 
 

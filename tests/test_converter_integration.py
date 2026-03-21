@@ -174,18 +174,24 @@ class TestBlankOverridePath:
             ]
             slide_texts = {
                 1: SlideText(slide_num=1, full_text="Slide 1 content", elements=[]),
-                2: SlideText(slide_num=2, full_text="", elements=[]),
+                2: SlideText(slide_num=2, full_text="", is_empty=True, elements=[]),
                 3: SlideText(slide_num=3, full_text="Slide 3 content", elements=[]),
             }
+            # Blank slide 2 would be overridden to pending before analysis
             pass1_analyses = {
                 1: SlideAnalysis(slide_type="data", evidence=[{"confidence": "high", "validated": True}]),
-                2: SlideAnalysis(slide_type="data", evidence=[{"confidence": "high", "validated": True}]),
+                2: SlideAnalysis.pending(),  # Blank override → pending
                 3: SlideAnalysis(slide_type="framework", evidence=[{"confidence": "high", "validated": True}]),
             }
 
             config = FolioConfig()
 
             with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="text"),
+                     2: MagicMock(classification="image_blank"),
+                     3: MagicMock(classification="text"),
+                 }), \
                  patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
                  patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
                  patch(

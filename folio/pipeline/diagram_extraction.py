@@ -1124,6 +1124,7 @@ def _compute_diagram_confidence(
     pass_c_run: bool = False,
     sweep_run: bool = False,
     sanity_triggered: bool = False,
+    text_validation_unavailable: bool = False,
 ) -> tuple[float, str]:
     """Compute extraction confidence score.
 
@@ -1155,7 +1156,10 @@ def _compute_diagram_confidence(
 
     # S8: Enhanced confidence scoring with text inventory coverage
     # and mutation magnitude
-    text_rich = word_count >= 20  # m2: aligned with proposal threshold
+    # Stage 1: when source text is unavailable (scanned PDF), skip the
+    # text-poor penalty — the diagram was extracted from vision alone and
+    # the word_count metric is meaningless.
+    text_rich = text_validation_unavailable or word_count >= 20
     base = avg_conf if text_rich else avg_conf * 0.8
 
     # S8: Text inventory coverage factor — nodes with text matches score higher
@@ -1177,7 +1181,12 @@ def _compute_diagram_confidence(
         uncertainty_penalty = 0.0
 
     reasons = []
-    if text_rich:
+    if text_validation_unavailable:
+        reasons.append(
+            f"Text validation unavailable (no source text, {word_count} words); "
+            f"text-poor penalty bypassed"
+        )
+    elif text_rich:
         reasons.append(f"Text-rich ({word_count} words)")
     else:
         reasons.append(f"Text-poor ({word_count} words, 0.8x base)")
@@ -1322,6 +1331,7 @@ def analyze_diagram_pages(
     api_key_env: str = "",
     all_provider_settings: dict[str, ProviderRuntimeSettings] | None = None,
     slide_numbers: list[int] | None = None,
+    diagram_max_tokens: int = 16384,
 ) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
     """Run diagram extraction on diagram/mixed slides.
 
@@ -1438,10 +1448,12 @@ def analyze_diagram_pages(
         )
 
         # Check final cache with expanded deps
+        # #4 fix: include diagram_max_tokens so config changes invalidate cache
         final_deps = {
             "_image_hash": image_hash,
             "_text_inventory_hash": text_inv_hash,
             "_profile_hash": profile_hash,
+            "_diagram_max_tokens": str(diagram_max_tokens),
         }
         cached_final = diagram_cache.check_entry(final_cache, image_hash, final_deps)
         if cached_final is not None and not force_miss:
@@ -1461,26 +1473,147 @@ def analyze_diagram_pages(
             "$text_inventory", text_inventory
         )
 
+        # Stage 1: Use explicit token budget from config, clamped to proposal ceiling
+        pass_a_requested_tokens = min(diagram_max_tokens, 32768)
         pass_a_out, pass_a_usage = _call_llm(
             provider, client, model, pass_a_prompt,
             pass_a_images, primary_settings, limiter,
+            max_tokens=pass_a_requested_tokens,
         )
 
         total_usage = pass_a_usage
 
+        # Stage 1: Track Pass A metadata for diagnostics
+        pass_a_truncated = pass_a_out.truncated if pass_a_out else False
+        pass_a_raw_len = len(pass_a_out.raw_text) if pass_a_out and pass_a_out.raw_text else 0
+        pass_a_escalation_attempted = False
+        pass_a_escalation_succeeded = False
+        pass_a_parse_outcome = "unknown"
+
         if pass_a_out is None or not pass_a_out.raw_text:
+            pass_a_parse_outcome = "provider_failure"
+            # #5 fix: explicit log for provider failure
+            logger.warning(
+                "Slide %d: Pass A provider failure (no output returned)",
+                slide_num,
+            )
             analysis.review_required = True
-            analysis.review_questions = ["Pass A extraction failed"]
+            analysis.review_questions = ["Pass A extraction failed (provider returned no output)"]
+            analysis._extraction_metadata.update({
+                "pass_a_requested_max_tokens": pass_a_requested_tokens,
+                "pass_a_truncated": pass_a_truncated,
+                "pass_a_raw_response_length": pass_a_raw_len,
+                "pass_a_escalation_retry_attempted": False,
+                "pass_a_escalation_retry_succeeded": False,
+                "pass_a_parse_outcome": pass_a_parse_outcome,
+            })
             results[slide_num] = analysis
             continue
 
         pass_a_raw = _extract_diagram_json(pass_a_out.raw_text)
+
+        # Stage 1 R4-#1 fix: Retry on ANY truncated=True, not just parse failure.
+        # A parseable but truncated response is still incomplete data.
+        # CRITICAL: discard original truncated pass_a_raw before retry so
+        # retry failure doesn't silently preserve partial data.
+        if pass_a_truncated:
+            pre_retry_raw = pass_a_raw  # save for logging only
+            pass_a_raw = None  # discard: retry must produce the authoritative result
+            escalated_tokens = min(pass_a_requested_tokens * 2, 32768)
+            # B-3 fix: skip retry when budget can't actually increase
+            if escalated_tokens > pass_a_requested_tokens:
+                pass_a_escalation_attempted = True
+                logger.info(
+                    "Slide %d: Pass A truncated at %d tokens "
+                    "(json_parsed=%s), retrying with %d",
+                    slide_num, pass_a_requested_tokens,
+                    pre_retry_raw is not None, escalated_tokens,
+                )
+                retry_out, retry_usage = _call_llm(
+                    provider, client, model, pass_a_prompt,
+                    pass_a_images, primary_settings, limiter,
+                    max_tokens=escalated_tokens,
+                )
+                total_usage = TokenUsage(
+                    input_tokens=total_usage.input_tokens + retry_usage.input_tokens,
+                    output_tokens=total_usage.output_tokens + retry_usage.output_tokens,
+                    total_tokens=total_usage.total_tokens + retry_usage.total_tokens,
+                )
+                if retry_out and retry_out.raw_text:
+                    pass_a_raw_len = len(retry_out.raw_text)
+                    pass_a_truncated = retry_out.truncated
+                    retry_parsed = _extract_diagram_json(retry_out.raw_text)
+                    if retry_parsed is not None:
+                        pass_a_raw = retry_parsed
+                        if not pass_a_truncated:
+                            pass_a_escalation_succeeded = True
+                        # else: parseable but still truncated — pass_a_raw set
+                        # but escalation_succeeded stays False
+                    # else: retry returned unparseable — pass_a_raw stays None
+                else:
+                    # Retry returned no output — pass_a_raw stays None
+                    logger.warning(
+                        "Slide %d: Pass A retry provider failure (no output)",
+                        slide_num,
+                    )
+            else:
+                logger.warning(
+                    "Slide %d: Pass A truncated but already at max budget (%d); "
+                    "skipping retry",
+                    slide_num, pass_a_requested_tokens,
+                )
+
         if pass_a_raw is None:
+            if pass_a_truncated:
+                pass_a_parse_outcome = "truncated_invalid_json"
+            else:
+                pass_a_parse_outcome = "invalid_json"
+            # #5 fix: distinct log for non-truncated invalid JSON
+            logger.warning(
+                "Slide %d: Pass A failed (%s, response_len=%d)",
+                slide_num, pass_a_parse_outcome, pass_a_raw_len,
+            )
             analysis.review_required = True
-            analysis.review_questions = ["Pass A returned invalid JSON"]
+            analysis.review_questions = [
+                f"Pass A returned invalid JSON ({pass_a_parse_outcome})"
+            ]
+            analysis._extraction_metadata.update({
+                "pass_a_requested_max_tokens": pass_a_requested_tokens,
+                "pass_a_truncated": pass_a_truncated,
+                "pass_a_raw_response_length": pass_a_raw_len,
+                "pass_a_escalation_retry_attempted": pass_a_escalation_attempted,
+                "pass_a_escalation_retry_succeeded": False,
+                "pass_a_parse_outcome": pass_a_parse_outcome,
+            })
             results[slide_num] = analysis
             continue
 
+        # R5-#1 fix: If pass_a_raw exists but output is still truncated after
+        # retry, the proposal §6.1 requires this to be a failure, not a continue.
+        # Discard the partial data and enter the failure path.
+        if pass_a_truncated:
+            logger.warning(
+                "Slide %d: Pass A still truncated after retry; "
+                "discarding partial data per §6.1",
+                slide_num,
+            )
+            pass_a_parse_outcome = "truncated_invalid_json"
+            analysis.review_required = True
+            analysis.review_questions = [
+                "Pass A still truncated after retry (§6.1 failure)"
+            ]
+            analysis._extraction_metadata.update({
+                "pass_a_requested_max_tokens": pass_a_requested_tokens,
+                "pass_a_truncated": True,
+                "pass_a_raw_response_length": pass_a_raw_len,
+                "pass_a_escalation_retry_attempted": pass_a_escalation_attempted,
+                "pass_a_escalation_retry_succeeded": False,
+                "pass_a_parse_outcome": pass_a_parse_outcome,
+            })
+            results[slide_num] = analysis
+            continue
+
+        pass_a_parse_outcome = "success"
         normalized = _normalize_pass_a(pass_a_raw)
 
         # Unsupported diagram detection
@@ -1724,12 +1857,20 @@ def analyze_diagram_pages(
                         post_b_graph = _merge_sweep_results(post_b_graph, sweep_data)
 
         # --- Confidence scoring ---
+        # R5-#2 fix: Also check is_empty per proposal §6.3 detection rule
+        _text_validation_unavailable = (
+            slide_text is None
+            or getattr(slide_text, 'is_empty', False)
+            or not slide_text.full_text
+            or not slide_text.full_text.strip()
+        )
         # B5: Only award Pass C bonus if verdicts were actually parsed
         confidence, reasoning = _compute_diagram_confidence(
             post_b_graph, word_count,
             pass_c_run=pass_c_verdicts_parsed,
             sweep_run=sweep_run,
             sanity_triggered=sanity_triggered,
+            text_validation_unavailable=_text_validation_unavailable,
         )
 
         # --- Build final DiagramAnalysis ---
@@ -1819,12 +1960,19 @@ def analyze_diagram_pages(
         analysis._extraction_metadata = {
             "pass_a_model": model,
             "pass_a_provider": provider_name,
+            "pass_a_requested_max_tokens": pass_a_requested_tokens,
+            "pass_a_truncated": pass_a_truncated,
+            "pass_a_raw_response_length": pass_a_raw_len,
+            "pass_a_escalation_retry_attempted": pass_a_escalation_attempted,
+            "pass_a_escalation_retry_succeeded": pass_a_escalation_succeeded,
+            "pass_a_parse_outcome": pass_a_parse_outcome,
             "pass_b_mutations": mutation_accounting,
             "pass_b_sanity_triggered": sanity_triggered,
             "pass_c_attempted": pass_c_attempted,
             "pass_c_verdicts_parsed": pass_c_verdicts_parsed,
             "pass_c_claims_count": len(claims),
             "sweep_run": sweep_run,
+            "text_validation_unavailable": _text_validation_unavailable,
             "total_usage": {
                 "input_tokens": total_usage.input_tokens,
                 "output_tokens": total_usage.output_tokens,

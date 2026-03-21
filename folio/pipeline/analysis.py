@@ -31,7 +31,7 @@ _MAX_IMAGE_BYTES = 20_000_000  # 20 MB
 
 # Cache format version. Increment when the cache data shape changes.
 # On mismatch, the cache is fully invalidated (one-time re-analysis).
-_ANALYSIS_CACHE_VERSION = 3
+_ANALYSIS_CACHE_VERSION = 4  # R4-#3: bump for validation_unavailable semantics
 
 # PR 3: Diagram schema and pipeline versioning.
 # Used for deterministic cache invalidation when diagram dimensions change.
@@ -645,7 +645,9 @@ _CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
 # - partial_analysis_slide_{n}: reviewable slide n pending while others succeeded
 # - diagram_abstained_slide_{n}: slide n intentionally abstained (unsupported diagram)
 # - low_confidence_slide_{n}: slide n has low-confidence evidence
-# - unvalidated_claim_slide_{n}: slide n has unvalidated evidence
+# - unvalidated_claim_slide_{n}: slide n has unvalidated evidence (text was present)
+# - text_validation_unavailable_slide_{n}: slide n has unavailable text validation
+# - text_validation_unavailable: document-level — at least one slide had no source text
 # - high_density_unanalyzed: dense slides exist but pass 2 was not run
 # - confidence_below_threshold: document-level confidence < threshold
 
@@ -673,9 +675,17 @@ def _compute_extraction_confidence(analyses: dict[int, SlideAnalysis]) -> float 
     # confidence items pull the average up.  The equal penalty is intentional:
     # an unvalidated high-confidence claim is no more trustworthy than a
     # validated low-confidence one — both need human review.
+    #
+    # Stage 1: Skip the unvalidated cap for items where validation was
+    # unavailable (empty source text / scanned PDF).  These items are not
+    # "failed validation" — they simply had no text to validate against.
     if any(ev.get("confidence") == "low" for ev in evidence):
         score = min(score, 0.59)
-    if any(not ev.get("validated", False) for ev in evidence):
+    truly_unvalidated = [
+        ev for ev in evidence
+        if not ev.get("validated", False) and not ev.get("validation_unavailable", False)
+    ]
+    if truly_unvalidated:
         score = min(score, 0.59)
 
     return round(score, 2)
@@ -750,7 +760,7 @@ def assess_review_state(
             if analysis_item.review_questions:
                 flags.append(f"diagram_open_questions_slide_{slide_num}")
 
-    # Per-slide flags: low-confidence, unvalidated
+    # Per-slide flags: low-confidence, unvalidated / validation unavailable
     for slide_num, analysis_item in analyses.items():
         if analysis_item.slide_type == "pending":
             continue  # No evidence to check on pending slides
@@ -760,8 +770,49 @@ def assess_review_state(
         ]
         if any(ev.get("confidence") == "low" for ev in evidence):
             flags.append(f"low_confidence_slide_{slide_num}")
-        if any(not ev.get("validated", False) for ev in evidence):
-            flags.append(f"unvalidated_claim_slide_{slide_num}")
+
+        # R5-#3 fix: Derive unavailable from slide_texts directly,
+        # not just from evidence flags. A zero-text slide with no
+        # evidence must still get the unavailable flag.
+        st = slide_texts.get(slide_num)
+        slide_text_unavailable = (
+            st is None
+            or getattr(st, 'is_empty', False)
+            or not getattr(st, 'full_text', '')
+            or not getattr(st, 'full_text', '').strip()
+        )
+
+        if slide_text_unavailable:
+            # Source text unavailable for this slide — flag it
+            flags.append(f"text_validation_unavailable_slide_{slide_num}")
+        else:
+            # Stage 1: Distinguish unavailable validation from true invalidation
+            unvalidated = [
+                ev for ev in evidence if not ev.get("validated", False)
+            ]
+            if unvalidated:
+                all_unavailable = all(
+                    ev.get("validation_unavailable", False) for ev in unvalidated
+                )
+                if all_unavailable:
+                    flags.append(f"text_validation_unavailable_slide_{slide_num}")
+                else:
+                    flags.append(f"unvalidated_claim_slide_{slide_num}")
+
+    # R6 fix: Document-level flag derived from slide_texts for ALL reviewable
+    # (non-blank, non-abstained) slides, regardless of analysis completion.
+    # §6.3: if every reviewable page's slide_text is unavailable, emit deck flag.
+    all_reviewable_non_abstained = reviewable_slides - abstained_slides
+    if all_reviewable_non_abstained:
+        all_text_unavailable = True
+        for s in all_reviewable_non_abstained:
+            st = slide_texts.get(s)
+            if st is not None and not getattr(st, 'is_empty', False) \
+               and getattr(st, 'full_text', '') and getattr(st, 'full_text', '').strip():
+                all_text_unavailable = False
+                break
+        if all_text_unavailable:
+            flags.append("text_validation_unavailable")
 
     # Flag individual reviewable pending slides when other reviewable slides
     # succeeded (partial failure). Known blank slides and intentional
@@ -1461,7 +1512,9 @@ def _analyze_single_slide(
     analysis = _normalize_pass1_json(data)
 
     # Validate evidence against extracted text
-    if slide_text and analysis.evidence:
+    # #3 fix: call _validate_evidence even when slide_text is None
+    # so evidence items get validation_unavailable=True
+    if analysis.evidence:
         _validate_evidence(analysis.evidence, slide_text)
 
     return analysis, "success", output.usage
@@ -1475,8 +1528,25 @@ def _validate_evidence(evidence: list[dict], slide_text: "SlideText") -> None:
     """Validate evidence items against extracted slide text.
 
     Sets 'validated' to True/False on each evidence dict in place.
+    When source text is empty/unavailable (scanned PDF / zero-text slide),
+    sets 'validation_unavailable' to True instead of 'validated' = False.
     """
-    full_text_normalized = _normalize_for_matching(slide_text.full_text)
+    source_text = slide_text.full_text if slide_text else ""
+
+    # R5-#2 fix: Also check is_empty per proposal §6.3 detection rule
+    text_unavailable = (
+        not source_text or not source_text.strip()
+        or (slide_text is not None and getattr(slide_text, 'is_empty', False))
+    )
+
+    # Stage 1: empty/unavailable source text → mark all items as unavailable
+    if text_unavailable:
+        for item in evidence:
+            item["validated"] = False
+            item["validation_unavailable"] = True
+        return
+
+    full_text_normalized = _normalize_for_matching(source_text)
 
     for item in evidence:
         quote = item.get("quote", "")
@@ -1932,7 +2002,8 @@ def _run_depth_pass(
     evidence, reassessed_type, reassessed_framework = _normalize_pass2_json(data)
 
     # Validate against source text
-    if slide_text and evidence:
+    # #3 fix: call _validate_evidence even when slide_text is None
+    if evidence:
         _validate_evidence(evidence, slide_text)
 
     return evidence, reassessed_type, reassessed_framework, "success", output.usage

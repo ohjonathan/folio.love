@@ -407,6 +407,66 @@ class TestOpenAIAdapter:
         provider = OpenAIAnalysisProvider()
         assert provider.classify_error(RuntimeError("boom")).kind == "permanent"
 
+    def test_gpt5_uses_max_completion_tokens(self):
+        """GPT-5 models must use max_completion_tokens instead of max_tokens."""
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(50))
+
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=4096)
+            provider.analyze(mock_client, "gpt-5-turbo", inp)
+
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "max_completion_tokens" in call_kwargs
+        assert call_kwargs["max_completion_tokens"] == 4096
+        assert "max_tokens" not in call_kwargs
+
+    def test_gpt5_omits_temperature(self):
+        """GPT-5 models must not include temperature in the request."""
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(51))
+
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=4096, temperature=0.0)
+            provider.analyze(mock_client, "gpt-5", inp)
+
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "temperature" not in call_kwargs
+
+    def test_non_gpt5_preserves_max_tokens_and_temperature(self):
+        """Non-GPT-5 models must use max_tokens and temperature as before."""
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response(
+            make_pass1_json()
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img = Path(tmpdir) / "test.png"
+            img.write_bytes(_make_unique_png(52))
+
+            inp = ProviderInput(prompt="Analyze", images=(ImagePart(image_data=img.read_bytes(), role="global", media_type="image/png"),), max_tokens=2048, temperature=0.5)
+            provider.analyze(mock_client, "gpt-4o", inp)
+
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "max_tokens" in call_kwargs
+        assert call_kwargs["max_tokens"] == 2048
+        assert "max_completion_tokens" not in call_kwargs
+        assert "temperature" in call_kwargs
+        assert call_kwargs["temperature"] == 0.5
+
     def test_classify_error_timeout(self):
         """B2: APITimeoutError must be transient."""
         provider = OpenAIAnalysisProvider()

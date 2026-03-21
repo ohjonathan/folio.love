@@ -191,6 +191,8 @@ class ConversionConfig:
     density_threshold: float = 2.0
     pptx_renderer: str = "auto"
     review_confidence_threshold: float = 0.6
+    diagram_max_tokens: int = 16384
+    max_image_pixels: Optional[int] = None
 
 
 @dataclass
@@ -231,6 +233,19 @@ class FolioConfig:
             raise ValueError(
                 f"review_confidence_threshold must be between 0.0 and 1.0, got {c.review_confidence_threshold!r}"
             )
+        if not isinstance(c.diagram_max_tokens, int) or c.diagram_max_tokens <= 0:
+            raise ValueError(
+                f"diagram_max_tokens must be a positive integer, got {c.diagram_max_tokens!r}"
+            )
+        if c.diagram_max_tokens > 32768:
+            raise ValueError(
+                f"diagram_max_tokens must be <= 32768 (proposal ceiling), got {c.diagram_max_tokens!r}"
+            )
+        if c.max_image_pixels is not None:
+            if not isinstance(c.max_image_pixels, int) or c.max_image_pixels <= 0:
+                raise ValueError(
+                    f"max_image_pixels must be None or a positive integer, got {c.max_image_pixels!r}"
+                )
 
         # LLM validation (spec §3.2)
         self._validate_llm()
@@ -470,6 +485,8 @@ class FolioConfig:
             density_threshold=conv_raw.get("density_threshold", 2.0),
             pptx_renderer=conv_raw.get("pptx_renderer", "auto"),
             review_confidence_threshold=conv_raw.get("review_confidence_threshold", 0.6),
+            diagram_max_tokens=conv_raw.get("diagram_max_tokens", 16384),
+            max_image_pixels=conv_raw.get("max_image_pixels", None),
         )
 
         # Parse provider runtime settings (merge onto defaults)

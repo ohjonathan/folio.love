@@ -852,3 +852,500 @@ class TestSelectPassCImages:
         assert len(parts) == 1
         assert parts[0].role == "global"
         assert parts[0].media_type == "image/png"
+
+# ---------------------------------------------------------------------------
+# Stage 1: Pass A token hardening & zero-text confidence
+# ---------------------------------------------------------------------------
+
+
+class TestDiagramConfidenceTextValidation:
+    """Stage 1 tests for _compute_diagram_confidence text_validation_unavailable."""
+
+    def test_text_validation_unavailable_skips_text_poor_penalty(self):
+        """When source text is unavailable, text-poor penalty is skipped."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        # word_count=5 → normally text-poor (0.8x penalty)
+        score_normal, r_normal = _compute_diagram_confidence(graph, word_count=5)
+        score_unavail, r_unavail = _compute_diagram_confidence(
+            graph, word_count=5, text_validation_unavailable=True,
+        )
+        assert "Text-poor" in r_normal
+        assert "Text validation unavailable" in r_unavail
+        assert score_unavail > score_normal
+
+    def test_text_validation_unavailable_does_not_inflate_beyond_quality(self):
+        """Unavailable text bypasses penalty but doesn't inflate beyond graph quality."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.5}],  # low quality
+            "edges": [],
+        }
+        score_unavail, _ = _compute_diagram_confidence(
+            graph, word_count=5, text_validation_unavailable=True,
+        )
+        score_rich, _ = _compute_diagram_confidence(
+            graph, word_count=50,
+        )
+        # Both should give similar scores — unavailable treated same as text-rich
+        assert abs(score_unavail - score_rich) < 0.05
+
+    def test_text_validation_unavailable_false_preserves_penalty(self):
+        """When text_validation_unavailable=False, text-poor penalty still applies."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        score, reasoning = _compute_diagram_confidence(
+            graph, word_count=5, text_validation_unavailable=False,
+        )
+        assert "Text-poor" in reasoning
+
+    def test_unavailable_reasoning_string_per_spec(self):
+        """§6.3: reasoning must state 'validation unavailable' and 'penalty bypassed'."""
+        graph = {
+            "nodes": [{"id": "n1", "confidence": 0.9}],
+            "edges": [],
+        }
+        _, reasoning = _compute_diagram_confidence(
+            graph, word_count=5, text_validation_unavailable=True,
+        )
+        assert "Text validation unavailable" in reasoning
+        assert "penalty bypassed" in reasoning
+
+
+# ---------------------------------------------------------------------------
+# Stage 1 R-1: Orchestrator-level Pass A truncation retry tests
+# ---------------------------------------------------------------------------
+
+
+class TestPassARetryOrchestrator:
+    """R-1: Orchestrator-level tests for analyze_diagram_pages retry logic."""
+
+    @staticmethod
+    def _make_valid_pass_a_json():
+        """Valid Pass A JSON response that will parse successfully."""
+        return json.dumps({
+            "diagram_type": "architecture",
+            "nodes": [
+                {"id": "n1", "label": "Start", "confidence": 0.9},
+                {"id": "n2", "label": "End", "confidence": 0.9},
+            ],
+            "edges": [
+                {"source": "n1", "target": "n2", "label": "next", "confidence": 0.9},
+            ],
+        })
+
+    @staticmethod
+    def _make_truncated_json():
+        """Truncated JSON that won't parse."""
+        return '{"diagram_type": "architecture", "nodes": [{"id": "n1", "lab'
+
+    def _setup_mocks(self, tmp_path, call_responses):
+        """Create minimal mocks for analyze_diagram_pages.
+
+        call_responses: list of (raw_text, truncated) tuples for _call_llm.
+        """
+        from unittest.mock import patch, MagicMock
+        from folio.pipeline.analysis import DiagramAnalysis
+        from folio.pipeline.images import ImageResult
+        from folio.pipeline.text import SlideText
+        from folio.llm.types import ProviderOutput, TokenUsage
+
+        # Create a fake image
+        img_path = tmp_path / "slide-001.png"
+        img_path.write_bytes(
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+        pass1_results = {
+            1: DiagramAnalysis(
+                slide_type="data", diagram_type="architecture",
+            ),
+        }
+
+        # Mock page profile
+        mock_profile = MagicMock()
+        mock_profile.classification = "diagram"
+        mock_profile.crop_box = (0.0, 0.0, 612.0, 792.0)
+        mock_profile.escalation_level = "simple"
+        mock_profile.render_dpi = 150
+        mock_profile.rotation = 0
+        mock_profile.vector_count = 0
+        mock_profile.char_count = 0
+        mock_profile.bounded_texts = []
+        page_profiles = {1: mock_profile}
+
+        image_results = [
+            ImageResult(path=img_path, slide_num=1, width=200, height=200),
+        ]
+        slide_texts = {
+            1: SlideText(slide_num=1, full_text="Node A connects to Node B", elements=[]),
+        }
+
+        # Build _call_llm responses
+        call_idx = [0]
+
+        def mock_call_llm(*args, **kwargs):
+            idx = call_idx[0]
+            call_idx[0] += 1
+            if idx < len(call_responses):
+                raw_text, truncated = call_responses[idx]
+            else:
+                raw_text, truncated = ("", False)
+            output = ProviderOutput(
+                raw_text=raw_text, truncated=truncated,
+                provider_name="anthropic", model_name="test",
+                usage=TokenUsage(input_tokens=100, output_tokens=200, total_tokens=300),
+            )
+            return output, output.usage
+
+        return (
+            pass1_results, page_profiles, image_results, slide_texts,
+            mock_call_llm, call_idx,
+        )
+
+    def test_retry_fires_on_truncation_and_succeeds(self, tmp_path):
+        """Truncated Pass A → retry with doubled budget → success."""
+        from unittest.mock import patch, MagicMock
+        from folio.pipeline.diagram_extraction import analyze_diagram_pages
+        from PIL import Image as PILImage
+
+        valid_json = self._make_valid_pass_a_json()
+        truncated_json = self._make_truncated_json()
+
+        (pass1, profiles, imgs, texts, mock_llm, call_idx) = self._setup_mocks(
+            tmp_path,
+            [
+                (truncated_json, True),   # Pass A: truncated
+                (valid_json, False),       # Retry: succeeds
+            ],
+        )
+
+        mock_img = PILImage.new("RGB", (200, 200), "white")
+
+        with patch("folio.pipeline.diagram_extraction._get_provider_and_client",
+                    return_value=(MagicMock(), MagicMock())), \
+             patch("folio.pipeline.diagram_extraction._call_llm", side_effect=mock_llm), \
+             patch("folio.pipeline.diagram_extraction._load_page_image", return_value=mock_img), \
+             patch("folio.pipeline.diagram_extraction.diagram_cache") as mock_cache:
+            mock_cache.load_stage_cache.return_value = {}
+            mock_cache.check_entry.return_value = None
+
+            results, stats, meta = analyze_diagram_pages(
+                pass1_results=pass1,
+                page_profiles=profiles,
+                image_results=imgs,
+                slide_texts=texts,
+                cache_dir=tmp_path,
+                force_miss=True,
+                slide_numbers=[1],
+                diagram_max_tokens=8192,
+            )
+
+        # Retry should have fired: 2 _call_llm calls (Pass A + retry)
+        assert call_idx[0] >= 2
+        analysis = results[1]
+        meta = analysis._extraction_metadata
+        assert meta["pass_a_escalation_retry_attempted"] is True
+        assert meta["pass_a_escalation_retry_succeeded"] is True
+        assert meta["pass_a_requested_max_tokens"] == 8192
+
+    def test_retry_skipped_at_max_budget(self, tmp_path):
+        """When diagram_max_tokens=32768, retry skipped (B-3 guard)."""
+        from unittest.mock import patch, MagicMock
+        from folio.pipeline.diagram_extraction import analyze_diagram_pages
+        from PIL import Image as PILImage
+
+        truncated_json = self._make_truncated_json()
+
+        (pass1, profiles, imgs, texts, mock_llm, call_idx) = self._setup_mocks(
+            tmp_path,
+            [
+                (truncated_json, True),   # Pass A: truncated
+                # No retry should fire
+            ],
+        )
+
+        mock_img = PILImage.new("RGB", (200, 200), "white")
+
+        with patch("folio.pipeline.diagram_extraction._get_provider_and_client",
+                    return_value=(MagicMock(), MagicMock())), \
+             patch("folio.pipeline.diagram_extraction._call_llm", side_effect=mock_llm), \
+             patch("folio.pipeline.diagram_extraction._load_page_image", return_value=mock_img), \
+             patch("folio.pipeline.diagram_extraction.diagram_cache") as mock_cache:
+            mock_cache.load_stage_cache.return_value = {}
+            mock_cache.check_entry.return_value = None
+
+            results, stats, meta = analyze_diagram_pages(
+                pass1_results=pass1,
+                page_profiles=profiles,
+                image_results=imgs,
+                slide_texts=texts,
+                cache_dir=tmp_path,
+                force_miss=True,
+                slide_numbers=[1],
+                diagram_max_tokens=32768,  # Already at cap
+            )
+
+        # Only 1 _call_llm call (Pass A only, no retry)
+        assert call_idx[0] == 1
+        analysis = results[1]
+        meta_dict = analysis._extraction_metadata
+        assert meta_dict["pass_a_escalation_retry_attempted"] is False
+        assert meta_dict["pass_a_parse_outcome"] == "truncated_invalid_json"
+
+    def test_retry_fires_but_still_truncated(self, tmp_path):
+        """Retry fires but second response is also truncated → recorded as failed."""
+        from unittest.mock import patch, MagicMock
+        from folio.pipeline.diagram_extraction import analyze_diagram_pages
+        from PIL import Image as PILImage
+
+        truncated_json = self._make_truncated_json()
+
+        (pass1, profiles, imgs, texts, mock_llm, call_idx) = self._setup_mocks(
+            tmp_path,
+            [
+                (truncated_json, True),    # Pass A: truncated
+                (truncated_json, True),    # Retry: also truncated
+            ],
+        )
+
+        mock_img = PILImage.new("RGB", (200, 200), "white")
+
+        with patch("folio.pipeline.diagram_extraction._get_provider_and_client",
+                    return_value=(MagicMock(), MagicMock())), \
+             patch("folio.pipeline.diagram_extraction._call_llm", side_effect=mock_llm), \
+             patch("folio.pipeline.diagram_extraction._load_page_image", return_value=mock_img), \
+             patch("folio.pipeline.diagram_extraction.diagram_cache") as mock_cache:
+            mock_cache.load_stage_cache.return_value = {}
+            mock_cache.check_entry.return_value = None
+
+            results, stats, meta = analyze_diagram_pages(
+                pass1_results=pass1,
+                page_profiles=profiles,
+                image_results=imgs,
+                slide_texts=texts,
+                cache_dir=tmp_path,
+                force_miss=True,
+                slide_numbers=[1],
+                diagram_max_tokens=8192,
+            )
+
+        assert call_idx[0] >= 2
+        analysis = results[1]
+        meta_dict = analysis._extraction_metadata
+        assert meta_dict["pass_a_escalation_retry_attempted"] is True
+        assert meta_dict["pass_a_escalation_retry_succeeded"] is False
+        assert meta_dict["pass_a_parse_outcome"] == "truncated_invalid_json"
+        assert analysis.review_required is True
+
+    def test_parseable_truncated_also_retries(self, tmp_path):
+        """#1: Parseable but truncated Pass A → retry fires (not just parse failure)."""
+        from unittest.mock import patch, MagicMock
+        from folio.pipeline.diagram_extraction import analyze_diagram_pages
+        from PIL import Image as PILImage
+
+        valid_json = self._make_valid_pass_a_json()
+
+        (pass1, profiles, imgs, texts, mock_llm, call_idx) = self._setup_mocks(
+            tmp_path,
+            [
+                (valid_json, True),    # Pass A: parseable but truncated
+                (valid_json, False),   # Retry: succeeds, not truncated
+            ],
+        )
+
+        mock_img = PILImage.new("RGB", (200, 200), "white")
+
+        with patch("folio.pipeline.diagram_extraction._get_provider_and_client",
+                    return_value=(MagicMock(), MagicMock())), \
+             patch("folio.pipeline.diagram_extraction._call_llm", side_effect=mock_llm), \
+             patch("folio.pipeline.diagram_extraction._load_page_image", return_value=mock_img), \
+             patch("folio.pipeline.diagram_extraction.diagram_cache") as mock_cache:
+            mock_cache.load_stage_cache.return_value = {}
+            mock_cache.check_entry.return_value = None
+
+            results, stats, meta = analyze_diagram_pages(
+                pass1_results=pass1,
+                page_profiles=profiles,
+                image_results=imgs,
+                slide_texts=texts,
+                cache_dir=tmp_path,
+                force_miss=True,
+                slide_numbers=[1],
+                diagram_max_tokens=8192,
+            )
+
+        # Retry fired even though JSON parsed: 2+ _call_llm calls
+        assert call_idx[0] >= 2
+        analysis = results[1]
+        meta_dict = analysis._extraction_metadata
+        assert meta_dict["pass_a_escalation_retry_attempted"] is True
+        assert meta_dict["pass_a_escalation_retry_succeeded"] is True
+
+
+class TestDiagramCacheInvalidation:
+    """#4: Cache deps should include diagram_max_tokens."""
+
+    def test_different_max_tokens_different_cache_key(self):
+        """Changing diagram_max_tokens should produce a different cache key."""
+        deps_8k = {
+            "_image_hash": "abc",
+            "_text_inventory_hash": "def",
+            "_profile_hash": "ghi",
+            "_diagram_max_tokens": str(8192),
+        }
+        deps_16k = {
+            "_image_hash": "abc",
+            "_text_inventory_hash": "def",
+            "_profile_hash": "ghi",
+            "_diagram_max_tokens": str(16384),
+        }
+        # Cache keys should differ
+        import json
+        key_8k = json.dumps(deps_8k, sort_keys=True)
+        key_16k = json.dumps(deps_16k, sort_keys=True)
+        assert key_8k != key_16k
+
+
+class TestPassARetryDiscardSemantics:
+    """R4-#1: Retry must discard original truncated pass_a_raw."""
+
+    @staticmethod
+    def _make_valid_json():
+        return json.dumps({
+            "diagram_type": "architecture",
+            "nodes": [{"id": "n1", "label": "A", "confidence": 0.9}],
+            "edges": [],
+        })
+
+    @staticmethod
+    def _make_truncated_json():
+        return '{"diagram_type": "architecture", "nodes": [{"id": "n1", "lab'
+
+    def _run_orchestrator(self, tmp_path, call_responses, max_tokens=8192):
+        from unittest.mock import patch, MagicMock
+        from folio.pipeline.diagram_extraction import analyze_diagram_pages
+        from folio.pipeline.analysis import DiagramAnalysis
+        from folio.pipeline.images import ImageResult
+        from folio.pipeline.text import SlideText
+        from folio.llm.types import ProviderOutput, TokenUsage
+        from PIL import Image as PILImage
+
+        img_path = tmp_path / "slide-001.png"
+        img_path.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 40)
+
+        call_idx = [0]
+        def mock_call_llm(*args, **kwargs):
+            idx = call_idx[0]
+            call_idx[0] += 1
+            if idx < len(call_responses):
+                raw_text, truncated = call_responses[idx]
+            else:
+                raw_text, truncated = ("", False)
+            out = ProviderOutput(
+                raw_text=raw_text, truncated=truncated,
+                provider_name="anthropic", model_name="test",
+                usage=TokenUsage(input_tokens=100, output_tokens=200, total_tokens=300),
+            )
+            return out, out.usage
+
+        mock_profile = MagicMock()
+        mock_profile.classification = "diagram"
+        mock_profile.crop_box = (0.0, 0.0, 612.0, 792.0)
+        mock_profile.escalation_level = "simple"
+        mock_profile.render_dpi = 150
+        mock_profile.rotation = 0
+        mock_profile.vector_count = 0
+        mock_profile.char_count = 0
+        mock_profile.bounded_texts = []
+
+        mock_img = PILImage.new("RGB", (200, 200), "white")
+
+        with patch("folio.pipeline.diagram_extraction._get_provider_and_client",
+                    return_value=(MagicMock(), MagicMock())), \
+             patch("folio.pipeline.diagram_extraction._call_llm", side_effect=mock_call_llm), \
+             patch("folio.pipeline.diagram_extraction._load_page_image", return_value=mock_img), \
+             patch("folio.pipeline.diagram_extraction.diagram_cache") as mock_cache:
+            mock_cache.load_stage_cache.return_value = {}
+            mock_cache.check_entry.return_value = None
+
+            results, stats, meta = analyze_diagram_pages(
+                pass1_results={1: DiagramAnalysis(slide_type="data", diagram_type="architecture")},
+                page_profiles={1: mock_profile},
+                image_results=[ImageResult(path=img_path, slide_num=1, width=200, height=200)],
+                slide_texts={1: SlideText(slide_num=1, full_text="Node A", elements=[])},
+                cache_dir=tmp_path,
+                force_miss=True,
+                slide_numbers=[1],
+                diagram_max_tokens=max_tokens,
+            )
+
+        return results, call_idx[0]
+
+    def test_parseable_truncated_retry_invalid_json_discards_original(self, tmp_path):
+        """Parseable truncated Pass A + retry returns invalid JSON → failure."""
+        valid_json = self._make_valid_json()
+        truncated_json = self._make_truncated_json()
+
+        results, num_calls = self._run_orchestrator(tmp_path, [
+            (valid_json, True),       # Pass A: parseable but truncated
+            (truncated_json, False),  # Retry: not truncated but invalid JSON
+        ])
+
+        assert num_calls >= 2
+        analysis = results[1]
+        meta = analysis._extraction_metadata
+        assert meta["pass_a_escalation_retry_attempted"] is True
+        assert meta["pass_a_escalation_retry_succeeded"] is False
+        assert meta["pass_a_parse_outcome"] == "invalid_json"
+        assert analysis.review_required is True
+
+    def test_parseable_truncated_retry_no_output_discards_original(self, tmp_path):
+        """Parseable truncated Pass A + retry returns no output → failure."""
+        valid_json = self._make_valid_json()
+
+        results, num_calls = self._run_orchestrator(tmp_path, [
+            (valid_json, True),   # Pass A: parseable but truncated
+            ("", False),          # Retry: empty output
+        ])
+
+        assert num_calls >= 2
+        analysis = results[1]
+        meta = analysis._extraction_metadata
+        assert meta["pass_a_escalation_retry_attempted"] is True
+        assert meta["pass_a_escalation_retry_succeeded"] is False
+        # pass_a_raw is None → failure path
+        assert "invalid_json" in meta["pass_a_parse_outcome"] or \
+               "truncated_invalid_json" in meta["pass_a_parse_outcome"]
+        assert analysis.review_required is True
+
+    def test_parseable_truncated_retry_still_truncated_parseable(self, tmp_path):
+        """R5-#1: Parseable truncated + retry parseable-truncated → failure per §6.1."""
+        valid_json = self._make_valid_json()
+
+        results, num_calls = self._run_orchestrator(tmp_path, [
+            (valid_json, True),   # Pass A: parseable but truncated
+            (valid_json, True),   # Retry: also parseable but still truncated
+        ])
+
+        assert num_calls >= 2
+        analysis = results[1]
+        meta = analysis._extraction_metadata
+        assert meta["pass_a_escalation_retry_attempted"] is True
+        assert meta["pass_a_escalation_retry_succeeded"] is False
+        # R5-#1: truncated retry is a failure, not truncated_success
+        assert meta["pass_a_parse_outcome"] == "truncated_invalid_json"
+        assert analysis.review_required is True
+
+
+class TestAnalysisCacheVersion:
+    """R4-#3: Analysis cache version bump."""
+
+    def test_cache_version_bumped(self):
+        from folio.pipeline.analysis import _ANALYSIS_CACHE_VERSION
+        assert _ANALYSIS_CACHE_VERSION >= 4
