@@ -53,14 +53,13 @@ def import_csv(registry: EntityRegistry, csv_path: Path) -> ImportResult:
         raise ValueError(f"Cannot read {csv_path}: expected UTF-8 encoding.")
 
     rows_raw: list[list[str]] = []
-    line_num = 0
     try:
         reader = csv.reader(io.StringIO(text), strict=True)
-        for line_num, row in enumerate(reader, start=1):
+        for row in reader:
             rows_raw.append(row)
     except csv.Error as e:
         raise ValueError(
-            f"Cannot parse {csv_path} at line {line_num}: {e}"
+            f"Cannot parse {csv_path} at line {reader.line_num}: {e}"
         )
 
     if not rows_raw:
