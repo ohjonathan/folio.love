@@ -869,3 +869,52 @@ class TestTableHeavyReclassification:
         p = profiles[1]
         assert p.classification in ("mixed", "diagram"), \
             f"Diagonal-line page should remain mixed/diagram, got {p.classification}"
+
+    def test_is_table_like_boundary_axis_ratio(self):
+        """S4: Axis-aligned ratio just below 0.85 threshold → False.
+
+        Simulates an architecture diagram with some axis-aligned boxes
+        but enough diagonal connectors to drop below the 85% threshold.
+        """
+        from folio.pipeline.inspect import _is_table_like
+        # 200 words, 120 vectors, but only 100 axis-aligned (83.3%)
+        assert not _is_table_like(word_count=200, vector_count=120, axis_aligned_count=100), \
+            "83% axis-aligned should not trigger table reclassification"
+
+    def test_architecture_diagram_with_text_stays_mixed(self, tmp_path):
+        """S4: Architecture diagram — rect boxes + diagonal connectors + text.
+
+        An architecture diagram with >150 words and >100 vectors but
+        enough non-axis-aligned lines should NOT be reclassified to text.
+        """
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+
+        pdf = tmp_path / "arch.pdf"
+        c = canvas.Canvas(str(pdf), pagesize=letter)
+
+        # Substantial text (>150 words) — class labels, annotations
+        t = c.beginText(72, 700)
+        t.setFont("Helvetica", 10)
+        for i in range(20):
+            t.textLine(f"Component {i}: handles request routing and data transformation logic")
+        c.drawText(t)
+
+        # Rectangular boxes (axis-aligned) — 40 component boxes
+        for row in range(8):
+            for col in range(5):
+                c.rect(50 + col * 100, 50 + row * 50, 80, 40)
+
+        # Diagonal connectors (NOT axis-aligned) — 80 diagonal lines
+        for i in range(80):
+            x_base = 50 + (i % 20) * 25
+            y_base = 50 + (i // 20) * 100
+            c.line(x_base, y_base, x_base + 60, y_base + 70)
+
+        c.showPage()
+        c.save()
+
+        profiles = inspect_pages(pdf)
+        p = profiles[1]
+        assert p.classification != "text", \
+            f"Architecture diagram should not be reclassified to text, got {p.classification}"

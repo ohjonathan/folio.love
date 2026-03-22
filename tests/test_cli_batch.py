@@ -153,3 +153,39 @@ class TestBatchDedup:
         assert "Empty files skipped: 2" in result.output
         assert "Duplicates skipped: 0" in result.output
         assert mock_converter.convert.call_count == 0
+
+
+class TestCombinedBatchScenario:
+    """B4: Combined mocked batch test per spec §7.1.
+
+    One duplicate + one empty + two unique files in a single invocation.
+    """
+
+    @patch("folio.cli.FolioConverter")
+    def test_combined_batch(self, mock_converter_cls, tmp_path):
+        """Mixed scenario: 2 unique, 1 duplicate, 1 empty → 2 conversions."""
+        # Two unique files
+        (tmp_path / "unique_a.pptx").write_bytes(b"content alpha")
+        (tmp_path / "unique_b.pptx").write_bytes(b"content beta")
+        # One duplicate of unique_a
+        (tmp_path / "dup_of_a.pptx").write_bytes(b"content alpha")
+        # One empty file
+        (tmp_path / "empty.pptx").write_bytes(b"")
+
+        mock_converter = MagicMock()
+        mock_result = MagicMock()
+        mock_result.slide_count = 1
+        mock_result.renderer_used = "powerpoint"
+        mock_converter.convert.return_value = mock_result
+        mock_converter_cls.return_value = mock_converter
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pptx"])
+
+        # Only 2 unique non-empty files should be converted
+        assert mock_converter.convert.call_count == 2
+        assert "Duplicates skipped: 1" in result.output
+        assert "Empty files skipped: 1" in result.output
+        # Verify output mentions both skips
+        assert "duplicate of" in result.output
+        assert "empty, skipped" in result.output

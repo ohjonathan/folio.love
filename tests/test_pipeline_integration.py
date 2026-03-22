@@ -1611,3 +1611,75 @@ class TestEndpointBlockedClassification:
 
         exc = EndpointNotAllowedError("Endpoint not allowed for model X")
         assert _classify_outcome(exc) == "endpoint_blocked"
+
+
+# ── P4: Zero-text extraction pipeline integration (B3) ────────────────
+
+class TestZeroTextPipelineIntegration:
+    """B3: Spec §7.5 — zero-text confidence + flags through pipeline."""
+
+    def test_zero_text_confidence_above_059(self):
+        """High-confidence validation_unavailable evidence → confidence > 0.59."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{
+                    "claim": "Revenue $10M",
+                    "confidence": "high",
+                    "validated": False,
+                    "validation_unavailable": True,
+                }],
+            ),
+        }
+        texts = {1: SlideText(slide_num=1, full_text="", elements=[])}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.extraction_confidence is not None
+        assert result.extraction_confidence > 0.59, \
+            f"Zero-text high-confidence should not clamp to 0.59, got {result.extraction_confidence}"
+
+    def test_zero_text_extraction_flag_emitted(self):
+        """Whole-deck zero-text emits zero_text_extraction flag."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{
+                    "confidence": "high",
+                    "validated": False,
+                    "validation_unavailable": True,
+                }],
+            ),
+        }
+        texts = {1: SlideText(slide_num=1, full_text="", elements=[])}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "zero_text_extraction" in result.review_flags
+        assert "text_validation_unavailable" in result.review_flags
+
+    def test_normal_text_no_zero_text_flag(self):
+        """Normal text-bearing deck → no zero_text_extraction flag."""
+        from folio.pipeline.analysis import assess_review_state
+
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+        }
+        texts = {1: SlideText(slide_num=1, full_text="Normal text content", elements=[])}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "zero_text_extraction" not in result.review_flags

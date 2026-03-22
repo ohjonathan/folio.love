@@ -34,11 +34,11 @@ def _matches_scope(path: str, scope: str) -> bool:
 # Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
 _RESTART_CADENCE = 15
 
-_HASH_CHUNK_SIZE = 8192
+_HASH_CHUNK_SIZE = 65536
 
 
 def _content_hash(path: Path) -> str:
-    """Streaming SHA-256 of file contents (8 KB chunks)."""
+    """Streaming SHA-256 of file contents (64 KB chunks)."""
     h = hashlib.sha256()
     with open(path, "rb") as fh:
         while True:

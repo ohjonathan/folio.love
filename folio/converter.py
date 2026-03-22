@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 # Shared constant for PPTX/PPT extensions — used by cli.py too.
 PPTX_EXTENSIONS = frozenset({".pptx", ".ppt"})
 
+# P1b: Slide types that skip diagram extraction when framework is absent.
+_SKIP_DIAGRAM_TYPES = frozenset({"data", "appendix", "title"})
+
 
 def _get_provider(name: str):
     """Resolve a provider adapter lazily to avoid widening module coupling."""
@@ -395,7 +398,6 @@ class FolioConverter:
             # PR 6: Exclude frozen slides from diagram extraction and rendering
             # P1b: Post-Pass-1 diagram gating — skip extraction for pages
             # whose Pass-1 type is data/appendix/title with no framework.
-            _SKIP_DIAGRAM_TYPES = {"data", "appendix", "title"}
             pass1_gated_slides = set()
             for slide_num in diagram_or_mixed_slides:
                 analysis_item = slide_analyses.get(slide_num)
@@ -403,6 +405,11 @@ class FolioConverter:
                     fw = getattr(analysis_item, "framework", None)
                     if fw in {"none", "", None}:
                         pass1_gated_slides.add(slide_num)
+                        # B1 fix: Mark gated DiagramAnalysis as abstained to
+                        # prevent ghost state (DiagramAnalysis with no diagram
+                        # content but abstained=False).
+                        if isinstance(analysis_item, analysis.DiagramAnalysis):
+                            analysis_item.abstained = True
                         logger.info(
                             "Slide %d: skipping diagram extraction (type=%s, no framework)",
                             slide_num,
