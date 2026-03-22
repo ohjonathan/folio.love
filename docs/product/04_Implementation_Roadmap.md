@@ -18,7 +18,7 @@ generated_by: ontos_scaffold
 
 ## March 2026 Status Update
 
-Since this roadmap was published, `main` has shipped seven important baseline
+Since this roadmap was published, `main` has shipped eight important baseline
 changes:
 
 - PR #8: multi-provider LLM analysis for `folio convert` / `folio batch`
@@ -42,12 +42,18 @@ changes:
   extraction (content-hash deduplication, table-heavy `mixed -> text`
   reclassification, post-Pass-1 diagram gating, zero-text confidence
   tightening, and large-document warnings)
+- PR #32: Tier 3 interaction ingestion (`folio ingest`, ontology-native
+  `interaction` notes, mixed-library registry generalization, `routing.ingest`,
+  degraded-output handling, and interaction-aware `status` / `scan` /
+  `refresh`)
 
 This does **not** change the roadmap hierarchy. It does change the current
 implementation baseline: multi-provider LLM support is now shipped foundation,
 the managed-mac automated PPTX conversion path has been rerun successfully on
 the real Tier 1 corpus, and the enterprise-scale batch path now includes the
-first round of runtime-waste controls discovered in field deployment.
+first round of runtime-waste controls discovered in field deployment. Tier 3 is
+no longer purely planned scope: the first Week 13-15 slice (`folio ingest`) is
+now shipped on `main`.
 
 Current Tier 1 reality after PR #14:
 
@@ -316,12 +322,16 @@ The unchecked boxes remain the canonical gate list.
 | Configuration supports named LLM profiles and credential references | Achieved | Named profiles, credential env-var references, route-based selection, and single-command override are all in current `main` and exercised in the accelerated run |
 | Johnny uses it daily on real engagement for 2+ weeks | Not yet complete | The accelerated pre-closeout explicitly does not satisfy the formal 2-week daily-use criterion |
 
-Current program status after PR #17:
+Current program status after PR #32:
 
 - Tier 2 implementation is on `main`
 - Accelerated operational validation found no systematic blockers
 - Tier 3 planning can proceed in parallel
 - Formal Tier 2 closeout is still pending the remaining gate items above
+- Tier 3 implementation began under the explicit waiver recorded in
+  `docs/validation/tier2_to_tier3_waiver_note.md`
+- Week 13-15 interaction ingestion is now shipped on `main` via PR #32
+- The next active Tier 3 slice is Week 16-18: Entity System
 
 ---
 
@@ -329,27 +339,39 @@ Current program status after PR #17:
 
 **Goal:** Folio captures the full engagement lifecycle, not just decks. Meetings, interviews, and interactions become first-class content. Entities connect across documents.
 
-**This is entirely new scope from the February brainstorm. Only start after Tier 2 is in daily use.**
+**This is entirely new scope from the February brainstorm.** The original gate
+was “only start after Tier 2 is in daily use.” In practice, Week 13-15 shipped
+under the explicit Tier 2 waiver while formal Tier 2 closeout remained
+pending.
 
 ### Week 13-15: Interaction Ingestion
 
-**The highest-value brainstorm feature.** Solves the 5-step manual process (OneNote → audio → transcribe → ChatGPT → summarize) with one command.
+**Status:** Shipped on `main` in PR #32.
+
+**The highest-value brainstorm feature.** Solves the 5-step manual process
+(OneNote → audio → transcribe → ChatGPT → summarize) with one command.
 
 - `folio ingest <file>` command accepting transcript (txt/md) or notes
 - Interaction subtypes: client_meeting, expert_interview, internal_sync, partner_check_in, workshop
-- Three auto-generated outputs per interaction:
+- Single ontology-native interaction note per ingest containing:
   1. Narrative summary (what happened, key takeaways)
-  2. Extracted entities (people, departments, systems as wikilinks)
+  2. Extracted entities (people, departments, systems as unresolved wikilinks)
   3. Structured insights (claims with attribution, data points, decisions, open questions)
 - "Impact on Hypotheses" section created as empty stub at L0 (LLM lacks library context at ingest time; human fills during L0→L1, enrichment refines at L2)
 - Frontmatter: type=interaction, authority=captured, curation_level=L0
-- IDs follow date-based convention: `clienta_ddq126_interview_20260213_01`
+- Frontmatter uses `source_transcript` + `source_hash`, not evidence-only source fields
+- Re-ingest resolves identity by explicit target, `source_transcript`, or `source_hash`
+- Mixed-library commands now include interaction entries in `status` / `scan`; `refresh` skips them with rerun guidance to use `folio ingest`
+- IDs follow date-based convention, for example: `clienta_ddq126_interview_20260213_01`
 
 **Open question for this phase:** OneNote → Markdown pathway. For v1, copy-paste transcript text into a .txt file is acceptable. Research better pathways as a side task.
 
-**Deliverable:** One command converts a meeting transcript into structured, linked Markdown.
+**Deliverable:** Achieved. One command converts a meeting transcript into a
+structured, linked interaction note.
 
 ### Week 16-18: Entity System
+
+**Status:** Next active Tier 3 slice.
 
 - Entity registry (JSON file or markdown directory) for known people, departments, systems
 - Name resolution during ingest: LLM proposes matches against registry, flags ambiguous cases
@@ -390,6 +412,18 @@ Current program status after PR #17:
 - [ ] Retroactive provenance links deliverable slides to evidence
 - [ ] Context documents provide engagement scaffolding
 - [ ] Full engagement lifecycle tested end-to-end
+
+### Current Status Against Tier 3 Exit Criteria
+
+| Checkpoint | Current Status | Evidence / Notes |
+|-----------|----------------|------------------|
+| `folio ingest` converts transcript to structured interaction in <60 seconds | Shipped, but real-engagement timing still needs explicit field validation | PR #32 merged the feature and passing tests; formal timing validation on engagement materials is still outstanding |
+| Entity registry tracks people, departments, systems | Not started | Week 16-18 is now the next active slice |
+| Name resolution works for common cases | Not started | Deferred to the entity system slice |
+| `folio enrich` adds tags and links to existing assets | Not started | Still blocked behind the entity system and real-library rerun |
+| Retroactive provenance links deliverable slides to evidence | Not started | Still a later Tier 3 slice |
+| Context documents provide engagement scaffolding | Not started | Planned for Week 21-22 |
+| Full engagement lifecycle tested end-to-end | Not started | Depends on entities, enrich, and context docs landing first |
 
 ---
 
@@ -463,7 +497,7 @@ folio promote <id> <level>
 
 ### Tier 3 (engagement intelligence)
 ```bash
-folio ingest <file> --type <subtype> [--client X] [--notes raw.md]
+folio ingest <file> --type <subtype> --date YYYY-MM-DD [--client X] [--engagement Y] [--participants "A, B"] [--llm-profile profile]
 folio enrich [scope]
 folio entities [view|import <csv>]
 folio link <id> <id> [type]

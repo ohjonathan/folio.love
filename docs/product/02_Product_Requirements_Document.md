@@ -9,15 +9,16 @@ generated_by: ontos_scaffold
 
 # Folio: Product Requirements Document
 
-**Version 1.1 | March 2026**
+**Version 1.2 | March 2026**
 **folio.love**
 
-**v1.1 changes:** Added FR-700 (Trust & Reviewability) section per strategic
-direction update. Revised FR-103 to require source grounding for LLM
-extractions. Revised FR-607 to flag incomplete output rather than silently
-filing it. Revised NFR-100 to establish quality as a hard floor with speed as
-a soft target. Updated frontmatter examples with review schema fields.
-See `docs/product/strategic_direction_memo.md` for governing principles.
+**v1.2 changes:** Added the shipped `folio ingest` interaction-ingestion
+baseline and mixed-library command behavior. Expanded FR-500 to cover
+interaction ingestion and mixed evidence/interaction libraries. Updated FR-600
+task routing to include `routing.ingest`. Clarified that FR-607 and FR-700
+apply to transcript- and notes-based interaction outputs as well as deck
+conversion. See `docs/product/strategic_direction_memo.md` for governing
+principles.
 
 ---
 
@@ -33,10 +34,12 @@ Folio's output must be trustworthy enough for direct use in active McKinsey enga
 
 Folio v1.0 encompasses:
 - Document conversion pipeline (PPTX/PDF to Markdown)
+- Interaction ingestion pipeline (txt/md transcripts and notes to interaction markdown)
 - Source file tracking with relative paths
 - Version tracking and change detection
 - Optional LLM analysis with bring-your-own provider credentials
 - Knowledge library organization (multi-client, multi-engagement)
+- Mixed-library registry/status/scan behavior across evidence and interaction documents
 - Obsidian-compatible output format
 - CLI for all operations
 - Source grounding and extraction confidence scoring
@@ -47,8 +50,11 @@ Folio v1.0 encompasses:
 | Term | Definition |
 |------|------------|
 | Deck | A PowerPoint presentation (.pptx) or PDF document |
+| Interaction | A meeting, interview, workshop, or sync note created by `folio ingest` from transcript or notes text |
+| Document | Any managed Folio markdown asset in the library (for example evidence or interaction) |
 | Library | The organized collection of all converted materials (an Obsidian vault) |
 | Source Path | Relative path from the markdown file to the original source file |
+| Source Transcript | Relative path from an interaction note to the transcript or notes file used to create it |
 | Source Hash | SHA256 hash of the source file for staleness detection |
 | Verbatim Text | Exact text extracted from slides, preserving wording |
 | Analysis | LLM-generated description of visual content and frameworks |
@@ -240,7 +246,7 @@ The knowledge library SHALL follow this structure:
 ```
 folio_library/
 ├── folio.yaml               # Configuration
-├── registry.json            # Index of all decks
+├── registry.json            # Index of all managed documents
 │
 ├── ClientA/
 │   └── Project1/
@@ -252,6 +258,13 @@ folio_library/
 │           ├── version_history.json
 │           ├── .texts_cache.json
 │           └── .overrides.json  # Human corrections (if any)
+│
+├── ClientA/
+│   └── DD_Q1_2026/
+│       └── interactions/
+│           └── clienta_ddq126_interview_20260321_expert-interview/
+│               ├── clienta_ddq126_interview_20260321_expert-interview.md
+│               └── version_history.json
 │
 ├── Internal/
 │   └── Templates/
@@ -305,9 +318,9 @@ changing the frontmatter contract.
 #### FR-403: Registry
 
 The system SHALL maintain a `registry.json` with:
-- All converted decks
-- Source paths and hashes
-- Last conversion timestamp
+- All managed documents (including evidence decks and interaction notes)
+- Document type, source paths/transcripts, and source hashes
+- Last processing timestamp
 - Current staleness status
 - Review status and extraction confidence (for library-wide review queries)
 
@@ -339,8 +352,8 @@ folio batch <source_directory> [--pattern "*.pptx"] [--llm-profile <profile>]
 ```bash
 folio status [<scope>]
 ```
-- Show all decks and their status
-- Flag stale conversions
+- Show all managed documents and their status
+- Flag stale documents
 - Flag missing source files
 - Flag documents with `review_status: flagged`
 - Scope to client/engagement or any library-relative path (any path relative to
@@ -350,8 +363,9 @@ folio status [<scope>]
 ```bash
 folio scan
 ```
-- Find new files in source directories not yet converted
-- Find source files that have changed since conversion
+- Find new files in source directories not yet converted or ingested
+- Find source files that have changed since last conversion or ingest
+- Include transcript and notes sources (`.txt`, `.md`) alongside deck inputs
 - Output actionable list
 
 #### FR-505: Refresh Command
@@ -363,6 +377,29 @@ folio refresh [--scope <path>] [--all]
   (any path relative to `library_root`)
 - Update registry
 - Respect human overrides: do not overwrite sections recorded in `.overrides.json`
+- Skip interaction entries with explicit rerun guidance to use `folio ingest`
+
+#### FR-506: Ingest Command
+```bash
+folio ingest <source_file> --type <subtype> --date YYYY-MM-DD [--client <name>] [--engagement <name>] [--participants "A, B"] [--duration-minutes N] [--source-recording <path>] [--title <title>] [--target <path>] [--llm-profile <profile>] [--note "version note"]
+```
+- Accept transcript or notes sources in `.txt` or `.md` format
+- Generate a single structured interaction note with ontology-native frontmatter
+- Support interaction subtypes: `client_meeting`, `expert_interview`,
+  `internal_sync`, `partner_check_in`, `workshop`
+- Preserve note identity on re-ingest by matching explicit target,
+  `source_transcript`, or `source_hash`
+- If analysis cannot run, still write a degraded interaction note that is
+  visibly flagged for review
+
+**Acceptance Criteria:**
+- [ ] `folio ingest` writes a markdown note with `type: interaction`
+- [ ] Interaction frontmatter uses `source_transcript` and `source_hash`, not
+  evidence-only source fields
+- [ ] Interaction notes include Summary, Key Findings, Entities Mentioned,
+  Quotes / Evidence, Impact on Hypotheses, and Raw Transcript sections
+- [ ] Re-ingesting the same source reuses the existing note path and increments
+  versioning instead of creating duplicates
 
 ---
 
@@ -388,6 +425,7 @@ Folio SHALL support named LLM profiles containing:
 Folio SHALL support route-based selection of LLM profiles by task:
 - `routing.default` defines the fallback route for unspecified tasks
 - `routing.convert` controls the `folio convert` analysis path in v1.0
+- `routing.ingest` controls the `folio ingest` analysis path in v1.0
 - `--llm-profile` overrides route-based selection for a single command invocation
 
 #### FR-605: Optional Transient Fallback
@@ -400,9 +438,9 @@ Folio SHALL record internal LLM execution metadata in output frontmatter, includ
 
 #### FR-607: Graceful Degradation with Explicit Flagging
 
-Folio SHALL degrade to pending analysis without failing conversion when analysis
-cannot run because of missing credentials, missing SDKs, provider rejection, or
-exhausted transient fallbacks.
+Folio SHALL degrade to pending analysis without failing document processing
+when analysis cannot run because of missing credentials, missing SDKs,
+provider rejection, or exhausted transient fallbacks.
 
 When degradation occurs, the system SHALL:
 - Set `review_status: flagged` in frontmatter
@@ -410,9 +448,9 @@ When degradation occurs, the system SHALL:
 - Set `extraction_confidence: null`
 - Display a visible warning in the markdown body (not just a placeholder)
 
-The conversion still succeeds, but the output is explicitly marked as
-incomplete. A document with pending analysis must never appear identical to a
-fully analyzed document when browsing in Obsidian or querying via Dataview.
+The command still succeeds, but the output is explicitly marked as incomplete.
+A document with pending analysis must never appear identical to a fully
+analyzed document when browsing in Obsidian or querying via Dataview.
 
 ---
 
@@ -426,7 +464,8 @@ pipeline paths (conversion, ingestion, enrichment).
 
 Every LLM-extracted claim SHALL include source grounding:
 - A verbatim quoted text span (10-100 characters) from the source material
-- The element type the quote came from (title, body, note, chart label)
+- The element type the quote came from (title, body, note, chart label, or
+  interaction utterance)
 - A per-claim confidence level (high, medium, low)
 
 Quoted spans SHALL be validated against extracted text. If the quoted span does
@@ -499,6 +538,8 @@ Example flags:
 - `analysis_unavailable` — LLM analysis could not run
 - `low_confidence_slide_N` — slide N has low-confidence extractions
 - `unvalidated_claim_slide_N` — slide N has a quoted span that doesn't match source
+- `low_confidence_claim_N` — interaction claim N has low-confidence extraction
+- `unvalidated_claim_N` — interaction claim N has a quoted span that doesn't match source
 - `text_validation_unavailable_slide_N` — slide N had no extracted text to
   validate against
 - `text_validation_unavailable` — document-level text validation was
@@ -727,6 +768,16 @@ _llm_metadata:
 | v1 | 2026-01-05 | Initial (5 slides) | First conversion |
 ```
 
+Interaction notes are a second shipped output family. They use ontology-native
+interaction frontmatter rather than evidence shims:
+- `type: interaction`
+- `source_transcript` and `source_hash`
+- optional `participants`, `duration_minutes`, and `source_recording`
+- `impacts: []` at L0
+- interaction-specific body sections: `## Summary`, `## Key Findings`,
+  `## Entities Mentioned`, `## Quotes / Evidence`, `## Impact on Hypotheses`,
+  and a collapsed raw-transcript callout
+
 ### 4.2 Configuration Schema (folio.yaml)
 
 ```yaml
@@ -770,6 +821,9 @@ llm:
       primary: high_quality_anthropic
       fallbacks: []
     convert:
+      primary: high_quality_anthropic
+      fallbacks: [backup_google]
+    ingest:
       primary: high_quality_anthropic
       fallbacks: [backup_google]
 
