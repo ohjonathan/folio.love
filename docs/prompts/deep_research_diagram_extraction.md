@@ -1,8 +1,9 @@
 ---
+id: deep_research_diagram_extraction
 title: "Deep Research: Architecture Diagram Extraction from PDF"
-type: prompt
+type: atom
 target: deep-research-tool
-status: ready
+status: draft
 created: 2026-03-14
 context: >
   folio.love diagram ingestion exploration. Two known gaps: blank detection

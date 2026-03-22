@@ -1,3 +1,10 @@
+---
+id: strategic_direction_memo
+type: strategy
+status: active
+date: 2026-03-14
+---
+
 # Folio.love: Strategic Direction Update
 
 **Date:** 2026-03-14
