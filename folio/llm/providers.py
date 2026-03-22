@@ -49,7 +49,7 @@ def _resolve_base_url(base_url_env: str) -> str | None:
 def _preflight_input() -> ProviderInput:
     """Build a minimal text-only request for warning-only preflight probes."""
     return ProviderInput(
-        prompt="ping",
+        prompt="Respond with OK.",
         images=(),
         max_tokens=1,
         temperature=0.0,
@@ -60,6 +60,17 @@ def _format_preflight_error(exc: Exception) -> str:
     """Render a compact warning reason for model preflight failures."""
     message = str(exc).strip()
     return message or type(exc).__name__
+
+
+def _uses_custom_openai_base_url(client: Any) -> bool:
+    """Detect whether an OpenAI client appears to target a non-default base URL."""
+    base_url = getattr(client, "base_url", None)
+    if base_url is None:
+        return False
+    text = str(base_url).strip()
+    if not text or text.startswith("<MagicMock"):
+        return False
+    return "api.openai.com" not in text
 
 
 class AnthropicAnalysisProvider:
@@ -229,6 +240,8 @@ class OpenAIAnalysisProvider:
         lookup_error: Exception | None = None
         try:
             client.models.retrieve(model)
+            if not _uses_custom_openai_base_url(client):
+                return None
         except Exception as exc:
             lookup_error = exc
 

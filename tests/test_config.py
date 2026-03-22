@@ -366,6 +366,22 @@ class TestLLMConfigValidation:
                 )
             )
 
+    def test_non_string_base_url_env_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="base_url_env must be a string"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "main": LLMProfile(
+                            name="main",
+                            provider="openai",
+                            base_url_env=123,  # type: ignore[arg-type]
+                        ),
+                    },
+                    routing={"default": LLMRoute(primary="main")},
+                )
+            )
+
 
 class TestReviewConfidenceThreshold:
     """Test review_confidence_threshold config field."""

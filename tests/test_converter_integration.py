@@ -573,23 +573,23 @@ class TestNoCacheConverterIntegration:
                 converter = FolioConverter(config)
 
                 # Run 1: populate cache (no_cache=False).
-                # Stage 2 adds one warning-only preflight call per conversion run.
+                # Stage 2 adds one warning-only preflight call per profile set.
                 r1 = converter.convert(source_path=source, target=target_dir, passes=1)
                 calls_run1 = len(api_calls)
                 assert calls_run1 == 3  # 1 preflight + 2 slides analyzed
 
-                # Run 2: cached (no_cache=False) — only preflight should call API
+                # Run 2: cached (no_cache=False) — no preflight repeat, no analysis call.
                 api_calls.clear()
                 r2 = converter.convert(source_path=source, target=target_dir, passes=1)
-                assert len(api_calls) == 1  # Preflight only; analysis is all cache hits
+                assert len(api_calls) == 0
                 assert r2.cache_stats is not None
                 assert r2.cache_stats.hits == 2
                 assert r2.cache_stats.misses == 0
 
-                # Run 3: forced re-analysis (no_cache=True) — preflight + both slides
+                # Run 3: forced re-analysis (no_cache=True) — both slides re-analyzed.
                 api_calls.clear()
                 r3 = converter.convert(source_path=source, target=target_dir, passes=1, no_cache=True)
-                assert len(api_calls) == 3  # 1 preflight + both slides re-analyzed
+                assert len(api_calls) == 2
                 assert r3.cache_stats is not None
                 assert r3.cache_stats.misses == 2
                 assert r3.cache_stats.hits == 0
@@ -1071,6 +1071,57 @@ class TestEnterpriseOperabilityStage2:
 
             primary_provider.preflight.assert_called_once()
             fallback_provider.preflight.assert_not_called()
+
+    def test_preflight_only_runs_once_per_profile_for_reused_converter(self):
+        from folio.config import LLMConfig, LLMProfile, LLMRoute
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source, target_dir, image_results, slide_texts, pass1_results, pass1_meta = (
+                self._basic_fixture_bundle(tmpdir_path)
+            )
+
+            config = FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "primary": LLMProfile(name="primary"),
+                        "fallback": LLMProfile(name="fallback", provider="openai", model="gpt-4o"),
+                    },
+                    routing={
+                        "default": LLMRoute(primary="primary"),
+                        "convert": LLMRoute(primary="primary", fallbacks=["fallback"]),
+                    },
+                )
+            )
+
+            primary_provider = MagicMock()
+            primary_provider.create_client.return_value = object()
+            primary_provider.preflight.return_value = None
+            fallback_provider = MagicMock()
+            fallback_provider.create_client.return_value = object()
+            fallback_provider.preflight.return_value = None
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch(
+                     "folio.pipeline.analysis.analyze_slides",
+                     return_value=(
+                         pass1_results,
+                         CacheStats(hits=0, misses=1, pass_name="pass1"),
+                         pass1_meta,
+                     ),
+                 ), \
+                 patch("folio.converter.get_provider", side_effect=lambda name: {
+                     "anthropic": primary_provider,
+                     "openai": fallback_provider,
+                 }[name]):
+                converter = FolioConverter(config)
+                converter.convert(source_path=source, target=target_dir, passes=1)
+                converter.convert(source_path=source, target=target_dir, passes=1)
+
+            primary_provider.preflight.assert_called_once()
+            fallback_provider.preflight.assert_called_once()
 
     def test_base_url_env_is_threaded_to_all_stage_calls(self):
         from folio.config import LLMConfig, LLMProfile, LLMRoute

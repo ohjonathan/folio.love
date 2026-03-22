@@ -320,15 +320,30 @@ If the env var is unset or blank, Folio silently falls back to the SDK default
 endpoint.
 
 Folio now runs a warning-only model preflight once per selected profile per
-conversion run. This checks whether the configured model appears usable before
-the first expensive pass. A warning does **not** block conversion; it simply
+CLI run. This checks whether the configured model appears usable before the
+first expensive pass. A warning does **not** block conversion; it simply
 surfaces blocked or unavailable models earlier.
 
-Two Stage 1 hardening behaviors are also part of current `main`:
+### Scanned and Image-Only PDFs
 
-- scanned or image-only PDFs keep honest review flags without the old blanket
-  `0.59` confidence cap when text validation is unavailable
-- oversized PDF pages automatically back off DPI before Pillow limits are hit
+When a deck has no extractable text, Folio marks that text validation was
+unavailable instead of treating the deck as if evidence validation failed.
+Those decks still surface review flags, but they no longer get the old blanket
+`0.59` confidence cap just because the source is scanned.
+
+### Oversized PDF Page Fallback
+
+Large architecture diagrams and poster-sized PDF pages can exceed Pillow safety
+limits at the requested DPI. Folio now backs off DPI per page before hitting
+that limit. If a page still cannot be rendered safely, conversion fails with a
+specific oversized-image error instead of a generic rendering failure.
+
+### OpenAI GPT-5 Compatibility
+
+GPT-5 OpenAI chat models use a slightly different request shape from GPT-4.x
+and GPT-4o. Folio handles that automatically by using
+`max_completion_tokens` and omitting `temperature` for `gpt-5*` models while
+preserving the existing request shape for non-GPT-5 models.
 
 ## How It Works
 

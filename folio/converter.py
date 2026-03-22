@@ -40,14 +40,14 @@ class FolioConverter:
 
     def __init__(self, config: Optional[FolioConfig] = None):
         self.config = config or FolioConfig.load()
+        self._preflight_done: set[str] = set()
 
     def _run_profile_preflight(self, profiles: list[LLMProfile]) -> None:
         """Warn once per selected profile if the configured model looks unusable."""
-        seen: set[str] = set()
         for profile in profiles:
-            if profile.name in seen:
+            if profile.name in self._preflight_done:
                 continue
-            seen.add(profile.name)
+            self._preflight_done.add(profile.name)
 
             try:
                 provider = get_provider(profile.provider)

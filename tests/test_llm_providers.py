@@ -21,7 +21,12 @@ from folio.llm.types import (
     StageLLMMetadata,
     TokenUsage,
 )
-from folio.llm.providers import AnthropicAnalysisProvider, OpenAIAnalysisProvider, GoogleAnalysisProvider
+from folio.llm.providers import (
+    AnthropicAnalysisProvider,
+    GoogleAnalysisProvider,
+    OpenAIAnalysisProvider,
+    _resolve_base_url,
+)
 from tests.llm_mocks import (
     make_anthropic_response, make_openai_response, make_google_response,
     make_pass1_json,
@@ -352,6 +357,22 @@ class TestBYOCredentialWiring:
                 assert "GEMINI_API_KEY" in str(e)
 
 
+class TestBaseUrlResolution:
+    """Test environment-driven gateway URL resolution."""
+
+    def test_missing_env_returns_none(self):
+        with patch.dict(os.environ, {}, clear=True):
+            assert _resolve_base_url("OPENAI_BASE_URL") is None
+
+    def test_whitespace_env_returns_none(self):
+        with patch.dict(os.environ, {"OPENAI_BASE_URL": "   "}, clear=True):
+            assert _resolve_base_url("OPENAI_BASE_URL") is None
+
+    def test_strips_whitespace(self):
+        with patch.dict(os.environ, {"OPENAI_BASE_URL": "  https://gateway.example.com/v1  "}, clear=True):
+            assert _resolve_base_url("OPENAI_BASE_URL") == "https://gateway.example.com/v1"
+
+
 class TestPass1ValidationHardening:
     """Test that pass-1 normalization rejects malformed payloads."""
 
@@ -555,9 +576,21 @@ class TestOpenAIAdapter:
         except ImportError:
             pytest.skip("openai not installed")
 
-    def test_preflight_checks_lookup_and_chat_execution(self):
+    def test_preflight_prefers_model_lookup_on_default_endpoint(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
+        mock_client.base_url = "https://api.openai.com/v1/"
+
+        reason = provider.preflight(mock_client, "gpt-4o")
+
+        assert reason is None
+        mock_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_client.chat.completions.create.assert_not_called()
+
+    def test_preflight_checks_chat_execution_for_custom_gateway(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.base_url = "https://gateway.example.com/openai/v1"
         mock_client.chat.completions.create.return_value = make_openai_response("ok")
 
         reason = provider.preflight(mock_client, "gpt-4o")
@@ -592,6 +625,7 @@ class TestOpenAIAdapter:
     def test_preflight_warns_when_lookup_succeeds_but_chat_is_blocked(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
+        mock_client.base_url = "https://gateway.example.com/openai/v1"
         mock_client.chat.completions.create.side_effect = RuntimeError("chat blocked")
 
         reason = provider.preflight(mock_client, "gpt-4o")
