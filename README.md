@@ -146,7 +146,7 @@ Accepts the same flags as `convert` (`--client`, `--engagement`, `--passes`, `--
 
 ### `folio status`
 
-Show library health -- which decks are current, stale, or missing their source file.
+Show library health -- which decks are current, stale, or missing their source file. When an entity registry exists, status also reports the total entity count.
 
 ```bash
 folio status
@@ -186,6 +186,46 @@ folio promote <deck_id> L1
 ```
 
 Validates required metadata per level (e.g. L1 requires `client` and `tags`). Use `folio status` to find deck IDs.
+
+### `folio entities`
+
+Manage the entity registry -- people, departments, systems, and processes mentioned across your library.
+
+```bash
+# List all entities, grouped by type
+folio entities
+
+# Filter by type or show only unconfirmed
+folio entities --type person
+folio entities --unconfirmed
+
+# JSON export
+folio entities --json
+
+# Show detail for a specific entity
+folio entities show "Alice Chen"
+folio entities show "Engineering" --type department
+
+# Import from a CSV org chart
+folio entities import org_chart.csv
+
+# Confirm or reject auto-extracted entities
+folio entities confirm "Jane Smith"
+folio entities reject "Jnae Smith"   # typo cleanup
+```
+
+**CSV import format** -- a `name` column is required; all others are optional:
+
+| Column | Description |
+|--------|-------------|
+| `name` | Person's canonical name (required) |
+| `title` | Job title |
+| `department` | Department name (auto-created if new) |
+| `reports_to` | Manager name (resolved to registry key) |
+| `aliases` | Semicolon-separated alternate names |
+| `client` | Associated client |
+
+The entity registry is stored as `entities.json` alongside `registry.json` in the library root. Imported entities are confirmed automatically; entities extracted during future ingest passes will be marked as needing confirmation.
 
 **Global flags**: `--verbose` / `-v` (debug logging), `--config` / `-c` (path to `folio.yaml`)
 
@@ -406,9 +446,10 @@ The test suite depends on dev-only packages such as `python-pptx` and `reportlab
 
 ```
 folio/
-├── cli.py              # Click CLI (convert, batch, status, scan, refresh, promote)
+├── cli.py              # Click CLI (convert, batch, status, scan, refresh, promote, entities)
 ├── config.py           # FolioConfig + folio.yaml loading
 ├── converter.py        # Pipeline orchestrator
+├── entity_import.py    # CSV org chart → entity registry
 ├── pipeline/
 │   ├── normalize.py    # PPTX/PPT → PDF
 │   ├── images.py       # PDF → slide images + blank detection
@@ -418,13 +459,16 @@ folio/
 │   ├── frontmatter.py  # YAML frontmatter (v2 schema)
 │   └── markdown.py     # Markdown assembly
 └── tracking/
+    ├── entities.py     # Entity registry (people, departments, systems, processes)
+    ├── registry.py     # Deck registry + atomic JSON writes
     ├── sources.py      # Source file tracking + staleness
     └── versions.py     # Version detection + change sets
 ```
 
 ## Roadmap
 
-Search and retrieval (`folio search`) is planned but not yet implemented. Today, converted decks are searchable via Obsidian, grep, or any tool that reads Markdown + YAML frontmatter.
+- **Entity resolution at ingest time** -- automatically match names mentioned in slides to the entity registry (PR B, planned).
+- **Search and retrieval** (`folio search`) -- not yet implemented. Today, converted decks are searchable via Obsidian, grep, or any tool that reads Markdown + YAML frontmatter.
 
 ## License
 
