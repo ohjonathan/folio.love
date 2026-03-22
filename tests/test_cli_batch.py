@@ -221,3 +221,59 @@ class TestDedupRobustness:
 
         assert "Mode: PDF mitigation" not in result.output
         assert "Empty files skipped: 2" in result.output
+
+
+class TestSameBasenameDifferentContent:
+    """Literal same-basename, different content via recursive glob."""
+
+    @patch("folio.cli.FolioConverter")
+    def test_same_basename_different_content_recursive(self, mock_converter_cls, tmp_path):
+        """Same basename in subdirs + recursive glob → both process (content differs)."""
+        sub_a = tmp_path / "a"
+        sub_b = tmp_path / "b"
+        sub_a.mkdir()
+        sub_b.mkdir()
+
+        # Literally same filename, different content
+        (sub_a / "deck.pptx").write_bytes(b"content A")
+        (sub_b / "deck.pptx").write_bytes(b"content B")
+
+        mock_converter = MagicMock()
+        mock_result = MagicMock()
+        mock_result.slide_count = 1
+        mock_result.renderer_used = "powerpoint"
+        mock_converter.convert.return_value = mock_result
+        mock_converter_cls.return_value = mock_converter
+
+        runner = CliRunner()
+        # Recursive glob pattern discovers same-basename files in subdirs
+        result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "**/*.pptx"])
+
+        assert mock_converter.convert.call_count == 2
+        assert "Duplicates skipped: 0" in result.output
+
+    @patch("folio.cli.FolioConverter")
+    def test_same_basename_same_content_deduped(self, mock_converter_cls, tmp_path):
+        """Same basename + same content via recursive glob → one deduped."""
+        sub_a = tmp_path / "a"
+        sub_b = tmp_path / "b"
+        sub_a.mkdir()
+        sub_b.mkdir()
+
+        # Same filename AND same content
+        (sub_a / "deck.pptx").write_bytes(b"identical content")
+        (sub_b / "deck.pptx").write_bytes(b"identical content")
+
+        mock_converter = MagicMock()
+        mock_result = MagicMock()
+        mock_result.slide_count = 1
+        mock_result.renderer_used = "powerpoint"
+        mock_converter.convert.return_value = mock_result
+        mock_converter_cls.return_value = mock_converter
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "**/*.pptx"])
+
+        assert mock_converter.convert.call_count == 1
+        assert "Duplicates skipped: 1" in result.output
+        assert "duplicate of" in result.output

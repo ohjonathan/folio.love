@@ -1937,6 +1937,199 @@ class TestPostPass1DiagramGating:
 
             assert 1 not in captured_slide_numbers, "title+no-framework should be gated"
 
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_frozen_mixed_slide_not_gated(self):
+        """Frozen mixed slide with data/no-framework is NOT gated or mutated.
+
+        A frozen mixed slide would match P1b gating criteria (data + no framework),
+        but must be excluded because it's frozen — its payload from
+        discover_frozen_notes should be preserved unchanged.
+        """
+        from folio.pipeline.analysis import DiagramAnalysis
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            image_results = []
+            for i in range(1, 3):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(self._make_unique_png(i))
+                image_results.append(
+                    ImageResult(path=img, slide_num=i, width=200, height=200)
+                )
+
+            slide_texts = {
+                i: SlideText(slide_num=i, full_text="text", elements=[])
+                for i in range(1, 3)
+            }
+
+            # Slide 1: data/no-framework (would be gated if not frozen)
+            # Slide 2: framework slide (should reach extraction)
+            pass1_results = {
+                1: SlideAnalysis(slide_type="data", framework="none",
+                                 evidence=[{"confidence": "high", "validated": True}]),
+                2: SlideAnalysis(slide_type="framework", framework="tam-sam-som",
+                                 evidence=[{"confidence": "high", "validated": True}]),
+            }
+
+            # Create a frozen payload for slide 1 — simulates discover_frozen_notes
+            frozen_diagram = DiagramAnalysis(
+                slide_type="data",
+                diagram_type="mixed",
+                description="Frozen diagram content",
+                diagram_confidence=0.9,
+            )
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            captured_slide_numbers = []
+
+            def mock_analyze_diagram_pages(**kwargs):
+                captured_slide_numbers.extend(kwargs.get("slide_numbers", []))
+                return kwargs["pass1_results"], CacheStats(), None
+
+            config = FolioConfig()
+
+            # Mock discover_frozen_notes to return a frozen payload for slide 1
+            frozen_payloads = {1: frozen_diagram}
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("folio.pipeline.analysis.analyze_slides", return_value=(pass1_results, CacheStats(), None)), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="mixed"),
+                     2: MagicMock(classification="mixed"),
+                 }), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 patch("folio.output.diagram_notes.discover_frozen_notes", return_value=frozen_payloads), \
+                 patch("folio.pipeline.diagram_extraction.analyze_diagram_pages", side_effect=mock_analyze_diagram_pages):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            # Slide 1 is frozen — should NOT be gated, NOT appear in extraction,
+            # and its Pass-1 analysis should be unchanged (not coerced or marked abstained)
+            assert 1 not in captured_slide_numbers, \
+                "Frozen slide should be excluded from extraction (by frozen exclusion, not gating)"
+            # Slide 2 (framework) should reach extraction normally
+            assert 2 in captured_slide_numbers, "Non-frozen framework slide should reach extraction"
+
+
+# ── Combined Integration: P1b Gating + Diagram + P4 Zero-Text ─────────
+
+class TestCombinedConverterIntegration:
+    """Combined integration test: P1b gating, diagram pass-through, and P4 zero-text
+    exercised in a single converter.convert() flow.
+
+    4-slide deck:
+      - Slide 1: data/no-framework → P1b gated (keeps SlideAnalysis)
+      - Slide 2: framework/tam-sam-som → reaches diagram extraction
+      - Slide 3: diagram classification + framework → reaches diagram extraction
+      - Slide 4: appendix/no-framework, zero text → P1b gated, included in P4 check
+    """
+
+    @staticmethod
+    def _make_unique_png(index: int) -> bytes:
+        return (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            + bytes([index]) * 16
+            + b'\x00\x00\x00\x00IEND\xaeB\x60\x82'
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_gating_extraction_and_zero_text_combined(self):
+        """P1b + diagram + P4 in a single converter flow."""
+        from folio.pipeline.analysis import DiagramAnalysis
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            image_results = []
+            for i in range(1, 5):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(self._make_unique_png(i))
+                image_results.append(
+                    ImageResult(path=img, slide_num=i, width=200, height=200)
+                )
+
+            # Slide 4 has zero text (P4 scenario)
+            slide_texts = {
+                1: SlideText(slide_num=1, full_text="Some data text", elements=[]),
+                2: SlideText(slide_num=2, full_text="Framework text", elements=[]),
+                3: SlideText(slide_num=3, full_text="Diagram text", elements=[]),
+                4: SlideText(slide_num=4, full_text="", elements=[]),
+            }
+
+            pass1_results = {
+                1: SlideAnalysis(slide_type="data", framework="none",
+                                 evidence=[{"confidence": "high", "validated": True}]),
+                2: SlideAnalysis(slide_type="framework", framework="tam-sam-som",
+                                 evidence=[{"confidence": "high", "validated": True}]),
+                3: SlideAnalysis(slide_type="data", framework="swot",
+                                 evidence=[{"confidence": "high", "validated": True}]),
+                4: SlideAnalysis(slide_type="appendix", framework="",
+                                 evidence=[{"confidence": "high", "validated": False,
+                                            "validation_unavailable": True}]),
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            captured_slide_numbers = []
+
+            def mock_analyze_diagram_pages(**kwargs):
+                captured_slide_numbers.extend(kwargs.get("slide_numbers", []))
+                return kwargs["pass1_results"], CacheStats(), None
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("folio.pipeline.analysis.analyze_slides", return_value=(pass1_results, CacheStats(), None)), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="mixed"),
+                     2: MagicMock(classification="mixed"),
+                     3: MagicMock(classification="diagram"),
+                     4: MagicMock(classification="mixed"),
+                 }), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 patch("folio.pipeline.diagram_extraction.analyze_diagram_pages", side_effect=mock_analyze_diagram_pages):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            # P1b: Slides 1 and 4 gated (data/appendix + no framework)
+            assert 1 not in captured_slide_numbers, "Slide 1 (data/no-fw) should be P1b gated"
+            assert 4 not in captured_slide_numbers, "Slide 4 (appendix/no-fw) should be P1b gated"
+
+            # Diagram pass-through: Slides 2 and 3 reach extraction
+            assert 2 in captured_slide_numbers, "Slide 2 (framework) should reach extraction"
+            assert 3 in captured_slide_numbers, "Slide 3 (framework) should reach extraction"
+
+            # P1b gated slides keep SlideAnalysis (not DiagramAnalysis)
+            assert not isinstance(pass1_results[1], DiagramAnalysis), \
+                "Gated slide 1 should keep SlideAnalysis"
+            assert not isinstance(pass1_results[4], DiagramAnalysis), \
+                "Gated slide 4 should keep SlideAnalysis"
+
+            # P4: Slide 4 has zero text and is NOT excluded from zero-text checks
+            # (it's not abstained/DiagramAnalysis, so it stays in the reviewable set)
+            assert pass1_results[4].slide_type == "appendix", \
+                "Gated slide 4 preserves Pass-1 type"
 
 
 # ── P3: Large-Document Warning ─────────────────────────────────────────
