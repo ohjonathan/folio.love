@@ -1,0 +1,106 @@
+{
+  "_schema_version": 1,
+  "updated_at": "2026-03-22T14:30:00+00:00",
+  "entities": {
+    "person": {
+      "alice_chen": {
+        "canonical_name": "Alice Chen",
+        "type": "person",
+        "aliases": ["Alice", "the CEO"],
+        "needs_confirmation": false,
+        "source": "import",
+        "first_seen": "2026-03-22T14:30:00+00:00",
+        "created_at": "2026-03-22T14:30:00+00:00",
+        "updated_at": "2026-03-22T14:30:00+00:00",
+        "title": "CEO",
+        "department": "executive"
+      },
+      "bob_martinez": {
+        "canonical_name": "Bob Martinez",
+        "type": "person",
+        "aliases": ["Bob", "the CTO"],
+        "needs_confirmation": false,
+        "source": "import",
+        "first_seen": "2026-03-22T14:30:00+00:00",
+        "created_at": "2026-03-22T14:30:00+00:00",
+        "updated_at": "2026-03-22T14:30:00+00:00",
+        "title": "CTO",
+        "department": "engineering",
+        "reports_to": "alice_chen"
+      },
+      "carol_davis": {
+        "canonical_name": "Carol Davis",
+        "type": "person",
+        "aliases": ["Carol"],
+        "needs_confirmation": false,
+        "source": "import",
+        "first_seen": "2026-03-22T14:30:00+00:00",
+        "created_at": "2026-03-22T14:30:00+00:00",
+        "updated_at": "2026-03-22T14:30:00+00:00",
+        "title": "VP Operations",
+        "department": "operations",
+        "reports_to": "alice_chen"
+      },
+      "diana_lee": {
+        "canonical_name": "Diana Lee",
+        "type": "person",
+        "aliases": ["Diana"],
+        "needs_confirmation": false,
+        "source": "import",
+        "first_seen": "2026-03-22T14:30:00+00:00",
+        "created_at": "2026-03-22T14:30:00+00:00",
+        "updated_at": "2026-03-22T14:30:00+00:00",
+        "title": "Senior Engineer",
+        "department": "engineering",
+        "reports_to": "bob_martinez"
+      },
+      "eve_wilson": {
+        "canonical_name": "Eve Wilson",
+        "type": "person",
+        "aliases": [],
+        "needs_confirmation": false,
+        "source": "import",
+        "first_seen": "2026-03-22T14:30:00+00:00",
+        "created_at": "2026-03-22T14:30:00+00:00",
+        "updated_at": "2026-03-22T14:30:00+00:00",
+        "title": "Analyst",
+        "department": "operations",
+        "reports_to": "carol_davis"
+      }
+    },
+    "department": {
+      "executive": {
+        "canonical_name": "Executive",
+        "type": "department",
+        "aliases": [],
+        "needs_confirmation": false,
+        "source": "import",
+        "first_seen": "2026-03-22T14:30:00+00:00",
+        "created_at": "2026-03-22T14:30:00+00:00",
+        "updated_at": "2026-03-22T14:30:00+00:00"
+      },
+      "engineering": {
+        "canonical_name": "Engineering",
+        "type": "department",
+        "aliases": [],
+        "needs_confirmation": false,
+        "source": "import",
+        "first_seen": "2026-03-22T14:30:00+00:00",
+        "created_at": "2026-03-22T14:30:00+00:00",
+        "updated_at": "2026-03-22T14:30:00+00:00"
+      },
+      "operations": {
+        "canonical_name": "Operations",
+        "type": "department",
+        "aliases": [],
+        "needs_confirmation": false,
+        "source": "import",
+        "first_seen": "2026-03-22T14:30:00+00:00",
+        "created_at": "2026-03-22T14:30:00+00:00",
+        "updated_at": "2026-03-22T14:30:00+00:00"
+      }
+    },
+    "system": {},
+    "process": {}
+  }
+}

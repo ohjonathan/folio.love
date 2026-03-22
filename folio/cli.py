@@ -1,6 +1,7 @@
 """CLI interface for Folio."""
 
 import hashlib
+import json
 import logging
 import os
 import re
@@ -672,6 +673,23 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
     if missing:
         click.echo(f"  ✗ Missing source: {missing}")
 
+    # Entity count (v0.5.1)
+    entities_path = library_root / "entities.json"
+    if entities_path.exists():
+        try:
+            from .tracking.entities import EntityRegistry, EntityRegistryError
+            ent_reg = EntityRegistry(entities_path)
+            ent_reg.load()
+            total_ent = ent_reg.entity_count()
+            unconf = ent_reg.unconfirmed_count()
+            if total_ent > 0:
+                if unconf:
+                    click.echo(f"  Entities: {total_ent} ({unconf} unconfirmed)")
+                else:
+                    click.echo(f"  Entities: {total_ent}")
+        except Exception:
+            click.echo("  ⚠ entities.json unreadable")
+
     if flagged_decks:
         click.echo("")
         click.echo("Flagged:")
@@ -1080,6 +1098,289 @@ def promote(ctx, deck_id: str, level: str):
     click.echo(f"✓ Promoted {deck_id}: {current_level} → {level}")
     for w in warnings:
         click.echo(f"  ⚠ {w}")
+
+
+# ---------------------------------------------------------------------------
+# entities group (v0.5.1)
+# ---------------------------------------------------------------------------
+
+_ENTITY_TYPE_LABELS = {
+    "person": "People",
+    "department": "Departments",
+    "system": "Systems",
+    "process": "Processes",
+}
+
+
+def _entities_list(ctx, entity_type, unconfirmed, json_output):
+    """Default handler: list entities."""
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+
+    from .tracking.entities import EntityRegistry, EntityRegistryError
+
+    reg = EntityRegistry(entities_path)
+    try:
+        reg.load()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    if reg.entity_count() == 0:
+        click.echo("No entities in library.")
+        return
+
+    if json_output:
+        click.echo(json.dumps(reg._data, indent=2))
+        return
+
+    counts = reg.count_by_type()
+    types = [entity_type] if entity_type else ["person", "department", "system", "process"]
+
+    for etype in types:
+        info = counts.get(etype, {"total": 0, "unconfirmed": 0})
+        if info["total"] == 0 and entity_type is None:
+            continue
+        label = _ENTITY_TYPE_LABELS.get(etype, etype.title())
+        header = f"{label} ({info['total']} total"
+        if info["unconfirmed"]:
+            header += f", {info['unconfirmed']} unconfirmed"
+        header += ")"
+        click.echo(header)
+
+        for _et, _key, entry in reg.iter_entities(
+            entity_type=etype, unconfirmed_only=unconfirmed
+        ):
+            status = "unconfirmed" if entry.needs_confirmation else "confirmed"
+            detail = ""
+            if entry.title:
+                detail = entry.title
+                if entry.department:
+                    detail += f", {entry.department}"
+            elif entry.department:
+                detail = entry.department
+            if detail:
+                click.echo(f"  {entry.canonical_name:<20s} {detail:<25s} {status}")
+            else:
+                click.echo(f"  {entry.canonical_name:<20s} {'':25s} {status}")
+        click.echo("")
+
+
+@cli.group(invoke_without_command=True)
+@click.option("--type", "entity_type",
+              type=click.Choice(["person", "department", "system", "process"]),
+              default=None, help="Filter by entity type.")
+@click.option("--unconfirmed", is_flag=True, default=False,
+              help="Show only unconfirmed entities.")
+@click.option("--json", "json_output", is_flag=True, default=False,
+              help="Output as JSON.")
+@click.pass_context
+def entities(ctx, entity_type, unconfirmed, json_output):
+    """Manage entities in the library."""
+    ctx.ensure_object(dict)
+    ctx.obj["entity_type"] = entity_type
+    if ctx.invoked_subcommand is None:
+        _entities_list(ctx, entity_type, unconfirmed, json_output)
+
+
+@entities.command()
+@click.argument("name")
+@click.pass_context
+def show(ctx, name):
+    """Show detail for a single entity."""
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+    entity_type = ctx.obj.get("entity_type")
+
+    from .tracking.entities import EntityRegistry, EntityRegistryError, EntityAmbiguousError
+
+    reg = EntityRegistry(entities_path)
+    try:
+        reg.load()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    matches = reg.lookup(name, entity_type=entity_type)
+
+    if len(matches) == 0:
+        click.echo(f"No entity found matching '{name}'.")
+        sys.exit(1)
+
+    if len(matches) > 1:
+        click.echo(f"Multiple matches for \"{name}\":")
+        for i, (etype, key, entry) in enumerate(matches, 1):
+            click.echo(f"  {i}. {entry.canonical_name} ({etype}) — canonical name")
+        click.echo("")
+        click.echo("Use --type to disambiguate:")
+        click.echo(f"  folio entities --type {matches[0][0]} show \"{name}\"")
+        return
+
+    etype, key, entry = matches[0]
+    status = "confirmed" if not entry.needs_confirmation else "unconfirmed"
+    click.echo(f"{entry.canonical_name} ({etype}) {status}")
+    if entry.title:
+        click.echo(f"  Title:       {entry.title}")
+    if entry.department:
+        click.echo(f"  Department:  {entry.department}")
+    if entry.reports_to:
+        click.echo(f"  Reports to:  {entry.reports_to}")
+    if entry.aliases:
+        click.echo(f"  Aliases:     {', '.join(entry.aliases)}")
+    if entry.client:
+        click.echo(f"  Client:      {entry.client}")
+    if entry.head:
+        click.echo(f"  Head:        {entry.head}")
+    if entry.owner_dept:
+        click.echo(f"  Owner dept:  {entry.owner_dept}")
+    click.echo(f"  Source:      {entry.source}")
+    if entry.first_seen:
+        click.echo(f"  First seen:  {entry.first_seen[:10]}")
+    if entry.created_at:
+        click.echo(f"  Created:     {entry.created_at[:10]}")
+
+    # Mentioned in: scan library markdown files
+    mention_count = 0
+    wikilink = f"[[{entry.canonical_name}]]"
+    for md_file in library_root.rglob("*.md"):
+        try:
+            if wikilink in md_file.read_text():
+                mention_count += 1
+        except OSError:
+            pass
+    click.echo(f"  Mentioned in: {mention_count} interaction notes")
+
+
+@entities.command("import")
+@click.argument("csv_file", type=click.Path(exists=True))
+@click.pass_context
+def import_cmd(ctx, csv_file):
+    """Import entities from a CSV org chart file."""
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+
+    from .tracking.entities import EntityRegistry, EntityRegistryError
+    from .entity_import import import_csv
+
+    reg = EntityRegistry(entities_path)
+    try:
+        reg.load()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    try:
+        result = import_csv(reg, Path(csv_file))
+    except (ValueError, OSError) as e:
+        click.echo(f"✗ Import failed: {e}", err=True)
+        sys.exit(1)
+
+    parts = []
+    if result.people_imported:
+        parts.append(f"Imported {result.people_imported} people")
+    if result.people_updated:
+        parts.append(f"Updated {result.people_updated} people")
+    if result.people_skipped:
+        parts.append(f"Skipped {result.people_skipped} people (no changes)")
+    if result.departments_created:
+        parts.append(f"Created {result.departments_created} departments")
+
+    if parts:
+        click.echo("✓ " + ", ".join(parts) + ".")
+    else:
+        click.echo("No entities imported.")
+
+    for w in result.warnings:
+        click.echo(f"  ⚠ {w}")
+
+
+@entities.command()
+@click.argument("name")
+@click.pass_context
+def confirm(ctx, name):
+    """Confirm an unconfirmed entity."""
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+    entity_type = ctx.obj.get("entity_type")
+
+    from .tracking.entities import (
+        EntityRegistry, EntityRegistryError, EntityAmbiguousError,
+    )
+
+    reg = EntityRegistry(entities_path)
+    try:
+        reg.load()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    try:
+        match = reg.lookup_unique(name, entity_type=entity_type)
+    except EntityAmbiguousError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    if match is None:
+        click.echo(f"✗ No entity found matching '{name}'.", err=True)
+        sys.exit(1)
+
+    etype, key, entry = match
+    if not entry.needs_confirmation:
+        click.echo(f"Already confirmed: {entry.canonical_name} ({etype})")
+        return
+
+    reg.confirm_entity(etype, key)
+    reg.save()
+    click.echo(f"Confirmed: {entry.canonical_name} ({etype})")
+
+
+@entities.command()
+@click.argument("name")
+@click.pass_context
+def reject(ctx, name):
+    """Reject an unconfirmed entity."""
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+    entity_type = ctx.obj.get("entity_type")
+
+    from .tracking.entities import (
+        EntityRegistry, EntityRegistryError, EntityAmbiguousError,
+    )
+
+    reg = EntityRegistry(entities_path)
+    try:
+        reg.load()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    try:
+        match = reg.lookup_unique(name, entity_type=entity_type)
+    except EntityAmbiguousError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    if match is None:
+        click.echo(f"✗ No entity found matching '{name}'.", err=True)
+        sys.exit(1)
+
+    etype, key, entry = match
+    if not entry.needs_confirmation:
+        click.echo(
+            f"✗ Cannot reject confirmed entity. "
+            f"Edit entities.json directly to remove confirmed entities.",
+            err=True,
+        )
+        sys.exit(1)
+
+    reg.remove_entity(etype, key)
+    reg.save()
+    click.echo(f"Rejected and removed: {entry.canonical_name} ({etype})")
 
 
 def main():
