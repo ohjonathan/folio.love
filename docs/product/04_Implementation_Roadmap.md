@@ -18,7 +18,7 @@ generated_by: ontos_scaffold
 
 ## March 2026 Status Update
 
-Since this roadmap was published, `main` has shipped five important baseline
+Since this roadmap was published, `main` has shipped seven important baseline
 changes:
 
 - PR #8: multi-provider LLM analysis for `folio convert` / `folio batch`
@@ -38,11 +38,16 @@ changes:
 - PR #17: accelerated Tier 2 operational validation on a real engagement
   corpus, with an explicit recommendation to continue Tier 3 planning while
   formal Tier 2 closeout remains pending
+- PR #30: enterprise performance hardening for `folio batch` and diagram
+  extraction (content-hash deduplication, table-heavy `mixed -> text`
+  reclassification, post-Pass-1 diagram gating, zero-text confidence
+  tightening, and large-document warnings)
 
 This does **not** change the roadmap hierarchy. It does change the current
 implementation baseline: multi-provider LLM support is now shipped foundation,
-and the managed-mac automated PPTX conversion path has been rerun successfully
-on the real Tier 1 corpus.
+the managed-mac automated PPTX conversion path has been rerun successfully on
+the real Tier 1 corpus, and the enterprise-scale batch path now includes the
+first round of runtime-waste controls discovered in field deployment.
 
 Current Tier 1 reality after PR #14:
 

@@ -332,6 +332,8 @@ folio batch <source_directory> [--pattern "*.pptx"] [--llm-profile <profile>]
 - Progress indicator
 - Error handling per file (continue on failure)
 - Summary output
+- When duplicate-content or empty files are encountered, skip them without
+  aborting the batch and report the skipped counts in summary output
 
 #### FR-503: Status Command
 ```bash
@@ -444,6 +446,10 @@ computed from per-claim confidence levels:
 - Mix of high and medium: confidence in 0.6-0.8 range
 - Any low-confidence or unvalidated claims: confidence below 0.6
 - No LLM analysis: `null`
+- Whole-document source-text validation unavailable (for example, scanned PDFs
+  with zero extracted text): confidence remains non-null and directionally
+  meaningful when analysis succeeded; unavailable validation is not treated as
+  failed validation
 
 The exact scoring formula is an implementation detail and may be calibrated over
 time. The requirement is that the score exists, is queryable, and is
@@ -453,6 +459,8 @@ directionally meaningful.
 - [ ] Every analyzed document has a non-null `extraction_confidence`
 - [ ] Confidence is queryable via Dataview (`WHERE extraction_confidence < 0.7`)
 - [ ] Confidence correlates with actual extraction quality on ground-truth fixtures
+- [ ] Documents with unavailable source-text validation still receive a
+  meaningful non-null confidence score when analysis succeeded
 
 #### FR-703: Review Status Tracking
 
@@ -470,6 +478,8 @@ The system SHALL automatically set `review_status: flagged` when:
 - Any extraction claim is unvalidated (quoted span not found in source)
 - Any extraction claim has low confidence
 - Analysis was unavailable (degraded conversion)
+- Source-text validation was unavailable for the whole document (for example,
+  scanned PDFs with zero extracted text)
 - Extraction confidence is below a configurable threshold (default: 0.6)
 
 Humans update `review_status` to `reviewed` or `overridden` manually or via
@@ -489,6 +499,12 @@ Example flags:
 - `analysis_unavailable` — LLM analysis could not run
 - `low_confidence_slide_N` — slide N has low-confidence extractions
 - `unvalidated_claim_slide_N` — slide N has a quoted span that doesn't match source
+- `text_validation_unavailable_slide_N` — slide N had no extracted text to
+  validate against
+- `text_validation_unavailable` — document-level text validation was
+  unavailable
+- `zero_text_extraction` — every reviewable slide lacked extractable text, so
+  the document is flagged for review even if claim confidence remains high
 - `high_density_unanalyzed` — dense slide only received single-pass analysis
 
 Review flags are machine-generated. Humans clear them by resolving the
