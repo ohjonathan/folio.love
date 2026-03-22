@@ -27,6 +27,11 @@ For managed Macs where LibreOffice is blocked, see the
 [Managed Mac workflow](managed_mac_workflow.md) and set
 `pptx_renderer: powerpoint` in `folio.yaml`.
 
+If you use an enterprise gateway, keep the gateway URL in an environment
+variable such as `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, or
+`GEMINI_BASE_URL`, then reference that variable from the selected Folio LLM
+profile with `base_url_env`.
+
 ---
 
 ## One-Command Bootstrap (macOS, Repo Required)
@@ -57,6 +62,43 @@ PDF-only workflow:
 ```bash
 scripts/bootstrap_macos.sh --renderer pdf-only
 ```
+
+---
+
+## Enterprise Gateway Profiles
+
+Folio supports profile-level gateway routing through `base_url_env` in
+`folio.yaml`:
+
+```yaml
+llm:
+  profiles:
+    gateway_openai:
+      provider: openai
+      model: gpt-4o
+      api_key_env: OPENAI_API_KEY
+      base_url_env: OPENAI_BASE_URL
+```
+
+Use `--llm-profile` to select the gateway-backed profile explicitly:
+
+```bash
+folio convert sample.pdf --llm-profile gateway_openai
+```
+
+At the start of each conversion run, Folio runs a warning-only model preflight
+once per selected profile. The probe is bounded, uses the same runtime
+guardrails as normal model calls, and only emits warnings. If a model is
+blocked or unavailable, you will see a warning before the expensive analysis
+stages begin, but the run will continue.
+
+Related runtime notes for agents and operators:
+
+- managed Macs can keep using `pptx_renderer: powerpoint`
+- scanned or image-only PDFs stay flagged for review, but no longer get the
+  old blanket confidence penalty just because text validation is unavailable
+- oversized PDF pages automatically reduce DPI before triggering Pillow size
+  limits
 
 ---
 

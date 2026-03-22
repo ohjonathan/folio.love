@@ -10,17 +10,21 @@ import base64
 import logging
 import os
 from typing import Any
+from urllib.parse import urlparse
 
+from .runtime import RateLimiter, execute_with_retry
 from .types import (
     AnalysisProvider,
     ErrorDisposition,
     ImagePart,
     ProviderInput,
     ProviderOutput,
+    ProviderRuntimeSettings,
     TokenUsage,
 )
 
 logger = logging.getLogger(__name__)
+_PREFLIGHT_TIMEOUT_SECONDS = 5.0
 
 
 def _parse_retry_after(headers) -> float | None:
@@ -38,13 +42,124 @@ def _parse_retry_after(headers) -> float | None:
         return None
 
 
+def _resolve_base_url(base_url_env: str) -> str | None:
+    """Resolve an optional custom gateway base URL from the environment."""
+    if not base_url_env:
+        return None
+    value = os.environ.get(base_url_env, "").strip()
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.hostname:
+        logger.warning(
+            "Environment variable %s does not look like a URL; ignoring it: %s",
+            base_url_env,
+            _truncate_message(value, max_chars=120),
+        )
+        return None
+    return value
+
+
+def _preflight_input(*, require_store_false: bool) -> ProviderInput:
+    """Build a minimal text-only request for warning-only preflight probes."""
+    return ProviderInput(
+        prompt="Respond with OK.",
+        images=(),
+        max_tokens=1,
+        temperature=0.0,
+        require_store_false=require_store_false,
+        timeout_seconds=_PREFLIGHT_TIMEOUT_SECONDS,
+    )
+
+
+def _format_preflight_error(exc: Exception) -> str:
+    """Render a compact warning reason for model preflight failures."""
+    message = str(exc).strip()
+    return _truncate_message(message or type(exc).__name__)
+
+
+def _truncate_message(message: str, max_chars: int = 200) -> str:
+    """Clamp long warning text to keep logs readable."""
+    text = message.strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
+
+
+def _uses_custom_openai_base_url(client: Any) -> bool:
+    """Detect whether an OpenAI client targets a non-default base URL."""
+    base_url = getattr(client, "base_url", None)
+    if base_url is None:
+        return False
+    text = str(base_url).strip()
+    if not text:
+        return False
+    parsed = urlparse(text)
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    return hostname != "api.openai.com"
+
+
+def _preflight_settings(
+    settings: ProviderRuntimeSettings | None,
+) -> ProviderRuntimeSettings:
+    """Build a bounded runtime profile for warning-only preflight probes."""
+    base = settings or ProviderRuntimeSettings()
+    return ProviderRuntimeSettings(
+        rate_limit_rpm=base.rate_limit_rpm,
+        rate_limit_tpm=base.rate_limit_tpm,
+        max_attempts=1,
+        base_delay_seconds=base.base_delay_seconds,
+        max_delay_seconds=min(base.max_delay_seconds, 1.0),
+        allowed_endpoints=base.allowed_endpoints,
+        excluded_endpoints=base.excluded_endpoints,
+        require_store_false=base.require_store_false,
+    )
+
+
+def _openai_lookup_client(client: Any, timeout_seconds: float) -> Any | None:
+    """Build a per-request timeout-scoped OpenAI client when supported."""
+    with_options = getattr(client, "with_options", None)
+    if not callable(with_options):
+        return None
+    configured = with_options(timeout=timeout_seconds)
+    return configured if configured is not None else None
+
+
+def _run_runtime_preflight(
+    provider: AnalysisProvider,
+    client: Any,
+    model: str,
+    settings: ProviderRuntimeSettings | None,
+) -> str | None:
+    """Run a bounded text-only probe through the normal runtime guardrails."""
+    runtime_settings = _preflight_settings(settings)
+    limiter = RateLimiter(
+        rpm_limit=runtime_settings.rate_limit_rpm,
+        tpm_limit=runtime_settings.rate_limit_tpm,
+    )
+    inp = _preflight_input(
+        require_store_false=runtime_settings.require_store_false,
+    )
+    try:
+        execute_with_retry(provider, client, model, inp, runtime_settings, limiter)
+        return None
+    except Exception as exc:
+        return _format_preflight_error(exc)
+
+
 class AnthropicAnalysisProvider:
     """Anthropic Claude provider adapter."""
 
     provider_name: str = "anthropic"
     endpoint_name: str = "messages"
 
-    def create_client(self, api_key_env: str = "") -> Any:
+    def create_client(
+        self,
+        api_key_env: str = "",
+        base_url_env: str = "",
+    ) -> Any:
         """Create an Anthropic client with SDK auto-retry disabled."""
         import anthropic
 
@@ -53,10 +168,24 @@ class AnthropicAnalysisProvider:
         if not api_key:
             raise ValueError(f"{env_var} environment variable not set")
 
-        return anthropic.Anthropic(
-            api_key=api_key,
-            max_retries=0,  # Folio manages retries
-        )
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "max_retries": 0,  # Folio manages retries
+        }
+        resolved_base_url = _resolve_base_url(base_url_env)
+        if resolved_base_url:
+            kwargs["base_url"] = resolved_base_url
+
+        return anthropic.Anthropic(**kwargs)
+
+    def preflight(
+        self,
+        client: Any,
+        model: str,
+        settings: ProviderRuntimeSettings | None = None,
+    ) -> str | None:
+        """Probe Anthropic model availability with a minimal text-only call."""
+        return _run_runtime_preflight(self, client, model, settings)
 
     def analyze(
         self,
@@ -93,7 +222,7 @@ class AnthropicAnalysisProvider:
         kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": inp.max_tokens,
-            "timeout": 120.0,
+            "timeout": inp.timeout_seconds or 120.0,
             "messages": [{"role": "user", "content": content}],
             "temperature": inp.temperature,
         }
@@ -160,7 +289,11 @@ class OpenAIAnalysisProvider:
     provider_name: str = "openai"
     endpoint_name: str = "chat_completions"
 
-    def create_client(self, api_key_env: str = "") -> Any:
+    def create_client(
+        self,
+        api_key_env: str = "",
+        base_url_env: str = "",
+    ) -> Any:
         """Create an OpenAI client."""
         from openai import OpenAI
 
@@ -169,10 +302,39 @@ class OpenAIAnalysisProvider:
         if not api_key:
             raise ValueError(f"{env_var} environment variable not set")
 
-        return OpenAI(
-            api_key=api_key,
-            max_retries=0,
-        )
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "max_retries": 0,
+        }
+        resolved_base_url = _resolve_base_url(base_url_env)
+        if resolved_base_url:
+            kwargs["base_url"] = resolved_base_url
+
+        return OpenAI(**kwargs)
+
+    def preflight(
+        self,
+        client: Any,
+        model: str,
+        settings: ProviderRuntimeSettings | None = None,
+    ) -> str | None:
+        """Probe OpenAI model availability and execution capability."""
+        lookup_error: Exception | None = None
+        lookup_client = _openai_lookup_client(client, _PREFLIGHT_TIMEOUT_SECONDS)
+        if lookup_client is not None:
+            try:
+                lookup_client.models.retrieve(model)
+                if not _uses_custom_openai_base_url(client):
+                    return None
+            except Exception as exc:
+                lookup_error = exc
+
+        reason = _run_runtime_preflight(self, client, model, settings)
+        if reason is None:
+            return None
+        if lookup_error is not None:
+            return f"{reason} (lookup also failed: {_format_preflight_error(lookup_error)})"
+        return reason
 
     def analyze(
         self,
@@ -207,7 +369,7 @@ class OpenAIAnalysisProvider:
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "timeout": 120.0,
+            "timeout": inp.timeout_seconds or 120.0,
             "messages": [{"role": "user", "content": content}],
         }
         # GPT-5.x: uses max_completion_tokens, does not accept temperature
@@ -287,7 +449,11 @@ class GoogleAnalysisProvider:
     provider_name: str = "google"
     endpoint_name: str = "generate_content"
 
-    def create_client(self, api_key_env: str = "") -> Any:
+    def create_client(
+        self,
+        api_key_env: str = "",
+        base_url_env: str = "",
+    ) -> Any:
         """Create a Google GenAI client."""
         from google import genai
 
@@ -296,7 +462,41 @@ class GoogleAnalysisProvider:
         if not api_key:
             raise ValueError(f"{env_var} environment variable not set")
 
-        return genai.Client(api_key=api_key)
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+        }
+        resolved_base_url = _resolve_base_url(base_url_env)
+        if resolved_base_url:
+            kwargs["http_options"] = {"base_url": resolved_base_url}
+
+        return genai.Client(**kwargs)
+
+    def preflight(
+        self,
+        client: Any,
+        model: str,
+        settings: ProviderRuntimeSettings | None = None,
+    ) -> str | None:
+        """Probe Google model availability with lookup when supported."""
+        lookup_error: Exception | None = None
+        models_api = getattr(client, "models", None)
+        model_getter = getattr(models_api, "get", None)
+        if callable(model_getter):
+            try:
+                model_getter(
+                    name=model,
+                    config={"http_options": {"timeout": _PREFLIGHT_TIMEOUT_SECONDS}},
+                )
+                return None
+            except Exception as exc:
+                lookup_error = exc
+
+        reason = _run_runtime_preflight(self, client, model, settings)
+        if reason is None:
+            return None
+        if lookup_error is not None:
+            return f"{reason} (lookup also failed: {_format_preflight_error(lookup_error)})"
+        return reason
 
     def analyze(
         self,
@@ -329,7 +529,7 @@ class GoogleAnalysisProvider:
         # Config
         config_kwargs: dict[str, Any] = {
             "max_output_tokens": inp.max_tokens,
-            "http_options": {"timeout": 120_000},
+            "http_options": {"timeout": int((inp.timeout_seconds or 120.0) * 1000)},
             "temperature": inp.temperature,
         }
 

@@ -54,7 +54,7 @@ sudo apt install libreoffice poppler-utils
 <details>
 <summary>Managed macOS (no LibreOffice)</summary>
 
-If your machine blocks LibreOffice, Folio can use Microsoft PowerPoint as the renderer. Set `pptx_renderer: powerpoint` in `folio.yaml`, run batch jobs from Terminal.app, and keep a dedicated PowerPoint session with no unrelated presentations open. See [docs/guides/managed_mac_workflow.md](docs/guides/managed_mac_workflow.md) for the full workflow.
+If your machine blocks LibreOffice, Folio can use Microsoft PowerPoint as the renderer. Set `pptx_renderer: powerpoint` in `folio.yaml`, run batch jobs from Terminal.app, and keep a dedicated PowerPoint session with no unrelated presentations open. See [Managed Mac workflow](https://github.com/ohjonathan/folio.love/blob/main/docs/guides/managed_mac_workflow.md) for the full workflow.
 
 If neither renderer is available, export the deck to PDF manually and run `folio convert deck.pdf`.
 
@@ -270,16 +270,19 @@ llm:
       provider: anthropic
       model: claude-sonnet-4-20250514
       api_key_env: ANTHROPIC_API_KEY
+      base_url_env: ANTHROPIC_BASE_URL   # Optional enterprise gateway
 
     fast_openai:
       provider: openai
       model: gpt-4o-mini
       api_key_env: OPENAI_API_KEY
+      base_url_env: OPENAI_BASE_URL      # Optional enterprise gateway
 
     backup_google:
       provider: google
       model: gemini-2.5-pro
       api_key_env: GEMINI_API_KEY
+      base_url_env: GEMINI_BASE_URL      # Optional enterprise gateway
 
   routing:
     default:
@@ -305,6 +308,43 @@ With no `folio.yaml`, Folio uses sensible defaults: output goes to `./library`, 
 | `ANTHROPIC_API_KEY` | Anthropic credentials (included in base install) |
 | `OPENAI_API_KEY` | OpenAI credentials (requires `folio-love[llm]`) |
 | `GEMINI_API_KEY` | Google Gemini credentials (requires `folio-love[llm]`) |
+| `ANTHROPIC_BASE_URL` | Optional Anthropic-compatible gateway URL |
+| `OPENAI_BASE_URL` | Optional OpenAI-compatible gateway URL |
+| `GEMINI_BASE_URL` | Optional Gemini-compatible gateway URL |
+
+### Enterprise Gateways and Preflight Warnings
+
+If you route Folio through an enterprise AI gateway, keep the gateway URL in an
+environment variable and reference it from the profile with `base_url_env`.
+If the env var is unset or blank, Folio silently falls back to the SDK default
+endpoint.
+
+Folio now runs a warning-only model preflight once per selected profile per
+conversion run. This checks whether the configured model appears usable before
+the first expensive pass. The probe is bounded and uses the same runtime
+guardrails as normal model calls. A warning does **not** block conversion; it
+simply surfaces blocked or unavailable models earlier.
+
+### Scanned and Image-Only PDFs
+
+When a deck has no extractable text, Folio marks that text validation was
+unavailable instead of treating the deck as if evidence validation failed.
+Those decks still surface review flags, but they no longer get the old blanket
+`0.59` confidence cap just because the source is scanned.
+
+### Oversized PDF Page Fallback
+
+Large architecture diagrams and poster-sized PDF pages can exceed Pillow safety
+limits at the requested DPI. Folio now backs off DPI per page before hitting
+that limit. If a page still cannot be rendered safely, conversion fails with a
+specific oversized-image error instead of a generic rendering failure.
+
+### OpenAI GPT-5 Compatibility
+
+GPT-5 OpenAI chat models use a slightly different request shape from GPT-4.x
+and GPT-4o. Folio handles that automatically by using
+`max_completion_tokens` and omitting `temperature` for `gpt-5*` models while
+preserving the existing request shape for non-GPT-5 models.
 
 ## How It Works
 
@@ -355,10 +395,14 @@ Version history is recorded in both the markdown output and `version_history.jso
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-python -m pytest
-python -m pytest --cov=folio
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/python -m pytest tests/ -v
+.venv/bin/python -m pytest --cov=folio
 ```
+
+The test suite depends on dev-only packages such as `python-pptx` and `reportlab`, so run it from the project virtualenv after installing `.[dev]` rather than from an arbitrary system Python.
 
 ```
 folio/

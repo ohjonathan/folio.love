@@ -86,6 +86,7 @@ class ProviderInput:
     max_tokens: int = 4096
     temperature: float = 0.0
     require_store_false: bool = False
+    timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -142,15 +143,37 @@ class AnalysisProvider(Protocol):
     provider_name: str
     endpoint_name: str  # "messages", "chat_completions", "generate_content"
 
-    def create_client(self, api_key_env: str = "") -> Any:
+    def create_client(
+        self,
+        api_key_env: str = "",
+        base_url_env: str = "",
+    ) -> Any:
         """Return a provider-native SDK client instance.
 
         Args:
             api_key_env: Environment variable name for the API key.
                 If empty, the provider uses its default env var.
+            base_url_env: Optional environment variable name for a custom
+                gateway base URL. If empty or unresolved, the provider uses
+                its SDK default base URL.
 
         Called once per pass. SDK auto-retry MUST be disabled;
         Folio manages its own retry/fallback policy.
+        """
+        ...
+
+    def preflight(
+        self,
+        client: Any,
+        model: str,
+        settings: ProviderRuntimeSettings | None = None,
+    ) -> str | None:
+        """Run a warning-only model availability probe.
+
+        Returns:
+            None if the profile appears usable, or a warning string if the
+            profile/model appears unavailable. Implementations must not raise
+            for normal provider/API unavailability checks.
         """
         ...
 
@@ -166,6 +189,12 @@ class AnalysisProvider(Protocol):
     def classify_error(self, exc: Exception) -> ErrorDisposition:
         """Classify an exception as transient or permanent."""
         ...
+
+
+# Reusable orchestration aliases for resolved fallback specs and live clients.
+ProviderClient = tuple["AnalysisProvider", Any]
+FallbackProfileSpec = tuple[str, str, str, str]
+FallbackProviderClient = tuple["AnalysisProvider", Any, str, str]
 
 
 # ---------------------------------------------------------------------------

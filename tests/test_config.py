@@ -197,6 +197,42 @@ llm:
         p = LLMProfile(name="test", provider="openai", api_key_env="MY_CUSTOM_KEY")
         assert p.api_key_env == "MY_CUSTOM_KEY"
 
+    def test_base_url_env_defaults_empty(self):
+        from folio.config import LLMProfile
+        p = LLMProfile(name="test", provider="openai")
+        assert p.base_url_env == ""
+
+    def test_base_url_env_explicit(self):
+        from folio.config import LLMProfile
+        p = LLMProfile(
+            name="test",
+            provider="openai",
+            base_url_env="OPENAI_BASE_URL",
+        )
+        assert p.base_url_env == "OPENAI_BASE_URL"
+
+    def test_profile_config_loads_base_url_env(self):
+        yaml_content = """\
+llm:
+  profiles:
+    gateway_openai:
+      provider: openai
+      model: gpt-4o
+      api_key_env: OPENAI_API_KEY
+      base_url_env: OPENAI_BASE_URL
+  routing:
+    default:
+      primary: gateway_openai
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = FolioConfig.load(Path(f.name))
+
+        profile = config.llm.resolve_profile()
+        assert profile.name == "gateway_openai"
+        assert profile.base_url_env == "OPENAI_BASE_URL"
+
     def test_cli_llm_profile_option_accepted(self):
         from click.testing import CliRunner
         from folio.cli import cli
@@ -330,6 +366,22 @@ class TestLLMConfigValidation:
                 )
             )
 
+    def test_non_string_base_url_env_rejects(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        with pytest.raises(ValueError, match="base_url_env must be a string"):
+            FolioConfig(
+                llm=LLMConfig(
+                    profiles={
+                        "main": LLMProfile(
+                            name="main",
+                            provider="openai",
+                            base_url_env=123,  # type: ignore[arg-type]
+                        ),
+                    },
+                    routing={"default": LLMRoute(primary="main")},
+                )
+            )
+
 
 class TestReviewConfidenceThreshold:
     """Test review_confidence_threshold config field."""
@@ -420,4 +472,3 @@ class TestMaxImagePixelsConfig:
         from folio.config import ConversionConfig
         with pytest.raises(ValueError, match="max_image_pixels"):
             FolioConfig(conversion=ConversionConfig(max_image_pixels=-1))
-

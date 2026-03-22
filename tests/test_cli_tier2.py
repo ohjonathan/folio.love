@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from click.testing import CliRunner
-from folio.cli import cli
+from folio.cli import _configure_logging, cli
 from folio.tracking.registry import (
     RegistryEntry,
     load_registry,
@@ -165,6 +165,40 @@ class TestScanCommand:
         result = runner.invoke(cli, ["--config", str(config_path), "scan"])
         assert result.exit_code == 0
         assert "New: 1" in result.output
+
+
+class TestVerboseLoggingConfig:
+    def test_verbose_clamps_noisy_third_party_loggers_to_warning(self):
+        import logging
+
+        logging.getLogger("pdfminer").setLevel(logging.NOTSET)
+        logging.getLogger("pdfplumber").setLevel(logging.NOTSET)
+        logging.getLogger("PIL.PngImagePlugin").setLevel(logging.NOTSET)
+        _configure_logging(verbose=True)
+
+        assert logging.getLogger("pdfminer").level == logging.WARNING
+        assert logging.getLogger("pdfplumber").level == logging.WARNING
+        assert logging.getLogger("PIL.PngImagePlugin").level == logging.WARNING
+
+    def test_non_verbose_resets_noisy_logger_overrides(self):
+        import logging
+
+        logging.getLogger("pdfminer").setLevel(logging.WARNING)
+        logging.getLogger("pdfplumber").setLevel(logging.WARNING)
+        logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
+        _configure_logging(verbose=False)
+
+        assert logging.getLogger("pdfminer").level == logging.NOTSET
+        assert logging.getLogger("pdfplumber").level == logging.NOTSET
+        assert logging.getLogger("PIL.PngImagePlugin").level == logging.NOTSET
+
+    def test_verbose_keeps_folio_debug_logs_visible(self):
+        import logging
+
+        logging.getLogger("folio.converter").setLevel(logging.NOTSET)
+        _configure_logging(verbose=True)
+
+        assert logging.getLogger("folio.converter").level == logging.NOTSET
 
 
 # ---------------------------------------------------------------------------
@@ -1175,5 +1209,3 @@ class TestStatusRefreshReconcilesFlagged:
         # After reconciliation, frontmatter's "flagged" should win
         assert "Flagged: 1" in result.output
         assert "partial_analysis_slide_2" in result.output
-
-

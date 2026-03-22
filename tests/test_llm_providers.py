@@ -2,7 +2,9 @@
 
 import os
 import json
+import sys
 import tempfile
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -15,12 +17,20 @@ from folio.llm.types import (
     ImagePart,
     ProviderInput,
     ProviderOutput,
+    ProviderRuntimeSettings,
     ResolvedLLMProfile,
     ResolvedLLMRoute,
     StageLLMMetadata,
     TokenUsage,
 )
-from folio.llm.providers import AnthropicAnalysisProvider, OpenAIAnalysisProvider, GoogleAnalysisProvider
+from folio.llm.providers import (
+    AnthropicAnalysisProvider,
+    GoogleAnalysisProvider,
+    OpenAIAnalysisProvider,
+    _format_preflight_error,
+    _resolve_base_url,
+    _uses_custom_openai_base_url,
+)
 from tests.llm_mocks import (
     make_anthropic_response, make_openai_response, make_google_response,
     make_pass1_json,
@@ -268,6 +278,69 @@ class TestBYOCredentialWiring:
             provider.create_client(api_key_env="MY_CUSTOM_KEY")
             mock_cls.assert_called_once_with(api_key="custom-test-key", max_retries=0)
 
+    @patch.dict(os.environ, {
+        "MY_CUSTOM_KEY": "custom-test-key",
+        "ANTHROPIC_BASE_URL": "https://gateway.example/anthropic",
+    })
+    def test_anthropic_base_url_env(self):
+        provider = get_provider("anthropic")
+        with patch("anthropic.Anthropic") as mock_cls:
+            provider.create_client(
+                api_key_env="MY_CUSTOM_KEY",
+                base_url_env="ANTHROPIC_BASE_URL",
+            )
+            mock_cls.assert_called_once_with(
+                api_key="custom-test-key",
+                base_url="https://gateway.example/anthropic",
+                max_retries=0,
+            )
+
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "openai-test-key"})
+    def test_openai_base_url_env_ignored_when_unset(self):
+        provider = get_provider("openai")
+        openai_module = MagicMock()
+        openai_ctor = MagicMock()
+        openai_module.OpenAI = openai_ctor
+        with patch.dict(sys.modules, {"openai": openai_module}):
+            provider.create_client(base_url_env="OPENAI_BASE_URL")
+        openai_ctor.assert_called_once_with(
+            api_key="openai-test-key",
+            max_retries=0,
+        )
+
+    @patch.dict(os.environ, {
+        "OPENAI_API_KEY": "openai-test-key",
+        "OPENAI_BASE_URL": "https://gateway.example/openai/v1",
+    })
+    def test_openai_base_url_env(self):
+        provider = get_provider("openai")
+        openai_module = MagicMock()
+        openai_ctor = MagicMock()
+        openai_module.OpenAI = openai_ctor
+        with patch.dict(sys.modules, {"openai": openai_module}):
+            provider.create_client(base_url_env="OPENAI_BASE_URL")
+        openai_ctor.assert_called_once_with(
+            api_key="openai-test-key",
+            base_url="https://gateway.example/openai/v1",
+            max_retries=0,
+        )
+
+    @patch.dict(os.environ, {
+        "GEMINI_API_KEY": "gemini-test-key",
+        "GEMINI_BASE_URL": "https://gateway.example/google",
+    })
+    def test_google_base_url_env(self):
+        provider = get_provider("google")
+        google_module = MagicMock()
+        genai_module = MagicMock()
+        google_module.genai = genai_module
+        with patch.dict(sys.modules, {"google": google_module, "google.genai": genai_module}):
+            provider.create_client(base_url_env="GEMINI_BASE_URL")
+        genai_module.Client.assert_called_once_with(
+            api_key="gemini-test-key",
+            http_options={"base_url": "https://gateway.example/google"},
+        )
+
     def test_anthropic_custom_env_var_missing_raises(self):
         provider = get_provider("anthropic")
         with patch.dict(os.environ, {}, clear=True):
@@ -286,6 +359,69 @@ class TestBYOCredentialWiring:
                 pytest.skip("google-genai not installed")
             except ValueError as e:
                 assert "GEMINI_API_KEY" in str(e)
+
+
+class TestBaseUrlResolution:
+    """Test environment-driven gateway URL resolution."""
+
+    def test_empty_base_url_env_name_returns_none(self):
+        assert _resolve_base_url("") is None
+
+    def test_missing_env_returns_none(self):
+        with patch.dict(os.environ, {}, clear=True):
+            assert _resolve_base_url("OPENAI_BASE_URL") is None
+
+    def test_whitespace_env_returns_none(self):
+        with patch.dict(os.environ, {"OPENAI_BASE_URL": "   "}, clear=True):
+            assert _resolve_base_url("OPENAI_BASE_URL") is None
+
+    def test_strips_whitespace(self):
+        with patch.dict(os.environ, {"OPENAI_BASE_URL": "  https://gateway.example.com/v1  "}, clear=True):
+            assert _resolve_base_url("OPENAI_BASE_URL") == "https://gateway.example.com/v1"
+
+    def test_invalid_url_logs_warning_but_preserves_value(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            with patch.dict(os.environ, {"OPENAI_BASE_URL": "hello world"}, clear=True):
+                assert _resolve_base_url("OPENAI_BASE_URL") is None
+        assert "does not look like a URL; ignoring it" in caplog.text
+
+
+class TestPreflightWarningFormatting:
+    """Test warning formatting helpers for preflight UX."""
+
+    def test_long_messages_are_truncated(self):
+        message = "x" * 400
+        formatted = _format_preflight_error(RuntimeError(message))
+        assert len(formatted) == 200
+        assert formatted.endswith("...")
+
+
+class TestOpenAIBaseUrlDetection:
+    """Test OpenAI base URL classification for preflight behavior."""
+
+    def test_default_openai_endpoint_is_not_custom(self):
+        client = MagicMock()
+        client.base_url = "https://api.openai.com/v1"
+
+        assert _uses_custom_openai_base_url(client) is False
+
+    def test_gateway_endpoint_is_custom(self):
+        client = MagicMock()
+        client.base_url = "https://gateway.example.com/openai/v1"
+
+        assert _uses_custom_openai_base_url(client) is True
+
+    def test_path_containing_api_openai_com_does_not_mask_gateway(self):
+        client = MagicMock()
+        client.base_url = "https://gateway.example.com/proxy/api.openai.com/v1"
+
+        assert _uses_custom_openai_base_url(client) is True
+
+    def test_missing_or_invalid_hostname_is_not_custom(self):
+        client = MagicMock()
+        client.base_url = "not-a-url"
+
+        assert _uses_custom_openai_base_url(client) is False
 
 
 class TestPass1ValidationHardening:
@@ -491,6 +627,93 @@ class TestOpenAIAdapter:
         except ImportError:
             pytest.skip("openai not installed")
 
+    def test_preflight_prefers_model_lookup_on_default_endpoint(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.base_url = "https://api.openai.com/v1"
+        lookup_client = MagicMock()
+        mock_client.with_options.return_value = lookup_client
+
+        with patch("folio.llm.providers.execute_with_retry") as mock_execute:
+            reason = provider.preflight(mock_client, "gpt-4o")
+
+        assert reason is None
+        mock_client.with_options.assert_called_once_with(timeout=5.0)
+        lookup_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_execute.assert_not_called()
+
+    def test_preflight_probes_execution_after_lookup_on_custom_gateway(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.base_url = "https://gateway.example.com/openai/v1"
+        lookup_client = MagicMock()
+        mock_client.with_options.return_value = lookup_client
+        settings = ProviderRuntimeSettings(
+            allowed_endpoints=("chat_completions",),
+            require_store_false=True,
+        )
+
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
+            reason = provider.preflight(mock_client, "gpt-4o", settings)
+
+        assert reason is None
+        mock_client.with_options.assert_called_once_with(timeout=5.0)
+        lookup_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_execute.assert_called_once()
+        _, _, _, inp, runtime_settings, _ = mock_execute.call_args.args
+        assert inp.require_store_false is True
+        assert inp.timeout_seconds == 5.0
+        assert runtime_settings.max_attempts == 1
+        assert runtime_settings.allowed_endpoints == ("chat_completions",)
+
+    def test_preflight_falls_back_to_runtime_probe_when_lookup_fails(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.base_url = "https://api.openai.com/v1"
+        lookup_client = MagicMock()
+        lookup_client.models.retrieve.side_effect = RuntimeError("models endpoint unavailable")
+        mock_client.with_options.return_value = lookup_client
+        settings = ProviderRuntimeSettings(
+            allowed_endpoints=("chat_completions",),
+            require_store_false=True,
+        )
+
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
+            reason = provider.preflight(mock_client, "gpt-4o", settings)
+
+        assert reason is None
+        mock_client.with_options.assert_called_once_with(timeout=5.0)
+        lookup_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_execute.assert_called_once()
+        _, _, _, inp, runtime_settings, _ = mock_execute.call_args.args
+        assert inp.require_store_false is True
+        assert inp.timeout_seconds == 5.0
+        assert runtime_settings.max_attempts == 1
+        assert runtime_settings.allowed_endpoints == ("chat_completions",)
+
+    def test_preflight_returns_warning_reason_when_lookup_and_runtime_probe_fail(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.base_url = "https://gateway.example.com/openai/v1"
+        lookup_client = MagicMock()
+        lookup_client.models.retrieve.side_effect = RuntimeError("lookup blocked")
+        mock_client.with_options.return_value = lookup_client
+
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            side_effect=RuntimeError("chat blocked"),
+        ):
+            reason = provider.preflight(mock_client, "gpt-4o")
+
+        assert "chat blocked" in reason
+        assert "lookup also failed: lookup blocked" in reason
+
 
 class TestGoogleAdapter:
     """Test Google Gemini adapter request/response normalization."""
@@ -592,6 +815,92 @@ class TestGoogleAdapter:
         provider = GoogleAnalysisProvider()
         class PermissionDenied(Exception): pass
         assert provider.classify_error(PermissionDenied("forbidden")).kind == "permanent"
+
+    def test_preflight_uses_model_get_when_available(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.get.return_value = {"name": "gemini-2.5-pro"}
+
+        reason = provider.preflight(mock_client, "gemini-2.5-pro")
+
+        assert reason is None
+        mock_client.models.get.assert_called_once_with(
+            name="gemini-2.5-pro",
+            config={"http_options": {"timeout": 5.0}},
+        )
+        mock_client.models.generate_content.assert_not_called()
+
+    def test_preflight_falls_back_to_generate_content_when_lookup_fails(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.get.side_effect = RuntimeError("lookup unsupported")
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
+            reason = provider.preflight(mock_client, "gemini-2.5-pro")
+
+        assert reason is None
+        mock_client.models.get.assert_called_once_with(
+            name="gemini-2.5-pro",
+            config={"http_options": {"timeout": 5.0}},
+        )
+        mock_execute.assert_called_once()
+
+    def test_preflight_without_model_get_uses_generate_content(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        del mock_client.models.get
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
+            reason = provider.preflight(mock_client, "gemini-2.5-pro")
+
+        assert reason is None
+        mock_execute.assert_called_once()
+
+
+class TestAnthropicPreflight:
+    """Test Anthropic warning-only preflight behavior."""
+
+    def test_preflight_uses_runtime_probe_with_guardrails(self):
+        provider = AnthropicAnalysisProvider()
+        mock_client = MagicMock()
+        settings = ProviderRuntimeSettings(
+            allowed_endpoints=("messages",),
+            require_store_false=True,
+        )
+
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
+            reason = provider.preflight(
+                mock_client,
+                "claude-sonnet-4-20250514",
+                settings,
+            )
+
+        assert reason is None
+        mock_execute.assert_called_once()
+        _, _, _, inp, runtime_settings, _ = mock_execute.call_args.args
+        assert inp.require_store_false is True
+        assert inp.timeout_seconds == 5.0
+        assert runtime_settings.max_attempts == 1
+        assert runtime_settings.allowed_endpoints == ("messages",)
+
+    def test_preflight_returns_warning_reason(self):
+        provider = AnthropicAnalysisProvider()
+        mock_client = MagicMock()
+
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            side_effect=RuntimeError("model blocked"),
+        ):
+            reason = provider.preflight(mock_client, "claude-sonnet-4-20250514")
+
+        assert reason == "model blocked"
 
 
 class TestRuntimeFallbackChain:
@@ -843,4 +1152,3 @@ class TestTokenTotalAggregation:
         assert meta.usage_total.total_tokens == 450
         assert meta.usage_total.input_tokens == 300
         assert meta.usage_total.output_tokens == 150
-
