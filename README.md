@@ -395,10 +395,14 @@ Version history is recorded in both the markdown output and `version_history.jso
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-python -m pytest
-python -m pytest --cov=folio
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/python -m pytest tests/ -v
+.venv/bin/python -m pytest --cov=folio
 ```
+
+The test suite depends on dev-only packages such as `python-pptx` and `reportlab`, so run it from the project virtualenv after installing `.[dev]` rather than from an arbitrary system Python.
 
 ```
 folio/
