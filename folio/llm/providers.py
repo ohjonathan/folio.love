@@ -10,6 +10,7 @@ import base64
 import logging
 import os
 from typing import Any
+from urllib.parse import urlparse
 
 from .types import (
     AnalysisProvider,
@@ -68,9 +69,13 @@ def _uses_custom_openai_base_url(client: Any) -> bool:
     if base_url is None:
         return False
     text = str(base_url).strip()
-    if not text or text.startswith("<MagicMock"):
+    if not text:
         return False
-    return "api.openai.com" not in text
+    parsed = urlparse(text)
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    return hostname != "api.openai.com"
 
 
 class AnthropicAnalysisProvider:

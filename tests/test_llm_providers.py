@@ -26,6 +26,7 @@ from folio.llm.providers import (
     GoogleAnalysisProvider,
     OpenAIAnalysisProvider,
     _resolve_base_url,
+    _uses_custom_openai_base_url,
 )
 from tests.llm_mocks import (
     make_anthropic_response, make_openai_response, make_google_response,
@@ -360,6 +361,9 @@ class TestBYOCredentialWiring:
 class TestBaseUrlResolution:
     """Test environment-driven gateway URL resolution."""
 
+    def test_empty_base_url_env_name_returns_none(self):
+        assert _resolve_base_url("") is None
+
     def test_missing_env_returns_none(self):
         with patch.dict(os.environ, {}, clear=True):
             assert _resolve_base_url("OPENAI_BASE_URL") is None
@@ -371,6 +375,34 @@ class TestBaseUrlResolution:
     def test_strips_whitespace(self):
         with patch.dict(os.environ, {"OPENAI_BASE_URL": "  https://gateway.example.com/v1  "}, clear=True):
             assert _resolve_base_url("OPENAI_BASE_URL") == "https://gateway.example.com/v1"
+
+
+class TestUsesCustomOpenAIBaseUrl:
+    """Test OpenAI custom gateway detection heuristic."""
+
+    @pytest.mark.parametrize(
+        ("base_url", "expected"),
+        [
+            (None, False),
+            ("", False),
+            ("https://api.openai.com/v1/", False),
+            ("https://gateway.example.com/openai/v1", True),
+            ("https://gateway.example.com/proxy/api.openai.com/v1", True),
+        ],
+    )
+    def test_base_url_variants(self, base_url, expected):
+        client = MagicMock()
+        client.base_url = base_url
+        assert _uses_custom_openai_base_url(client) is expected
+
+    def test_httpx_url_like_object(self):
+        class UrlLike:
+            def __str__(self) -> str:
+                return "https://api.openai.com/v1/"
+
+        client = MagicMock()
+        client.base_url = UrlLike()
+        assert _uses_custom_openai_base_url(client) is False
 
 
 class TestPass1ValidationHardening:
