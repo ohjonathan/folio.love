@@ -52,8 +52,8 @@ Without one of those, the correct status is:
 | Seq | Action | Required | Machine | Owner | PASS Means | Required Artifact | Status |
 |---|---|---|---|---|---|---|---|
 | 1 | Sync baseline docs if still stale beyond PR #30 | Yes | Personal Folio dev laptop | Agents draft, you review/merge | PRD/roadmap/baseline docs match shipped reality closely enough for future prompts | Updated docs on `main` | Done |
-| 2 | Make Tier 2 decision explicit (`GO` or waiver) | Yes | Personal Folio dev laptop | You decide; agents can draft wording | A written decision exists stating whether Tier 3 implementation is allowed to begin | Decision note, checklist update, or closeout/waiver note | Not started |
-| 3 | Freeze the first Tier 3 implementation slice as `folio ingest` only | Yes | Personal Folio dev laptop | Agents draft, you approve | Scope is explicit: no entities/enrich/provenance creep in the first PR | Tier 3 kickoff prompt/spec | Not started |
+| 2 | Make Tier 2 decision explicit (`GO` or waiver) | Yes | Personal Folio dev laptop | You decide; agents can draft wording | A written decision exists stating whether Tier 3 implementation is allowed to begin | `tier2_to_tier3_waiver_note.md` or equivalent decision note | Done |
+| 3 | Freeze the first Tier 3 implementation slice as `folio ingest` only | Yes | Personal Folio dev laptop | Agents draft, you approve | Scope is explicit: no entities/enrich/provenance creep in the first PR | `docs/specs/v0.5.0_tier3_ingest_spec.md` | Drafted (pending review) |
 | 4 | Assemble initial Tier 3 fixtures | Yes | Personal Folio dev laptop; McKinsey laptop if using real examples | Shared | Repo contains the minimum realistic inputs to drive ingest design and tests | Transcript fixtures, context example, org-chart CSV fixture | Not started |
 
 ## Safe To Start Immediately After The Gate
@@ -122,7 +122,7 @@ before the later enrichment and provenance-heavy workstreams.
 ## Live Checklist
 
 - [x] Baseline product docs updated for PR #30
-- [ ] Tier 2 go/waive decision recorded explicitly
+- [x] Tier 2 go/waive decision recorded explicitly
 - [ ] Tier 3 kickoff prompt/spec drafted for `folio ingest`
 - [ ] Initial Tier 3 fixtures assembled
 - [ ] `folio ingest` scaffold implemented
@@ -131,4 +131,3 @@ before the later enrichment and provenance-heavy workstreams.
 - [ ] Per-stage routing decision recorded
 - [ ] Real engagement/library rerun completed on McKinsey laptop
 - [ ] Real vault validation completed on McKinsey laptop
-
