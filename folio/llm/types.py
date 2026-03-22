@@ -86,6 +86,7 @@ class ProviderInput:
     max_tokens: int = 4096
     temperature: float = 0.0
     require_store_false: bool = False
+    timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -165,6 +166,7 @@ class AnalysisProvider(Protocol):
         self,
         client: Any,
         model: str,
+        settings: ProviderRuntimeSettings | None = None,
     ) -> str | None:
         """Run a warning-only model availability probe.
 

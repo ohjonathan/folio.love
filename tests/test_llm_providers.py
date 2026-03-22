@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import logging
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,6 +18,7 @@ from folio.llm.types import (
     ImagePart,
     ProviderInput,
     ProviderOutput,
+    ProviderRuntimeSettings,
     ResolvedLLMProfile,
     ResolvedLLMRoute,
     StageLLMMetadata,
@@ -28,7 +30,7 @@ from folio.llm.providers import (
     OpenAIAnalysisProvider,
     _format_preflight_error,
     _resolve_base_url,
-    _uses_custom_openai_base_url,
+    _run_with_budget,
 )
 from tests.llm_mocks import (
     make_anthropic_response, make_openai_response, make_google_response,
@@ -381,8 +383,8 @@ class TestBaseUrlResolution:
     def test_invalid_url_logs_warning_but_preserves_value(self, caplog):
         with caplog.at_level(logging.WARNING):
             with patch.dict(os.environ, {"OPENAI_BASE_URL": "hello world"}, clear=True):
-                assert _resolve_base_url("OPENAI_BASE_URL") == "hello world"
-        assert "does not look like a URL" in caplog.text
+                assert _resolve_base_url("OPENAI_BASE_URL") is None
+        assert "does not look like a URL; ignoring it" in caplog.text
 
 
 class TestPreflightWarningFormatting:
@@ -395,32 +397,14 @@ class TestPreflightWarningFormatting:
         assert formatted.endswith("...")
 
 
-class TestUsesCustomOpenAIBaseUrl:
-    """Test OpenAI custom gateway detection heuristic."""
+class TestPreflightBudget:
+    """Test bounded preflight helpers."""
 
-    @pytest.mark.parametrize(
-        ("base_url", "expected"),
-        [
-            (None, False),
-            ("", False),
-            ("https://api.openai.com/v1/", False),
-            ("https://gateway.example.com/openai/v1", True),
-            ("https://gateway.example.com/proxy/api.openai.com/v1", True),
-        ],
-    )
-    def test_base_url_variants(self, base_url, expected):
-        client = MagicMock()
-        client.base_url = base_url
-        assert _uses_custom_openai_base_url(client) is expected
-
-    def test_httpx_url_like_object(self):
-        class UrlLike:
-            def __str__(self) -> str:
-                return "https://api.openai.com/v1/"
-
-        client = MagicMock()
-        client.base_url = UrlLike()
-        assert _uses_custom_openai_base_url(client) is False
+    def test_run_with_budget_times_out(self):
+        start = time.monotonic()
+        with pytest.raises(TimeoutError, match="preflight timed out"):
+            _run_with_budget(lambda: time.sleep(0.2), timeout_seconds=0.01)
+        assert time.monotonic() - start < 0.2
 
 
 class TestPass1ValidationHardening:
@@ -629,7 +613,6 @@ class TestOpenAIAdapter:
     def test_preflight_prefers_model_lookup_on_default_endpoint(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
-        mock_client.base_url = "https://api.openai.com/v1/"
 
         reason = provider.preflight(mock_client, "gpt-4o")
 
@@ -637,52 +620,43 @@ class TestOpenAIAdapter:
         mock_client.models.retrieve.assert_called_once_with("gpt-4o")
         mock_client.chat.completions.create.assert_not_called()
 
-    def test_preflight_checks_chat_execution_for_custom_gateway(self):
-        provider = OpenAIAnalysisProvider()
-        mock_client = MagicMock()
-        mock_client.base_url = "https://gateway.example.com/openai/v1"
-        mock_client.chat.completions.create.return_value = make_openai_response("ok")
-
-        reason = provider.preflight(mock_client, "gpt-4o")
-
-        assert reason is None
-        mock_client.models.retrieve.assert_called_once_with("gpt-4o")
-        mock_client.chat.completions.create.assert_called_once()
-
-    def test_preflight_falls_back_to_chat_when_lookup_fails(self):
+    def test_preflight_falls_back_to_runtime_probe_when_lookup_fails(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
         mock_client.models.retrieve.side_effect = RuntimeError("models endpoint unavailable")
-        mock_client.chat.completions.create.return_value = make_openai_response("ok")
+        settings = ProviderRuntimeSettings(
+            allowed_endpoints=("chat_completions",),
+            require_store_false=True,
+        )
 
-        reason = provider.preflight(mock_client, "gpt-4o")
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
+            reason = provider.preflight(mock_client, "gpt-4o", settings)
 
         assert reason is None
         mock_client.models.retrieve.assert_called_once_with("gpt-4o")
-        mock_client.chat.completions.create.assert_called_once()
+        mock_execute.assert_called_once()
+        _, _, _, inp, runtime_settings, _ = mock_execute.call_args.args
+        assert inp.require_store_false is True
+        assert inp.timeout_seconds == 5.0
+        assert runtime_settings.max_attempts == 1
+        assert runtime_settings.allowed_endpoints == ("chat_completions",)
 
-    def test_preflight_returns_warning_reason_when_lookup_and_chat_fail(self):
+    def test_preflight_returns_warning_reason_when_lookup_and_runtime_probe_fail(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
         mock_client.models.retrieve.side_effect = RuntimeError("lookup blocked")
-        mock_client.chat.completions.create.side_effect = RuntimeError("chat blocked")
 
-        reason = provider.preflight(mock_client, "gpt-4o")
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            side_effect=RuntimeError("chat blocked"),
+        ):
+            reason = provider.preflight(mock_client, "gpt-4o")
 
         assert "chat blocked" in reason
         assert "lookup also failed: lookup blocked" in reason
-
-    def test_preflight_warns_when_lookup_succeeds_but_chat_is_blocked(self):
-        provider = OpenAIAnalysisProvider()
-        mock_client = MagicMock()
-        mock_client.base_url = "https://gateway.example.com/openai/v1"
-        mock_client.chat.completions.create.side_effect = RuntimeError("chat blocked")
-
-        reason = provider.preflight(mock_client, "gpt-4o")
-
-        assert reason == "chat blocked"
-        mock_client.models.retrieve.assert_called_once_with("gpt-4o")
-        mock_client.chat.completions.create.assert_called_once()
 
 
 class TestGoogleAdapter:
@@ -801,69 +775,68 @@ class TestGoogleAdapter:
         provider = GoogleAnalysisProvider()
         mock_client = MagicMock()
         mock_client.models.get.side_effect = RuntimeError("lookup unsupported")
-        mock_client.models.generate_content.return_value = make_google_response("ok")
-
-        google_module = MagicMock()
-        genai_module = MagicMock()
-        types_module = MagicMock()
-        google_module.genai = genai_module
-        genai_module.types = types_module
-        types_module.Part.from_bytes.return_value = MagicMock()
-        types_module.GenerateContentConfig.return_value = MagicMock()
-
-        with patch.dict(
-            sys.modules,
-            {"google": google_module, "google.genai": genai_module, "google.genai.types": types_module},
-        ):
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
             reason = provider.preflight(mock_client, "gemini-2.5-pro")
 
         assert reason is None
         mock_client.models.get.assert_called_once_with(name="gemini-2.5-pro")
-        mock_client.models.generate_content.assert_called_once()
+        mock_execute.assert_called_once()
 
     def test_preflight_without_model_get_uses_generate_content(self):
         provider = GoogleAnalysisProvider()
         mock_client = MagicMock()
         del mock_client.models.get
-        mock_client.models.generate_content.return_value = make_google_response("ok")
-
-        google_module = MagicMock()
-        genai_module = MagicMock()
-        types_module = MagicMock()
-        google_module.genai = genai_module
-        genai_module.types = types_module
-        types_module.Part.from_bytes.return_value = MagicMock()
-        types_module.GenerateContentConfig.return_value = MagicMock()
-
-        with patch.dict(
-            sys.modules,
-            {"google": google_module, "google.genai": genai_module, "google.genai.types": types_module},
-        ):
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
             reason = provider.preflight(mock_client, "gemini-2.5-pro")
 
         assert reason is None
-        mock_client.models.generate_content.assert_called_once()
+        mock_execute.assert_called_once()
 
 
 class TestAnthropicPreflight:
     """Test Anthropic warning-only preflight behavior."""
 
-    def test_preflight_uses_messages_path(self):
+    def test_preflight_uses_runtime_probe_with_guardrails(self):
         provider = AnthropicAnalysisProvider()
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = make_anthropic_response("ok")
+        settings = ProviderRuntimeSettings(
+            allowed_endpoints=("messages",),
+            require_store_false=True,
+        )
 
-        reason = provider.preflight(mock_client, "claude-sonnet-4-20250514")
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
+            reason = provider.preflight(
+                mock_client,
+                "claude-sonnet-4-20250514",
+                settings,
+            )
 
         assert reason is None
-        mock_client.messages.create.assert_called_once()
+        mock_execute.assert_called_once()
+        _, _, _, inp, runtime_settings, _ = mock_execute.call_args.args
+        assert inp.require_store_false is True
+        assert inp.timeout_seconds == 5.0
+        assert runtime_settings.max_attempts == 1
+        assert runtime_settings.allowed_endpoints == ("messages",)
 
     def test_preflight_returns_warning_reason(self):
         provider = AnthropicAnalysisProvider()
         mock_client = MagicMock()
-        mock_client.messages.create.side_effect = RuntimeError("model blocked")
 
-        reason = provider.preflight(mock_client, "claude-sonnet-4-20250514")
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            side_effect=RuntimeError("model blocked"),
+        ):
+            reason = provider.preflight(mock_client, "claude-sonnet-4-20250514")
 
         assert reason == "model blocked"
 

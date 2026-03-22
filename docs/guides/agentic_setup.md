@@ -86,9 +86,11 @@ Use `--llm-profile` to select the gateway-backed profile explicitly:
 folio convert sample.pdf --llm-profile gateway_openai
 ```
 
-At the start of a conversion, Folio runs a warning-only model preflight once
-per selected profile. If a model is blocked or unavailable, you will see a
-warning before the expensive analysis stages begin, but the run will continue.
+At the start of each conversion run, Folio runs a warning-only model preflight
+once per selected profile. The probe is bounded, uses the same runtime
+guardrails as normal model calls, and only emits warnings. If a model is
+blocked or unavailable, you will see a warning before the expensive analysis
+stages begin, but the run will continue.
 
 Related runtime notes for agents and operators:
 

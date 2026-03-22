@@ -320,9 +320,10 @@ If the env var is unset or blank, Folio silently falls back to the SDK default
 endpoint.
 
 Folio now runs a warning-only model preflight once per selected profile per
-CLI run. This checks whether the configured model appears usable before the
-first expensive pass. A warning does **not** block conversion; it simply
-surfaces blocked or unavailable models earlier.
+conversion run. This checks whether the configured model appears usable before
+the first expensive pass. The probe is bounded and uses the same runtime
+guardrails as normal model calls. A warning does **not** block conversion; it
+simply surfaces blocked or unavailable models earlier.
 
 ### Scanned and Image-Only PDFs
 

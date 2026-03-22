@@ -174,13 +174,11 @@ class TestVerboseLoggingConfig:
         logging.getLogger("pdfminer").setLevel(logging.NOTSET)
         logging.getLogger("pdfplumber").setLevel(logging.NOTSET)
         logging.getLogger("PIL.PngImagePlugin").setLevel(logging.NOTSET)
-        logging.getLogger("httpx").setLevel(logging.NOTSET)
         _configure_logging(verbose=True)
 
         assert logging.getLogger("pdfminer").level == logging.WARNING
         assert logging.getLogger("pdfplumber").level == logging.WARNING
         assert logging.getLogger("PIL.PngImagePlugin").level == logging.WARNING
-        assert logging.getLogger("httpx").level == logging.WARNING
 
     def test_non_verbose_resets_noisy_logger_overrides(self):
         import logging
@@ -188,13 +186,19 @@ class TestVerboseLoggingConfig:
         logging.getLogger("pdfminer").setLevel(logging.WARNING)
         logging.getLogger("pdfplumber").setLevel(logging.WARNING)
         logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
-        logging.getLogger("httpx").setLevel(logging.WARNING)
         _configure_logging(verbose=False)
 
         assert logging.getLogger("pdfminer").level == logging.NOTSET
         assert logging.getLogger("pdfplumber").level == logging.NOTSET
         assert logging.getLogger("PIL.PngImagePlugin").level == logging.NOTSET
-        assert logging.getLogger("httpx").level == logging.NOTSET
+
+    def test_verbose_keeps_folio_debug_logs_visible(self):
+        import logging
+
+        logging.getLogger("folio.converter").setLevel(logging.NOTSET)
+        _configure_logging(verbose=True)
+
+        assert logging.getLogger("folio.converter").level == logging.NOTSET
 
 
 # ---------------------------------------------------------------------------

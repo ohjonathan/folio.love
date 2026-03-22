@@ -49,8 +49,6 @@ def _configure_logging(verbose: bool) -> None:
         "pdfplumber",
         "PIL",
         "PIL.PngImagePlugin",
-        "httpx",
-        "httpcore",
     )
     third_party_level = logging.WARNING if verbose else logging.NOTSET
     for logger_name in third_party_loggers:

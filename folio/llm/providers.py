@@ -9,19 +9,23 @@ from __future__ import annotations
 import base64
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from typing import Any
 from urllib.parse import urlparse
 
+from .runtime import RateLimiter, execute_with_retry
 from .types import (
     AnalysisProvider,
     ErrorDisposition,
     ImagePart,
     ProviderInput,
     ProviderOutput,
+    ProviderRuntimeSettings,
     TokenUsage,
 )
 
 logger = logging.getLogger(__name__)
+_PREFLIGHT_TIMEOUT_SECONDS = 5.0
 
 
 def _parse_retry_after(headers) -> float | None:
@@ -49,20 +53,23 @@ def _resolve_base_url(base_url_env: str) -> str | None:
     parsed = urlparse(value)
     if not parsed.scheme or not parsed.hostname:
         logger.warning(
-            "Environment variable %s does not look like a URL: %s",
+            "Environment variable %s does not look like a URL; ignoring it: %s",
             base_url_env,
             _truncate_message(value, max_chars=120),
         )
+        return None
     return value
 
 
-def _preflight_input() -> ProviderInput:
+def _preflight_input(*, require_store_false: bool) -> ProviderInput:
     """Build a minimal text-only request for warning-only preflight probes."""
     return ProviderInput(
         prompt="Respond with OK.",
         images=(),
         max_tokens=1,
         temperature=0.0,
+        require_store_false=require_store_false,
+        timeout_seconds=_PREFLIGHT_TIMEOUT_SECONDS,
     )
 
 
@@ -80,19 +87,58 @@ def _truncate_message(message: str, max_chars: int = 200) -> str:
     return text[: max_chars - 3].rstrip() + "..."
 
 
-def _uses_custom_openai_base_url(client: Any) -> bool:
-    """Detect whether an OpenAI client appears to target a non-default base URL."""
-    base_url = getattr(client, "base_url", None)
-    if base_url is None:
-        return False
-    text = str(base_url).strip()
-    if not text:
-        return False
-    parsed = urlparse(text)
-    hostname = parsed.hostname
-    if not hostname:
-        return False
-    return hostname != "api.openai.com"
+def _preflight_settings(
+    settings: ProviderRuntimeSettings | None,
+) -> ProviderRuntimeSettings:
+    """Build a bounded runtime profile for warning-only preflight probes."""
+    base = settings or ProviderRuntimeSettings()
+    return ProviderRuntimeSettings(
+        rate_limit_rpm=base.rate_limit_rpm,
+        rate_limit_tpm=base.rate_limit_tpm,
+        max_attempts=1,
+        base_delay_seconds=base.base_delay_seconds,
+        max_delay_seconds=min(base.max_delay_seconds, 1.0),
+        allowed_endpoints=base.allowed_endpoints,
+        excluded_endpoints=base.excluded_endpoints,
+        require_store_false=base.require_store_false,
+    )
+
+
+def _run_with_budget(fn, timeout_seconds: float = _PREFLIGHT_TIMEOUT_SECONDS):
+    """Run a small preflight helper with a hard wall-clock budget."""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(fn)
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FutureTimeoutError as exc:
+        future.cancel()
+        raise TimeoutError(
+            f"preflight timed out after {timeout_seconds:.1f}s"
+        ) from exc
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _run_runtime_preflight(
+    provider: AnalysisProvider,
+    client: Any,
+    model: str,
+    settings: ProviderRuntimeSettings | None,
+) -> str | None:
+    """Run a bounded text-only probe through the normal runtime guardrails."""
+    runtime_settings = _preflight_settings(settings)
+    limiter = RateLimiter(
+        rpm_limit=runtime_settings.rate_limit_rpm,
+        tpm_limit=runtime_settings.rate_limit_tpm,
+    )
+    inp = _preflight_input(
+        require_store_false=runtime_settings.require_store_false,
+    )
+    try:
+        execute_with_retry(provider, client, model, inp, runtime_settings, limiter)
+        return None
+    except Exception as exc:
+        return _format_preflight_error(exc)
 
 
 class AnthropicAnalysisProvider:
@@ -124,13 +170,14 @@ class AnthropicAnalysisProvider:
 
         return anthropic.Anthropic(**kwargs)
 
-    def preflight(self, client: Any, model: str) -> str | None:
+    def preflight(
+        self,
+        client: Any,
+        model: str,
+        settings: ProviderRuntimeSettings | None = None,
+    ) -> str | None:
         """Probe Anthropic model availability with a minimal text-only call."""
-        try:
-            self.analyze(client, model, _preflight_input())
-            return None
-        except Exception as exc:
-            return _format_preflight_error(exc)
+        return _run_runtime_preflight(self, client, model, settings)
 
     def analyze(
         self,
@@ -167,7 +214,7 @@ class AnthropicAnalysisProvider:
         kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": inp.max_tokens,
-            "timeout": 120.0,
+            "timeout": inp.timeout_seconds or 120.0,
             "messages": [{"role": "user", "content": content}],
             "temperature": inp.temperature,
         }
@@ -257,24 +304,26 @@ class OpenAIAnalysisProvider:
 
         return OpenAI(**kwargs)
 
-    def preflight(self, client: Any, model: str) -> str | None:
+    def preflight(
+        self,
+        client: Any,
+        model: str,
+        settings: ProviderRuntimeSettings | None = None,
+    ) -> str | None:
         """Probe OpenAI model availability and execution capability."""
         lookup_error: Exception | None = None
         try:
-            client.models.retrieve(model)
-            if not _uses_custom_openai_base_url(client):
-                return None
+            _run_with_budget(lambda: client.models.retrieve(model))
+            return None
         except Exception as exc:
             lookup_error = exc
 
-        try:
-            self.analyze(client, model, _preflight_input())
+        reason = _run_runtime_preflight(self, client, model, settings)
+        if reason is None:
             return None
-        except Exception as exc:
-            reason = _format_preflight_error(exc)
-            if lookup_error is not None:
-                reason = f"{reason} (lookup also failed: {_format_preflight_error(lookup_error)})"
-            return reason
+        if lookup_error is not None:
+            return f"{reason} (lookup also failed: {_format_preflight_error(lookup_error)})"
+        return reason
 
     def analyze(
         self,
@@ -309,7 +358,7 @@ class OpenAIAnalysisProvider:
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "timeout": 120.0,
+            "timeout": inp.timeout_seconds or 120.0,
             "messages": [{"role": "user", "content": content}],
         }
         # GPT-5.x: uses max_completion_tokens, does not accept temperature
@@ -411,26 +460,29 @@ class GoogleAnalysisProvider:
 
         return genai.Client(**kwargs)
 
-    def preflight(self, client: Any, model: str) -> str | None:
+    def preflight(
+        self,
+        client: Any,
+        model: str,
+        settings: ProviderRuntimeSettings | None = None,
+    ) -> str | None:
         """Probe Google model availability with lookup when supported."""
         lookup_error: Exception | None = None
         models_api = getattr(client, "models", None)
         model_getter = getattr(models_api, "get", None)
         if callable(model_getter):
             try:
-                model_getter(name=model)
+                _run_with_budget(lambda: model_getter(name=model))
                 return None
             except Exception as exc:
                 lookup_error = exc
 
-        try:
-            self.analyze(client, model, _preflight_input())
+        reason = _run_runtime_preflight(self, client, model, settings)
+        if reason is None:
             return None
-        except Exception as exc:
-            reason = _format_preflight_error(exc)
-            if lookup_error is not None:
-                reason = f"{reason} (lookup also failed: {_format_preflight_error(lookup_error)})"
-            return reason
+        if lookup_error is not None:
+            return f"{reason} (lookup also failed: {_format_preflight_error(lookup_error)})"
+        return reason
 
     def analyze(
         self,
@@ -463,7 +515,7 @@ class GoogleAnalysisProvider:
         # Config
         config_kwargs: dict[str, Any] = {
             "max_output_tokens": inp.max_tokens,
-            "http_options": {"timeout": 120_000},
+            "http_options": {"timeout": int((inp.timeout_seconds or 120.0) * 1000)},
             "temperature": inp.temperature,
         }
 

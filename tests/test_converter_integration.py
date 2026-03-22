@@ -578,18 +578,20 @@ class TestNoCacheConverterIntegration:
                 calls_run1 = len(api_calls)
                 assert calls_run1 == 3  # 1 preflight + 2 slides analyzed
 
-                # Run 2: cached (no_cache=False) — no preflight repeat, no analysis call.
+                # Run 2: cached (no_cache=False) — analysis stays cached, but
+                # preflight still runs once for this conversion.
                 api_calls.clear()
                 r2 = converter.convert(source_path=source, target=target_dir, passes=1)
-                assert len(api_calls) == 0
+                assert len(api_calls) == 1
                 assert r2.cache_stats is not None
                 assert r2.cache_stats.hits == 2
                 assert r2.cache_stats.misses == 0
 
-                # Run 3: forced re-analysis (no_cache=True) — both slides re-analyzed.
+                # Run 3: forced re-analysis (no_cache=True) — preflight runs once
+                # and both slides are re-analyzed.
                 api_calls.clear()
                 r3 = converter.convert(source_path=source, target=target_dir, passes=1, no_cache=True)
-                assert len(api_calls) == 2
+                assert len(api_calls) == 3
                 assert r3.cache_stats is not None
                 assert r3.cache_stats.misses == 2
                 assert r3.cache_stats.hits == 0
@@ -1074,7 +1076,7 @@ class TestEnterpriseOperabilityStage2:
             primary_provider.preflight.assert_called_once()
             fallback_provider.preflight.assert_not_called()
 
-    def test_preflight_only_runs_once_per_profile_for_reused_converter(self):
+    def test_preflight_runs_once_per_profile_per_conversion(self):
         from folio.config import LLMConfig, LLMProfile, LLMRoute
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1114,16 +1116,18 @@ class TestEnterpriseOperabilityStage2:
                          pass1_meta,
                      ),
                  ), \
-                 patch("folio.converter._get_provider", side_effect=lambda name: {
-                     "anthropic": primary_provider,
-                     "openai": fallback_provider,
-                 }[name]):
+                patch("folio.converter._get_provider", side_effect=lambda name: {
+                    "anthropic": primary_provider,
+                    "openai": fallback_provider,
+                }[name]):
                 converter = FolioConverter(config)
                 converter.convert(source_path=source, target=target_dir, passes=1)
                 converter.convert(source_path=source, target=target_dir, passes=1)
 
-            primary_provider.preflight.assert_called_once()
-            fallback_provider.preflight.assert_called_once()
+            assert primary_provider.preflight.call_count == 2
+            assert fallback_provider.preflight.call_count == 2
+            assert primary_provider.create_client.call_count == 2
+            assert fallback_provider.create_client.call_count == 2
 
     def test_base_url_env_is_threaded_to_all_stage_calls(self):
         from folio.config import LLMConfig, LLMProfile, LLMRoute
@@ -1211,13 +1215,13 @@ class TestEnterpriseOperabilityStage2:
                 converter.convert(source_path=source, target=target_dir, passes=2)
 
             assert mock_pass1.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
-            assert mock_pass1.call_args.kwargs["provider_client"] == (provider, provider.create_client.return_value)
-            assert mock_pass1.call_args.kwargs["fallback_provider_clients"] == []
+            assert "provider_client" not in mock_pass1.call_args.kwargs
+            assert "fallback_provider_clients" not in mock_pass1.call_args.kwargs
             assert mock_diagram.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
-            assert mock_diagram.call_args.kwargs["provider_client"] == (provider, provider.create_client.return_value)
+            assert "provider_client" not in mock_diagram.call_args.kwargs
             assert mock_pass2.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
-            assert mock_pass2.call_args.kwargs["provider_client"] == (provider, provider.create_client.return_value)
-            assert mock_pass2.call_args.kwargs["fallback_provider_clients"] == []
+            assert "provider_client" not in mock_pass2.call_args.kwargs
+            assert "fallback_provider_clients" not in mock_pass2.call_args.kwargs
             provider.create_client.assert_called_once()
 
 
