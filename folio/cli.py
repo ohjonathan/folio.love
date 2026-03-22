@@ -1132,7 +1132,7 @@ def _entities_list(ctx, entity_type, unconfirmed, json_output):
         return
 
     if json_output:
-        click.echo(json.dumps(reg._data, indent=2))
+        click.echo(reg.to_json())
         return
 
     counts = reg.count_by_type()
@@ -1154,12 +1154,22 @@ def _entities_list(ctx, entity_type, unconfirmed, json_output):
         ):
             status = "unconfirmed" if entry.needs_confirmation else "confirmed"
             detail = ""
-            if entry.title:
-                detail = entry.title
-                if entry.department:
-                    detail += f", {reg.resolve_key_to_name(entry.department, 'department')}"
-            elif entry.department:
-                detail = reg.resolve_key_to_name(entry.department, "department")
+            if entry.type == "person":
+                if entry.title:
+                    detail = entry.title
+                    if entry.department:
+                        detail += f", {reg.resolve_key_to_name(entry.department, 'department')}"
+                elif entry.department:
+                    detail = reg.resolve_key_to_name(entry.department, "department")
+            elif entry.type == "department" and entry.head:
+                detail = f"Head: {reg.resolve_key_to_name(entry.head, 'person')}"
+            elif entry.type in ("system", "process"):
+                parts = []
+                if entry.owner_dept:
+                    parts.append(reg.resolve_key_to_name(entry.owner_dept, "department"))
+                if entry.status:
+                    parts.append(entry.status)
+                detail = ", ".join(parts)
             if detail:
                 click.echo(f"  {entry.canonical_name:<20s} {detail:<25s} {status}")
             else:

@@ -110,6 +110,18 @@ class TestImportReportsTo:
         bob = reg.get_entity("person", "bob")
         assert bob.reports_to == "alice"
 
+    def test_import_self_referencing_reports_to(self, tmp_path):
+        """Self-referencing reports_to should be ignored with a warning."""
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,reports_to\nAlice,Alice\nBob,Alice\n")
+        reg = _make_registry(tmp_path)
+        result = import_csv(reg, csv_path)
+        alice = reg.get_entity("person", "alice")
+        assert alice.reports_to is None  # self-ref ignored
+        bob = reg.get_entity("person", "bob")
+        assert bob.reports_to == "alice"
+        assert any("self" in w.lower() for w in result.warnings)
+
 
 # ---------------------------------------------------------------------------
 # Duplicate handling

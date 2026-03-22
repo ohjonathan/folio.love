@@ -3,17 +3,20 @@
 import json
 import logging
 import re
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from .registry import _atomic_write_json
+from .registry import _atomic_write_json as atomic_write_json
 
 logger = logging.getLogger(__name__)
 
 _ENTITY_SCHEMA_VERSION = 1
 VALID_ENTITY_TYPES = frozenset({"person", "department", "system", "process"})
+# Entity types that can be auto-extracted from interaction notes (PR B seam)
+EXTRACTION_ENTITY_TYPES = frozenset({"person", "department"})
 _WIKILINK_UNSAFE_CHARS = set("[]|#^")
 
 
@@ -48,10 +51,11 @@ class EntitySchemaVersionError(EntityRegistryError):
 def slugify(name: str) -> str:
     """Derive entity key from canonical name.
 
-    Lowercase, replace runs of non-alphanumeric characters with ``_``,
-    strip leading/trailing underscores.
+    NFC-normalizes, lowercases, replaces runs of non-alphanumeric
+    characters with ``_``, strips leading/trailing underscores.
     """
-    s = name.lower()
+    s = unicodedata.normalize("NFC", name)
+    s = s.lower()
     s = re.sub(r"[^a-z0-9]+", "_", s)
     return s.strip("_")
 
@@ -221,7 +225,7 @@ class EntityRegistry:
             )
         self._data["updated_at"] = _now_iso()
         self._data.setdefault("_schema_version", _ENTITY_SCHEMA_VERSION)
-        _atomic_write_json(self._path, self._data)
+        atomic_write_json(self._path, self._data)
 
     # -- CRUD ---------------------------------------------------------------
 
@@ -510,4 +514,8 @@ class EntityRegistry:
             if key in type_dict:
                 return type_dict[key].get("canonical_name", key)
         return key
+
+    def to_json(self) -> str:
+        """Serialize the full registry as a JSON string."""
+        return json.dumps(self._data, indent=2)
 

@@ -235,6 +235,14 @@ def import_csv(registry: EntityRegistry, csv_path: Path) -> ImportResult:
         name = sanitize_wikilink_name(name)
         person_slug = slugify(name)
         target_slug = slugify(sanitize_wikilink_name(reports_to))
+
+        # S3: Reject self-referencing reports_to
+        if target_slug == person_slug:
+            result.warnings.append(
+                f"'{name}' reports_to self — ignored."
+            )
+            continue
+
         target = registry.get_entity("person", target_slug)
         if target is not None:
             registry.update_entity("person", person_slug, {"reports_to": target_slug})

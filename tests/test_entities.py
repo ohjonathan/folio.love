@@ -45,6 +45,13 @@ class TestSlugify:
         assert slugify("Jane  Smith") == "jane_smith"
         assert slugify("  Jane Smith  ") == "jane_smith"
 
+    def test_slugify_unicode_normalization(self):
+        """Precomposed and decomposed forms should produce identical slugs."""
+        # é as single codepoint (NFC) vs e + combining accent (NFD)
+        precomposed = "Ren\u00e9 Dupont"
+        decomposed = "Rene\u0301 Dupont"
+        assert slugify(precomposed) == slugify(decomposed) == "ren_dupont"
+
     def test_wikilink_sanitization(self):
         assert sanitize_wikilink_name("Jane [Smith]") == "Jane Smith"
         assert sanitize_wikilink_name("Dept|Eng") == "DeptEng"
