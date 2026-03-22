@@ -354,7 +354,6 @@ class DiagramAnalysis(SlideAnalysis):
     review_questions: list[str] = field(default_factory=list)
     review_required: bool = False
     abstained: bool = False
-    gated: bool = False  # P1b: True when system gated extraction (distinct from LLM abstention)
     _extraction_metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -651,7 +650,6 @@ _CONFIDENCE_BASE = {"high": 0.90, "medium": 0.65, "low": 0.40}
 # - analysis_unavailable: all reviewable slides pending (LLM failure / no analysis)
 # - partial_analysis_slide_{n}: reviewable slide n pending while others succeeded
 # - diagram_abstained_slide_{n}: slide n intentionally abstained (unsupported diagram)
-# - diagram_gated_slide_{n}: slide n skipped by P1b system gating (not LLM abstention)
 # - low_confidence_slide_{n}: slide n has low-confidence evidence
 # - unvalidated_claim_slide_{n}: slide n has unvalidated evidence (text was present)
 # - text_validation_unavailable_slide_{n}: slide n has unavailable text validation
@@ -755,13 +753,9 @@ def assess_review_state(
     if all_reviewable_pending:
         flags.append("analysis_unavailable")
 
-    # Dedicated flags for intentional diagram abstentions vs. system gating
+    # Dedicated flags for intentional diagram abstentions
     for slide_num in sorted(abstained_slides):
-        da = analyses[slide_num]
-        if isinstance(da, DiagramAnalysis) and da.gated:
-            flags.append(f"diagram_gated_slide_{slide_num}")
-        else:
-            flags.append(f"diagram_abstained_slide_{slide_num}")
+        flags.append(f"diagram_abstained_slide_{slide_num}")
 
     # PR 4: Dedicated flags for non-abstained diagrams needing review
     for slide_num in sorted(reviewable_slides - abstained_slides):

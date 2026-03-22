@@ -189,3 +189,43 @@ class TestCombinedBatchScenario:
         # Verify output mentions both skips
         assert "duplicate of" in result.output
         assert "empty, skipped" in result.output
+
+
+class TestDedupRobustness:
+    """R3 Blocking #3: Hash/read failures are per-file non-fatal."""
+
+    @patch("folio.cli.FolioConverter")
+    @patch("folio.cli._content_hash", side_effect=OSError("Permission denied"))
+    def test_hash_failure_still_processes(self, mock_hash, mock_converter_cls, tmp_path):
+        """File with hash read error is still processed (not skipped or aborted)."""
+        f = tmp_path / "deck.pptx"
+        f.write_bytes(b"content")
+
+        mock_converter = MagicMock()
+        mock_result = MagicMock()
+        mock_result.slide_count = 1
+        mock_result.renderer_used = "powerpoint"
+        mock_converter.convert.return_value = mock_result
+        mock_converter_cls.return_value = mock_converter
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pptx"])
+
+        assert result.exit_code == 0
+        assert mock_converter.convert.call_count == 1
+        assert "read error" in result.output
+        assert "processing anyway" in result.output
+
+    @patch("folio.cli.FolioConverter")
+    def test_all_empty_batch_no_pdf_mode(self, mock_converter_cls, tmp_path):
+        """All-empty batch does not print 'Mode: PDF mitigation'."""
+        (tmp_path / "a.pdf").write_bytes(b"")
+        (tmp_path / "b.pdf").write_bytes(b"")
+
+        mock_converter_cls.return_value = MagicMock()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pdf"])
+
+        assert "Mode: PDF mitigation" not in result.output
+        assert "Empty files skipped: 2" in result.output

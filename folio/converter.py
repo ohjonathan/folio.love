@@ -398,8 +398,11 @@ class FolioConverter:
             # PR 6: Exclude frozen slides from diagram extraction and rendering
             # P1b: Post-Pass-1 diagram gating — skip extraction for pages
             # whose Pass-1 type is data/appendix/title with no framework.
+            # R3 fix: Gating runs AFTER frozen exclusions to avoid mutating
+            # frozen mixed slides.
+            non_frozen_diagram_slides = diagram_or_mixed_slides - all_frozen_diagram_slides
             pass1_gated_slides = set()
-            for slide_num in diagram_or_mixed_slides:
+            for slide_num in non_frozen_diagram_slides:
                 analysis_item = slide_analyses.get(slide_num)
                 if analysis_item and analysis_item.slide_type in _SKIP_DIAGRAM_TYPES:
                     fw = getattr(analysis_item, "framework", None)
@@ -408,19 +411,14 @@ class FolioConverter:
                         # B1 fix: Mark gated DiagramAnalysis as abstained to
                         # prevent ghost state (DiagramAnalysis with no diagram
                         # content but abstained=False).
-                        # S-NEW-1: Also mark gated=True so assess_review_state
-                        # emits diagram_gated_slide_{n} (not diagram_abstained).
                         if isinstance(analysis_item, analysis.DiagramAnalysis):
                             analysis_item.abstained = True
-                            analysis_item.gated = True
                         logger.info(
                             "Slide %d: skipping diagram extraction (type=%s, no framework)",
                             slide_num,
                             analysis_item.slide_type,
                         )
-            diagram_extract_slides = (
-                diagram_or_mixed_slides - all_frozen_diagram_slides - pass1_gated_slides
-            )
+            diagram_extract_slides = non_frozen_diagram_slides - pass1_gated_slides
 
             if diagram_extract_slides:
                 from .pipeline import diagram_extraction as diag_ext

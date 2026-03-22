@@ -1773,8 +1773,8 @@ class TestPostPass1DiagramGating:
             assert 1 in captured_slide_numbers, "data+framework should reach extraction"
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
-    def test_gated_diagram_marked_abstained_and_gated(self):
-        """M-NEW-1: Gated DiagramAnalysis has abstained=True AND gated=True."""
+    def test_gated_diagram_marked_abstained(self):
+        """M-NEW-1: Gated DiagramAnalysis has abstained=True."""
         from folio.pipeline.analysis import DiagramAnalysis
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -1805,7 +1805,6 @@ class TestPostPass1DiagramGating:
                 return_value=_mock_anthropic_response(MOCK_RESPONSE)
             )
 
-            # Capture the pass1_results dict that reaches diagram extraction
             captured_analyses = {}
 
             def mock_analyze_diagram_pages(**kwargs):
@@ -1827,13 +1826,11 @@ class TestPostPass1DiagramGating:
                 converter = FolioConverter(config)
                 result = converter.convert(source_path=source, target=target_dir, passes=1)
 
-            # Diagram extraction should NOT have been called (all slides gated)
-            # so captured_analyses should be empty. Check pass1_results directly.
+            # Check pass1_results directly — slide should be coerced and marked abstained.
             analysis_item = pass1_results[1]
             assert isinstance(analysis_item, DiagramAnalysis), \
                 f"Should be coerced to DiagramAnalysis, got {type(analysis_item)}"
             assert analysis_item.abstained is True, "Gated slide must be marked abstained"
-            assert analysis_item.gated is True, "Gated slide must be marked gated"
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_appendix_no_framework_gated(self):

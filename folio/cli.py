@@ -309,11 +309,16 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
     duplicates_skipped = 0
     empty_files_skipped = 0
     for f in files:
-        if os.path.getsize(f) == 0:
-            click.echo(f"⚠ {f.name} (empty, skipped)")
-            empty_files_skipped += 1
+        try:
+            if os.path.getsize(f) == 0:
+                click.echo(f"⚠ {f.name} (empty, skipped)")
+                empty_files_skipped += 1
+                continue
+            h = _content_hash(f)
+        except OSError as exc:
+            click.echo(f"⚠ {f.name} (read error: {exc}, processing anyway)")
+            files_to_process.append(f)
             continue
-        h = _content_hash(f)
         first_seen = seen_hashes.get(h)
         if first_seen is not None:
             click.echo(f"⊘ {f.name} (duplicate of {first_seen.name}, skipped)")
@@ -323,7 +328,9 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
         files_to_process.append(f)
 
     # Classify files into automated PPTX vs PDF mitigation
-    is_pdf_batch = all(f.suffix.lower() == ".pdf" for f in files_to_process)
+    is_pdf_batch = bool(files_to_process) and all(
+        f.suffix.lower() == ".pdf" for f in files_to_process
+    )
 
     click.echo(f"Converting {len(files_to_process)} files...")
     if is_pdf_batch:
