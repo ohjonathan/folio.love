@@ -44,9 +44,17 @@ def _configure_logging(verbose: bool) -> None:
         level=level,
         format="%(message)s" if not verbose else "%(name)s: %(message)s",
     )
-    logging.getLogger("pdfminer").setLevel(
-        logging.WARNING if verbose else logging.NOTSET
+    third_party_loggers = (
+        "pdfminer",
+        "pdfplumber",
+        "PIL",
+        "PIL.PngImagePlugin",
+        "httpx",
+        "httpcore",
     )
+    third_party_level = logging.WARNING if verbose else logging.NOTSET
+    for logger_name in third_party_loggers:
+        logging.getLogger(logger_name).setLevel(third_party_level)
 
 
 @dataclass

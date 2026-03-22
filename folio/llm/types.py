@@ -189,6 +189,12 @@ class AnalysisProvider(Protocol):
         ...
 
 
+# Reusable orchestration aliases for resolved fallback specs and live clients.
+ProviderClient = tuple["AnalysisProvider", Any]
+FallbackProfileSpec = tuple[str, str, str, str]
+FallbackProviderClient = tuple["AnalysisProvider", Any, str, str]
+
+
 # ---------------------------------------------------------------------------
 # Orchestration types (used by config, converter, analysis)
 # ---------------------------------------------------------------------------

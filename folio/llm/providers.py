@@ -44,7 +44,16 @@ def _resolve_base_url(base_url_env: str) -> str | None:
     if not base_url_env:
         return None
     value = os.environ.get(base_url_env, "").strip()
-    return value or None
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.hostname:
+        logger.warning(
+            "Environment variable %s does not look like a URL: %s",
+            base_url_env,
+            _truncate_message(value, max_chars=120),
+        )
+    return value
 
 
 def _preflight_input() -> ProviderInput:
@@ -60,7 +69,15 @@ def _preflight_input() -> ProviderInput:
 def _format_preflight_error(exc: Exception) -> str:
     """Render a compact warning reason for model preflight failures."""
     message = str(exc).strip()
-    return message or type(exc).__name__
+    return _truncate_message(message or type(exc).__name__)
+
+
+def _truncate_message(message: str, max_chars: int = 200) -> str:
+    """Clamp long warning text to keep logs readable."""
+    text = message.strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
 
 
 def _uses_custom_openai_base_url(client: Any) -> bool:

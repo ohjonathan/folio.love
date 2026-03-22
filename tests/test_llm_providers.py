@@ -4,6 +4,7 @@ import os
 import json
 import sys
 import tempfile
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -25,6 +26,7 @@ from folio.llm.providers import (
     AnthropicAnalysisProvider,
     GoogleAnalysisProvider,
     OpenAIAnalysisProvider,
+    _format_preflight_error,
     _resolve_base_url,
     _uses_custom_openai_base_url,
 )
@@ -375,6 +377,22 @@ class TestBaseUrlResolution:
     def test_strips_whitespace(self):
         with patch.dict(os.environ, {"OPENAI_BASE_URL": "  https://gateway.example.com/v1  "}, clear=True):
             assert _resolve_base_url("OPENAI_BASE_URL") == "https://gateway.example.com/v1"
+
+    def test_invalid_url_logs_warning_but_preserves_value(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            with patch.dict(os.environ, {"OPENAI_BASE_URL": "hello world"}, clear=True):
+                assert _resolve_base_url("OPENAI_BASE_URL") == "hello world"
+        assert "does not look like a URL" in caplog.text
+
+
+class TestPreflightWarningFormatting:
+    """Test warning formatting helpers for preflight UX."""
+
+    def test_long_messages_are_truncated(self):
+        message = "x" * 400
+        formatted = _format_preflight_error(RuntimeError(message))
+        assert len(formatted) == 200
+        assert formatted.endswith("...")
 
 
 class TestUsesCustomOpenAIBaseUrl:

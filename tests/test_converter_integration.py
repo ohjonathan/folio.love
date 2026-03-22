@@ -956,7 +956,7 @@ class TestEnterpriseOperabilityStage2:
                          pass1_meta,
                      ),
                  ), \
-                 patch("folio.converter.get_provider", side_effect=lambda name: {
+                 patch("folio.converter._get_provider", side_effect=lambda name: {
                      "anthropic": primary_provider,
                      "openai": fallback_provider,
                  }[name]), \
@@ -968,6 +968,8 @@ class TestEnterpriseOperabilityStage2:
             assert "LLM profile 'fallback' (openai/gpt-4o) may be unavailable" in caplog.text
             primary_provider.preflight.assert_called_once()
             fallback_provider.preflight.assert_called_once()
+            primary_provider.create_client.assert_called_once()
+            fallback_provider.create_client.assert_called_once()
 
     def test_preflight_warns_on_client_initialization_failures(self, caplog):
         from folio.config import LLMConfig, LLMProfile, LLMRoute
@@ -1010,7 +1012,7 @@ class TestEnterpriseOperabilityStage2:
                          pass1_meta,
                      ),
                  ), \
-                 patch("folio.converter.get_provider", return_value=primary_provider), \
+                 patch("folio.converter._get_provider", return_value=primary_provider), \
                  caplog.at_level(logging.WARNING):
                 converter = FolioConverter(config)
                 result = converter.convert(source_path=source, target=target_dir, passes=1)
@@ -1057,7 +1059,7 @@ class TestEnterpriseOperabilityStage2:
                          pass1_meta,
                      ),
                  ), \
-                 patch("folio.converter.get_provider", side_effect=lambda name: {
+                 patch("folio.converter._get_provider", side_effect=lambda name: {
                      "anthropic": primary_provider,
                      "openai": fallback_provider,
                  }[name]):
@@ -1112,7 +1114,7 @@ class TestEnterpriseOperabilityStage2:
                          pass1_meta,
                      ),
                  ), \
-                 patch("folio.converter.get_provider", side_effect=lambda name: {
+                 patch("folio.converter._get_provider", side_effect=lambda name: {
                      "anthropic": primary_provider,
                      "openai": fallback_provider,
                  }[name]):
@@ -1204,13 +1206,19 @@ class TestEnterpriseOperabilityStage2:
                          pass2_meta,
                      ),
                  ) as mock_pass2, \
-                 patch("folio.converter.get_provider", return_value=provider):
+                 patch("folio.converter._get_provider", return_value=provider):
                 converter = FolioConverter(config)
                 converter.convert(source_path=source, target=target_dir, passes=2)
 
             assert mock_pass1.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
+            assert mock_pass1.call_args.kwargs["provider_client"] == (provider, provider.create_client.return_value)
+            assert mock_pass1.call_args.kwargs["fallback_provider_clients"] == []
             assert mock_diagram.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
+            assert mock_diagram.call_args.kwargs["provider_client"] == (provider, provider.create_client.return_value)
             assert mock_pass2.call_args.kwargs["base_url_env"] == "OPENAI_BASE_URL"
+            assert mock_pass2.call_args.kwargs["provider_client"] == (provider, provider.create_client.return_value)
+            assert mock_pass2.call_args.kwargs["fallback_provider_clients"] == []
+            provider.create_client.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

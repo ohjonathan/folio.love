@@ -168,21 +168,33 @@ class TestScanCommand:
 
 
 class TestVerboseLoggingConfig:
-    def test_verbose_clamps_pdfminer_to_warning(self):
+    def test_verbose_clamps_noisy_third_party_loggers_to_warning(self):
         import logging
 
         logging.getLogger("pdfminer").setLevel(logging.NOTSET)
+        logging.getLogger("pdfplumber").setLevel(logging.NOTSET)
+        logging.getLogger("PIL.PngImagePlugin").setLevel(logging.NOTSET)
+        logging.getLogger("httpx").setLevel(logging.NOTSET)
         _configure_logging(verbose=True)
 
         assert logging.getLogger("pdfminer").level == logging.WARNING
+        assert logging.getLogger("pdfplumber").level == logging.WARNING
+        assert logging.getLogger("PIL.PngImagePlugin").level == logging.WARNING
+        assert logging.getLogger("httpx").level == logging.WARNING
 
-    def test_non_verbose_resets_pdfminer_override(self):
+    def test_non_verbose_resets_noisy_logger_overrides(self):
         import logging
 
         logging.getLogger("pdfminer").setLevel(logging.WARNING)
+        logging.getLogger("pdfplumber").setLevel(logging.WARNING)
+        logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
         _configure_logging(verbose=False)
 
         assert logging.getLogger("pdfminer").level == logging.NOTSET
+        assert logging.getLogger("pdfplumber").level == logging.NOTSET
+        assert logging.getLogger("PIL.PngImagePlugin").level == logging.NOTSET
+        assert logging.getLogger("httpx").level == logging.NOTSET
 
 
 # ---------------------------------------------------------------------------
@@ -1193,4 +1205,3 @@ class TestStatusRefreshReconcilesFlagged:
         # After reconciliation, frontmatter's "flagged" should win
         assert "Flagged: 1" in result.output
         assert "partial_analysis_slide_2" in result.output
-

@@ -18,7 +18,13 @@ from ..llm import (
     ImagePart, TokenUsage, RateLimiter, execute_with_retry,
 )
 from ..llm.runtime import EndpointNotAllowedError
-from ..llm.types import ProviderRuntimeSettings, StageLLMMetadata
+from ..llm.types import (
+    FallbackProfileSpec,
+    FallbackProviderClient,
+    ProviderClient,
+    ProviderRuntimeSettings,
+    StageLLMMetadata,
+)
 from .text import SlideText, _EXTRACTION_VERSION
 
 
@@ -1128,7 +1134,9 @@ def analyze_slides(
     provider_name: str = "anthropic",
     api_key_env: str = "",
     base_url_env: str = "",
-    fallback_profiles: Optional[list[tuple[str, str, str, str]]] = None,
+    provider_client: ProviderClient | None = None,
+    fallback_profiles: Optional[list[FallbackProfileSpec]] = None,
+    fallback_provider_clients: Optional[list[FallbackProviderClient]] = None,
     all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
     slide_numbers: list[int] | None = None,
 ) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
@@ -1142,8 +1150,9 @@ def analyze_slides(
         force_miss: Skip cache reads but still write fresh results (G3).
         provider_name: Provider adapter to use (default: anthropic).
         api_key_env: Override env var for API key (from LLMProfile).
-        fallback_profiles: List of (provider_name, model, api_key_env, base_url_env) tuples
-            for transient fallback per spec §6.2.
+        provider_client: Optional pre-created (provider, client) tuple.
+        fallback_profiles: List of fallback profile specs for transient fallback.
+        fallback_provider_clients: Optional pre-created fallback provider/client tuples.
         all_provider_settings: Dict mapping provider name to ProviderRuntimeSettings.
             If None, uses sensible defaults for each provider.
         slide_numbers: Optional list of real slide numbers corresponding to
@@ -1170,46 +1179,50 @@ def analyze_slides(
             return slide_numbers[index]
         return index + 1
 
-    try:
-        provider = get_provider(provider_name)
-        client = provider.create_client(
-            api_key_env=api_key_env,
-            base_url_env=base_url_env,
-        )
-    except ValueError as e:
-        reason = f"Analysis pending \u2014 profile requires {api_key_env or provider_name.upper() + '_API_KEY'}"
-        logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
-        return (
-            {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
-            CacheStats(), stage_meta,
-        )
-    except ImportError as e:
-        reason = f"Analysis pending \u2014 install the {provider_name} SDK"
-        logger.warning("LLM provider '%s' SDK missing: %s. Skipping analysis.", provider_name, e)
-        return (
-            {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
-            CacheStats(), stage_meta,
-        )
-    except Exception as e:
-        reason = f"Analysis pending \u2014 provider '{provider_name}' rejected the request"
-        logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
-        return (
-            {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
-            CacheStats(), stage_meta,
-        )
+    if provider_client is not None:
+        provider, client = provider_client
+    else:
+        try:
+            provider = get_provider(provider_name)
+            client = provider.create_client(
+                api_key_env=api_key_env,
+                base_url_env=base_url_env,
+            )
+        except ValueError as e:
+            reason = f"Analysis pending \u2014 profile requires {api_key_env or provider_name.upper() + '_API_KEY'}"
+            logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
+            return (
+                {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+                CacheStats(), stage_meta,
+            )
+        except ImportError as e:
+            reason = f"Analysis pending \u2014 install the {provider_name} SDK"
+            logger.warning("LLM provider '%s' SDK missing: %s. Skipping analysis.", provider_name, e)
+            return (
+                {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+                CacheStats(), stage_meta,
+            )
+        except Exception as e:
+            reason = f"Analysis pending \u2014 provider '{provider_name}' rejected the request"
+            logger.warning("LLM provider '%s' unavailable: %s. Skipping analysis.", provider_name, e)
+            return (
+                {_slide_num(i): SlideAnalysis.pending(reason) for i in range(len(image_paths))},
+                CacheStats(), stage_meta,
+            )
 
     # Build fallback chain: [(provider, client, model, provider_name)] for transient fallback
-    fallback_chain = []
-    for fb_provider_name, fb_model, fb_api_key_env, fb_base_url_env in (fallback_profiles or []):
-        try:
-            fb_provider = get_provider(fb_provider_name)
-            fb_client = fb_provider.create_client(
-                api_key_env=fb_api_key_env,
-                base_url_env=fb_base_url_env,
-            )
-            fallback_chain.append((fb_provider, fb_client, fb_model, fb_provider_name))
-        except Exception as e:
-            logger.warning("Fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
+    fallback_chain = list(fallback_provider_clients or [])
+    if fallback_provider_clients is None:
+        for fb_provider_name, fb_model, fb_api_key_env, fb_base_url_env in (fallback_profiles or []):
+            try:
+                fb_provider = get_provider(fb_provider_name)
+                fb_client = fb_provider.create_client(
+                    api_key_env=fb_api_key_env,
+                    base_url_env=fb_base_url_env,
+                )
+                fallback_chain.append((fb_provider, fb_client, fb_model, fb_provider_name))
+            except Exception as e:
+                logger.warning("Fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
 
     # Per-provider settings dict (B1: each provider gets its own settings)
     _all_settings = all_provider_settings or {}
@@ -1708,7 +1721,9 @@ def analyze_slides_deep(
     provider_name: str = "anthropic",
     api_key_env: str = "",
     base_url_env: str = "",
-    fallback_profiles: Optional[list[tuple[str, str, str, str]]] = None,
+    provider_client: ProviderClient | None = None,
+    fallback_profiles: Optional[list[FallbackProfileSpec]] = None,
+    fallback_provider_clients: Optional[list[FallbackProviderClient]] = None,
     all_provider_settings: Optional[dict[str, ProviderRuntimeSettings]] = None,
 ) -> tuple[dict[int, SlideAnalysis], CacheStats, StageLLMMetadata]:
     """Run selective second pass on high-density slides.
@@ -1723,8 +1738,9 @@ def analyze_slides_deep(
         skip_slides: Slide numbers to exclude from density scoring
             (e.g., blank slides). These are never sent to Pass 2.
         force_miss: Skip cache reads but still write fresh results (G3).
-        fallback_profiles: List of (provider_name, model, api_key_env, base_url_env) for
-            transient fallback per spec §6.2.
+        provider_client: Optional pre-created (provider, client) tuple.
+        fallback_profiles: List of fallback profile specs for transient fallback.
+        fallback_provider_clients: Optional pre-created fallback provider/client tuples.
         all_provider_settings: Dict mapping provider name to ProviderRuntimeSettings.
             If None, uses sensible defaults for each provider.
 
@@ -1759,28 +1775,32 @@ def analyze_slides_deep(
     # Load deep cache (skip read when force_miss)
     deep_cache = _load_cache_deep(cache_dir, model=model, provider=provider_name) if cache_dir and not force_miss else {}
 
-    try:
-        provider = get_provider(provider_name)
-        client = provider.create_client(
-            api_key_env=api_key_env,
-            base_url_env=base_url_env,
-        )
-    except (ValueError, Exception) as e:
-        logger.warning("LLM provider '%s' unavailable for Pass 2: %s", provider_name, e)
-        return pass1_results, CacheStats(pass_name="pass2"), stage_meta
+    if provider_client is not None:
+        provider, client = provider_client
+    else:
+        try:
+            provider = get_provider(provider_name)
+            client = provider.create_client(
+                api_key_env=api_key_env,
+                base_url_env=base_url_env,
+            )
+        except (ValueError, Exception) as e:
+            logger.warning("LLM provider '%s' unavailable for Pass 2: %s", provider_name, e)
+            return pass1_results, CacheStats(pass_name="pass2"), stage_meta
 
     # Build fallback chain for pass 2
-    fallback_chain = []
-    for fb_provider_name, fb_model, fb_api_key_env, fb_base_url_env in (fallback_profiles or []):
-        try:
-            fb_provider = get_provider(fb_provider_name)
-            fb_client = fb_provider.create_client(
-                api_key_env=fb_api_key_env,
-                base_url_env=fb_base_url_env,
-            )
-            fallback_chain.append((fb_provider, fb_client, fb_model, fb_provider_name))
-        except Exception as e:
-            logger.warning("Pass 2 fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
+    fallback_chain = list(fallback_provider_clients or [])
+    if fallback_provider_clients is None:
+        for fb_provider_name, fb_model, fb_api_key_env, fb_base_url_env in (fallback_profiles or []):
+            try:
+                fb_provider = get_provider(fb_provider_name)
+                fb_client = fb_provider.create_client(
+                    api_key_env=fb_api_key_env,
+                    base_url_env=fb_base_url_env,
+                )
+                fallback_chain.append((fb_provider, fb_client, fb_model, fb_provider_name))
+            except Exception as e:
+                logger.warning("Pass 2 fallback provider '%s' unavailable: %s — skipping", fb_provider_name, e)
 
     # Per-provider settings dict (B1)
     _all_settings = all_provider_settings or {}

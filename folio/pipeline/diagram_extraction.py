@@ -22,6 +22,7 @@ from PIL import Image
 from ..llm.runtime import RateLimiter, execute_with_retry
 from ..llm.types import (
     ImagePart,
+    ProviderClient,
     ProviderInput,
     ProviderOutput,
     ProviderRuntimeSettings,
@@ -1334,6 +1335,7 @@ def analyze_diagram_pages(
     model: str = "claude-sonnet-4-20250514",
     api_key_env: str = "",
     base_url_env: str = "",
+    provider_client: ProviderClient | None = None,
     all_provider_settings: dict[str, ProviderRuntimeSettings] | None = None,
     slide_numbers: list[int] | None = None,
     diagram_max_tokens: int = 16384,
@@ -1354,6 +1356,7 @@ def analyze_diagram_pages(
         model: LLM model name.
         api_key_env: API key env var.
         base_url_env: Optional base URL env var for custom gateways.
+        provider_client: Optional pre-created (provider, client) tuple.
         all_provider_settings: Per-provider runtime settings.
         slide_numbers: Which slides to process (diagram/mixed only).
 
@@ -1376,12 +1379,12 @@ def analyze_diagram_pages(
         image_by_slide[ir.slide_num] = ir
 
     # Get provider + client
-    provider_client = _get_provider_and_client(
+    resolved_provider_client = provider_client or _get_provider_and_client(
         provider_name,
         api_key_env,
         base_url_env,
     )
-    if provider_client is None:
+    if resolved_provider_client is None:
         # All diagram slides become pending
         for sn in (slide_numbers or []):
             if sn in pass1_results:
@@ -1390,7 +1393,7 @@ def analyze_diagram_pages(
                     da.review_required = True
         return pass1_results, stats, stage_meta
 
-    provider, client = provider_client
+    provider, client = resolved_provider_client
 
     # Load caches (S-NEW-2/S1: removed dead pass_a_cache load)
     final_cache = {} if force_miss else diagram_cache.load_stage_cache(
