@@ -62,16 +62,15 @@ class TestBatchDedup:
         assert "Duplicates skipped: 1" in result.output
 
     @patch("folio.cli.FolioConverter")
-    def test_same_basename_different_content_both_process(self, mock_converter_cls, tmp_path):
-        """Same basename in subdirectories with different content → both process."""
-        sub_a = tmp_path / "a"
-        sub_b = tmp_path / "b"
-        sub_a.mkdir()
-        sub_b.mkdir()
+    def test_different_content_both_process(self, mock_converter_cls, tmp_path):
+        """Different content → both process, regardless of names.
 
-        # Create files with same basename but different content
-        (sub_a / "deck.pptx").write_bytes(b"content A")
-        (sub_b / "deck.pptx").write_bytes(b"content B")
+        Note: batch uses non-recursive Path.glob(), so same-basename files in
+        subdirectories are not discoverable. This test proves content-based
+        dedup by verifying two files with different content are both processed.
+        """
+        (tmp_path / "a.pptx").write_bytes(b"content A")
+        (tmp_path / "b.pptx").write_bytes(b"content B")
 
         mock_converter = MagicMock()
         mock_result = MagicMock()
@@ -80,15 +79,8 @@ class TestBatchDedup:
         mock_converter.convert.return_value = mock_result
         mock_converter_cls.return_value = mock_converter
 
-        # Note: batch uses glob which is non-recursive by default,
-        # so we put both files in the same dir for this test.
-        flat_dir = tmp_path / "flat"
-        flat_dir.mkdir()
-        (flat_dir / "a.pptx").write_bytes(b"content A")
-        (flat_dir / "b.pptx").write_bytes(b"content B")
-
         runner = CliRunner()
-        result = runner.invoke(cli, ["batch", str(flat_dir), "--pattern", "*.pptx"])
+        result = runner.invoke(cli, ["batch", str(tmp_path), "--pattern", "*.pptx"])
 
         assert mock_converter.convert.call_count == 2
         assert "Duplicates skipped: 0" in result.output

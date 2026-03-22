@@ -1773,8 +1773,8 @@ class TestPostPass1DiagramGating:
             assert 1 in captured_slide_numbers, "data+framework should reach extraction"
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
-    def test_gated_diagram_marked_abstained(self):
-        """M-NEW-1: Gated DiagramAnalysis has abstained=True."""
+    def test_gated_page_keeps_slide_analysis(self):
+        """R4: Gated pages keep Pass-1 SlideAnalysis — NOT coerced to DiagramAnalysis."""
         from folio.pipeline.analysis import DiagramAnalysis
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -1793,8 +1793,7 @@ class TestPostPass1DiagramGating:
 
             slide_texts = {1: SlideText(slide_num=1, full_text="text", elements=[])}
 
-            # Pass-1: data + no framework → will be coerced to DiagramAnalysis,
-            # then gated.
+            # Pass-1: data + no framework → will be gated, NOT coerced.
             pass1_results = {
                 1: SlideAnalysis(slide_type="data", framework="none",
                                  evidence=[{"confidence": "high", "validated": True}]),
@@ -1826,11 +1825,11 @@ class TestPostPass1DiagramGating:
                 converter = FolioConverter(config)
                 result = converter.convert(source_path=source, target=target_dir, passes=1)
 
-            # Check pass1_results directly — slide should be coerced and marked abstained.
+            # Gated slide keeps original SlideAnalysis — NOT coerced to DiagramAnalysis
             analysis_item = pass1_results[1]
-            assert isinstance(analysis_item, DiagramAnalysis), \
-                f"Should be coerced to DiagramAnalysis, got {type(analysis_item)}"
-            assert analysis_item.abstained is True, "Gated slide must be marked abstained"
+            assert not isinstance(analysis_item, DiagramAnalysis), \
+                f"Gated slide should keep SlideAnalysis, got {type(analysis_item).__name__}"
+            assert analysis_item.slide_type == "data", "Pass-1 analysis preserved"
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_appendix_no_framework_gated(self):
