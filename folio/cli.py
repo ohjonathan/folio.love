@@ -1157,9 +1157,9 @@ def _entities_list(ctx, entity_type, unconfirmed, json_output):
             if entry.title:
                 detail = entry.title
                 if entry.department:
-                    detail += f", {entry.department}"
+                    detail += f", {reg.resolve_key_to_name(entry.department, 'department')}"
             elif entry.department:
-                detail = entry.department
+                detail = reg.resolve_key_to_name(entry.department, "department")
             if detail:
                 click.echo(f"  {entry.canonical_name:<20s} {detail:<25s} {status}")
             else:
@@ -1224,17 +1224,17 @@ def show(ctx, name):
     if entry.title:
         click.echo(f"  Title:       {entry.title}")
     if entry.department:
-        click.echo(f"  Department:  {entry.department}")
+        click.echo(f"  Department:  {reg.resolve_key_to_name(entry.department, 'department')}")
     if entry.reports_to:
-        click.echo(f"  Reports to:  {entry.reports_to}")
+        click.echo(f"  Reports to:  {reg.resolve_key_to_name(entry.reports_to, 'person')}")
     if entry.aliases:
         click.echo(f"  Aliases:     {', '.join(entry.aliases)}")
     if entry.client:
         click.echo(f"  Client:      {entry.client}")
     if entry.head:
-        click.echo(f"  Head:        {entry.head}")
+        click.echo(f"  Head:        {reg.resolve_key_to_name(entry.head, 'person')}")
     if entry.owner_dept:
-        click.echo(f"  Owner dept:  {entry.owner_dept}")
+        click.echo(f"  Owner dept:  {reg.resolve_key_to_name(entry.owner_dept, 'department')}")
     click.echo(f"  Source:      {entry.source}")
     if entry.first_seen:
         click.echo(f"  First seen:  {entry.first_seen[:10]}")

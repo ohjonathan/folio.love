@@ -210,7 +210,15 @@ class EntityRegistry:
         self._loaded = True
 
     def save(self) -> None:
-        """Write entities.json atomically."""
+        """Write entities.json atomically.
+
+        Raises ``EntityRegistryError`` if ``load()`` was never called.
+        """
+        if not self._loaded:
+            raise EntityRegistryError(
+                "Cannot save without loading first — call load() to "
+                "read existing data before writing."
+            )
         self._data["updated_at"] = _now_iso()
         self._data.setdefault("_schema_version", _ENTITY_SCHEMA_VERSION)
         _atomic_write_json(self._path, self._data)
@@ -286,6 +294,31 @@ class EntityRegistry:
         type_dict[slug] = entry.to_dict()
         return slug
 
+    def _check_alias_collisions(
+        self, entity_type: str, exclude_key: str,
+        new_aliases: list[str],
+    ) -> list[str]:
+        """Return list of colliding aliases (lowercased).
+
+        Checks ``new_aliases`` against all canonical names and aliases
+        in the type namespace except the entity with ``exclude_key``.
+        """
+        type_dict = self._data["entities"].get(entity_type, {})
+        existing_names = set()
+        existing_aliases = set()
+        for k, ed in type_dict.items():
+            if k == exclude_key:
+                continue
+            existing_names.add(ed.get("canonical_name", "").lower())
+            for a in ed.get("aliases", []):
+                existing_aliases.add(a.lower())
+        collisions = []
+        for a in new_aliases:
+            al = a.lower()
+            if al in existing_names or al in existing_aliases:
+                collisions.append(a)
+        return collisions
+
     def update_entity(
         self, entity_type: str, key: str, updates: dict,
         preserve_existing: bool = False,
@@ -294,6 +327,7 @@ class EntityRegistry:
 
         If ``preserve_existing`` is True, only fill ``None``/absent fields.
         Never overwrites ``first_seen``.  Always updates ``updated_at``.
+        Validates alias uniqueness before applying alias changes.
         Returns True if any field changed.
         """
         type_dict = self._data["entities"].get(entity_type, {})
@@ -308,6 +342,19 @@ class EntityRegistry:
                 continue  # never overwrite
             if preserve_existing and entry.get(field_name) is not None:
                 continue
+            # Validate alias uniqueness
+            if field_name == "aliases" and isinstance(value, list):
+                collisions = self._check_alias_collisions(
+                    entity_type, key, value
+                )
+                if collisions:
+                    # Strip colliding aliases, keep the rest
+                    value = [a for a in value if a not in collisions]
+                    logger.warning(
+                        "Dropped colliding aliases for '%s': %s",
+                        entry.get("canonical_name", key),
+                        ", ".join(collisions),
+                    )
             if entry.get(field_name) != value:
                 entry[field_name] = value
                 changed = True
@@ -449,3 +496,18 @@ class EntityRegistry:
                 if ed.get("needs_confirmation"):
                     count += 1
         return count
+
+    def resolve_key_to_name(
+        self, key: str, entity_type: Optional[str] = None,
+    ) -> str:
+        """Resolve an entity slug to its canonical name.
+
+        Falls back to the raw key if not found.
+        """
+        types = [entity_type] if entity_type else VALID_ENTITY_TYPES
+        for etype in types:
+            type_dict = self._data["entities"].get(etype, {})
+            if key in type_dict:
+                return type_dict[key].get("canonical_name", key)
+        return key
+

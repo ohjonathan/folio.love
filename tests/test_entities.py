@@ -329,3 +329,80 @@ class TestEntityRegistryDurability:
                 reg.save()
         finally:
             path.parent.chmod(stat.S_IRWXU)
+
+
+# ---------------------------------------------------------------------------
+# B2: save-without-load guard
+# ---------------------------------------------------------------------------
+
+class TestSaveWithoutLoadGuard:
+    def test_save_without_load_raises(self, tmp_path):
+        """save() without load() must raise to prevent data clobbering."""
+        path = tmp_path / "entities.json"
+        # Pre-populate existing data
+        path.write_text(json.dumps({
+            "_schema_version": 1,
+            "entities": {
+                "person": {"existing": {
+                    "canonical_name": "Existing",
+                    "type": "person",
+                    "aliases": [],
+                }},
+                "department": {}, "system": {}, "process": {},
+            },
+        }))
+
+        reg = EntityRegistry(path)
+        with pytest.raises(EntityRegistryError, match="load"):
+            reg.save()
+
+        # Verify original data is untouched
+        data = json.loads(path.read_text())
+        assert "existing" in data["entities"]["person"]
+
+
+# ---------------------------------------------------------------------------
+# B1: alias collision in update_entity
+# ---------------------------------------------------------------------------
+
+class TestUpdateEntityAliasCollision:
+    def test_update_entity_drops_colliding_aliases(self, tmp_path):
+        """Upgrading an unconfirmed entity with an alias that collides with
+        an existing entity's alias should silently drop the collision."""
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        reg.add_entity(_sample_entity(
+            canonical_name="Jane Smith",
+            aliases=["Jane"],
+        ))
+        reg.add_entity(_sample_entity(
+            canonical_name="John Doe",
+            needs_confirmation=True,
+        ))
+
+        # Try to add alias "Jane" to John Doe — it collides with Jane Smith's alias
+        changed = reg.update_entity("person", "john_doe", {
+            "aliases": ["Jane", "JD"],
+        })
+        assert changed is True
+
+        # "Jane" should be dropped, "JD" should be kept
+        john = reg.get_entity("person", "john_doe")
+        assert "JD" in john.aliases
+        assert "Jane" not in john.aliases
+
+    def test_update_entity_non_colliding_aliases_pass(self, tmp_path):
+        """Non-colliding aliases in update should be applied normally."""
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        reg.add_entity(_sample_entity(canonical_name="Jane Smith"))
+        reg.add_entity(_sample_entity(canonical_name="John Doe"))
+
+        changed = reg.update_entity("person", "john_doe", {
+            "aliases": ["JD", "Johnny"],
+        })
+        assert changed is True
+        john = reg.get_entity("person", "john_doe")
+        assert "JD" in john.aliases
+        assert "Johnny" in john.aliases
+

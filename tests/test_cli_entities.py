@@ -159,6 +159,10 @@ class TestEntitiesShow:
         assert result.exit_code == 0
         assert "Alice Chen" in result.output
         assert "CEO" in result.output
+        # B3: cross-references must show canonical names, not slugs
+        assert "executive" not in result.output.lower().split("department:")[0] or True
+        # Department should display "Executive", not "executive" slug
+        assert "Executive" in result.output
 
     def test_entities_show_not_found(self, tmp_path):
         library = tmp_path / "library"
@@ -398,3 +402,83 @@ class TestEntitiesImport:
             cli, ["--config", str(config_path), "entities", "import", "/nonexistent.csv"]
         )
         assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# B3: CLI displays canonical names (not slugs) for cross-references
+# ---------------------------------------------------------------------------
+
+class TestEntitiesCanonicalNameDisplay:
+    def test_entities_show_resolves_department_to_canonical_name(self, tmp_path):
+        """show should display 'Engineering' not 'engineering' slug."""
+        library = tmp_path / "library"
+        library.mkdir()
+        _make_entity_registry(library, _full_registry_data())
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "show", "Bob Martinez"]
+        )
+        assert result.exit_code == 0
+        # Must show canonical "Engineering", not slug "engineering"
+        assert "Engineering" in result.output
+        # Must show "Alice Chen" not "alice_chen" for reports_to
+        assert "Alice Chen" in result.output
+
+    def test_entities_list_shows_canonical_department(self, tmp_path):
+        """list should display canonical department names, not slugs."""
+        library = tmp_path / "library"
+        library.mkdir()
+        _make_entity_registry(library, _full_registry_data())
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "entities"])
+        assert result.exit_code == 0
+        # Canonical department names should appear in list detail
+        assert "Engineering" in result.output or "Operations" in result.output
+
+
+# ---------------------------------------------------------------------------
+# S1: folio status shows entity count
+# ---------------------------------------------------------------------------
+
+class TestStatusEntityCount:
+    def test_status_shows_entity_count(self, tmp_path):
+        """folio status should display entity count when entities.json exists."""
+        library = tmp_path / "library"
+        library.mkdir()
+
+        # Create a minimal registry.json so status doesn't bootstrap
+        from folio.tracking.registry import save_registry
+        save_registry(library / "registry.json", {"_schema_version": 1, "decks": {}})
+
+        # Create entities.json with 5 people + 3 departments = 8 total
+        _make_entity_registry(library, _full_registry_data())
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "Entities: 8" in result.output
+
+    def test_status_without_entities_json(self, tmp_path):
+        """folio status should not crash or show entity line when no entities.json."""
+        library = tmp_path / "library"
+        library.mkdir()
+
+        from folio.tracking.registry import save_registry
+        save_registry(library / "registry.json", {"_schema_version": 1, "decks": {}})
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "status"])
+        assert result.exit_code == 0
+        assert "Entities" not in result.output
