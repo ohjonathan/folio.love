@@ -1772,6 +1772,175 @@ class TestPostPass1DiagramGating:
             # data+tam-sam-som should NOT be gated
             assert 1 in captured_slide_numbers, "data+framework should reach extraction"
 
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_gated_diagram_marked_abstained_and_gated(self):
+        """M-NEW-1: Gated DiagramAnalysis has abstained=True AND gated=True."""
+        from folio.pipeline.analysis import DiagramAnalysis
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            image_results = [
+                ImageResult(
+                    path=(target_dir / "slide-001.png"),
+                    slide_num=1, width=200, height=200,
+                ),
+            ]
+            (target_dir / "slide-001.png").write_bytes(self._make_unique_png(1))
+
+            slide_texts = {1: SlideText(slide_num=1, full_text="text", elements=[])}
+
+            # Pass-1: data + no framework → will be coerced to DiagramAnalysis,
+            # then gated.
+            pass1_results = {
+                1: SlideAnalysis(slide_type="data", framework="none",
+                                 evidence=[{"confidence": "high", "validated": True}]),
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            # Capture the pass1_results dict that reaches diagram extraction
+            captured_analyses = {}
+
+            def mock_analyze_diagram_pages(**kwargs):
+                captured_analyses.update(kwargs.get("pass1_results", {}))
+                return kwargs["pass1_results"], CacheStats(), None
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("folio.pipeline.analysis.analyze_slides", return_value=(pass1_results, CacheStats(), None)), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="mixed"),
+                 }), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 patch("folio.pipeline.diagram_extraction.analyze_diagram_pages", side_effect=mock_analyze_diagram_pages):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            # Diagram extraction should NOT have been called (all slides gated)
+            # so captured_analyses should be empty. Check pass1_results directly.
+            analysis_item = pass1_results[1]
+            assert isinstance(analysis_item, DiagramAnalysis), \
+                f"Should be coerced to DiagramAnalysis, got {type(analysis_item)}"
+            assert analysis_item.abstained is True, "Gated slide must be marked abstained"
+            assert analysis_item.gated is True, "Gated slide must be marked gated"
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_appendix_no_framework_gated(self):
+        """M-NEW-2: appendix+no-framework slide is excluded from extraction."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            image_results = [
+                ImageResult(
+                    path=(target_dir / "slide-001.png"),
+                    slide_num=1, width=200, height=200,
+                ),
+            ]
+            (target_dir / "slide-001.png").write_bytes(self._make_unique_png(1))
+
+            slide_texts = {1: SlideText(slide_num=1, full_text="text", elements=[])}
+
+            pass1_results = {
+                1: SlideAnalysis(slide_type="appendix", framework="",
+                                 evidence=[{"confidence": "high", "validated": True}]),
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            captured_slide_numbers = []
+
+            def mock_analyze_diagram_pages(**kwargs):
+                captured_slide_numbers.extend(kwargs.get("slide_numbers", []))
+                return kwargs["pass1_results"], CacheStats(), None
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("folio.pipeline.analysis.analyze_slides", return_value=(pass1_results, CacheStats(), None)), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="mixed"),
+                 }), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 patch("folio.pipeline.diagram_extraction.analyze_diagram_pages", side_effect=mock_analyze_diagram_pages):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            assert 1 not in captured_slide_numbers, "appendix+no-framework should be gated"
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_title_no_framework_gated(self):
+        """M-NEW-2: title+no-framework slide is excluded from extraction."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+            source = tmpdir_path / "test.pptx"
+            source.write_bytes(b"fake")
+
+            image_results = [
+                ImageResult(
+                    path=(target_dir / "slide-001.png"),
+                    slide_num=1, width=200, height=200,
+                ),
+            ]
+            (target_dir / "slide-001.png").write_bytes(self._make_unique_png(1))
+
+            slide_texts = {1: SlideText(slide_num=1, full_text="text", elements=[])}
+
+            pass1_results = {
+                1: SlideAnalysis(slide_type="title", framework="none",
+                                 evidence=[{"confidence": "high", "validated": True}]),
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            captured_slide_numbers = []
+
+            def mock_analyze_diagram_pages(**kwargs):
+                captured_slide_numbers.extend(kwargs.get("slide_numbers", []))
+                return kwargs["pass1_results"], CacheStats(), None
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("folio.pipeline.analysis.analyze_slides", return_value=(pass1_results, CacheStats(), None)), \
+                 patch("folio.pipeline.inspect.inspect_pages", return_value={
+                     1: MagicMock(classification="mixed"),
+                 }), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 patch("folio.pipeline.diagram_extraction.analyze_diagram_pages", side_effect=mock_analyze_diagram_pages):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            assert 1 not in captured_slide_numbers, "title+no-framework should be gated"
+
 
 
 # ── P3: Large-Document Warning ─────────────────────────────────────────

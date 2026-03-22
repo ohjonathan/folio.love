@@ -1110,7 +1110,31 @@ class TestAssessReviewState:
         )
         assert result.review_status == "flagged"
         assert "diagram_abstained_slide_3" in result.review_flags
+        assert "diagram_gated_slide_3" not in result.review_flags
         assert not any(f.startswith("partial_analysis") for f in result.review_flags)
+
+    def test_gated_diagram_gets_gated_flag(self):
+        """S-NEW-1: P1b-gated diagram emits diagram_gated_slide_N, not abstained."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+            3: DiagramAnalysis(
+                slide_type="data",
+                diagram_type="mixed",
+                abstained=True,
+                gated=True,
+            ),
+        }
+        texts = {1: self._make_text(1), 3: self._make_text(3)}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "diagram_gated_slide_3" in result.review_flags
+        assert "diagram_abstained_slide_3" not in result.review_flags
 
 
 # ── P4: Zero-text extraction tests ────────────────────────────────────

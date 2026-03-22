@@ -408,8 +408,11 @@ class FolioConverter:
                         # B1 fix: Mark gated DiagramAnalysis as abstained to
                         # prevent ghost state (DiagramAnalysis with no diagram
                         # content but abstained=False).
+                        # S-NEW-1: Also mark gated=True so assess_review_state
+                        # emits diagram_gated_slide_{n} (not diagram_abstained).
                         if isinstance(analysis_item, analysis.DiagramAnalysis):
                             analysis_item.abstained = True
+                            analysis_item.gated = True
                         logger.info(
                             "Slide %d: skipping diagram extraction (type=%s, no framework)",
                             slide_num,
