@@ -82,6 +82,7 @@ class ProviderInput:
     """
 
     prompt: str
+    system_prompt: str | None = None
     images: tuple[ImagePart, ...] = ()
     max_tokens: int = 4096
     temperature: float = 0.0

@@ -43,6 +43,7 @@ def _sample_entry(**overrides) -> RegistryEntry:
         source_type="deck",
         version=1,
         converted="2026-03-10T02:15:00Z",
+        type="evidence",
         modified="2026-03-10T02:15:00Z",
         client="TestClient",
         authority="captured",
@@ -171,6 +172,36 @@ class TestRegistryBootstrap:
         entry_data = list(data["decks"].values())[0]
         assert entry_data["id"] == "clienta_evidence_20260310_deck"
         assert entry_data["staleness_status"] == "current"
+        assert entry_data["type"] == "evidence"
+
+    def test_bootstrap_finds_interaction_docs(self, tmp_path):
+        library = tmp_path / "library"
+        transcript = tmp_path / "transcripts" / "call.md"
+        _make_source(transcript, "meeting notes")
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(transcript)
+
+        md_path = library / "ClientA" / "interactions" / "call" / "call.md"
+        _make_folio_markdown(md_path, {
+            "id": "clienta_ddq126_interview_20260321_cto_call",
+            "title": "CTO Call",
+            "type": "interaction",
+            "subtype": "expert_interview",
+            "source_transcript": "../../../../transcripts/call.md",
+            "source_hash": h,
+            "version": 1,
+            "converted": "2026-03-21T02:15:00Z",
+            "authority": "captured",
+            "curation_level": "L0",
+        })
+
+        data = rebuild_registry(library)
+        assert len(data["decks"]) == 1
+        entry_data = list(data["decks"].values())[0]
+        assert entry_data["type"] == "interaction"
+        assert entry_data["source_relative_path"] == "../../../../transcripts/call.md"
+        assert "source_type" not in entry_data
 
     def test_bootstrap_ignores_non_folio_md(self, tmp_path):
         library = tmp_path / "library"
@@ -289,6 +320,22 @@ class TestEntryFromDict:
         assert entry.id == "minimal"
         assert entry.client is None
         assert entry.staleness_status == "current"
+
+    def test_missing_source_type_allowed_for_interaction(self):
+        d = {
+            "id": "interaction_note",
+            "title": "Interaction Note",
+            "markdown_path": "Client/interactions/note.md",
+            "deck_dir": "Client/interactions",
+            "source_relative_path": "../../transcripts/note.md",
+            "source_hash": "abc123",
+            "version": 1,
+            "converted": "2026-03-21T00:00:00Z",
+            "type": "interaction",
+        }
+        entry = entry_from_dict(d)
+        assert entry.type == "interaction"
+        assert entry.source_type is None
 
 
 # ---------------------------------------------------------------------------
@@ -483,6 +530,70 @@ class TestReviewFieldsRegistry:
         assert result["decks"]["test_deck"]["review_flags"] == []
 
 
+class TestInteractionRegistryBehavior:
+    def test_reconcile_updates_interaction_source_path_and_type(self, tmp_path):
+        from folio.tracking.registry import reconcile_from_frontmatter
+
+        library = tmp_path / "library"
+        md_path = library / "interactions" / "note" / "note.md"
+        _make_folio_markdown(md_path, {
+            "id": "interaction_note",
+            "title": "Interaction Note",
+            "type": "interaction",
+            "subtype": "expert_interview",
+            "source_transcript": "../../../transcripts/new.md",
+            "source_hash": "abc",
+        })
+
+        data = {
+            "_schema_version": 1,
+            "decks": {
+                "interaction_note": {
+                    "id": "interaction_note",
+                    "title": "Interaction Note",
+                    "type": "evidence",
+                    "markdown_path": "interactions/note/note.md",
+                    "deck_dir": "interactions/note",
+                    "source_relative_path": "../../../transcripts/old.md",
+                    "source_hash": "abc",
+                    "version": 1,
+                    "converted": "2026-03-21T00:00:00Z",
+                },
+            },
+        }
+
+        result = reconcile_from_frontmatter(library, data)
+        entry = result["decks"]["interaction_note"]
+        assert entry["type"] == "interaction"
+        assert entry["source_relative_path"] == "../../../transcripts/new.md"
+
+    def test_refresh_entry_status_generic_for_interaction(self, tmp_path):
+        library = tmp_path / "library"
+        transcript = tmp_path / "transcripts" / "call.md"
+        _make_source(transcript, "meeting notes")
+
+        from folio.tracking.sources import compute_file_hash
+        h = compute_file_hash(transcript)
+
+        md_path = library / "interactions" / "call" / "call.md"
+        _make_folio_markdown(md_path, {
+            "source_transcript": "../../../transcripts/call.md",
+            "source_hash": h,
+        })
+
+        entry = _sample_entry(
+            type="interaction",
+            markdown_path="interactions/call/call.md",
+            deck_dir="interactions/call",
+            source_relative_path="../../../transcripts/call.md",
+            source_hash=h,
+            source_type=None,
+        )
+
+        updated = refresh_entry_status(library, entry)
+        assert updated.staleness_status == "current"
+
+
 # --- PR 6: Standalone diagram notes excluded from registry ---
 
 
@@ -527,4 +638,3 @@ class TestDiagramNoteRegistryExclusion:
         # Only the deck note should be indexed
         assert len(data["decks"]) == 1
         assert "test_deck" in data["decks"]
-

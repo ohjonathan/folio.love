@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,7 @@ import click
 
 from .config import FolioConfig
 from .converter import FolioConverter, PPTX_EXTENSIONS
+from .ingest import IngestAmbiguityError, IngestError, IngestSubtypeMismatchError, ingest_source
 from .pipeline.images import ImageExtractionError
 from .llm.runtime import EndpointNotAllowedError
 
@@ -47,6 +49,25 @@ def _content_hash(path: Path) -> str:
                 break
             h.update(chunk)
     return h.hexdigest()
+
+
+def _split_csv_values(value: Optional[str]) -> list[str] | None:
+    """Split a comma-separated option into a trimmed, deduplicated list."""
+    if not value:
+        return None
+
+    values: list[str] = []
+    seen: set[str] = set()
+    for raw in value.split(","):
+        cleaned = raw.strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(cleaned)
+    return values or None
 
 
 # AppleScript error codes are 4-digit negative numbers following "error number"
@@ -253,6 +274,88 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
             import traceback
             traceback.print_exc()
         sys.exit(1)
+
+
+@cli.command()
+@click.argument("source", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--type",
+    "subtype",
+    type=click.Choice(["client_meeting", "expert_interview", "internal_sync", "partner_check_in", "workshop"]),
+    required=True,
+    help="Interaction subtype.",
+)
+@click.option("--date", "event_date", type=click.DateTime(formats=["%Y-%m-%d"]), required=True, help="Event date (YYYY-MM-DD).")
+@click.option("--client", default=None, help="Client name.")
+@click.option("--engagement", default=None, help="Engagement identifier.")
+@click.option("--participants", default=None, help="Comma-separated participant names.")
+@click.option("--duration-minutes", type=click.IntRange(min=1), default=None, help="Meeting duration in minutes.")
+@click.option(
+    "--source-recording",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional source recording path.",
+)
+@click.option("--title", default=None, help="Override note title.")
+@click.option("--target", type=click.Path(path_type=Path), default=None, help="Override output path or directory.")
+@click.option("--llm-profile", default=None, help="Override LLM profile (defined in folio.yaml).")
+@click.option("--note", "-n", default=None, help="Version note (e.g. 'Initial ingest from cleaned transcript').")
+@click.pass_context
+def ingest(
+    ctx,
+    source: Path,
+    subtype: str,
+    event_date: datetime,
+    client: str,
+    engagement: str,
+    participants: str,
+    duration_minutes: int,
+    source_recording: Path,
+    title: str,
+    target: Path,
+    llm_profile: str,
+    note: str,
+):
+    """Ingest a transcript or notes file into an interaction note."""
+    if event_date.date() > datetime.now().date():
+        raise click.BadParameter("--date cannot be in the future", param_hint="--date")
+
+    config = ctx.obj["config"]
+    participant_list = _split_csv_values(participants)
+
+    try:
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype=subtype,
+            event_date=event_date.date(),
+            client=client,
+            engagement=engagement,
+            participants=participant_list,
+            duration_minutes=duration_minutes,
+            source_recording=source_recording,
+            title=title,
+            target=target,
+            llm_profile=llm_profile,
+            note=note,
+        )
+    except (FileNotFoundError, IngestSubtypeMismatchError, IngestAmbiguityError, IngestError) as exc:
+        click.echo(f"✗ Ingest failed: {exc}", err=True)
+        sys.exit(1)
+    except Exception as exc:
+        click.echo(f"✗ Ingest failed: {exc}", err=True)
+        if ctx.obj.get("verbose"):
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+    click.echo(f"✓ {source.name}")
+    click.echo(f"  {result.output_path}")
+    click.echo(
+        f"  Version: {result.version} | ID: {result.interaction_id} | Review: {result.review_status}"
+    )
+    if result.degraded:
+        click.echo("  ⚠ analysis unavailable")
 
 
 @cli.command()
@@ -560,7 +663,7 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
             flagged_decks.append(entry)
 
     total = current + stale + missing
-    click.echo(f"Library: {total} decks")
+    click.echo(f"Library: {total} documents")
     if flagged:
         click.echo(f"  ! Flagged: {flagged}")
     click.echo(f"  ✓ Current: {current}")
@@ -648,7 +751,7 @@ def scan(ctx, scope: Optional[str]):
     scanned = 0
 
     from .converter import PPTX_EXTENSIONS
-    scan_extensions = PPTX_EXTENSIONS | {".pdf"}
+    scan_extensions = PPTX_EXTENSIONS | {".pdf", ".txt", ".md"}
 
     for src_config, resolved_root in config.resolve_source_roots():
         if not resolved_root.exists():
@@ -724,7 +827,7 @@ def scan(ctx, scope: Optional[str]):
               help="Re-convert all entries in scope, not just stale ones.")
 @click.pass_context
 def refresh(ctx, scope: Optional[str], convert_all: bool):
-    """Re-convert stale decks in the library.
+    """Re-convert stale documents in the library.
 
     Examples:
 
@@ -757,6 +860,7 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
 
     # Select entries to refresh
     entries_to_refresh = []
+    skipped_interactions = []
     for deck_id, entry_data in data.get("decks", {}).items():
         entry = registry.entry_from_dict(entry_data)
 
@@ -766,17 +870,29 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
                     _matches_scope(entry.deck_dir, scope)):
                 continue
 
+        if entry.type == "interaction":
+            skipped_interactions.append(entry)
+            continue
+
         # Refresh staleness
         entry = registry.refresh_entry_status(library_root, entry)
 
         if convert_all or entry.staleness_status == "stale":
             entries_to_refresh.append(entry)
 
+    for entry in skipped_interactions:
+        click.echo(
+            f"↷ {entry.id}: skipping interaction entry, re-run `folio ingest` instead"
+        )
+
+    if skipped_interactions:
+        click.echo(f"Skipped interaction entries: {len(skipped_interactions)}")
+
     if not entries_to_refresh:
         click.echo("Nothing to refresh.")
         return
 
-    click.echo(f"Refreshing {len(entries_to_refresh)} deck(s)...")
+    click.echo(f"Refreshing {len(entries_to_refresh)} document(s)...")
     click.echo("")
 
     converter = FolioConverter(config)
@@ -905,6 +1021,9 @@ def promote(ctx, deck_id: str, level: str):
         engagement_types = {"analysis", "evidence", "deliverable", "interaction"}
         if doc_type in engagement_types and not fm.get("engagement"):
             click.echo(f"✗ L0 → L1 requires 'engagement' for {doc_type}-type documents.")
+            sys.exit(1)
+        if doc_type == "interaction" and not fm.get("participants"):
+            click.echo(f"✗ L0 → L1 requires 'participants' for interaction-type documents.")
             sys.exit(1)
 
     # L1 -> L2 validation (warning only)

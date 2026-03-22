@@ -181,6 +181,45 @@ llm:
         profile = llm.resolve_profile(task="convert")
         assert profile.name == "main"
 
+    def test_ingest_route_resolution(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        llm = LLMConfig(
+            profiles={
+                "default": LLMProfile(name="default"),
+                "ingest_main": LLMProfile(name="ingest_main", provider="openai"),
+            },
+            routing={
+                "default": LLMRoute(primary="default"),
+                "ingest": LLMRoute(primary="ingest_main"),
+            },
+        )
+        profile = llm.resolve_profile(task="ingest")
+        assert profile.name == "ingest_main"
+        assert profile.provider == "openai"
+
+    def test_ingest_route_falls_back_to_default(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        llm = LLMConfig(
+            profiles={"main": LLMProfile(name="main")},
+            routing={"default": LLMRoute(primary="main")},
+        )
+        profile = llm.resolve_profile(task="ingest")
+        assert profile.name == "main"
+
+    def test_ingest_fallbacks_follow_default_when_missing(self):
+        from folio.config import LLMProfile, LLMConfig, LLMRoute
+        llm = LLMConfig(
+            profiles={
+                "main": LLMProfile(name="main"),
+                "backup": LLMProfile(name="backup", provider="google"),
+            },
+            routing={
+                "default": LLMRoute(primary="main", fallbacks=["backup"]),
+            },
+        )
+        fallbacks = llm.get_fallbacks(task="ingest")
+        assert [p.name for p in fallbacks] == ["backup"]
+
     def test_api_key_env_auto_generated(self):
         from folio.config import LLMProfile
         p = LLMProfile(name="test", provider="openai")

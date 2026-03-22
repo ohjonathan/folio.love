@@ -60,6 +60,29 @@ def _sample_registry_entry(**overrides) -> dict:
     return defaults
 
 
+def _sample_interaction_registry_entry(**overrides) -> dict:
+    defaults = {
+        "id": "test_interaction_20260310_call",
+        "title": "Test Call",
+        "markdown_path": "TestClient/interactions/call/call.md",
+        "deck_dir": "TestClient/interactions/call",
+        "source_relative_path": "../../../sources/call.txt",
+        "source_hash": "abc123def456",
+        "source_type": None,
+        "version": 1,
+        "converted": "2026-03-10T02:15:00Z",
+        "modified": "2026-03-10T02:15:00Z",
+        "client": "TestClient",
+        "authority": "captured",
+        "curation_level": "L0",
+        "staleness_status": "current",
+        "type": "interaction",
+        "subtype": "expert_interview",
+    }
+    defaults.update(overrides)
+    return defaults
+
+
 # ---------------------------------------------------------------------------
 # status command
 # ---------------------------------------------------------------------------
@@ -91,7 +114,7 @@ class TestStatusCommand:
         result = runner.invoke(cli, ["--config", str(config_path), "status"])
         assert result.exit_code == 0
         assert "Bootstrapping registry" in result.output
-        assert "Library: 1 decks" in result.output
+        assert "Library: 1 documents" in result.output
         assert (library / "registry.json").exists()
 
     def test_status_reads_existing_registry(self, tmp_path):
@@ -127,7 +150,7 @@ class TestStatusCommand:
         result = runner.invoke(cli, ["--config", str(config_path), "status"])
         assert result.exit_code == 0
         assert "Bootstrapping" not in result.output
-        assert "Library: 1 decks" in result.output
+        assert "Library: 1 documents" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +188,118 @@ class TestScanCommand:
         result = runner.invoke(cli, ["--config", str(config_path), "scan"])
         assert result.exit_code == 0
         assert "New: 1" in result.output
+
+    def test_scan_finds_text_sources(self, tmp_path):
+        """Scan should include .txt and .md source files."""
+        library = tmp_path / "library"
+        library.mkdir(parents=True)
+        sources_dir = tmp_path / "client_materials"
+        _make_source(sources_dir / "ClientA" / "notes.txt", "Transcript note")
+        _make_source(sources_dir / "ClientA" / "analysis.md", "# Heading\n\nBody")
+
+        save_registry(library / "registry.json", {"_schema_version": 1, "decks": {}})
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {
+            "library_root": str(library),
+            "sources": [{"name": "materials", "path": str(sources_dir), "target_prefix": ""}],
+        })
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "scan"])
+        assert result.exit_code == 0
+        assert "New: 2" in result.output
+
+
+# ---------------------------------------------------------------------------
+# refresh command
+# ---------------------------------------------------------------------------
+
+class TestRefreshCommand:
+    @patch("folio.cli.FolioConverter")
+    def test_refresh_skips_interaction_entries(self, MockConverter, tmp_path):
+        library = tmp_path / "library"
+        deck_dir = library / "Client" / "deck"
+        interaction_dir = library / "Client" / "interactions" / "call"
+        deck_dir.mkdir(parents=True)
+        interaction_dir.mkdir(parents=True)
+
+        deck_source = tmp_path / "sources" / "deck.pptx"
+        interaction_source = tmp_path / "sources" / "call.txt"
+        _make_source(deck_source, "deck")
+        _make_source(interaction_source, "meeting notes")
+
+        from folio.tracking.sources import compute_file_hash
+        deck_hash = compute_file_hash(deck_source)
+        interaction_hash = compute_file_hash(interaction_source)
+
+        deck_md = deck_dir / "deck.md"
+        _make_folio_markdown(deck_md, {
+            "id": "deck_id",
+            "title": "Deck",
+            "type": "evidence",
+            "curation_level": "L0",
+            "client": "ClientA",
+            "engagement": "Q1 2026",
+            "source": "../../../sources/deck.pptx",
+            "source_hash": deck_hash,
+            "source_type": "deck",
+            "version": 1,
+            "converted": "2026-03-10T02:15:00Z",
+        })
+
+        interaction_md = interaction_dir / "call.md"
+        _make_folio_markdown(interaction_md, {
+            "id": "interaction_id",
+            "title": "Call",
+            "type": "interaction",
+            "subtype": "expert_interview",
+            "status": "complete",
+            "authority": "captured",
+            "curation_level": "L0",
+            "source_transcript": "../../../../sources/call.txt",
+            "source_hash": interaction_hash,
+            "version": 1,
+            "converted": "2026-03-10T02:15:00Z",
+            "date": "2026-03-10",
+            "impacts": [],
+        })
+
+        deck_entry = _sample_registry_entry(
+            id="deck_id",
+            markdown_path="Client/deck/deck.md",
+            deck_dir="Client/deck",
+            source_relative_path="../../../sources/deck.pptx",
+            source_hash=deck_hash,
+        )
+        interaction_entry = _sample_interaction_registry_entry(
+            id="interaction_id",
+            markdown_path="Client/interactions/call/call.md",
+            deck_dir="Client/interactions/call",
+            source_relative_path="../../../../sources/call.txt",
+            source_hash=interaction_hash,
+        )
+        save_registry(
+            library / "registry.json",
+            {"_schema_version": 1, "decks": {deck_entry["id"]: deck_entry, interaction_entry["id"]: interaction_entry}},
+        )
+
+        mock_instance = MagicMock()
+        mock_instance.convert.return_value = MagicMock(version=2, slide_count=1)
+        MockConverter.return_value = mock_instance
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {
+            "library_root": str(library),
+            "sources": [{"name": "materials", "path": str(tmp_path / "sources"), "target_prefix": ""}],
+        })
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "refresh", "--all"])
+        assert result.exit_code == 0, result.output
+        assert "re-run `folio ingest`" in result.output
+        assert "Skipped interaction entries: 1" in result.output
+        assert mock_instance.convert.call_count == 1
 
 
 class TestVerboseLoggingConfig:
@@ -289,6 +424,48 @@ class TestPromoteCommand:
         result = runner.invoke(cli, ["--config", str(config_path), "promote", "no_client_deck", "L1"])
         assert result.exit_code != 0
         assert "client" in result.output.lower()
+
+    def test_promote_interaction_l0_to_l1_requires_participants(self, tmp_path):
+        """Promote should block L0→L1 for interactions missing participants."""
+        library = tmp_path / "library"
+        note_dir = library / "Client" / "interactions" / "call"
+        md_path = note_dir / "call.md"
+        _make_folio_markdown(md_path, {
+            "id": "interaction_call",
+            "title": "Call",
+            "type": "interaction",
+            "subtype": "expert_interview",
+            "status": "complete",
+            "authority": "captured",
+            "curation_level": "L0",
+            "client": "ClientA",
+            "engagement": "Q1 2026",
+            "tags": ["expert-interview"],
+            "date": "2026-03-10",
+            "impacts": [],
+            "source_transcript": "../../../sources/call.txt",
+            "source_hash": "abc123",
+        })
+
+        entry = _sample_interaction_registry_entry(
+            id="interaction_call",
+            markdown_path="Client/interactions/call/call.md",
+            deck_dir="Client/interactions/call",
+            source_relative_path="../../../sources/call.txt",
+            source_hash="abc123",
+            client="ClientA",
+            engagement="Q1 2026",
+            curation_level="L0",
+        )
+        save_registry(library / "registry.json", {"_schema_version": 1, "decks": {"interaction_call": entry}})
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "promote", "interaction_call", "L1"])
+        assert result.exit_code != 0
+        assert "participants" in result.output.lower()
 
     def test_promote_l1_to_l2_warns_no_relationships(self, tmp_path):
         """Promote L1→L2 should warn when no relationship fields present."""
@@ -709,7 +886,7 @@ class TestE2EWorkflow:
         result = runner.invoke(cli, ["--config", str(config_path), "status"])
         assert result.exit_code == 0
         assert "Bootstrapping" in result.output
-        assert "Library: 1 decks" in result.output
+        assert "Library: 1 documents" in result.output
         assert (library / "registry.json").exists()
 
         # Step 3: Scan should show 0 new (already converted)
@@ -790,10 +967,10 @@ class TestCorruptRegistryRecovery:
         result = runner.invoke(cli, ["--config", str(config_path), "status"])
         assert result.exit_code == 0
         assert "corrupt" in result.output.lower()
-        assert "Library: 1 decks" in result.output
+        assert "Library: 1 documents" in result.output
 
     def test_status_never_reports_zero_on_populated_library(self, tmp_path):
-        """Corrupt registry must not report Library: 0 decks when library has files."""
+        """Corrupt registry must not report Library: 0 documents when library has files."""
         library = tmp_path / "library"
         source = tmp_path / "sources" / "deck.pptx"
         _make_source(source)
@@ -820,7 +997,7 @@ class TestCorruptRegistryRecovery:
         runner = CliRunner()
         result = runner.invoke(cli, ["--config", str(config_path), "status"])
         assert result.exit_code == 0
-        assert "Library: 1 decks" in result.output
+        assert "Library: 1 documents" in result.output
 
     def test_upsert_entry_rebuilds_on_corrupt_not_clobber(self, tmp_path):
         """upsert_entry on corrupt registry must rebuild, not clobber the index.
@@ -917,7 +1094,7 @@ class TestCorruptRegistryRecovery:
         runner = CliRunner()
         result = runner.invoke(cli, ["--config", str(config_path), "status"])
         assert result.exit_code == 0
-        assert "Library: 1 decks" in result.output
+        assert "Library: 1 documents" in result.output
 
 
 # ---------------------------------------------------------------------------

@@ -26,9 +26,10 @@ class RegistryEntry:
     deck_dir: str               # relative to library_root
     source_relative_path: str   # frontmatter source field
     source_hash: str
-    source_type: str
     version: int
     converted: str
+    source_type: Optional[str] = None
+    type: Optional[str] = None
     modified: Optional[str] = None
     client: Optional[str] = None
     engagement: Optional[str] = None
@@ -114,9 +115,10 @@ def remove_entry(registry_path: Path, deck_id: str) -> None:
 def rebuild_registry(library_root: Path) -> dict:
     """Bootstrap a registry by walking existing markdown files.
 
-    Scans ``library_root`` for Folio markdown files (ones with
-    ``source`` and ``source_hash`` in YAML frontmatter) and creates
-    a registry entry for each.
+    Scans ``library_root`` for Folio markdown files and creates a registry
+    entry for each note carrying either:
+    - ``source`` + ``source_hash`` (evidence-style docs)
+    - ``source_transcript`` + ``source_hash`` (interaction docs)
     """
     library_root = Path(library_root).resolve()
     data = _empty_registry()
@@ -125,8 +127,14 @@ def rebuild_registry(library_root: Path) -> dict:
         fm = _read_frontmatter(md_file)
         if fm is None:
             continue
-        # Must have source tracking fields to be a Folio document
-        if "source" not in fm or "source_hash" not in fm:
+        source_field = None
+        if "source" in fm:
+            source_field = "source"
+        elif "source_transcript" in fm:
+            source_field = "source_transcript"
+
+        # Must have a supported source tracking field to be a Folio document
+        if source_field is None or "source_hash" not in fm:
             continue
 
         deck_id = fm.get("id", md_file.stem)
@@ -136,18 +144,19 @@ def rebuild_registry(library_root: Path) -> dict:
             deck_dir_rel = ""
 
         # Compute staleness
-        staleness = check_staleness(md_file, fm["source"], fm["source_hash"])
+        staleness = check_staleness(md_file, fm[source_field], fm["source_hash"])
 
         entry = RegistryEntry(
             id=deck_id,
             title=fm.get("title", md_file.stem),
             markdown_path=md_rel,
             deck_dir=deck_dir_rel,
-            source_relative_path=fm["source"],
+            source_relative_path=fm[source_field],
             source_hash=fm["source_hash"],
-            source_type=fm.get("source_type", "deck"),
+            source_type=fm.get("source_type"),
             version=fm.get("version", 1),
             converted=fm.get("converted", ""),
+            type=fm.get("type", "evidence"),
             modified=fm.get("modified"),
             client=fm.get("client"),
             engagement=fm.get("engagement"),
@@ -170,7 +179,7 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
     """Reconcile registry entries against their actual markdown frontmatter.
 
     Updates registry fields that are frontmatter-authoritative
-    (title, client, engagement, authority, curation_level,
+    (title, type, client, engagement, authority, curation_level,
     review_status, review_flags) so the registry stays consistent
     after manual edits.
     """
@@ -194,8 +203,8 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
         # These are intentionally excluded; the registry retains the last-computed
         # values and frontmatter is the source of truth only after re-conversion.
         authoritative = [
-            "title", "client", "engagement", "authority", "curation_level",
-            "review_status", "review_flags",
+            "title", "type", "client", "engagement", "authority",
+            "curation_level", "review_status", "review_flags",
         ]
         for field_name in authoritative:
             if field_name in fm:
@@ -209,6 +218,16 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
                 if entry_data.get(field_name) is not None:
                     entry_data[field_name] = None
                     changed += 1
+        source_field = None
+        if "source_transcript" in fm:
+            source_field = "source_transcript"
+        elif "source" in fm:
+            source_field = "source"
+        if source_field is not None:
+            source_val = fm.get(source_field)
+            if source_val != entry_data.get("source_relative_path"):
+                entry_data["source_relative_path"] = source_val
+                changed += 1
         # Also reconcile the ID if frontmatter has one
         fm_id = fm.get("id")
         if fm_id and fm_id != deck_id:

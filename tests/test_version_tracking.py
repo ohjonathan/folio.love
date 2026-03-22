@@ -172,6 +172,22 @@ class TestComputeVersion:
         assert not vi.changes.has_changes
         assert vi.changes.unchanged == [1, 2]
 
+    def test_interaction_adapter_single_unit_versioning(self, tmp_path):
+        texts = {1: "Normalized interaction transcript body"}
+        vi = compute_version(tmp_path, "h1", "transcripts/interview.md", 1, texts)
+        assert vi.version == 1
+        assert vi.slide_count == 1
+        assert vi.changes.added == [1]
+
+    def test_interaction_adapter_identity_stable_on_unchanged_reingest(self, tmp_path):
+        texts = {1: "Normalized interaction transcript body"}
+        compute_version(tmp_path, "h1", "transcripts/interview.md", 1, texts)
+        vi = compute_version(tmp_path, "h2", "transcripts/interview.md", 1, texts)
+        assert vi.version == 2
+        assert vi.slide_count == 1
+        assert vi.changes.unchanged == [1]
+        assert not vi.changes.has_changes
+
 
 # ---------------------------------------------------------------------------
 # Load/save edge cases (6)
