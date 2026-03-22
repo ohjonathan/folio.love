@@ -260,6 +260,41 @@ class TestImportDuplicates:
         assert jane.needs_confirmation is True  # not upgraded
         assert jane.source == "extracted"
 
+    def test_import_case_only_variant_updates_existing(self, tmp_path):
+        """'jane smith' must match existing 'Jane Smith' (case-insensitive)."""
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title\njane smith,CTO\n")
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Jane Smith",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+        result = import_csv(reg, csv_path)
+        # Should update, not reject as collision
+        assert result.people_updated == 1
+        jane = reg.get_entity("person", "jane_smith")
+        assert jane.title == "CTO"
+
+    def test_import_case_only_variant_upgrades_unconfirmed(self, tmp_path):
+        """'JANE SMITH' must upgrade existing unconfirmed 'Jane Smith'."""
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title\nJANE SMITH,CTO\n")
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Jane Smith",
+            type="person",
+            source="extracted",
+            needs_confirmation=True,
+        ))
+        reg.save()
+        result = import_csv(reg, csv_path)
+        assert result.people_updated == 1
+        jane = reg.get_entity("person", "jane_smith")
+        assert jane.needs_confirmation is False
+        assert jane.source == "import"
+
 
 # ---------------------------------------------------------------------------
 # Aliases
@@ -314,20 +349,20 @@ class TestImportEncoding:
             import_csv(reg, csv_path)
 
     def test_import_malformed_quote_open_aborts(self, tmp_path):
-        """Unclosed opening quote aborts with parse error and no writes."""
+        """Unclosed opening quote aborts with parse error including line number."""
         csv_path = tmp_path / "bad_quote.csv"
         _make_csv(csv_path, 'name,title\n"Jane Smith,CTO\n')
         reg = _make_registry(tmp_path)
-        with pytest.raises(ValueError, match="Cannot parse"):
+        with pytest.raises(ValueError, match=r"Cannot parse .* at line \d+"):
             import_csv(reg, csv_path)
         assert reg.entity_count() == 0
 
     def test_import_malformed_quote_close_aborts(self, tmp_path):
-        """Unclosed quote in second field aborts with parse error and no writes."""
+        """Unclosed quote in second field aborts with parse error including line number."""
         csv_path = tmp_path / "bad_quote2.csv"
         _make_csv(csv_path, 'name,title\nJane Smith,"CTO\n')
         reg = _make_registry(tmp_path)
-        with pytest.raises(ValueError, match="Cannot parse"):
+        with pytest.raises(ValueError, match=r"Cannot parse .* at line \d+"):
             import_csv(reg, csv_path)
         assert reg.entity_count() == 0
 
