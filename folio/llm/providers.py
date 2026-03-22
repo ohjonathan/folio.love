@@ -9,7 +9,6 @@ from __future__ import annotations
 import base64
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from typing import Any
 from urllib.parse import urlparse
 
@@ -87,6 +86,21 @@ def _truncate_message(message: str, max_chars: int = 200) -> str:
     return text[: max_chars - 3].rstrip() + "..."
 
 
+def _uses_custom_openai_base_url(client: Any) -> bool:
+    """Detect whether an OpenAI client targets a non-default base URL."""
+    base_url = getattr(client, "base_url", None)
+    if base_url is None:
+        return False
+    text = str(base_url).strip()
+    if not text:
+        return False
+    parsed = urlparse(text)
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    return hostname != "api.openai.com"
+
+
 def _preflight_settings(
     settings: ProviderRuntimeSettings | None,
 ) -> ProviderRuntimeSettings:
@@ -104,19 +118,13 @@ def _preflight_settings(
     )
 
 
-def _run_with_budget(fn, timeout_seconds: float = _PREFLIGHT_TIMEOUT_SECONDS):
-    """Run a small preflight helper with a hard wall-clock budget."""
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(fn)
-    try:
-        return future.result(timeout=timeout_seconds)
-    except FutureTimeoutError as exc:
-        future.cancel()
-        raise TimeoutError(
-            f"preflight timed out after {timeout_seconds:.1f}s"
-        ) from exc
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
+def _openai_lookup_client(client: Any, timeout_seconds: float) -> Any | None:
+    """Build a per-request timeout-scoped OpenAI client when supported."""
+    with_options = getattr(client, "with_options", None)
+    if not callable(with_options):
+        return None
+    configured = with_options(timeout=timeout_seconds)
+    return configured if configured is not None else None
 
 
 def _run_runtime_preflight(
@@ -312,11 +320,14 @@ class OpenAIAnalysisProvider:
     ) -> str | None:
         """Probe OpenAI model availability and execution capability."""
         lookup_error: Exception | None = None
-        try:
-            _run_with_budget(lambda: client.models.retrieve(model))
-            return None
-        except Exception as exc:
-            lookup_error = exc
+        lookup_client = _openai_lookup_client(client, _PREFLIGHT_TIMEOUT_SECONDS)
+        if lookup_client is not None:
+            try:
+                lookup_client.models.retrieve(model)
+                if not _uses_custom_openai_base_url(client):
+                    return None
+            except Exception as exc:
+                lookup_error = exc
 
         reason = _run_runtime_preflight(self, client, model, settings)
         if reason is None:
@@ -472,7 +483,10 @@ class GoogleAnalysisProvider:
         model_getter = getattr(models_api, "get", None)
         if callable(model_getter):
             try:
-                _run_with_budget(lambda: model_getter(name=model))
+                model_getter(
+                    name=model,
+                    config={"http_options": {"timeout": _PREFLIGHT_TIMEOUT_SECONDS}},
+                )
                 return None
             except Exception as exc:
                 lookup_error = exc

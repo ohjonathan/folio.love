@@ -5,7 +5,6 @@ import json
 import sys
 import tempfile
 import logging
-import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -30,7 +29,7 @@ from folio.llm.providers import (
     OpenAIAnalysisProvider,
     _format_preflight_error,
     _resolve_base_url,
-    _run_with_budget,
+    _uses_custom_openai_base_url,
 )
 from tests.llm_mocks import (
     make_anthropic_response, make_openai_response, make_google_response,
@@ -397,14 +396,32 @@ class TestPreflightWarningFormatting:
         assert formatted.endswith("...")
 
 
-class TestPreflightBudget:
-    """Test bounded preflight helpers."""
+class TestOpenAIBaseUrlDetection:
+    """Test OpenAI base URL classification for preflight behavior."""
 
-    def test_run_with_budget_times_out(self):
-        start = time.monotonic()
-        with pytest.raises(TimeoutError, match="preflight timed out"):
-            _run_with_budget(lambda: time.sleep(0.2), timeout_seconds=0.01)
-        assert time.monotonic() - start < 0.2
+    def test_default_openai_endpoint_is_not_custom(self):
+        client = MagicMock()
+        client.base_url = "https://api.openai.com/v1"
+
+        assert _uses_custom_openai_base_url(client) is False
+
+    def test_gateway_endpoint_is_custom(self):
+        client = MagicMock()
+        client.base_url = "https://gateway.example.com/openai/v1"
+
+        assert _uses_custom_openai_base_url(client) is True
+
+    def test_path_containing_api_openai_com_does_not_mask_gateway(self):
+        client = MagicMock()
+        client.base_url = "https://gateway.example.com/proxy/api.openai.com/v1"
+
+        assert _uses_custom_openai_base_url(client) is True
+
+    def test_missing_or_invalid_hostname_is_not_custom(self):
+        client = MagicMock()
+        client.base_url = "not-a-url"
+
+        assert _uses_custom_openai_base_url(client) is False
 
 
 class TestPass1ValidationHardening:
@@ -613,17 +630,24 @@ class TestOpenAIAdapter:
     def test_preflight_prefers_model_lookup_on_default_endpoint(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
+        mock_client.base_url = "https://api.openai.com/v1"
+        lookup_client = MagicMock()
+        mock_client.with_options.return_value = lookup_client
 
-        reason = provider.preflight(mock_client, "gpt-4o")
+        with patch("folio.llm.providers.execute_with_retry") as mock_execute:
+            reason = provider.preflight(mock_client, "gpt-4o")
 
         assert reason is None
-        mock_client.models.retrieve.assert_called_once_with("gpt-4o")
-        mock_client.chat.completions.create.assert_not_called()
+        mock_client.with_options.assert_called_once_with(timeout=5.0)
+        lookup_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_execute.assert_not_called()
 
-    def test_preflight_falls_back_to_runtime_probe_when_lookup_fails(self):
+    def test_preflight_probes_execution_after_lookup_on_custom_gateway(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
-        mock_client.models.retrieve.side_effect = RuntimeError("models endpoint unavailable")
+        mock_client.base_url = "https://gateway.example.com/openai/v1"
+        lookup_client = MagicMock()
+        mock_client.with_options.return_value = lookup_client
         settings = ProviderRuntimeSettings(
             allowed_endpoints=("chat_completions",),
             require_store_false=True,
@@ -636,7 +660,36 @@ class TestOpenAIAdapter:
             reason = provider.preflight(mock_client, "gpt-4o", settings)
 
         assert reason is None
-        mock_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_client.with_options.assert_called_once_with(timeout=5.0)
+        lookup_client.models.retrieve.assert_called_once_with("gpt-4o")
+        mock_execute.assert_called_once()
+        _, _, _, inp, runtime_settings, _ = mock_execute.call_args.args
+        assert inp.require_store_false is True
+        assert inp.timeout_seconds == 5.0
+        assert runtime_settings.max_attempts == 1
+        assert runtime_settings.allowed_endpoints == ("chat_completions",)
+
+    def test_preflight_falls_back_to_runtime_probe_when_lookup_fails(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.base_url = "https://api.openai.com/v1"
+        lookup_client = MagicMock()
+        lookup_client.models.retrieve.side_effect = RuntimeError("models endpoint unavailable")
+        mock_client.with_options.return_value = lookup_client
+        settings = ProviderRuntimeSettings(
+            allowed_endpoints=("chat_completions",),
+            require_store_false=True,
+        )
+
+        with patch(
+            "folio.llm.providers.execute_with_retry",
+            return_value=ProviderOutput(raw_text="ok"),
+        ) as mock_execute:
+            reason = provider.preflight(mock_client, "gpt-4o", settings)
+
+        assert reason is None
+        mock_client.with_options.assert_called_once_with(timeout=5.0)
+        lookup_client.models.retrieve.assert_called_once_with("gpt-4o")
         mock_execute.assert_called_once()
         _, _, _, inp, runtime_settings, _ = mock_execute.call_args.args
         assert inp.require_store_false is True
@@ -647,7 +700,10 @@ class TestOpenAIAdapter:
     def test_preflight_returns_warning_reason_when_lookup_and_runtime_probe_fail(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
-        mock_client.models.retrieve.side_effect = RuntimeError("lookup blocked")
+        mock_client.base_url = "https://gateway.example.com/openai/v1"
+        lookup_client = MagicMock()
+        lookup_client.models.retrieve.side_effect = RuntimeError("lookup blocked")
+        mock_client.with_options.return_value = lookup_client
 
         with patch(
             "folio.llm.providers.execute_with_retry",
@@ -768,7 +824,10 @@ class TestGoogleAdapter:
         reason = provider.preflight(mock_client, "gemini-2.5-pro")
 
         assert reason is None
-        mock_client.models.get.assert_called_once_with(name="gemini-2.5-pro")
+        mock_client.models.get.assert_called_once_with(
+            name="gemini-2.5-pro",
+            config={"http_options": {"timeout": 5.0}},
+        )
         mock_client.models.generate_content.assert_not_called()
 
     def test_preflight_falls_back_to_generate_content_when_lookup_fails(self):
@@ -782,7 +841,10 @@ class TestGoogleAdapter:
             reason = provider.preflight(mock_client, "gemini-2.5-pro")
 
         assert reason is None
-        mock_client.models.get.assert_called_once_with(name="gemini-2.5-pro")
+        mock_client.models.get.assert_called_once_with(
+            name="gemini-2.5-pro",
+            config={"http_options": {"timeout": 5.0}},
+        )
         mock_execute.assert_called_once()
 
     def test_preflight_without_model_get_uses_generate_content(self):
