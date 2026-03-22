@@ -1112,3 +1112,124 @@ class TestAssessReviewState:
         assert "diagram_abstained_slide_3" in result.review_flags
         assert not any(f.startswith("partial_analysis") for f in result.review_flags)
 
+
+# ── P4: Zero-text extraction tests ────────────────────────────────────
+
+class TestZeroTextExtraction:
+    """P4: Zero-text confidence tightening and review flags."""
+
+    def _make_text(self, slide_num, full_text="Some slide text"):
+        return SlideText(slide_num=slide_num, full_text=full_text, elements=[])
+
+    def test_zero_text_flag_emitted(self):
+        """Whole-deck zero-text emits zero_text_extraction."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{
+                    "confidence": "high",
+                    "validated": False,
+                    "validation_unavailable": True,
+                }],
+            ),
+        }
+        # Empty text for all slides
+        texts = {1: self._make_text(1, "")}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "zero_text_extraction" in result.review_flags
+
+    def test_zero_text_additive_with_validation_unavailable(self):
+        """zero_text_extraction is additive with text_validation_unavailable."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{
+                    "confidence": "high",
+                    "validated": False,
+                    "validation_unavailable": True,
+                }],
+            ),
+        }
+        texts = {1: self._make_text(1, "")}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "text_validation_unavailable" in result.review_flags
+        assert "zero_text_extraction" in result.review_flags
+
+    def test_zero_text_high_confidence_not_clamped(self):
+        """High-confidence validation_unavailable evidence → confidence > 0.59."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{
+                    "claim": "Revenue growth is 15%",
+                    "confidence": "high",
+                    "validated": False,
+                    "validation_unavailable": True,
+                }],
+            ),
+            2: SlideAnalysis(
+                slide_type="data",
+                evidence=[{
+                    "claim": "Market size $5B",
+                    "confidence": "high",
+                    "validated": False,
+                    "validation_unavailable": True,
+                }],
+            ),
+        }
+        texts = {1: self._make_text(1, ""), 2: self._make_text(2, "")}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.extraction_confidence is not None
+        assert result.extraction_confidence > 0.59, \
+            f"Zero-text high-confidence should not be clamped to 0.59, got {result.extraction_confidence}"
+
+    def test_low_confidence_still_clamped_in_zero_text(self):
+        """Low-confidence evidence still clamps even in zero-text scenarios."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{
+                    "confidence": "low",
+                    "validated": False,
+                    "validation_unavailable": True,
+                }],
+            ),
+        }
+        texts = {1: self._make_text(1, "")}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert result.extraction_confidence is not None
+        assert result.extraction_confidence <= 0.59, \
+            f"Low-confidence should still clamp to 0.59, got {result.extraction_confidence}"
+
+    def test_normal_text_no_zero_text_flag(self):
+        """Normal text-bearing deck → no zero_text_extraction."""
+        analyses = {
+            1: SlideAnalysis(
+                slide_type="data",
+                evidence=[{"confidence": "high", "validated": True}],
+            ),
+        }
+        texts = {1: self._make_text(1, "Some normal text content")}
+        result = assess_review_state(
+            analyses, texts,
+            effective_passes=1, density_threshold=2.0,
+            review_confidence_threshold=0.6,
+        )
+        assert "zero_text_extraction" not in result.review_flags
+

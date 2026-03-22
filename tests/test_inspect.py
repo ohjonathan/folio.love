@@ -780,3 +780,92 @@ class TestPdfiumFallback:
         assert p.classification != "blank", \
             "Soft pdfium failure should not make text page blank"
         assert p.word_count > 0
+
+
+# ── P1a: Table-heavy reclassification tests ────────────────────────────────
+
+def _make_table_heavy_pdf(path: Path) -> None:
+    """Generate a page with high word count and axis-aligned-only table vectors.
+
+    200+ words with 120+ rects (all axis-aligned) → should reclassify mixed→text.
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+
+    c = canvas.Canvas(str(path), pagesize=letter)
+    # Substantial text (> 150 words)
+    t = c.beginText(72, 700)
+    t.setFont("Helvetica", 10)
+    for i in range(25):
+        t.textLine(f"Row {i}: revenue data quarterly summary analysis results and commentary")
+    c.drawText(t)
+    # Many axis-aligned rects (table grid lines) — 120 rects
+    for row in range(12):
+        for col in range(10):
+            c.rect(50 + col * 50, 50 + row * 40, 48, 38)
+    c.showPage()
+    c.save()
+
+
+def _make_diagonal_mixed_pdf(path: Path) -> None:
+    """Generate a page with high word count and diagonal lines.
+
+    Diagonal lines are NOT axis-aligned → should stay mixed.
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+
+    c = canvas.Canvas(str(path), pagesize=letter)
+    # Substantial text
+    t = c.beginText(72, 700)
+    t.setFont("Helvetica", 10)
+    for i in range(25):
+        t.textLine(f"Line {i}: substantial descriptive text here for the diagram below")
+    c.drawText(t)
+    # Diagonal lines — NOT axis-aligned
+    for i in range(120):
+        c.line(50 + i * 4, 50, 100 + i * 4, 200)
+    c.showPage()
+    c.save()
+
+
+class TestTableHeavyReclassification:
+    """P1a: Table-heavy reclassification from mixed → text."""
+
+    def test_is_table_like_true(self):
+        """High word count, many vectors, >85% axis-aligned → True."""
+        from folio.pipeline.inspect import _is_table_like
+        assert _is_table_like(word_count=200, vector_count=120, axis_aligned_count=110)
+
+    def test_is_table_like_low_words(self):
+        """Low word count → False (even if all axis-aligned)."""
+        from folio.pipeline.inspect import _is_table_like
+        assert not _is_table_like(word_count=50, vector_count=120, axis_aligned_count=110)
+
+    def test_is_table_like_low_vectors(self):
+        """Low vector count → False."""
+        from folio.pipeline.inspect import _is_table_like
+        assert not _is_table_like(word_count=200, vector_count=50, axis_aligned_count=45)
+
+    def test_is_table_like_low_ratio(self):
+        """Low axis-aligned ratio → False."""
+        from folio.pipeline.inspect import _is_table_like
+        assert not _is_table_like(word_count=200, vector_count=120, axis_aligned_count=80)
+
+    def test_table_heavy_pdf_classified_as_text(self, tmp_path):
+        """Integration: PDF with table-like vectors → text classification."""
+        pdf = tmp_path / "table.pdf"
+        _make_table_heavy_pdf(pdf)
+        profiles = inspect_pages(pdf)
+        p = profiles[1]
+        assert p.classification == "text", \
+            f"Table-heavy page should be reclassified to text, got {p.classification}"
+
+    def test_diagonal_lines_stay_mixed(self, tmp_path):
+        """Integration: PDF with diagonal lines → stays mixed."""
+        pdf = tmp_path / "diag.pdf"
+        _make_diagonal_mixed_pdf(pdf)
+        profiles = inspect_pages(pdf)
+        p = profiles[1]
+        assert p.classification in ("mixed", "diagram"), \
+            f"Diagonal-line page should remain mixed/diagram, got {p.classification}"

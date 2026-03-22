@@ -195,6 +195,42 @@ def get_pdfplumber_words_from_doc(plumber_doc, page_number: int) -> list[str]:
     return [w["text"] for w in raw_words if w.get("text", "").strip()]
 
 
+_AXIS_TOLERANCE = 0.5  # points
+
+
+def get_page_vector_detail_from_doc(
+    plumber_doc, page_number: int
+) -> tuple[int, int, bool]:
+    """Return (vector_count, axis_aligned_vector_count, has_images).
+
+    Axis-aligned classification:
+    - rects: always axis-aligned
+    - lines: axis-aligned when horizontal (|y0-y1| <= tol) or vertical (|x0-x1| <= tol)
+    - curves: total only (never counted as axis-aligned)
+    """
+    if page_number < 1 or page_number > len(plumber_doc.pages):
+        return 0, 0, False
+    page = plumber_doc.pages[page_number - 1]
+    rects = page.rects or []
+    lines = page.lines or []
+    curves = page.curves or []
+    images = page.images or []
+
+    vector_count = len(rects) + len(lines) + len(curves)
+    # Rects are always axis-aligned
+    axis_aligned = len(rects)
+    # Lines: check horizontal/vertical within tolerance
+    for ln in lines:
+        x0 = ln.get("x0", 0)
+        y0 = ln.get("y0", 0)
+        x1 = ln.get("x1", 0)
+        y1 = ln.get("y1", 0)
+        if abs(x0 - x1) <= _AXIS_TOLERANCE or abs(y0 - y1) <= _AXIS_TOLERANCE:
+            axis_aligned += 1
+    return vector_count, axis_aligned, bool(images)
+
+
+
 # ── internal helpers ──────────────────────────────────────────────────
 
 def _union_boxes(

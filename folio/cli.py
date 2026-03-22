@@ -1,6 +1,8 @@
 """CLI interface for Folio."""
 
+import hashlib
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -28,8 +30,24 @@ def _matches_scope(path: str, scope: str) -> bool:
     norm_scope = scope.rstrip("/") + "/"
     return path == scope or path.startswith(norm_scope)
 
+
 # Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
 _RESTART_CADENCE = 15
+
+_HASH_CHUNK_SIZE = 8192
+
+
+def _content_hash(path: Path) -> str:
+    """Streaming SHA-256 of file contents (8 KB chunks)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while True:
+            chunk = fh.read(_HASH_CHUNK_SIZE)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
 
 # AppleScript error codes are 4-digit negative numbers following "error number"
 # or "error (" patterns.  We anchor to these patterns to avoid false matches
@@ -285,10 +303,29 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
         click.echo(f"No files matching '{pattern}' in {directory}")
         return
 
-    # Classify files into automated PPTX vs PDF mitigation
-    is_pdf_batch = all(f.suffix.lower() == ".pdf" for f in files)
+    # P0: Content-hash deduplication — skip duplicates and empty files
+    seen_hashes: dict[str, Path] = {}  # hash -> first file
+    files_to_process: list[Path] = []
+    duplicates_skipped = 0
+    empty_files_skipped = 0
+    for f in files:
+        if os.path.getsize(f) == 0:
+            click.echo(f"⚠ {f.name} (empty, skipped)")
+            empty_files_skipped += 1
+            continue
+        h = _content_hash(f)
+        first_seen = seen_hashes.get(h)
+        if first_seen is not None:
+            click.echo(f"⊘ {f.name} (duplicate of {first_seen.name}, skipped)")
+            duplicates_skipped += 1
+            continue
+        seen_hashes[h] = f
+        files_to_process.append(f)
 
-    click.echo(f"Converting {len(files)} files...")
+    # Classify files into automated PPTX vs PDF mitigation
+    is_pdf_batch = all(f.suffix.lower() == ".pdf" for f in files_to_process)
+
+    click.echo(f"Converting {len(files_to_process)} files...")
     if is_pdf_batch:
         click.echo("  Mode: PDF mitigation (not Tier 1)")
     click.echo("")
@@ -296,7 +333,7 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
     outcomes: list[BatchOutcome] = []
     pptx_conversion_count = 0  # Track PPTX conversions for restart cadence
 
-    for f in files:
+    for f in files_to_process:
         is_pptx = f.suffix.lower() in PPTX_EXTENSIONS
         # Config-based fallback for non-NormalizationError failures.
         # NormalizationError carries .renderer_used for accurate reporting.
@@ -409,6 +446,8 @@ def batch(ctx, directory: str, pattern: str, note: str, client: str, engagement:
         click.echo(f"PDF mitigation (not Tier 1): {pdf_ok} succeeded, {pdf_fail} failed")
     if not pptx_outcomes and not pdf_outcomes:
         click.echo("No files processed.")
+    click.echo(f"Duplicates skipped: {duplicates_skipped}")
+    click.echo(f"Empty files skipped: {empty_files_skipped}")
 
     # Detail failures
     failures = [o for o in outcomes if o.outcome != "success"]

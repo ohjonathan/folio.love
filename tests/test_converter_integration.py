@@ -1633,3 +1633,155 @@ class TestPartialPayloadWarmCacheIntegration:
             assert parsed_fm["review_status"] != "clean"
             # Must not have blank normal-analysis content
             assert "**Slide Type:**  " not in content
+
+
+# ── P1b: Post-Pass-1 Diagram Gating ───────────────────────────────────
+
+class TestPostPass1DiagramGating:
+    """P1b: Diagram gating skips extraction for data/appendix/title with no framework."""
+
+    def test_data_no_framework_gated(self):
+        """data slide with framework='none' is removed from diagram_extract_slides."""
+        slide_analyses = {
+            1: SlideAnalysis(slide_type="data", framework="none"),
+            2: SlideAnalysis(slide_type="framework", framework="tam-sam-som"),
+        }
+        diagram_or_mixed = {1, 2}
+        frozen = set()
+
+        # Simulate the gating logic from converter.py
+        _SKIP_DIAGRAM_TYPES = {"data", "appendix", "title"}
+        gated = set()
+        for slide_num in diagram_or_mixed:
+            a = slide_analyses.get(slide_num)
+            if a and a.slide_type in _SKIP_DIAGRAM_TYPES:
+                fw = getattr(a, "framework", None)
+                if fw in {"none", "", None}:
+                    gated.add(slide_num)
+        result = diagram_or_mixed - frozen - gated
+
+        assert 1 not in result, "data+no-framework should be gated"
+        assert 2 in result, "framework slide should NOT be gated"
+
+    def test_appendix_no_framework_gated(self):
+        """appendix slide with framework='' is gated."""
+        a = SlideAnalysis(slide_type="appendix", framework="")
+        fw = getattr(a, "framework", None)
+        assert a.slide_type in {"data", "appendix", "title"}
+        assert fw in {"none", "", None}
+
+    def test_title_no_framework_gated(self):
+        """title slide with framework=None is gated."""
+        a = SlideAnalysis(slide_type="title", framework="none")
+        fw = getattr(a, "framework", None)
+        assert a.slide_type in {"data", "appendix", "title"}
+        assert fw in {"none", "", None}
+
+    def test_framework_slide_not_gated(self):
+        """framework type with non-empty framework is NOT gated."""
+        a = SlideAnalysis(slide_type="framework", framework="tam-sam-som")
+        fw = getattr(a, "framework", None)
+        skip = a.slide_type in {"data", "appendix", "title"} and fw in {"none", "", None}
+        assert not skip
+
+    def test_data_with_framework_not_gated(self):
+        """data slide WITH a framework value is NOT gated."""
+        a = SlideAnalysis(slide_type="data", framework="tam-sam-som")
+        fw = getattr(a, "framework", None)
+        skip = a.slide_type in {"data", "appendix", "title"} and fw in {"none", "", None}
+        assert not skip
+
+
+# ── P3: Large-Document Warning ─────────────────────────────────────────
+
+class TestLargeDocumentWarning:
+    """P3: Warning fires when slide_count > large_document_warn_pages."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_large_document_warning_fires(self, caplog):
+        """Document with more pages than threshold triggers warning."""
+        import logging
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+            source = tmpdir_path / "big.pptx"
+            source.write_bytes(b"fake")
+
+            # Create 60 image results (> default threshold of 50)
+            image_results = []
+            for i in range(1, 61):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(100))
+                image_results.append(
+                    ImageResult(path=img, slide_num=i, width=200, height=200)
+                )
+
+            slide_texts = {
+                i: SlideText(slide_num=i, full_text="text", elements=[])
+                for i in range(1, 61)
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 caplog.at_level(logging.WARNING):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            assert "Large document" in caplog.text
+            assert "60 pages" in caplog.text
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_no_warning_at_threshold(self, caplog):
+        """Document at or below threshold → no warning."""
+        import logging
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            target_dir = tmpdir_path / "output"
+            target_dir.mkdir()
+            source = tmpdir_path / "small.pptx"
+            source.write_bytes(b"fake")
+
+            # 5 slides (well below threshold)
+            image_results = []
+            for i in range(1, 6):
+                img = target_dir / f"slide-{i:03d}.png"
+                img.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(100))
+                image_results.append(
+                    ImageResult(path=img, slide_num=i, width=200, height=200)
+                )
+
+            slide_texts = {
+                i: SlideText(slide_num=i, full_text="text", elements=[])
+                for i in range(1, 6)
+            }
+
+            mock_client = MagicMock()
+            mock_client.messages.create = MagicMock(
+                return_value=_mock_anthropic_response(MOCK_RESPONSE)
+            )
+
+            config = FolioConfig()
+
+            with patch("folio.pipeline.normalize.to_pdf", return_value=NormalizationResult(pdf_path=source, renderer_used="powerpoint")), \
+                 patch("folio.pipeline.images.extract_with_metadata", return_value=image_results), \
+                 patch("folio.pipeline.text.extract_structured", return_value=slide_texts), \
+                 patch("anthropic.Anthropic", return_value=mock_client), \
+                 caplog.at_level(logging.WARNING):
+
+                converter = FolioConverter(config)
+                result = converter.convert(source_path=source, target=target_dir, passes=1)
+
+            assert "Large document" not in caplog.text

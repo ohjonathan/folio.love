@@ -194,6 +194,7 @@ class ConversionConfig:
     review_confidence_threshold: float = 0.6
     diagram_max_tokens: int = 16384
     max_image_pixels: Optional[int] = None
+    large_document_warn_pages: int = 50
 
 
 @dataclass
@@ -247,6 +248,10 @@ class FolioConfig:
                 raise ValueError(
                     f"max_image_pixels must be None or a positive integer, got {c.max_image_pixels!r}"
                 )
+        if not isinstance(c.large_document_warn_pages, int) or c.large_document_warn_pages <= 0:
+            raise ValueError(
+                f"large_document_warn_pages must be a positive integer, got {c.large_document_warn_pages!r}"
+            )
 
         # LLM validation (spec §3.2)
         self._validate_llm()
@@ -494,6 +499,7 @@ class FolioConfig:
             review_confidence_threshold=conv_raw.get("review_confidence_threshold", 0.6),
             diagram_max_tokens=conv_raw.get("diagram_max_tokens", 16384),
             max_image_pixels=conv_raw.get("max_image_pixels", None),
+            large_document_warn_pages=conv_raw.get("large_document_warn_pages", 50),
         )
 
         # Parse provider runtime settings (merge onto defaults)

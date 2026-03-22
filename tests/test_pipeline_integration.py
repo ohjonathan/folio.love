@@ -921,9 +921,9 @@ class TestBatchBehavior:
         from click.testing import CliRunner
         from folio.cli import cli, _RESTART_CADENCE
 
-        # Create 16 fake PPTX files
+        # Create 16 fake PPTX files with unique content (avoid dedup)
         for i in range(16):
-            (tmp_path / f"deck_{i:02d}.pptx").write_bytes(b"fake")
+            (tmp_path / f"deck_{i:02d}.pptx").write_bytes(f"fake-{i}".encode())
 
         restart_calls = []
 

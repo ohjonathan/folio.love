@@ -428,7 +428,7 @@ class TestBatchCLIForwarding:
 
         runner = CliRunner()
         with runner.isolated_filesystem():
-            Path("deck.pptx").touch()
+            Path("deck.pptx").write_bytes(b"fake")
             result = runner.invoke(cli, [
                 "batch", ".",
                 "--subtype", "data_extract",
