@@ -819,6 +819,10 @@ def assess_review_state(
                 break
         if all_text_unavailable:
             flags.append("text_validation_unavailable")
+            # P4: Additive deck-level flag for zero-text extraction.
+            # Distinct from text_validation_unavailable: the latter is
+            # per-slide-derived; this is a whole-deck summary signal.
+            flags.append("zero_text_extraction")
 
     # Flag individual reviewable pending slides when other reviewable slides
     # succeeded (partial failure). Known blank slides and intentional

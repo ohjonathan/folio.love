@@ -472,3 +472,40 @@ class TestMaxImagePixelsConfig:
         from folio.config import ConversionConfig
         with pytest.raises(ValueError, match="max_image_pixels"):
             FolioConfig(conversion=ConversionConfig(max_image_pixels=-1))
+
+
+# ── P3: Large-document warning config ──────────────────────────────────
+
+class TestLargeDocumentWarnPages:
+    """P3: Config field for large_document_warn_pages."""
+
+    def test_default_is_50(self):
+        config = FolioConfig()
+        assert config.conversion.large_document_warn_pages == 50
+
+    def test_yaml_loading(self, tmp_path):
+        yaml_path = tmp_path / "folio.yaml"
+        yaml_path.write_text(
+            "conversion:\n"
+            "  large_document_warn_pages: 100\n"
+            "llm:\n"
+            "  profiles:\n"
+            "    default:\n"
+            "      provider: anthropic\n"
+            "      model: claude-sonnet-4-20250514\n"
+            "  routing:\n"
+            "    default:\n"
+            "      primary: default\n"
+        )
+        config = FolioConfig.load(yaml_path)
+        assert config.conversion.large_document_warn_pages == 100
+
+    def test_zero_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="large_document_warn_pages"):
+            FolioConfig(conversion=ConversionConfig(large_document_warn_pages=0))
+
+    def test_negative_raises(self):
+        from folio.config import ConversionConfig
+        with pytest.raises(ValueError, match="large_document_warn_pages"):
+            FolioConfig(conversion=ConversionConfig(large_document_warn_pages=-1))

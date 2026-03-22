@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 # Shared constant for PPTX/PPT extensions — used by cli.py too.
 PPTX_EXTENSIONS = frozenset({".pptx", ".ppt"})
 
+# P1b: Slide types that skip diagram extraction when framework is absent.
+_SKIP_DIAGRAM_TYPES = frozenset({"data", "appendix", "title"})
+
 
 def _get_provider(name: str):
     """Resolve a provider adapter lazily to avoid widening module coupling."""
@@ -218,6 +221,13 @@ class FolioConverter:
             image_paths = [r.path for r in image_results]
             slide_count = len(image_results)
 
+            # P3: Large-document warning (informational only)
+            if slide_count > self.config.conversion.large_document_warn_pages:
+                logger.warning(
+                    "Large document (%d pages). Consider --passes 1 for text-heavy documents.",
+                    slide_count,
+                )
+
             # Blank detection: combine inspection + histogram.
             # Structurally blank (no text, no vectors, no images):
             structural_blanks = {
@@ -373,8 +383,32 @@ class FolioConverter:
                 f"{blank_slides & diagram_or_mixed_slides}"
             )
 
+            # PR 4: Diagram extraction for diagram/mixed slides
+            # PR 6: Exclude frozen slides from diagram extraction and rendering
+            # P1b: Post-Pass-1 diagram gating — skip extraction for pages
+            # whose Pass-1 type is data/appendix/title with no framework.
+            # R4 fix: Gating runs BEFORE DiagramAnalysis coercion so gated
+            # pages keep their original Pass-1 SlideAnalysis. This prevents
+            # leaking diagram_abstained_slide_{n} flags and preserves P4
+            # zero-text check coverage.
+            non_frozen_diagram_slides = diagram_or_mixed_slides - all_frozen_diagram_slides
+            pass1_gated_slides = set()
+            for slide_num in non_frozen_diagram_slides:
+                analysis_item = slide_analyses.get(slide_num)
+                if analysis_item and analysis_item.slide_type in _SKIP_DIAGRAM_TYPES:
+                    fw = getattr(analysis_item, "framework", None)
+                    if fw in {"none", "", None}:
+                        pass1_gated_slides.add(slide_num)
+                        logger.info(
+                            "Slide %d: skipping diagram extraction (type=%s, no framework)",
+                            slide_num,
+                            analysis_item.slide_type,
+                        )
+
             # PR 3: Coerce diagram/mixed pages to DiagramAnalysis post pass-1
-            for slide_num in diagram_or_mixed_slides:
+            # Gated slides are excluded — they keep their Pass-1 SlideAnalysis.
+            slides_to_coerce = non_frozen_diagram_slides - pass1_gated_slides
+            for slide_num in slides_to_coerce:
                 existing = slide_analyses.get(slide_num)
                 if existing and not isinstance(existing, analysis.DiagramAnalysis):
                     classification = page_profiles.get(slide_num)
@@ -384,9 +418,8 @@ class FolioConverter:
                         diagram_type=dtype,
                     )
 
-            # PR 4: Diagram extraction for diagram/mixed slides
-            # PR 6: Exclude frozen slides from diagram extraction and rendering
-            diagram_extract_slides = diagram_or_mixed_slides - all_frozen_diagram_slides
+            diagram_extract_slides = slides_to_coerce
+
             if diagram_extract_slides:
                 from .pipeline import diagram_extraction as diag_ext
                 slide_analyses, diagram_stats, diagram_meta = diag_ext.analyze_diagram_pages(

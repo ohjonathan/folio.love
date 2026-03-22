@@ -222,6 +222,7 @@ def _inspect_single_page(pdfium_doc, plumber_doc, page_num):
         get_page_geometry_from_doc,
         get_page_word_boxes_from_doc,
         get_page_vector_image_counts_from_doc,
+        get_page_vector_detail_from_doc,
         get_pdfplumber_words_from_doc,
     )
 
@@ -251,10 +252,22 @@ def _inspect_single_page(pdfium_doc, plumber_doc, page_num):
         word_count = len(pdfplumber_words)
         char_count = sum(len(w) for w in pdfplumber_words)
 
+    # P1a: Collect axis-aligned vector detail for table reclassification
+    _, axis_aligned_count, _ = get_page_vector_detail_from_doc(
+        plumber_doc, page_num
+    )
+
     # Classification
     classification = _classify_page(
         word_count, char_count, vector_count, has_images
     )
+
+    # P1a: Table-heavy reclassification override.
+    # Only fires when `mixed` and all three conditions are met.
+    if classification == "mixed" and _is_table_like(
+        word_count, vector_count, axis_aligned_count
+    ):
+        classification = "text"
 
     # Escalation (m7: uses strict > thresholds; pages exactly at threshold
     # stay at the lower level — this is intentional for conservative escalation)
@@ -287,6 +300,26 @@ def _inspect_single_page(pdfium_doc, plumber_doc, page_num):
 
 
 # ── Classification ─────────────────────────────────────────────────────
+
+
+def _is_table_like(
+    word_count: int,
+    vector_count: int,
+    axis_aligned_count: int,
+) -> bool:
+    """Conservative heuristic: table-heavy mixed pages should be text.
+
+    Only returns True when the signal is overwhelming:
+    - high word count (> 150)
+    - many vectors (> 100)
+    - nearly all (> 85%) axis-aligned (rects + H/V lines)
+
+    False negatives cost runtime; false positives skip real diagrams.
+    Bias toward False when uncertain.
+    """
+    if word_count <= 150 or vector_count <= 100:
+        return False
+    return axis_aligned_count / vector_count > 0.85
 
 def _classify_page(
     word_count: int,

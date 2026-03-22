@@ -1,11 +1,12 @@
 ---
 id: log_20260315_pr22-diagram-extraction-tier2-fixes
 type: log
-status: closed
+status: complete
 event_type: pr22-diagram-extraction-tier2-fixes
 source: cli
 branch: codex/diagram-pr4-extraction
 created: 2026-03-15
+concepts: [diagram-extraction, review-fixes, regression-tests]
 ---
 
 # PR 22: Diagram Extraction Tier 2 Review Fixes
