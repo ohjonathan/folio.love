@@ -153,6 +153,19 @@ class TestAnthropicProvider:
         image_parts = [p for p in content_parts if p.get("type") == "image"]
         assert len(image_parts) == 3, f"Expected 3 images, got {len(image_parts)}"
 
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_analyze_threads_system_prompt_separately(self):
+        provider = AnthropicAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = make_anthropic_response(make_pass1_json())
+
+        inp = ProviderInput(prompt="User payload", system_prompt="System guidance", images=(), max_tokens=256)
+        provider.analyze(mock_client, "test-model", inp)
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert call_kwargs["system"] == "System guidance"
+        assert call_kwargs["messages"][0]["content"][-1]["text"] == "User payload"
+
     def test_classify_error_rate_limit(self):
         provider = AnthropicAnalysisProvider()
         try:
@@ -523,6 +536,19 @@ class TestOpenAIAdapter:
         image_parts = [p for p in content_parts if p.get("type") == "image_url"]
         assert len(image_parts) == 3, f"Expected 3 images, got {len(image_parts)}"
 
+    def test_analyze_threads_system_prompt_separately(self):
+        provider = OpenAIAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = make_openai_response(make_pass1_json())
+
+        inp = ProviderInput(prompt="User payload", system_prompt="System guidance", images=(), max_tokens=256)
+        provider.analyze(mock_client, "gpt-4o", inp)
+
+        messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
+        assert messages[0] == {"role": "system", "content": "System guidance"}
+        assert messages[1]["role"] == "user"
+        assert messages[1]["content"][-1]["text"] == "User payload"
+
     def test_analyze_detects_truncation(self):
         provider = OpenAIAnalysisProvider()
         mock_client = MagicMock()
@@ -792,6 +818,22 @@ class TestGoogleAdapter:
                 contents = call_args.kwargs.get("contents", [])
                 # Contents should have 3 image parts + 1 text part = 4 total
                 assert len(contents) >= 4, f"Expected at least 4 content parts (3 images + prompt), got {len(contents)}"
+
+    def test_analyze_threads_system_prompt_separately(self):
+        provider = GoogleAnalysisProvider()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = make_google_response(make_pass1_json())
+
+        inp = ProviderInput(prompt="User payload", system_prompt="System guidance", images=(), max_tokens=256)
+        mock_google = MagicMock()
+        mock_genai = MagicMock()
+        mock_types = MagicMock()
+        mock_genai.types = mock_types
+        with patch.dict('sys.modules', {'google': mock_google, 'google.genai': mock_genai, 'google.genai.types': mock_types}):
+            mock_types.GenerateContentConfig.return_value = MagicMock()
+            provider.analyze(mock_client, "gemini-2.5-pro", inp)
+
+            assert mock_types.GenerateContentConfig.call_args.kwargs["system_instruction"] == "System guidance"
 
     def test_classify_error_generic(self):
         provider = GoogleAnalysisProvider()

@@ -226,6 +226,8 @@ class AnthropicAnalysisProvider:
             "messages": [{"role": "user", "content": content}],
             "temperature": inp.temperature,
         }
+        if inp.system_prompt:
+            kwargs["system"] = inp.system_prompt
 
         response = client.messages.create(**kwargs)
 
@@ -367,10 +369,15 @@ class OpenAIAnalysisProvider:
             "text": inp.prompt,
         })
 
+        messages: list[dict[str, Any]] = []
+        if inp.system_prompt:
+            messages.append({"role": "system", "content": inp.system_prompt})
+        messages.append({"role": "user", "content": content})
+
         kwargs: dict[str, Any] = {
             "model": model,
             "timeout": inp.timeout_seconds or 120.0,
-            "messages": [{"role": "user", "content": content}],
+            "messages": messages,
         }
         # GPT-5.x: uses max_completion_tokens, does not accept temperature
         if model.startswith("gpt-5"):
@@ -532,6 +539,8 @@ class GoogleAnalysisProvider:
             "http_options": {"timeout": int((inp.timeout_seconds or 120.0) * 1000)},
             "temperature": inp.temperature,
         }
+        if inp.system_prompt:
+            config_kwargs["system_instruction"] = inp.system_prompt
 
         # High media resolution when any image requests it
         any_high = any(
