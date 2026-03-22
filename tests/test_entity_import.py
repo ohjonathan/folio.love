@@ -201,8 +201,9 @@ class TestImportDuplicates:
         assert any("duplicate" in w.lower() for w in result.warnings)
 
     def test_import_slug_collision_skips_row(self, tmp_path):
+        """Same slug but different canonical name → skip with warning."""
         csv_path = tmp_path / "people.csv"
-        _make_csv(csv_path, "name\nJane  Smith\n")  # double space
+        _make_csv(csv_path, "name,title\nJane  Smith,CTO\n")  # double space
         reg = _make_registry(tmp_path)
         reg.add_entity(EntityEntry(
             canonical_name="Jane Smith",
@@ -211,9 +212,53 @@ class TestImportDuplicates:
         ))
         reg.save()
         result = import_csv(reg, csv_path)
-        # "Jane  Smith" produces same slug as "Jane Smith"
-        # Should be treated as an update (existing entity)
-        assert reg.entity_count() == 1
+        # "Jane  Smith" produces same slug as "Jane Smith" but different name
+        # Must be skipped, not treated as an update
+        assert result.people_imported == 0
+        assert result.people_updated == 0
+        assert any("skipped" in w.lower() for w in result.warnings)
+        # Original entity must remain unchanged
+        jane = reg.get_entity("person", "jane_smith")
+        assert jane.canonical_name == "Jane Smith"
+        assert jane.title is None  # not mutated
+
+    def test_import_slug_collision_confirmed_entity_unchanged(self, tmp_path):
+        """Confirmed entity with same slug but different name → skip, unchanged."""
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title,department\nJane  Smith,CTO,Acme\n")
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Jane Smith",
+            type="person",
+            source="import",
+            title="VP",
+        ))
+        reg.save()
+        result = import_csv(reg, csv_path)
+        assert result.people_updated == 0
+        assert result.people_skipped == 0
+        assert any("skipped" in w.lower() for w in result.warnings)
+        jane = reg.get_entity("person", "jane_smith")
+        assert jane.title == "VP"  # not mutated to CTO
+
+    def test_import_slug_collision_unconfirmed_entity_unchanged(self, tmp_path):
+        """Unconfirmed entity with same slug but different name → skip, unchanged."""
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title\nJane  Smith,CTO\n")
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Jane Smith",
+            type="person",
+            source="extracted",
+            needs_confirmation=True,
+        ))
+        reg.save()
+        result = import_csv(reg, csv_path)
+        assert result.people_updated == 0
+        assert any("skipped" in w.lower() for w in result.warnings)
+        jane = reg.get_entity("person", "jane_smith")
+        assert jane.needs_confirmation is True  # not upgraded
+        assert jane.source == "extracted"
 
 
 # ---------------------------------------------------------------------------
@@ -261,12 +306,30 @@ class TestImportEncoding:
         assert any("fewer columns" in w for w in result.warnings)
 
     def test_import_unparseable_row_aborts(self, tmp_path):
+        """Missing name column still aborts."""
         csv_path = tmp_path / "bad.csv"
-        # csv module in Python is lenient, so we test missing name column
         _make_csv(csv_path, "title,department\nCEO,Exec\n")
         reg = _make_registry(tmp_path)
         with pytest.raises(ValueError, match="Missing required 'name' column"):
             import_csv(reg, csv_path)
+
+    def test_import_malformed_quote_open_aborts(self, tmp_path):
+        """Unclosed opening quote aborts with parse error and no writes."""
+        csv_path = tmp_path / "bad_quote.csv"
+        _make_csv(csv_path, 'name,title\n"Jane Smith,CTO\n')
+        reg = _make_registry(tmp_path)
+        with pytest.raises(ValueError, match="Cannot parse"):
+            import_csv(reg, csv_path)
+        assert reg.entity_count() == 0
+
+    def test_import_malformed_quote_close_aborts(self, tmp_path):
+        """Unclosed quote in second field aborts with parse error and no writes."""
+        csv_path = tmp_path / "bad_quote2.csv"
+        _make_csv(csv_path, 'name,title\nJane Smith,"CTO\n')
+        reg = _make_registry(tmp_path)
+        with pytest.raises(ValueError, match="Cannot parse"):
+            import_csv(reg, csv_path)
+        assert reg.entity_count() == 0
 
     def test_import_unrecognized_columns_warning(self, tmp_path):
         csv_path = tmp_path / "extra.csv"

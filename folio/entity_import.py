@@ -53,7 +53,7 @@ def import_csv(registry: EntityRegistry, csv_path: Path) -> ImportResult:
         raise ValueError(f"Cannot read {csv_path}: expected UTF-8 encoding.")
 
     try:
-        reader = csv.reader(io.StringIO(text))
+        reader = csv.reader(io.StringIO(text), strict=True)
         rows_raw = list(reader)
     except csv.Error as e:
         raise ValueError(f"Cannot parse {csv_path}: {e}")
@@ -131,6 +131,14 @@ def import_csv(registry: EntityRegistry, csv_path: Path) -> ImportResult:
         existing = registry.get_entity("person", slug)
 
         if existing is not None:
+            # B1: Reject same-slug/different-canonical-name
+            if existing.canonical_name != name:
+                result.warnings.append(
+                    f"Row {row_idx}: '{name}' produces slug '{slug}' "
+                    f"which belongs to '{existing.canonical_name}', skipped."
+                )
+                continue
+
             if existing.needs_confirmation:
                 # Upgrade: extracted → import, confirm
                 updates = {
