@@ -152,8 +152,10 @@ def compute_version(
         deck_dir: Directory for this deck (contains version_history.json).
         source_hash: Current source file hash.
         source_path: Relative path to source.
-        slide_count: Number of slides.
-        new_texts: Current slide texts (str or SlideText values).
+        slide_count: Number of tracked content units.
+        new_texts: Current tracked texts (str or SlideText values). Callers
+            may provide a synthetic single-unit map such as
+            ``{1: normalized_source_body}`` for non-slide documents.
         note: Optional version note.
 
     Returns:

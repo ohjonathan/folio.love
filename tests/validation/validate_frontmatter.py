@@ -14,14 +14,19 @@ OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 
 # --- Schema constants from Folio Ontology Architecture v2 ---
 
-REQUIRED_FIELDS = [
+BASE_REQUIRED_FIELDS = [
     "id", "title", "type", "subtype", "status", "authority",
-    "curation_level", "source", "source_hash", "source_type",
-    "version", "created", "modified", "converted", "slide_count",
+    "curation_level", "source_hash", "version", "created", "modified",
+    "converted",
 ]
+REQUIRED_EVIDENCE_FIELDS = ["source", "source_type", "slide_count"]
+REQUIRED_INTERACTION_FIELDS = ["source_transcript", "date", "impacts"]
 
 ALLOWED_TYPES = {"context", "analysis", "evidence", "deliverable", "reference", "interaction", "diagram"}
 ALLOWED_SUBTYPES_EVIDENCE = {"research", "data_extract", "external_report", "benchmark"}
+ALLOWED_SUBTYPES_INTERACTION = {
+    "client_meeting", "expert_interview", "internal_sync", "partner_check_in", "workshop",
+}
 ALLOWED_STATUS = {"active", "draft", "archived", "superseded", "complete"}
 ALLOWED_AUTHORITY = {"captured", "analyzed", "aligned", "decided"}
 ALLOWED_CURATION_LEVELS = {"L0", "L1", "L2", "L3"}
@@ -66,8 +71,18 @@ def validate_deck(md_path: Path) -> dict:
         _validate_diagram_note(fm, result)
         return result
 
-    _validate_required_fields(fm, result)
-    _validate_field_types(fm, result)
+    if fm.get("type") == "interaction":
+        _validate_required_fields(fm, result, "interaction")
+        _validate_field_types(fm, result, "interaction")
+        _validate_enum_values(fm, result)
+        _validate_grounding_summary(fm, result)
+        _validate_version_fields(fm, result)
+        _validate_llm_metadata(fm, result)
+        _validate_interaction_markdown_structure(content, result)
+        return result
+
+    _validate_required_fields(fm, result, "evidence")
+    _validate_field_types(fm, result, "evidence")
     _validate_enum_values(fm, result)
     _validate_grounding_summary(fm, result)
     _validate_version_fields(fm, result)
@@ -108,21 +123,41 @@ def _parse_frontmatter(content: str, result: dict) -> dict | None:
         return None
 
 
-def _validate_required_fields(fm: dict, result: dict):
-    for field in REQUIRED_FIELDS:
+def _validate_required_fields(fm: dict, result: dict, doc_type: str):
+    required_fields = list(BASE_REQUIRED_FIELDS)
+    if doc_type == "interaction":
+        required_fields.extend(REQUIRED_INTERACTION_FIELDS)
+    else:
+        required_fields.extend(REQUIRED_EVIDENCE_FIELDS)
+
+    for field in required_fields:
         if field not in fm:
             result["errors"].append(("Silent-Malformed-Frontmatter", f"Missing required field: {field}"))
         elif fm[field] is None or (isinstance(fm[field], str) and not fm[field].strip()):
             result["errors"].append(("Silent-Malformed-Frontmatter", f"Empty required field: {field}"))
 
 
-def _validate_field_types(fm: dict, result: dict):
-    type_checks = {
+def _validate_field_types(fm: dict, result: dict, doc_type: str):
+    type_checks: dict[str, type] = {
         "id": str, "title": str, "type": str, "subtype": str,
         "status": str, "authority": str, "curation_level": str,
-        "source": str, "source_hash": str, "source_type": str,
-        "version": int, "slide_count": int,
+        "source_hash": str, "version": int,
     }
+    if doc_type == "interaction":
+        type_checks.update({
+            "source_transcript": str,
+            "date": str,
+        })
+        optional_type_checks = {
+            "duration_minutes": int,
+        }
+    else:
+        type_checks.update({
+            "source": str,
+            "source_type": str,
+            "slide_count": int,
+        })
+        optional_type_checks = {}
     for field, expected_type in type_checks.items():
         if field in fm and fm[field] is not None:
             if not isinstance(fm[field], expected_type):
@@ -131,7 +166,14 @@ def _validate_field_types(fm: dict, result: dict):
                     f"Field '{field}' should be {expected_type.__name__}, got {type(fm[field]).__name__}",
                 ))
 
-    list_fields = ["frameworks", "slide_types", "tags", "industry"]
+    for field, expected_type in optional_type_checks.items():
+        if field in fm and fm[field] is not None and not isinstance(fm[field], expected_type):
+            result["errors"].append((
+                "Silent-Malformed-Frontmatter",
+                f"Field '{field}' should be {expected_type.__name__}, got {type(fm[field]).__name__}",
+            ))
+
+    list_fields = ["frameworks", "slide_types", "tags", "industry", "impacts", "participants"]
     for field in list_fields:
         if field in fm and fm[field] is not None:
             if not isinstance(fm[field], list):
@@ -144,7 +186,10 @@ def _validate_field_types(fm: dict, result: dict):
 def _validate_enum_values(fm: dict, result: dict):
     if fm.get("type") and fm["type"] not in ALLOWED_TYPES:
         result["errors"].append(("Silent-Malformed-Frontmatter", f"Invalid type: {fm['type']}"))
-    if fm.get("subtype") and fm["subtype"] not in ALLOWED_SUBTYPES_EVIDENCE:
+    if fm.get("type") == "interaction":
+        if fm.get("subtype") and fm["subtype"] not in ALLOWED_SUBTYPES_INTERACTION:
+            result["errors"].append(("Silent-Malformed-Frontmatter", f"Invalid interaction subtype: {fm['subtype']}"))
+    elif fm.get("subtype") and fm["subtype"] not in ALLOWED_SUBTYPES_EVIDENCE:
         result["warnings"].append(f"Unusual subtype: {fm['subtype']}")
     if fm.get("status") and fm["status"] not in ALLOWED_STATUS:
         result["errors"].append(("Silent-Malformed-Frontmatter", f"Invalid status: {fm['status']}"))
@@ -322,6 +367,27 @@ def _detect_silent_failures(content: str, fm: dict, slides_in_body: int, result:
             f"Grounding mismatch: frontmatter total_claims={total_claims_fm}, "
             f"body evidence count={evidence_in_body}"
         )
+
+
+def _validate_interaction_markdown_structure(content: str, result: dict):
+    required_sections = [
+        "## Summary",
+        "## Key Findings",
+        "## Entities Mentioned",
+        "## Quotes / Evidence",
+        "## Impact on Hypotheses",
+    ]
+    for section in required_sections:
+        if section not in content:
+            result["errors"].append((
+                "Silent-Missing-Content",
+                f"Interaction note missing required section: {section}",
+            ))
+    if "> [!quote]- Raw Transcript" not in content:
+        result["errors"].append((
+            "Silent-Missing-Content",
+            "Interaction note missing raw transcript callout",
+        ))
 
 
 def _validate_diagram_note(fm: dict, result: dict):

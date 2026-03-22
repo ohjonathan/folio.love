@@ -13,6 +13,7 @@ import yaml as yaml_lib
 from .config import FolioConfig, LLMProfile
 from .llm.types import FallbackProfileSpec
 from .llm.types import ProviderRuntimeSettings
+from .naming import humanize_token, sanitize_token
 from .pipeline import normalize, images, text, analysis, inspect
 from .tracking import sources, versions
 from .tracking import registry
@@ -815,16 +816,12 @@ def _detect_source_type(source_path: Path) -> str:
 
 def _sanitize_name(name: str) -> str:
     """Sanitize a name for use in file paths and IDs."""
-    # Replace spaces and special chars with underscores
-    name = re.sub(r"[^\w\-.]", "_", name)
-    # Collapse multiple underscores
-    name = re.sub(r"_+", "_", name)
-    return name.strip("_").lower()
+    return sanitize_token(name)
 
 
 def _title_from_name(deck_name: str) -> str:
     """Convert a sanitized deck name to a human-readable title."""
-    return deck_name.replace("_", " ").replace("-", " ").title()
+    return humanize_token(deck_name)
 
 
 def _generate_id(
