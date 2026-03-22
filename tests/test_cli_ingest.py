@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -203,6 +203,41 @@ class TestIngestCommand:
 
         assert result.exit_code != 0
         assert "Invalid value for '--date'" in result.output
+
+    @patch("folio.cli.ingest_source")
+    def test_ingest_uses_local_date_for_future_check(self, mock_ingest_source, tmp_path, monkeypatch):
+        class _LocalDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                assert tz is None
+                return cls(2026, 3, 21, 23, 30, 0)
+
+        monkeypatch.setattr("folio.cli.datetime", _LocalDateTime)
+
+        library = tmp_path / "library"
+        library.mkdir()
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, library)
+        source = tmp_path / "transcripts" / "client_meeting.txt"
+        _make_source(source)
+        mock_ingest_source.return_value = _ingest_result()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "ingest",
+                str(source),
+                "--type",
+                "client_meeting",
+                "--date",
+                "2026-03-21",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
 
     def test_ingest_rejects_invalid_extension(self, tmp_path):
         library = tmp_path / "library"

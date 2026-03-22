@@ -317,7 +317,7 @@ def ingest(
     note: str,
 ):
     """Ingest a transcript or notes file into an interaction note."""
-    if event_date.date() > datetime.now(timezone.utc).date():
+    if event_date.date() > datetime.now().date():
         raise click.BadParameter("--date cannot be in the future", param_hint="--date")
 
     config = ctx.obj["config"]
@@ -1021,6 +1021,9 @@ def promote(ctx, deck_id: str, level: str):
         engagement_types = {"analysis", "evidence", "deliverable", "interaction"}
         if doc_type in engagement_types and not fm.get("engagement"):
             click.echo(f"✗ L0 → L1 requires 'engagement' for {doc_type}-type documents.")
+            sys.exit(1)
+        if doc_type == "interaction" and not fm.get("participants"):
+            click.echo(f"✗ L0 → L1 requires 'participants' for interaction-type documents.")
             sys.exit(1)
 
     # L1 -> L2 validation (warning only)

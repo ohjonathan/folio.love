@@ -425,6 +425,48 @@ class TestPromoteCommand:
         assert result.exit_code != 0
         assert "client" in result.output.lower()
 
+    def test_promote_interaction_l0_to_l1_requires_participants(self, tmp_path):
+        """Promote should block L0→L1 for interactions missing participants."""
+        library = tmp_path / "library"
+        note_dir = library / "Client" / "interactions" / "call"
+        md_path = note_dir / "call.md"
+        _make_folio_markdown(md_path, {
+            "id": "interaction_call",
+            "title": "Call",
+            "type": "interaction",
+            "subtype": "expert_interview",
+            "status": "complete",
+            "authority": "captured",
+            "curation_level": "L0",
+            "client": "ClientA",
+            "engagement": "Q1 2026",
+            "tags": ["expert-interview"],
+            "date": "2026-03-10",
+            "impacts": [],
+            "source_transcript": "../../../sources/call.txt",
+            "source_hash": "abc123",
+        })
+
+        entry = _sample_interaction_registry_entry(
+            id="interaction_call",
+            markdown_path="Client/interactions/call/call.md",
+            deck_dir="Client/interactions/call",
+            source_relative_path="../../../sources/call.txt",
+            source_hash="abc123",
+            client="ClientA",
+            engagement="Q1 2026",
+            curation_level="L0",
+        )
+        save_registry(library / "registry.json", {"_schema_version": 1, "decks": {"interaction_call": entry}})
+
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "promote", "interaction_call", "L1"])
+        assert result.exit_code != 0
+        assert "participants" in result.output.lower()
+
     def test_promote_l1_to_l2_warns_no_relationships(self, tmp_path):
         """Promote L1→L2 should warn when no relationship fields present."""
         library = tmp_path / "library"

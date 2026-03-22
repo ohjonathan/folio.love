@@ -9,6 +9,7 @@ import pytest
 
 from folio.llm.types import ErrorDisposition, ProviderOutput, ProviderRuntimeSettings, TokenUsage
 from folio.output.interaction_markdown import assemble_interaction
+from folio.pipeline import interaction_analysis as interaction_analysis_module
 from folio.pipeline.interaction_analysis import (
     InteractionAnalysisResult,
     InteractionFinding,
@@ -223,6 +224,53 @@ class TestAnalyzeInteractionText:
 
     @patch("folio.pipeline.interaction_analysis.get_provider")
     @patch("folio.pipeline.interaction_analysis.execute_with_retry")
+    def test_malformed_json_response_degrades_instead_of_crashing(self, mock_execute, mock_get_provider):
+        provider = _FakeProvider()
+        mock_get_provider.return_value = provider
+        mock_execute.return_value = ProviderOutput(
+            raw_text='{"summary": "broken"',
+            provider_name="fake",
+            model_name="model-x",
+            usage=TokenUsage(total_tokens=10),
+        )
+
+        result = analyze_interaction_text(
+            "Transcript with content.",
+            "workshop",
+            provider_name="fake",
+            model="model-x",
+        )
+
+        assert result.review_status == "flagged"
+        assert result.review_flags == ["analysis_unavailable"]
+        assert result.llm_status == "pending"
+        assert "Malformed ingest JSON response" in result.warnings[0]
+
+    @patch("folio.pipeline.interaction_analysis.get_provider")
+    @patch("folio.pipeline.interaction_analysis.execute_with_retry")
+    def test_non_object_findings_degrades_instead_of_crashing(self, mock_execute, mock_get_provider):
+        provider = _FakeProvider()
+        mock_get_provider.return_value = provider
+        mock_execute.return_value = ProviderOutput(
+            raw_text='{"summary":"ok","findings":[],"entities":{},"notable_quotes":[],"warnings":[]}',
+            provider_name="fake",
+            model_name="model-x",
+            usage=TokenUsage(total_tokens=10),
+        )
+
+        result = analyze_interaction_text(
+            "Transcript with content.",
+            "client_meeting",
+            provider_name="fake",
+            model="model-x",
+        )
+
+        assert result.review_status == "flagged"
+        assert result.review_flags == ["analysis_unavailable"]
+        assert "findings" in result.warnings[0]
+
+    @patch("folio.pipeline.interaction_analysis.get_provider")
+    @patch("folio.pipeline.interaction_analysis.execute_with_retry")
     def test_uses_fallback_profile_after_transient_primary_failure(self, mock_execute, mock_get_provider):
         provider = _FakeProvider(disposition=ErrorDisposition.transient())
         mock_get_provider.return_value = provider
@@ -280,6 +328,38 @@ class TestAnalyzeInteractionText:
         reduce_prompt = mock_execute.call_args_list[-1].args[3].prompt
         assert "BEGIN_CHUNK_ANALYSES" in reduce_prompt
 
+    @patch("folio.pipeline.interaction_analysis.get_provider")
+    @patch("folio.pipeline.interaction_analysis.execute_with_retry")
+    def test_single_newline_transcript_still_chunks(self, mock_execute, mock_get_provider, monkeypatch):
+        provider = _FakeProvider()
+        mock_get_provider.return_value = provider
+        monkeypatch.setattr("folio.pipeline.interaction_analysis._CHUNK_TARGET_TOKENS", 10)
+        monkeypatch.setattr("folio.pipeline.interaction_analysis._context_window_for_model", lambda _: 20)
+        mock_execute.side_effect = [
+            ProviderOutput(raw_text=_analysis_payload(), usage=TokenUsage(total_tokens=10)),
+            ProviderOutput(raw_text=_analysis_payload(), usage=TokenUsage(total_tokens=10)),
+            ProviderOutput(raw_text=_analysis_payload(), usage=TokenUsage(total_tokens=10)),
+            ProviderOutput(raw_text=_analysis_payload(), usage=TokenUsage(total_tokens=10)),
+            ProviderOutput(raw_text=_analysis_payload(), usage=TokenUsage(total_tokens=10)),
+        ]
+
+        text = "\n".join(
+            [
+                "Jane Smith: We reduced downtime from 12 hours to 2 hours in one quarter.",
+                "The change depended on ServiceNow and tighter incident triage.",
+                "We still have one vendor bottleneck in the workflow.",
+            ]
+        )
+        result = analyze_interaction_text(
+            text,
+            "expert_interview",
+            provider_name="fake",
+            model="model-x",
+        )
+
+        assert result.pass_strategy == "chunked_reduce"
+        assert mock_execute.call_count >= 3
+
     def test_fails_explicitly_when_more_than_five_chunks_required(self, monkeypatch):
         monkeypatch.setattr("folio.pipeline.interaction_analysis._CHUNK_TARGET_TOKENS", 10)
         monkeypatch.setattr("folio.pipeline.interaction_analysis._context_window_for_model", lambda _: 20)
@@ -292,6 +372,16 @@ class TestAnalyzeInteractionText:
                 provider_name="fake",
                 model="model-x",
             )
+
+    def test_excessively_long_quote_short_circuits_before_sequence_matcher(self, monkeypatch):
+        huge_quote = "token " * 200
+        transcript = "A short transcript that does not contain the hallucinated content."
+
+        def _boom(*args, **kwargs):
+            raise AssertionError("SequenceMatcher should not run for huge quotes")
+
+        monkeypatch.setattr("folio.pipeline.interaction_analysis.SequenceMatcher", _boom)
+        assert interaction_analysis_module._validate_quote(huge_quote, transcript) is False
 
 
 class TestInteractionMarkdown:

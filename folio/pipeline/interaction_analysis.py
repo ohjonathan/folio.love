@@ -75,6 +75,7 @@ _SPEAKER_LABEL_RE = re.compile(r"(?m)^(?:[A-Z][\w .'\-/]{0,60}|Speaker \d+)\s*:\
 _MAX_CHUNKS = 5
 _CHUNK_TARGET_TOKENS = 6000
 _CHUNK_OVERLAP_TOKENS = 300
+_MAX_QUOTE_TOKENS_FOR_FUZZY_MATCH = 120
 
 _SUBTYPE_PROMPT_HINTS = {
     "client_meeting": "Emphasize decisions, asks, owners, and next steps.",
@@ -267,7 +268,17 @@ def analyze_interaction_text(
                 "All configured ingest providers failed.",
                 pass_strategy="single_pass",
             )
-        return _coerce_result(_parse_json_object(payload), normalized_text, pass_strategy="single_pass", subtype=subtype)
+        try:
+            parsed = _parse_json_object(payload)
+            return _coerce_result(
+                parsed,
+                normalized_text,
+                pass_strategy="single_pass",
+                subtype=subtype,
+            )
+        except ValueError as exc:
+            logger.warning("Malformed ingest LLM payload: %s", exc)
+            return _degraded_result(str(exc), pass_strategy="single_pass")
 
     chunks = _chunk_text(normalized_text)
     if len(chunks) > _MAX_CHUNKS:
@@ -288,7 +299,11 @@ def analyze_interaction_text(
                 "All configured ingest providers failed.",
                 pass_strategy="chunked_reduce",
             )
-        chunk_payloads.append(_parse_json_object(payload))
+        try:
+            chunk_payloads.append(_parse_json_object(payload))
+        except ValueError as exc:
+            logger.warning("Malformed ingest chunk payload: %s", exc)
+            return _degraded_result(str(exc), pass_strategy="chunked_reduce")
 
     reduce_payload = _run_with_fallback(
         prompt=_REDUCE_PROMPT_TEMPLATE.format(
@@ -304,12 +319,17 @@ def analyze_interaction_text(
             pass_strategy="chunked_reduce",
         )
 
-    return _coerce_result(
-        _parse_json_object(reduce_payload),
-        normalized_text,
-        pass_strategy="chunked_reduce",
-        subtype=subtype,
-    )
+    try:
+        parsed = _parse_json_object(reduce_payload)
+        return _coerce_result(
+            parsed,
+            normalized_text,
+            pass_strategy="chunked_reduce",
+            subtype=subtype,
+        )
+    except ValueError as exc:
+        logger.warning("Malformed ingest reduce payload: %s", exc)
+        return _degraded_result(str(exc), pass_strategy="chunked_reduce")
 
 
 def _degraded_result(message: str, *, pass_strategy: str) -> InteractionAnalysisResult:
@@ -416,6 +436,8 @@ def _coerce_result(
     subtype: str,
 ) -> InteractionAnalysisResult:
     findings = payload.get("findings", {})
+    if not isinstance(findings, dict):
+        raise ValueError("Malformed ingest JSON response: 'findings' must be an object")
     entities = payload.get("entities", {})
 
     result = InteractionAnalysisResult(
@@ -607,6 +629,8 @@ def _validate_quote(quote: str, transcript: str) -> bool:
     quote_tokens = normalized_quote.split()
     if len(quote_tokens) < 6 and not _contains_numeric_token(quote_tokens):
         return False
+    if len(quote_tokens) > _MAX_QUOTE_TOKENS_FOR_FUZZY_MATCH:
+        return False
 
     transcript_tokens = normalized_transcript.split()
     min_window = max(1, len(quote_tokens) - 3)
@@ -625,6 +649,8 @@ def _contains_numeric_token(tokens: list[str]) -> bool:
 
 def _chunk_text(text: str) -> list[str]:
     blocks = [block.strip() for block in re.split(r"\n{2,}", text) if block.strip()]
+    if len(blocks) <= 1:
+        blocks = [line.strip() for line in text.splitlines() if line.strip()]
     if not blocks:
         return [text]
 
