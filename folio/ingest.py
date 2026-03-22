@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -31,6 +32,7 @@ from .tracking.registry import RegistryEntry
 _SUPPORTED_EXTENSIONS = {".md", ".txt"}
 _TARGET_REINGEST_ERROR = "Use --target <existing-note.md> to disambiguate."
 _TITLE_H1_RE = re.compile(r"(?m)^#\s+(.+?)\s*$")
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -188,11 +190,11 @@ def ingest_source(
         "ingest": {
             "requested_profile": llm_profile or profile.name,
             "profile": profile.name,
-            "provider": profile.provider,
-            "model": profile.model,
+            "provider": analysis_result.provider_name or profile.provider,
+            "model": analysis_result.model_name or profile.model,
             "extraction_method": "source_text",
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "fallback_used": False,
+            "fallback_used": analysis_result.fallback_used,
             "status": analysis_result.llm_status,
             "pass_strategy": analysis_result.pass_strategy,
         }
@@ -311,6 +313,13 @@ def _resolve_existing_identity(
         existing_fm = _read_existing_frontmatter(explicit_target_md)
         if not existing_fm or existing_fm.get("type") != "interaction":
             raise IngestError(f"Target note is not an interaction note: {explicit_target_md}")
+        existing_subtype = existing_fm.get("subtype")
+        if existing_subtype and existing_subtype != subtype:
+            logger.warning(
+                "Target note subtype '%s' differs from requested ingest subtype '%s'; reusing explicit --target anyway.",
+                existing_subtype,
+                subtype,
+            )
         return _ResolvedIdentity(
             markdown_path=explicit_target_md,
             existing_frontmatter=existing_fm,
@@ -359,6 +368,10 @@ def _resolved_match(
 ) -> _ResolvedIdentity:
     markdown_path = (library_root / entry.markdown_path).resolve()
     existing_fm = _read_existing_frontmatter(markdown_path)
+    if existing_fm is None:
+        raise IngestError(
+            f"Matched registry entry {entry.id} but markdown file is missing or unreadable: {markdown_path}"
+        )
     existing_subtype = existing_fm.get("subtype") if existing_fm else None
     if existing_subtype and existing_subtype != subtype:
         raise IngestSubtypeMismatchError(

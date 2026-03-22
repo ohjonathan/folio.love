@@ -101,6 +101,21 @@ class TestNormalizeHelpers:
 
 
 class TestAnalyzeInteractionText:
+    def test_coerce_entities_deduplicates_case_insensitively(self):
+        result = interaction_analysis_module._coerce_entities(
+            {
+                "people": ["Jane Smith", "jane smith", "JANE SMITH"],
+                "departments": ["Engineering", "engineering"],
+                "systems": ["ServiceNow", "servicenow"],
+                "processes": ["Incident Triage", "incident triage"],
+            }
+        )
+
+        assert result["people"] == ["Jane Smith"]
+        assert result["departments"] == ["Engineering"]
+        assert result["systems"] == ["ServiceNow"]
+        assert result["processes"] == ["Incident Triage"]
+
     @patch("folio.pipeline.interaction_analysis.get_provider")
     @patch("folio.pipeline.interaction_analysis.execute_with_retry")
     def test_single_pass_parses_structured_json_and_validates_quote(self, mock_execute, mock_get_provider):
@@ -296,6 +311,40 @@ class TestAnalyzeInteractionText:
         assert result.llm_status == "executed"
         assert result.review_status == "clean"
         assert mock_execute.call_count == 2
+        assert result.fallback_used is True
+        assert result.provider_name == "fake"
+        assert result.model_name == "fallback-model"
+
+    @patch("folio.pipeline.interaction_analysis.get_provider")
+    @patch("folio.pipeline.interaction_analysis.execute_with_retry")
+    def test_uses_fallback_profile_after_permanent_primary_failure(self, mock_execute, mock_get_provider):
+        provider = _FakeProvider(disposition=ErrorDisposition.permanent())
+        mock_get_provider.return_value = provider
+        mock_execute.side_effect = [
+            RuntimeError("invalid api key"),
+            ProviderOutput(
+                raw_text=_analysis_payload(),
+                provider_name="fake",
+                model_name="fallback-model",
+                usage=TokenUsage(total_tokens=30),
+            ),
+        ]
+
+        result = analyze_interaction_text(
+            "Jane Smith: We reduced downtime from 12 hours to 2 hours in one quarter.",
+            "expert_interview",
+            provider_name="fake",
+            model="model-x",
+            fallback_profiles=[("fake", "fallback-model", "", "")],
+            all_provider_settings={"fake": ProviderRuntimeSettings()},
+        )
+
+        assert result.llm_status == "executed"
+        assert result.review_status == "clean"
+        assert mock_execute.call_count == 2
+        assert result.fallback_used is True
+        assert result.provider_name == "fake"
+        assert result.model_name == "fallback-model"
 
     @patch("folio.pipeline.interaction_analysis.get_provider")
     @patch("folio.pipeline.interaction_analysis.execute_with_retry")

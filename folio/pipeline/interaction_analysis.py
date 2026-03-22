@@ -199,6 +199,9 @@ class InteractionAnalysisResult:
     grounding_summary: dict[str, int] = field(default_factory=lambda: _empty_grounding_summary())
     pass_strategy: str = "single_pass"
     llm_status: str = "executed"
+    provider_name: str | None = None
+    model_name: str | None = None
+    fallback_used: bool = False
 
     def all_findings(self) -> list[InteractionFinding]:
         return [
@@ -207,6 +210,14 @@ class InteractionAnalysisResult:
             *self.decisions,
             *self.open_questions,
         ]
+
+
+@dataclass(frozen=True)
+class _ProviderRunResult:
+    raw_text: str
+    provider_name: str
+    model_name: str
+    fallback_used: bool
 
 
 def strip_leading_frontmatter(text: str) -> str:
@@ -257,28 +268,32 @@ def analyze_interaction_text(
     context_threshold = int(_context_window_for_model(model) * 0.60)
 
     if estimated_tokens <= context_threshold:
-        payload = _run_with_fallback(
+        execution = _run_with_fallback(
             prompt=_build_prompt(normalized_text, subtype),
             primary=(provider_name, model, api_key_env, base_url_env),
             fallback_profiles=fallback_profiles or [],
             all_provider_settings=all_provider_settings,
         )
-        if payload is None:
+        if execution is None:
             return _degraded_result(
                 "All configured ingest providers failed.",
                 pass_strategy="single_pass",
             )
         try:
-            parsed = _parse_json_object(payload)
-            return _coerce_result(
+            parsed = _parse_json_object(execution.raw_text)
+            result = _coerce_result(
                 parsed,
                 normalized_text,
                 pass_strategy="single_pass",
                 subtype=subtype,
             )
+            _apply_execution_metadata(result, execution)
+            return result
         except ValueError as exc:
             logger.warning("Malformed ingest LLM payload: %s", exc)
-            return _degraded_result(str(exc), pass_strategy="single_pass")
+            result = _degraded_result(str(exc), pass_strategy="single_pass")
+            _apply_execution_metadata(result, execution)
+            return result
 
     chunks = _chunk_text(normalized_text)
     if len(chunks) > _MAX_CHUNKS:
@@ -287,25 +302,27 @@ def analyze_interaction_text(
         )
 
     chunk_payloads: list[dict] = []
+    fallback_used = False
     for chunk in chunks:
-        payload = _run_with_fallback(
+        execution = _run_with_fallback(
             prompt=_build_prompt(chunk, subtype),
             primary=(provider_name, model, api_key_env, base_url_env),
             fallback_profiles=fallback_profiles or [],
             all_provider_settings=all_provider_settings,
         )
-        if payload is None:
+        if execution is None:
             return _degraded_result(
                 "All configured ingest providers failed.",
                 pass_strategy="chunked_reduce",
             )
+        fallback_used = fallback_used or execution.fallback_used
         try:
-            chunk_payloads.append(_parse_json_object(payload))
+            chunk_payloads.append(_parse_json_object(execution.raw_text))
         except ValueError as exc:
             logger.warning("Malformed ingest chunk payload: %s", exc)
             return _degraded_result(str(exc), pass_strategy="chunked_reduce")
 
-    reduce_payload = _run_with_fallback(
+    reduce_execution = _run_with_fallback(
         prompt=_REDUCE_PROMPT_TEMPLATE.format(
             chunk_payload=json.dumps(chunk_payloads, ensure_ascii=True, indent=2),
         ),
@@ -313,23 +330,28 @@ def analyze_interaction_text(
         fallback_profiles=fallback_profiles or [],
         all_provider_settings=all_provider_settings,
     )
-    if reduce_payload is None:
+    if reduce_execution is None:
         return _degraded_result(
             "All configured ingest providers failed.",
             pass_strategy="chunked_reduce",
         )
+    fallback_used = fallback_used or reduce_execution.fallback_used
 
     try:
-        parsed = _parse_json_object(reduce_payload)
-        return _coerce_result(
+        parsed = _parse_json_object(reduce_execution.raw_text)
+        result = _coerce_result(
             parsed,
             normalized_text,
             pass_strategy="chunked_reduce",
             subtype=subtype,
         )
+        _apply_execution_metadata(result, reduce_execution, fallback_used=fallback_used)
+        return result
     except ValueError as exc:
         logger.warning("Malformed ingest reduce payload: %s", exc)
-        return _degraded_result(str(exc), pass_strategy="chunked_reduce")
+        result = _degraded_result(str(exc), pass_strategy="chunked_reduce")
+        _apply_execution_metadata(result, reduce_execution, fallback_used=fallback_used)
+        return result
 
 
 def _degraded_result(message: str, *, pass_strategy: str) -> InteractionAnalysisResult:
@@ -343,6 +365,17 @@ def _degraded_result(message: str, *, pass_strategy: str) -> InteractionAnalysis
         pass_strategy=pass_strategy,
         llm_status="pending",
     )
+
+
+def _apply_execution_metadata(
+    result: InteractionAnalysisResult,
+    execution: _ProviderRunResult,
+    *,
+    fallback_used: bool | None = None,
+) -> None:
+    result.provider_name = execution.provider_name
+    result.model_name = execution.model_name
+    result.fallback_used = execution.fallback_used if fallback_used is None else fallback_used
 
 
 def _context_window_for_model(model_name: str) -> int:
@@ -365,9 +398,9 @@ def _run_with_fallback(
     primary: tuple[str, str, str, str],
     fallback_profiles: list[FallbackProfileSpec],
     all_provider_settings: dict[str, ProviderRuntimeSettings],
-) -> str | None:
+) -> _ProviderRunResult | None:
     attempts = [primary, *fallback_profiles]
-    for provider_name, model, api_key_env, base_url_env in attempts:
+    for index, (provider_name, model, api_key_env, base_url_env) in enumerate(attempts):
         provider = get_provider(provider_name)
         settings = all_provider_settings.get(provider_name, ProviderRuntimeSettings())
         limiter = RateLimiter(
@@ -393,7 +426,12 @@ def _run_with_fallback(
                 settings,
                 limiter,
             )
-            return output.raw_text
+            return _ProviderRunResult(
+                raw_text=output.raw_text,
+                provider_name=provider_name,
+                model_name=model,
+                fallback_used=index > 0,
+            )
         except EndpointNotAllowedError:
             raise
         except Exception as exc:
@@ -405,7 +443,7 @@ def _run_with_fallback(
                 exc,
             )
             if disposition.kind == "permanent":
-                return None
+                continue
             continue
     return None
 
@@ -481,8 +519,9 @@ def _coerce_entities(value: dict[str, Any]) -> dict[str, list[str]]:
         seen: set[str] = set()
         for item in items:
             cleaned = str(item).strip()
-            if cleaned and cleaned not in seen:
-                seen.add(cleaned)
+            dedup_key = cleaned.lower()
+            if cleaned and dedup_key not in seen:
+                seen.add(dedup_key)
                 result[key].append(cleaned)
     return result
 

@@ -12,7 +12,7 @@ import pytest
 import yaml
 
 from folio.config import FolioConfig
-from folio.ingest import IngestAmbiguityError, IngestSubtypeMismatchError, ingest_source
+from folio.ingest import IngestAmbiguityError, IngestError, IngestSubtypeMismatchError, ingest_source
 from folio.llm.runtime import EndpointNotAllowedError
 from folio.pipeline.interaction_analysis import InteractionAnalysisResult, InteractionFinding, InteractionQuote
 from folio.tracking.registry import save_registry
@@ -54,7 +54,15 @@ def _sample_interaction_registry_entry(**overrides) -> dict:
     return defaults
 
 
-def _analysis_result(*, llm_status: str = "executed", review_status: str = "clean", tags: list[str] | None = None) -> InteractionAnalysisResult:
+def _analysis_result(
+    *,
+    llm_status: str = "executed",
+    review_status: str = "clean",
+    tags: list[str] | None = None,
+    provider_name: str | None = "anthropic",
+    model_name: str | None = "claude-sonnet-4-20250514",
+    fallback_used: bool = False,
+) -> InteractionAnalysisResult:
     return InteractionAnalysisResult(
         summary="The team described a successful operational change and a follow-up dependency.",
         tags=tags or ["expert-interview", "operations"],
@@ -109,6 +117,9 @@ def _analysis_result(*, llm_status: str = "executed", review_status: str = "clea
         },
         pass_strategy="single_pass",
         llm_status=llm_status,
+        provider_name=provider_name,
+        model_name=model_name,
+        fallback_used=fallback_used,
     )
 
 
@@ -127,7 +138,12 @@ class TestIngestIntegration:
         shutil.copy2(_fixture("expert_interview.md"), source)
 
         config = FolioConfig(library_root=library)
-        mock_analyze.return_value = _analysis_result(tags=["expert-interview", "technology"])
+        mock_analyze.return_value = _analysis_result(
+            tags=["expert-interview", "technology"],
+            provider_name="openai",
+            model_name="gpt-5.4",
+            fallback_used=True,
+        )
 
         result = ingest_source(
             config,
@@ -169,6 +185,9 @@ class TestIngestIntegration:
         }
         assert fm["_llm_metadata"]["ingest"]["status"] == "executed"
         assert fm["_llm_metadata"]["ingest"]["pass_strategy"] == "single_pass"
+        assert fm["_llm_metadata"]["ingest"]["provider"] == "openai"
+        assert fm["_llm_metadata"]["ingest"]["model"] == "gpt-5.4"
+        assert fm["_llm_metadata"]["ingest"]["fallback_used"] is True
         assert "expert-interview" in fm["tags"]
 
         body = result.output_path.read_text()
@@ -409,6 +428,42 @@ class TestIngestIntegration:
         assert "> [!quote]- Raw Transcript" in body
 
     @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_explicit_target_warns_on_subtype_override(self, mock_analyze, tmp_path, caplog):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "expert_interview.md"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("expert_interview.md"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+
+        first = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        caplog.clear()
+        with caplog.at_level("WARNING", logger="folio.ingest"):
+            second = ingest_source(
+                config,
+                source_path=source,
+                subtype="client_meeting",
+                event_date=date(2026, 3, 21),
+                client="ClientA",
+                engagement="DD Q1 2026",
+                target=first.output_path,
+            )
+
+        assert second.output_path == first.output_path
+        assert "differs from requested ingest subtype" in caplog.text
+        fm = _parse_frontmatter(second.output_path)
+        assert fm["subtype"] == "client_meeting"
+
+    @patch("folio.ingest.analyze_interaction_text")
     def test_ingest_strips_markdown_frontmatter_from_raw_transcript(self, mock_analyze, tmp_path):
         library = _make_library(tmp_path)
         source = tmp_path / "transcripts" / "markdown_with_frontmatter.md"
@@ -468,3 +523,66 @@ class TestIngestIntegration:
         assert first.output_path.parent.name.startswith("2026-03-21_interview_")
         assert second.output_path.parent.name.startswith("2026-03-21_interview_")
         assert first.output_path.parent.name != second.output_path.parent.name
+
+    def test_ingest_whitespace_only_source_writes_degraded_note(self, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "whitespace_only.txt"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("whitespace_only.txt"), source)
+
+        config = FolioConfig(library_root=library)
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="internal_sync",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        assert result.degraded is True
+        fm = _parse_frontmatter(result.output_path)
+        assert fm["review_status"] == "flagged"
+        assert fm["review_flags"] == ["analysis_unavailable"]
+        assert fm["extraction_confidence"] is None
+        assert "Analysis Unavailable" in result.output_path.read_text()
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_rejects_stale_registry_match_with_missing_markdown(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "expert_interview.md"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("expert_interview.md"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+
+        from folio.tracking.sources import compute_file_hash
+
+        source_hash = compute_file_hash(source)
+        save_registry(
+            library / "registry.json",
+            {
+                "_schema_version": 1,
+                "decks": {
+                    "test_interaction_20260310_call": _sample_interaction_registry_entry(
+                        markdown_path="Client/interactions/call/missing.md",
+                        deck_dir="Client/interactions/call",
+                        source_relative_path="../../../transcripts/expert_interview.md",
+                        source_hash=source_hash,
+                        subtype="expert_interview",
+                    ),
+                },
+            },
+        )
+
+        with pytest.raises(IngestError, match="missing or unreadable"):
+            ingest_source(
+                config,
+                source_path=source,
+                subtype="expert_interview",
+                event_date=date(2026, 3, 21),
+                client="ClientA",
+                engagement="DD Q1 2026",
+            )

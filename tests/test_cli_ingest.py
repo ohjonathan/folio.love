@@ -265,6 +265,30 @@ class TestIngestCommand:
         assert result.exit_code != 0
         assert "supports .txt and .md only" in result.output
 
+    def test_ingest_rejects_missing_source_file(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, library)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "ingest",
+                str(tmp_path / "transcripts" / "missing.txt"),
+                "--type",
+                "client_meeting",
+                "--date",
+                "2026-03-21",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "does not exist" in result.output
+
     def test_ingest_rejects_nonexistent_source_recording(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()
