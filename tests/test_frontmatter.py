@@ -11,8 +11,14 @@ from folio.output.frontmatter import (
     _collect_unique,
     _generate_tags,
     generate,
+    generate_interaction,
 )
 from folio.pipeline.analysis import SlideAnalysis
+from folio.pipeline.interaction_analysis import (
+    InteractionAnalysisResult,
+    InteractionFinding,
+    InteractionQuote,
+)
 from folio.tracking.versions import ChangeSet, VersionInfo
 
 
@@ -518,12 +524,114 @@ class TestReviewFields:
             analyses={1: SlideAnalysis.pending()},
         ))
         assert "grounding_summary" in fm
-        assert fm["grounding_summary"]["total_claims"] == 0
-        assert fm["grounding_summary"]["high_confidence"] == 0
-        assert fm["grounding_summary"]["medium_confidence"] == 0
-        assert fm["grounding_summary"]["low_confidence"] == 0
-        assert fm["grounding_summary"]["validated"] == 0
-        assert fm["grounding_summary"]["unvalidated"] == 0
+
+
+class TestInteractionFrontmatter:
+    def test_generate_interaction_emits_ontology_native_fields(self):
+        analysis_result = InteractionAnalysisResult(
+            summary="The interview described a successful operational change.",
+            tags=["expert-interview", "operations"],
+            entities={
+                "people": ["Jane Smith", "Johnny Oh"],
+                "departments": ["Engineering"],
+                "systems": ["ServiceNow"],
+                "processes": ["Incident Triage"],
+            },
+            claims=[
+                InteractionFinding(
+                    statement="Downtime was reduced materially.",
+                    quote="We reduced downtime from 12 hours to 2 hours in one quarter.",
+                    element_type="data_point",
+                    confidence="high",
+                    speaker="Jane Smith",
+                    validated=True,
+                )
+            ],
+            data_points=[],
+            decisions=[],
+            open_questions=[],
+            notable_quotes=[
+                InteractionQuote(
+                    quote="We reduced downtime from 12 hours to 2 hours in one quarter.",
+                    element_type="statement",
+                    confidence="high",
+                    speaker="Jane Smith",
+                    validated=True,
+                )
+            ],
+            warnings=[],
+            review_status="flagged",
+            review_flags=["analysis_unavailable"],
+            extraction_confidence=None,
+            grounding_summary={
+                "total_claims": 1,
+                "high_confidence": 1,
+                "medium_confidence": 0,
+                "low_confidence": 0,
+                "validated": 1,
+                "unvalidated": 0,
+            },
+            pass_strategy="single_pass",
+            llm_status="pending",
+        )
+
+        fm = _parse_frontmatter(
+            generate_interaction(
+                interaction_id="clienta_ddq126_interview_20260321_cto_interview_notes",
+                title="CTO Interview Notes",
+                subtype="expert_interview",
+                event_date="2026-03-21",
+                version_info=_make_version_info(source_path="transcripts/cto_interview_notes.md"),
+                source_transcript="../../../transcripts/cto_interview_notes.md",
+                source_hash="abc123def456",
+                analysis_result=analysis_result,
+                client="ClientA",
+                engagement="DD Q1 2026",
+                participants=["Jane Smith", "Johnny Oh", "Jane Smith"],
+                duration_minutes=45,
+                source_recording="../../../recordings/cto_interview.wav",
+                llm_metadata={
+                    "ingest": {
+                        "requested_profile": "anthropic_sonnet",
+                        "profile": "anthropic_sonnet",
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-4-20250514",
+                        "extraction_method": "source_text",
+                        "timestamp": "2026-03-21T14:30:00Z",
+                        "fallback_used": False,
+                        "status": "pending",
+                        "pass_strategy": "single_pass",
+                    }
+                },
+            )
+        )
+
+        assert fm["type"] == "interaction"
+        assert fm["subtype"] == "expert_interview"
+        assert fm["status"] == "complete"
+        assert fm["date"] == "2026-03-21"
+        assert isinstance(fm["date"], str)
+        assert fm["source_transcript"] == "../../../transcripts/cto_interview_notes.md"
+        assert fm["source_hash"] == "abc123def456"
+        assert fm["source_recording"] == "../../../recordings/cto_interview.wav"
+        assert fm["participants"] == ["Jane Smith", "Johnny Oh"]
+        assert fm["duration_minutes"] == 45
+        assert fm["impacts"] == []
+        assert fm["review_status"] == "flagged"
+        assert fm["review_flags"] == ["analysis_unavailable"]
+        assert fm["extraction_confidence"] is None
+        assert fm["grounding_summary"] == {
+            "total_claims": 1,
+            "high_confidence": 1,
+            "medium_confidence": 0,
+            "low_confidence": 0,
+            "validated": 1,
+            "unvalidated": 0,
+        }
+        assert fm["_llm_metadata"]["ingest"]["status"] == "pending"
+        assert "source" not in fm
+        assert "source_type" not in fm
+        assert "slide_count" not in fm
 
 
 # --- PR 6: Diagram-aware frontmatter ---
@@ -592,4 +700,3 @@ class TestDiagramFrontmatter:
         assert "architecture" in tags
         assert "postgresql" in tags
         assert "tam-sam-som" in tags
-

@@ -1,0 +1,8 @@
+Client meeting notes
+
+Decisions:
+- Move the pilot to March.
+- Add a reporting checkpoint.
+
+Open questions:
+- Who owns the migration?
