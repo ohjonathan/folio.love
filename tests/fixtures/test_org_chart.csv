@@ -1,0 +1,6 @@
+name,title,department,reports_to,aliases
+Alice Chen,CEO,Executive,,Alice;the CEO
+Bob Martinez,CTO,Engineering,Alice Chen,Bob;the CTO
+Carol Davis,VP Operations,Operations,Alice Chen,Carol
+Diana Lee,Senior Engineer,Engineering,Bob Martinez,Diana
+Eve Wilson,Analyst,Operations,Carol Davis,
