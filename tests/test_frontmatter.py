@@ -12,6 +12,7 @@ from folio.output.frontmatter import (
     _generate_tags,
     generate,
     generate_interaction,
+    resolve_interaction_preserved_metadata,
 )
 from folio.pipeline.analysis import SlideAnalysis
 from folio.pipeline.interaction_analysis import (
@@ -371,6 +372,16 @@ class TestPreservationSafety:
         ))
         assert fm["id"] == "original_id"
         assert fm["created"] == "2025-06-01T00:00:00Z"
+
+    def test_empty_string_existing_client_does_not_discard_requested_override(self):
+        preserved = resolve_interaction_preserved_metadata(
+            existing_frontmatter={"client": "", "engagement": ""},
+            client="ClientB",
+            engagement="DD Q2 2026",
+        )
+
+        assert preserved["client"] == "ClientB"
+        assert preserved["engagement"] == "DD Q2 2026"
 
 
 class TestFrontmatterFenceParsing:

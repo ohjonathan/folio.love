@@ -44,3 +44,4 @@ folio.yaml
 # Scratch / generated outputs
 tmp/
 output/
+entities.lock

@@ -34,7 +34,6 @@ _ENTITY_TYPE_MAP = {
 _RESULT_TEMPLATE = {key: [] for key in _ENTITY_TYPE_MAP}
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*\})\s*```", re.DOTALL)
 _JSON_OBJECT_RE = re.compile(r"(\{.*?\})", re.DOTALL)
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 _WHITESPACE_RE = re.compile(r"\s+")
 _SOFT_MATCH_SYSTEM_PROMPT = """You are matching one extracted Folio entity mention to an existing entity registry.
 Return exactly one JSON object and no surrounding prose:
@@ -388,11 +387,67 @@ def _source_context(source_text: str, normalized_name: str) -> str:
         cleaned = line.strip()
         if not cleaned:
             continue
-        for sentence in _SENTENCE_SPLIT_RE.split(cleaned):
-            candidate = sentence.strip()
-            if candidate and target in candidate.lower():
-                return candidate
+        lower_cleaned = cleaned.lower()
+        if target not in lower_cleaned:
+            continue
+        candidate = _extract_sentence_containing(cleaned, lower_cleaned.index(target))
+        if candidate:
+            return candidate
     return "(not found)"
+
+
+def _extract_sentence_containing(text: str, target_index: int) -> str:
+    start = 0
+    for index, char in enumerate(text):
+        if index >= target_index:
+            break
+        if _is_sentence_boundary(text, index, char):
+            start = index + 1
+            while start < len(text) and text[start].isspace():
+                start += 1
+
+    end = len(text)
+    for index in range(target_index, len(text)):
+        if _is_sentence_boundary(text, index, text[index]):
+            end = index + 1
+            break
+
+    return text[start:end].strip()
+
+
+def _is_sentence_boundary(text: str, index: int, char: str) -> bool:
+    if char not in ".!?":
+        return False
+    if _is_abbreviation_terminator(text[: index + 1]):
+        return False
+    next_index = index + 1
+    while next_index < len(text) and text[next_index] in "\"')]}":
+        next_index += 1
+    return next_index == len(text) or text[next_index].isspace()
+
+
+def _is_abbreviation_terminator(prefix: str) -> bool:
+    stripped = prefix.rstrip()
+    if not stripped:
+        return False
+    token = stripped.split()[-1].lower()
+    if token in {
+        "mr.",
+        "mrs.",
+        "ms.",
+        "dr.",
+        "prof.",
+        "sr.",
+        "jr.",
+        "vs.",
+        "etc.",
+        "e.g.",
+        "i.e.",
+        "u.s.",
+        "u.k.",
+    }:
+        return True
+    return bool(re.fullmatch(r"(?:[a-z]\.){1,}[a-z]?\.?", token))
 
 
 def _persist_pending_creations(
@@ -442,6 +497,13 @@ def _persist_pending_creations(
 
 @contextmanager
 def _locked_entities_file(path: Path):
+    """Lock the sidecar file for the full read/merge/write transaction.
+
+    Any OSError raised while opening or locking the file intentionally
+    propagates to _persist_pending_creations(), which converts it into the
+    read-only fallback warning path.
+    """
+
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_suffix(".lock")
     lock_fd = open(lock_path, "w")

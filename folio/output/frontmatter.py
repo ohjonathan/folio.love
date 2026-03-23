@@ -234,15 +234,9 @@ def generate_interaction(
         if isinstance(prev_status, str) and prev_status:
             preserved_status = prev_status
 
-    preserved_metadata = resolve_interaction_preserved_metadata(
-        existing_frontmatter=existing_frontmatter,
-        client=client,
-        engagement=engagement,
-        participants=participants,
-    )
-    preserved_client = preserved_metadata["client"]
-    preserved_engagement = preserved_metadata["engagement"]
-    preserved_participants = preserved_metadata["participants"]
+    preserved_client = client
+    preserved_engagement = engagement
+    preserved_participants = participants
 
     preserved_duration = duration_minutes
     if preserved_duration is None and isinstance(existing_frontmatter, dict):
@@ -339,14 +333,14 @@ def resolve_interaction_preserved_metadata(
     preserved_client = client
     if isinstance(existing_frontmatter, dict):
         prev_client = existing_frontmatter.get("client")
-        if isinstance(prev_client, str):
-            preserved_client = prev_client or None
+        if isinstance(prev_client, str) and prev_client:
+            preserved_client = prev_client
 
     preserved_engagement = engagement
     if isinstance(existing_frontmatter, dict):
         prev_engagement = existing_frontmatter.get("engagement")
-        if isinstance(prev_engagement, str):
-            preserved_engagement = prev_engagement or None
+        if isinstance(prev_engagement, str) and prev_engagement:
+            preserved_engagement = prev_engagement
 
     preserved_participants = participants
     if isinstance(existing_frontmatter, dict):
