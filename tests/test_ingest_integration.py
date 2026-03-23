@@ -255,7 +255,7 @@ class TestIngestIntegration:
         assert "- [[ServiceNow]]" in body
         assert not (library / "entities.json").exists()
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback", return_value='{"match": null}')
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback", return_value='{"match": null}')
     @patch("folio.ingest.analyze_interaction_text")
     def test_ingest_with_entity_registry_resolves_and_autocreates(self, mock_analyze, _mock_soft_match, tmp_path):
         library = _make_library(tmp_path)
@@ -556,7 +556,7 @@ class TestIngestIntegration:
                 engagement="DD Q1 2026",
             )
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     @patch("folio.ingest.analyze_interaction_text")
     def test_ingest_with_registry_resolves_and_autocreates(
         self,
@@ -576,7 +576,7 @@ class TestIngestIntegration:
                 "processes": [],
             }
         )
-        mock_soft_match.return_value = type("SoftMatchResult", (), {"raw_text": '{"match": null}'})()
+        mock_soft_match.return_value = '{"match": null}'
 
         result = ingest_source(
             config,

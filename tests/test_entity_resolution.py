@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from folio.pipeline.entity_resolution import resolve_interaction_entities
@@ -268,13 +267,13 @@ class TestEntityResolution:
         assert result.entities["people"] == ["Jane Smith"]
         assert result.registry_changed is False
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_proposed(self, mock_run, tmp_path):
         path = _make_registry(
             tmp_path,
             [EntityEntry(canonical_name="Alice Chen", type="person", source="import")],
         )
-        mock_run.return_value = SimpleNamespace(raw_text='{"match":"Alice Chen"}')
+        mock_run.return_value = '{"match":"Alice Chen"}'
 
         result = resolve_interaction_entities(
             entities_path=path,
@@ -291,13 +290,13 @@ class TestEntityResolution:
         assert entry["proposed_match"] == "alice_chen"
         assert mock_run.call_count == 1
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_proposed_accepts_case_insensitive_canonical_name(self, mock_run, tmp_path):
         path = _make_registry(
             tmp_path,
             [EntityEntry(canonical_name="Alice Chen", type="person", source="import")],
         )
-        mock_run.return_value = SimpleNamespace(raw_text='{"match":"alice chen"}')
+        mock_run.return_value = '{"match":"alice chen"}'
 
         result = resolve_interaction_entities(
             entities_path=path,
@@ -313,13 +312,13 @@ class TestEntityResolution:
         assert result.created_entities[0].proposed_match == "alice_chen"
         assert entry["proposed_match"] == "alice_chen"
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_no_match(self, mock_run, tmp_path):
         path = _make_registry(
             tmp_path,
             [EntityEntry(canonical_name="Alice Chen", type="person", source="import")],
         )
-        mock_run.return_value = SimpleNamespace(raw_text='{"match": null}')
+        mock_run.return_value = '{"match": null}'
 
         result = resolve_interaction_entities(
             entities_path=path,
@@ -334,13 +333,13 @@ class TestEntityResolution:
         assert result.created_entities[0].proposed_match is None
         assert "proposed_match" not in entry
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_malformed_json_returns_none(self, mock_run, tmp_path):
         path = _make_registry(
             tmp_path,
             [EntityEntry(canonical_name="Bob Martinez", type="person", source="import")],
         )
-        mock_run.return_value = SimpleNamespace(raw_text="I think it's Bob")
+        mock_run.return_value = "I think it's Bob"
 
         result = resolve_interaction_entities(
             entities_path=path,
@@ -355,7 +354,7 @@ class TestEntityResolution:
         assert result.created_entities[0].proposed_match is None
         assert "proposed_match" not in entry
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_skipped_when_no_candidates(self, mock_run, tmp_path):
         path = _make_registry(tmp_path, [])
 
@@ -370,7 +369,7 @@ class TestEntityResolution:
         assert result.registry_changed is True
         assert mock_run.call_count == 0
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_capped_at_50(self, mock_run, tmp_path):
         people = {}
         for idx in range(60):
@@ -399,11 +398,11 @@ class TestEntityResolution:
         )
         captured_prompt: dict[str, str] = {}
 
-        def _fake_run_with_fallback(**kwargs):
+        def _fake_execute_with_fallback(**kwargs):
             captured_prompt["prompt"] = kwargs["prompt"]
-            return SimpleNamespace(raw_text='{"match": null}')
+            return '{"match": null}'
 
-        mock_run.side_effect = _fake_run_with_fallback
+        mock_run.side_effect = _fake_execute_with_fallback
 
         resolve_interaction_entities(
             entities_path=path,
@@ -421,13 +420,13 @@ class TestEntityResolution:
         assert any("Candidate 59" in line for line in candidate_lines)
         assert all("Candidate 00" not in line for line in candidate_lines)
 
-    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_one_call_per_name(self, mock_run, tmp_path):
         path = _make_registry(
             tmp_path,
             [EntityEntry(canonical_name="Alice Chen", type="person", source="import")],
         )
-        mock_run.return_value = SimpleNamespace(raw_text='{"match": null}')
+        mock_run.return_value = '{"match": null}'
 
         result = resolve_interaction_entities(
             entities_path=path,
