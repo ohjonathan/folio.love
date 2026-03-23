@@ -21,11 +21,13 @@ from .naming import (
 )
 from .output.frontmatter import generate_interaction
 from .output.interaction_markdown import assemble_interaction
+from .pipeline.entity_resolution import resolve_interaction_entities
 from .pipeline.interaction_analysis import (
     InteractionAnalysisResult,
     analyze_interaction_text,
     normalize_source_text,
 )
+from .tracking.entities import EntityRegistryError
 from .tracking import registry, sources, versions
 from .tracking.registry import RegistryEntry
 
@@ -176,6 +178,26 @@ def ingest_source(
         analysis_result = _degraded_analysis_result(
             f"LLM analysis did not run: {exc}",
         )
+
+    entities_path = library_root / "entities.json"
+    try:
+        resolution_result = resolve_interaction_entities(
+            entities_path=entities_path,
+            extracted_entities=analysis_result.entities,
+            source_text=normalized_source_body,
+            provider_name=profile.provider,
+            model=profile.model,
+            api_key_env=profile.api_key_env,
+            base_url_env=profile.base_url_env,
+            fallback_profiles=fallback_specs,
+            all_provider_settings=config.providers,
+        )
+    except (EntityRegistryError, OSError) as exc:
+        raise IngestError(f"Entity resolution failed: {exc}") from exc
+
+    analysis_result.entities = resolution_result.entities
+    for warning in resolution_result.warnings:
+        logger.warning("Entity resolution: %s", warning)
 
     version_info = versions.compute_version(
         deck_dir=output_dir,
