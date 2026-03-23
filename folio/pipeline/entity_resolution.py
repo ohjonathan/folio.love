@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import fcntl
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +19,7 @@ from ..tracking.entities import (
     EntityEntry,
     EntityRegistry,
     EntitySlugCollisionError,
+    entity_from_dict,
     sanitize_wikilink_name,
 )
 
@@ -31,6 +34,7 @@ _ENTITY_TYPE_MAP = {
 _RESULT_TEMPLATE = {key: [] for key in _ENTITY_TYPE_MAP}
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*\})\s*```", re.DOTALL)
 _JSON_OBJECT_RE = re.compile(r"(\{.*?\})", re.DOTALL)
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 _WHITESPACE_RE = re.compile(r"\s+")
 _SOFT_MATCH_SYSTEM_PROMPT = """You are matching one extracted Folio entity mention to an existing entity registry.
 Return exactly one JSON object and no surrounding prose:
@@ -73,6 +77,11 @@ class _ConfirmedCandidate:
     updated_at: str = ""
 
 
+@dataclass(frozen=True)
+class _PendingCreation:
+    entry: EntityEntry
+
+
 def resolve_interaction_entities(
     *,
     entities_path: Path,
@@ -101,9 +110,9 @@ def resolve_interaction_entities(
 
     warnings: list[str] = []
     created_entities: list[CreatedEntity] = []
-    registry_changed = False
     processed_cache: dict[tuple[str, str], str] = {}
     soft_match_cache: dict[tuple[str, str], Optional[str]] = {}
+    pending_creations: list[_PendingCreation] = []
     all_provider_settings = all_provider_settings or {}
 
     resolved_entities = _copy_entities(extracted_entities)
@@ -129,10 +138,7 @@ def resolve_interaction_entities(
                 resolved_name = matches[0][2].canonical_name
             elif len(matches) > 1:
                 resolved_name = normalized
-                warnings.append(
-                    f"Ambiguous entity '{normalized}' in {singular_type}: "
-                    f"{_describe_matches(matches)}. Keeping unresolved wikilink."
-                )
+                warnings.append(_format_ambiguity_warning(normalized, matches))
             else:
                 proposed_match = _soft_match_or_none(
                     registry=registry,
@@ -148,36 +154,25 @@ def resolve_interaction_entities(
                     cache=soft_match_cache,
                 )
                 resolved_name = normalized
+                pending_entry = EntityEntry(
+                    canonical_name=normalized,
+                    type=singular_type,
+                    aliases=[],
+                    needs_confirmation=True,
+                    source="extracted",
+                    proposed_match=proposed_match,
+                )
                 try:
-                    created_key = registry.add_entity(
-                        EntityEntry(
-                            canonical_name=normalized,
-                            type=singular_type,
-                            aliases=[],
-                            needs_confirmation=True,
-                            source="extracted",
-                            proposed_match=proposed_match,
-                        )
-                    )
+                    registry.add_entity(_clone_entity_entry(pending_entry))
                 except (EntityAliasCollisionError, EntitySlugCollisionError, ValueError) as exc:
-                    warnings.append(
-                        f"Could not auto-create {singular_type} '{normalized}': {exc}. "
-                        f"Keeping unresolved wikilink."
-                    )
+                    warnings.append(_format_auto_create_warning(pending_entry, exc))
                 except Exception as exc:
                     warnings.append(
-                        f"Unexpected error auto-creating {singular_type} '{normalized}': {exc}. "
-                        f"Keeping unresolved wikilink."
+                        _format_auto_create_warning(pending_entry, exc, unexpected=True)
                     )
                 else:
-                    registry_changed = True
-                    created_entities.append(
-                        CreatedEntity(
-                            entity_type=singular_type,
-                            key=created_key,
-                            canonical_name=normalized,
-                            proposed_match=proposed_match,
-                        )
+                    pending_creations.append(
+                        _PendingCreation(entry=_clone_entity_entry(pending_entry))
                     )
 
             processed_cache[cache_key] = resolved_name
@@ -185,14 +180,26 @@ def resolve_interaction_entities(
 
         resolved_entities[plural_type] = _dedupe_preserve_order(resolved_values)
 
-    if registry_changed:
-        registry.save()
+    committed_creations, persist_warnings = _persist_pending_creations(
+        entities_path=entities_path,
+        pending_creations=pending_creations,
+    )
+    warnings.extend(persist_warnings)
+    created_entities = [
+        CreatedEntity(
+            entity_type=entry.type,
+            key=key,
+            canonical_name=entry.canonical_name,
+            proposed_match=entry.proposed_match,
+        )
+        for key, entry in committed_creations
+    ]
 
     return ResolutionResult(
         entities=resolved_entities,
         warnings=warnings,
         created_entities=created_entities,
-        registry_changed=registry_changed,
+        registry_changed=bool(created_entities),
     )
 
 
@@ -213,6 +220,33 @@ def _normalize_entity_name(name: str) -> str:
 
 def _describe_matches(matches: list[tuple[str, str, EntityEntry]]) -> str:
     return ", ".join(f"{entry.canonical_name} ({entity_type})" for entity_type, _key, entry in matches)
+
+
+def _format_ambiguity_warning(
+    normalized_name: str,
+    matches: list[tuple[str, str, EntityEntry]],
+) -> str:
+    return (
+        f'⚠ Ambiguous entity: "{normalized_name}" matches {_describe_matches(matches)}\n'
+        f"  → Keeping unresolved wikilink: [[{normalized_name}]]"
+    )
+
+
+def _format_auto_create_warning(
+    entry: EntityEntry,
+    exc: Exception,
+    *,
+    unexpected: bool = False,
+) -> str:
+    prefix = "Unexpected error auto-creating" if unexpected else "Could not auto-create"
+    return (
+        f"{prefix} {entry.type} '{entry.canonical_name}': {exc}. "
+        f"Keeping unresolved wikilink."
+    )
+
+
+def _clone_entity_entry(entry: EntityEntry) -> EntityEntry:
+    return entity_from_dict(entry.to_dict())
 
 
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
@@ -352,9 +386,89 @@ def _source_context(source_text: str, normalized_name: str) -> str:
     target = normalized_name.lower()
     for line in source_text.splitlines():
         cleaned = line.strip()
-        if cleaned and target in cleaned.lower():
-            return cleaned
+        if not cleaned:
+            continue
+        for sentence in _SENTENCE_SPLIT_RE.split(cleaned):
+            candidate = sentence.strip()
+            if candidate and target in candidate.lower():
+                return candidate
     return "(not found)"
+
+
+def _persist_pending_creations(
+    *,
+    entities_path: Path,
+    pending_creations: list[_PendingCreation],
+) -> tuple[list[tuple[str, EntityEntry]], list[str]]:
+    if not pending_creations:
+        return [], []
+
+    warnings: list[str] = []
+    try:
+        with _locked_entities_file(entities_path):
+            latest_registry = EntityRegistry(entities_path)
+            latest_registry.load()
+
+            committed: list[tuple[str, EntityEntry]] = []
+            for pending in pending_creations:
+                entry = _clone_entity_entry(pending.entry)
+                try:
+                    key = latest_registry.add_entity(entry)
+                except (EntityAliasCollisionError, EntitySlugCollisionError, ValueError) as exc:
+                    warnings.append(_format_auto_create_warning(entry, exc))
+                except Exception as exc:
+                    warnings.append(_format_auto_create_warning(entry, exc, unexpected=True))
+                else:
+                    committed.append((key, entry))
+
+            if not committed:
+                return [], warnings
+
+            _write_entities_json_unlocked(entities_path, latest_registry.to_json())
+            return committed, warnings
+    except OSError as exc:
+        names = ", ".join(
+            sorted(
+                (pending.entry.canonical_name for pending in pending_creations),
+                key=str.lower,
+            )
+        )
+        warnings.append(
+            "entities.json could not be updated; resolved confirmed entities "
+            f"but skipped auto-create for: {names}. ({exc})"
+        )
+        return [], warnings
+
+
+@contextmanager
+def _locked_entities_file(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(".lock")
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+
+
+def _write_entities_json_unlocked(path: Path, payload_json: str) -> None:
+    tmp_path = path.with_suffix(".tmp")
+    try:
+        payload = json.loads(payload_json)
+        payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+        tmp_path.write_text(json.dumps(payload, indent=2))
+        tmp_path.rename(path)
+    except OSError as e:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise OSError(
+            f"Failed to write entity registry {path}: {e}. "
+            f"Check disk space and permissions."
+        ) from e
 
 
 def _execute_with_fallback(

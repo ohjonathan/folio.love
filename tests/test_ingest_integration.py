@@ -333,6 +333,88 @@ class TestIngestIntegration:
         assert "- [[Bob Martinez]]" in second.output_path.read_text()
 
     @patch("folio.ingest.analyze_interaction_text")
+    def test_reingest_ignores_conflicting_metadata_overrides(self, mock_analyze, tmp_path, caplog):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "expert_interview.md"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("expert_interview.md"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.side_effect = [_analysis_result(), _analysis_result()]
+
+        first = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+            participants=["Alice", "Bob"],
+        )
+
+        with caplog.at_level("WARNING", logger="folio.ingest"):
+            second = ingest_source(
+                config,
+                source_path=source,
+                subtype="expert_interview",
+                event_date=date(2026, 3, 21),
+                client="ClientB",
+                engagement="DD Q2 2026",
+                participants=["Carol"],
+            )
+
+        assert second.version == 2
+        fm = _parse_frontmatter(second.output_path)
+        assert fm["client"] == "ClientA"
+        assert fm["engagement"] == "DD Q1 2026"
+        assert fm["participants"] == ["Alice", "Bob"]
+
+        registry = json.loads((library / "registry.json").read_text())
+        entry = registry["decks"][first.interaction_id]
+        assert entry["client"] == "ClientA"
+        assert entry["engagement"] == "DD Q1 2026"
+        assert "Ignoring re-ingest client override" in caplog.text
+        assert "Ignoring re-ingest engagement override" in caplog.text
+        assert "Ignoring re-ingest participants override" in caplog.text
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_reingest_without_metadata_flags_preserves_registry_metadata(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "expert_interview.md"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("expert_interview.md"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.side_effect = [_analysis_result(), _analysis_result()]
+
+        first = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+            participants=["Alice", "Bob"],
+        )
+        second = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+        )
+
+        assert second.version == 2
+        fm = _parse_frontmatter(second.output_path)
+        assert fm["client"] == "ClientA"
+        assert fm["engagement"] == "DD Q1 2026"
+        assert fm["participants"] == ["Alice", "Bob"]
+
+        registry = json.loads((library / "registry.json").read_text())
+        entry = registry["decks"][first.interaction_id]
+        assert entry["client"] == "ClientA"
+        assert entry["engagement"] == "DD Q1 2026"
+
+    @patch("folio.ingest.analyze_interaction_text")
     def test_reingest_preserves_promoted_fields(self, mock_analyze, tmp_path):
         library = _make_library(tmp_path)
         source = tmp_path / "transcripts" / "expert_interview.md"
@@ -775,6 +857,50 @@ class TestIngestIntegration:
         assert "departments" not in fm
         assert "systems" not in fm
         assert "processes" not in fm
+
+    @patch("folio.pipeline.entity_resolution._write_entities_json_unlocked", side_effect=OSError("read only"))
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback", return_value='{"match": null}')
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_read_only_entities_registry_falls_back_to_resolution_only(
+        self,
+        mock_analyze,
+        _mock_soft_match,
+        _mock_write_entities,
+        tmp_path,
+        caplog,
+    ):
+        library = _make_library(tmp_path)
+        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+        config = FolioConfig(library_root=library)
+        _import_org_chart(library)
+        mock_analyze.return_value = _analysis_result(
+            entities={
+                "people": ["Bob", "the CEO", "the intern"],
+                "departments": ["Engineering"],
+                "systems": ["ServiceNow"],
+                "processes": [],
+            }
+        )
+
+        with caplog.at_level("WARNING", logger="folio.ingest"):
+            result = ingest_source(
+                config,
+                source_path=source,
+                subtype="expert_interview",
+                event_date=date(2026, 3, 21),
+            )
+
+        body = result.output_path.read_text()
+        assert "[[Bob Martinez]]" in body
+        assert "[[Alice Chen]]" in body
+        assert "[[Engineering]]" in body
+        assert "[[ServiceNow]]" in body
+        assert "[[the intern]]" in body
+
+        entities = json.loads((library / "entities.json").read_text())
+        assert "servicenow" not in entities["entities"]["system"]
+        assert "the_intern" not in entities["entities"]["person"]
+        assert "skipped auto-create for: ServiceNow, the intern" in caplog.text
 
     @patch("folio.ingest.analyze_interaction_text")
     def test_resolution_preserves_existing_evidence_registry_entries(self, mock_analyze, tmp_path):

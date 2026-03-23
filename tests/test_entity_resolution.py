@@ -7,7 +7,12 @@ import logging
 from pathlib import Path
 from unittest.mock import patch
 
-from folio.pipeline.entity_resolution import resolve_interaction_entities
+from folio.pipeline.entity_resolution import (
+    _PendingCreation,
+    _persist_pending_creations,
+    _source_context,
+    resolve_interaction_entities,
+)
 from folio.tracking.entities import EntityEntry, EntityRegistry
 
 
@@ -149,7 +154,8 @@ class TestEntityResolution:
         )
 
         assert result.entities["people"] == ["Jane"]
-        assert any("Ambiguous entity 'Jane'" in warning for warning in result.warnings)
+        assert any('⚠ Ambiguous entity: "Jane" matches' in warning for warning in result.warnings)
+        assert any("→ Keeping unresolved wikilink: [[Jane]]" in warning for warning in result.warnings)
         assert result.registry_changed is False
 
     def test_resolve_type_strict_miss(self, tmp_path):
@@ -268,6 +274,14 @@ class TestEntityResolution:
         assert result.entities["people"] == ["Jane Smith"]
         assert result.registry_changed is False
 
+    def test_source_context_returns_sentence_containing_mention(self):
+        source_text = (
+            "Alice introduced the topic. Bob mentioned ServiceNow during the update. "
+            "Carol closed the meeting."
+        )
+
+        assert _source_context(source_text, "ServiceNow") == "Bob mentioned ServiceNow during the update."
+
     @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_proposed(self, mock_run, tmp_path):
         path = _make_registry(
@@ -383,6 +397,45 @@ class TestEntityResolution:
         assert result.created_entities[0].proposed_match is None
         assert "proposed_match" not in entry
         assert "Entity soft-match provider 'openai/gpt-5.4' failed: boom" in caplog.text
+
+    def test_persist_pending_creations_merges_stale_snapshots(self, tmp_path):
+        path = _make_registry(tmp_path, [])
+
+        first_pending = _PendingCreation(
+            entry=EntityEntry(
+                canonical_name="ServiceNow",
+                type="system",
+                aliases=[],
+                needs_confirmation=True,
+                source="extracted",
+            )
+        )
+        second_pending = _PendingCreation(
+            entry=EntityEntry(
+                canonical_name="Workday",
+                type="system",
+                aliases=[],
+                needs_confirmation=True,
+                source="extracted",
+            )
+        )
+
+        committed_one, warnings_one = _persist_pending_creations(
+            entities_path=path,
+            pending_creations=[first_pending],
+        )
+        committed_two, warnings_two = _persist_pending_creations(
+            entities_path=path,
+            pending_creations=[second_pending],
+        )
+
+        saved = json.loads(path.read_text())
+        assert warnings_one == []
+        assert warnings_two == []
+        assert [key for key, _entry in committed_one] == ["servicenow"]
+        assert [key for key, _entry in committed_two] == ["workday"]
+        assert "servicenow" in saved["entities"]["system"]
+        assert "workday" in saved["entities"]["system"]
 
     @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_skipped_when_no_candidates(self, mock_run, tmp_path):

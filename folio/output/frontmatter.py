@@ -234,23 +234,15 @@ def generate_interaction(
         if isinstance(prev_status, str) and prev_status:
             preserved_status = prev_status
 
-    preserved_client = client
-    if preserved_client is None and isinstance(existing_frontmatter, dict):
-        prev_client = existing_frontmatter.get("client")
-        if isinstance(prev_client, str) and prev_client:
-            preserved_client = prev_client
-
-    preserved_engagement = engagement
-    if preserved_engagement is None and isinstance(existing_frontmatter, dict):
-        prev_engagement = existing_frontmatter.get("engagement")
-        if isinstance(prev_engagement, str) and prev_engagement:
-            preserved_engagement = prev_engagement
-
-    preserved_participants = participants
-    if preserved_participants is None and isinstance(existing_frontmatter, dict):
-        prev_participants = existing_frontmatter.get("participants")
-        if isinstance(prev_participants, list):
-            preserved_participants = prev_participants
+    preserved_metadata = resolve_interaction_preserved_metadata(
+        existing_frontmatter=existing_frontmatter,
+        client=client,
+        engagement=engagement,
+        participants=participants,
+    )
+    preserved_client = preserved_metadata["client"]
+    preserved_engagement = preserved_metadata["engagement"]
+    preserved_participants = preserved_metadata["participants"]
 
     preserved_duration = duration_minutes
     if preserved_duration is None and isinstance(existing_frontmatter, dict):
@@ -333,6 +325,40 @@ def generate_interaction(
         allow_unicode=True,
     )
     return f"---\n{yaml_str}---"
+
+
+def resolve_interaction_preserved_metadata(
+    *,
+    existing_frontmatter: Optional[dict] = None,
+    client: Optional[str] = None,
+    engagement: Optional[str] = None,
+    participants: Optional[list[str]] = None,
+) -> dict[str, Optional[str] | list[str] | None]:
+    """Resolve re-ingest metadata that must preserve existing note values."""
+
+    preserved_client = client
+    if isinstance(existing_frontmatter, dict):
+        prev_client = existing_frontmatter.get("client")
+        if isinstance(prev_client, str):
+            preserved_client = prev_client or None
+
+    preserved_engagement = engagement
+    if isinstance(existing_frontmatter, dict):
+        prev_engagement = existing_frontmatter.get("engagement")
+        if isinstance(prev_engagement, str):
+            preserved_engagement = prev_engagement or None
+
+    preserved_participants = participants
+    if isinstance(existing_frontmatter, dict):
+        prev_participants = existing_frontmatter.get("participants")
+        if isinstance(prev_participants, list):
+            preserved_participants = prev_participants
+
+    return {
+        "client": preserved_client,
+        "engagement": preserved_engagement,
+        "participants": preserved_participants,
+    }
 
 
 def _collect_unique(
