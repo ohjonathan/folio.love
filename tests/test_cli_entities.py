@@ -124,6 +124,47 @@ class TestEntitiesList:
         assert result.exit_code == 0
         assert "Unconfirmed" in result.output
 
+    def test_entities_list_unconfirmed_shows_proposed_match_for_intern(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["the_intern"] = _sample_entity_data(
+            canonical_name="the intern",
+            needs_confirmation=True,
+            source="extracted",
+            proposed_match="alice_chen",
+        )
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "--unconfirmed"]
+        )
+        assert result.exit_code == 0
+        assert "proposed: Alice Chen" in result.output
+
+    def test_entities_list_unconfirmed_shows_no_proposed_match_for_intern(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["the_intern"] = _sample_entity_data(
+            canonical_name="the intern",
+            needs_confirmation=True,
+            source="extracted",
+        )
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "--unconfirmed"]
+        )
+        assert result.exit_code == 0
+        assert "no proposed match" in result.output
+
     def test_entities_json_output(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()
@@ -138,6 +179,47 @@ class TestEntitiesList:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "_schema_version" in data
+
+    def test_entities_list_unconfirmed_shows_proposed_match_for_mystery_person(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["mystery_person"] = _sample_entity_data(
+            canonical_name="Mystery Person",
+            needs_confirmation=True,
+            source="extracted",
+            proposed_match="alice_chen",
+        )
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "--unconfirmed"]
+        )
+        assert result.exit_code == 0
+        assert "proposed: Alice Chen" in result.output
+
+    def test_entities_list_unconfirmed_shows_no_proposed_match_for_mystery_person(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["mystery_person"] = _sample_entity_data(
+            canonical_name="Mystery Person",
+            needs_confirmation=True,
+            source="extracted",
+        )
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "--unconfirmed"]
+        )
+        assert result.exit_code == 0
+        assert "no proposed match" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +325,48 @@ class TestEntitiesShow:
         )
         assert result.exit_code == 0
         assert "Operations" in result.output
+
+    def test_entities_show_unconfirmed_displays_proposed_match_for_mystery_person(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["mystery_person"] = _sample_entity_data(
+            canonical_name="Mystery Person",
+            needs_confirmation=True,
+            source="extracted",
+            proposed_match="alice_chen",
+        )
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "show", "Mystery Person"]
+        )
+        assert result.exit_code == 0
+        assert "Proposed match: Alice Chen" in result.output
+
+    def test_entities_show_unconfirmed_displays_proposed_match_for_intern(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["the_intern"] = _sample_entity_data(
+            canonical_name="the intern",
+            needs_confirmation=True,
+            source="extracted",
+            proposed_match="alice_chen",
+        )
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "show", "the intern"]
+        )
+        assert result.exit_code == 0
+        assert "Proposed match: Alice Chen" in result.output
 
 
 # ---------------------------------------------------------------------------

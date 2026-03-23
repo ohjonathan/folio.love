@@ -1170,10 +1170,17 @@ def _entities_list(ctx, entity_type, unconfirmed, json_output):
                 if entry.status:
                     parts.append(entry.status)
                 detail = ", ".join(parts)
+            proposal = ""
+            if entry.needs_confirmation:
+                if entry.proposed_match:
+                    proposed_name = reg.resolve_key_to_name(entry.proposed_match, entry.type)
+                    proposal = f" proposed: {proposed_name}"
+                else:
+                    proposal = " no proposed match"
             if detail:
-                click.echo(f"  {entry.canonical_name:<20s} {detail:<25s} {status}")
+                click.echo(f"  {entry.canonical_name:<20s} {detail:<25s} {status}{proposal}")
             else:
-                click.echo(f"  {entry.canonical_name:<20s} {'':25s} {status}")
+                click.echo(f"  {entry.canonical_name:<20s} {'':25s} {status}{proposal}")
         click.echo("")
 
 
@@ -1245,6 +1252,13 @@ def show(ctx, name):
         click.echo(f"  Head:        {reg.resolve_key_to_name(entry.head, 'person')}")
     if entry.owner_dept:
         click.echo(f"  Owner dept:  {reg.resolve_key_to_name(entry.owner_dept, 'department')}")
+    if entry.needs_confirmation:
+        if entry.proposed_match:
+            click.echo(
+                f"  Proposed match: {reg.resolve_key_to_name(entry.proposed_match, etype)}"
+            )
+        else:
+            click.echo("  Proposed match: none")
     click.echo(f"  Source:      {entry.source}")
     if entry.first_seen:
         click.echo(f"  First seen:  {entry.first_seen[:10]}")

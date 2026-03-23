@@ -19,13 +19,18 @@ from .naming import (
     humanize_token,
     sanitize_token,
 )
-from .output.frontmatter import generate_interaction
+from .output.frontmatter import (
+    generate_interaction,
+    resolve_interaction_preserved_metadata,
+)
 from .output.interaction_markdown import assemble_interaction
+from .pipeline.entity_resolution import resolve_interaction_entities
 from .pipeline.interaction_analysis import (
     InteractionAnalysisResult,
     analyze_interaction_text,
     normalize_source_text,
 )
+from .tracking.entities import EntityRegistryError
 from .tracking import registry, sources, versions
 from .tracking.registry import RegistryEntry
 
@@ -177,6 +182,40 @@ def ingest_source(
             f"LLM analysis did not run: {exc}",
         )
 
+    entities_path = library_root / "entities.json"
+    try:
+        resolution_result = resolve_interaction_entities(
+            entities_path=entities_path,
+            extracted_entities=analysis_result.entities,
+            source_text=normalized_source_body,
+            provider_name=profile.provider,
+            model=profile.model,
+            api_key_env=profile.api_key_env,
+            base_url_env=profile.base_url_env,
+            fallback_profiles=fallback_specs,
+            all_provider_settings=config.providers,
+        )
+    except (EntityRegistryError, OSError) as exc:
+        raise IngestError(f"Entity resolution failed: {exc}") from exc
+
+    analysis_result.entities = resolution_result.entities
+    for warning in resolution_result.warnings:
+        logger.warning("Entity resolution: %s", warning)
+
+    preserved_metadata = resolve_interaction_preserved_metadata(
+        existing_frontmatter=identity.existing_frontmatter,
+        client=client,
+        engagement=engagement,
+        participants=participants,
+    )
+    _warn_ignored_reingest_metadata_overrides(
+        existing_frontmatter=identity.existing_frontmatter,
+        requested_client=client,
+        requested_engagement=engagement,
+        requested_participants=participants,
+        preserved_metadata=preserved_metadata,
+    )
+
     version_info = versions.compute_version(
         deck_dir=output_dir,
         source_hash=source_info.file_hash,
@@ -209,9 +248,9 @@ def ingest_source(
         source_transcript=source_info.relative_path,
         source_hash=source_info.file_hash,
         analysis_result=analysis_result,
-        client=client,
-        engagement=engagement,
-        participants=participants,
+        client=preserved_metadata["client"],
+        engagement=preserved_metadata["engagement"],
+        participants=preserved_metadata["participants"],
         duration_minutes=duration_minutes,
         source_recording=source_recording_relative,
         existing_frontmatter=identity.existing_frontmatter,
@@ -244,8 +283,8 @@ def ingest_source(
                 version=version_info.version,
                 converted=version_info.timestamp,
                 modified=version_info.timestamp,
-                client=client,
-                engagement=engagement,
+                client=preserved_metadata["client"],
+                engagement=preserved_metadata["engagement"],
                 authority=identity.existing_frontmatter.get("authority") if identity.existing_frontmatter else "captured",
                 curation_level=identity.existing_frontmatter.get("curation_level") if identity.existing_frontmatter else "L0",
                 staleness_status="current",
@@ -263,6 +302,60 @@ def ingest_source(
         review_status=analysis_result.review_status,
         llm_status=analysis_result.llm_status,
     )
+
+
+def _warn_ignored_reingest_metadata_overrides(
+    *,
+    existing_frontmatter: Optional[dict],
+    requested_client: Optional[str],
+    requested_engagement: Optional[str],
+    requested_participants: Optional[list[str]],
+    preserved_metadata: dict[str, Optional[str] | list[str] | None],
+) -> None:
+    if not isinstance(existing_frontmatter, dict):
+        return
+
+    preserved_client = preserved_metadata.get("client")
+    if requested_client is not None and requested_client != preserved_client:
+        logger.warning(
+            "Ignoring re-ingest client override '%s'; preserving existing value '%s'.",
+            requested_client,
+            preserved_client,
+        )
+
+    preserved_engagement = preserved_metadata.get("engagement")
+    if requested_engagement is not None and requested_engagement != preserved_engagement:
+        logger.warning(
+            "Ignoring re-ingest engagement override '%s'; preserving existing value '%s'.",
+            requested_engagement,
+            preserved_engagement,
+        )
+
+    preserved_participants = preserved_metadata.get("participants")
+    if (
+        requested_participants is not None
+        and _normalize_participants(requested_participants)
+        != _normalize_participants(preserved_participants)
+    ):
+        logger.warning(
+            "Ignoring re-ingest participants override %s; preserving existing value %s.",
+            _normalize_participants(requested_participants),
+            _normalize_participants(preserved_participants),
+        )
+
+
+def _normalize_participants(values: Optional[list[str] | tuple[str, ...]]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        if not isinstance(value, str):
+            continue
+        cleaned = value.strip()
+        key = cleaned.lower()
+        if cleaned and key not in seen:
+            seen.add(key)
+            normalized.append(cleaned)
+    return normalized
 
 
 def _resolve_target(target: Optional[Path]) -> tuple[Optional[Path], Optional[Path]]:
