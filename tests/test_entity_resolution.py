@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -353,6 +354,35 @@ class TestEntityResolution:
         entry = saved["entities"]["person"]["mystery_person"]
         assert result.created_entities[0].proposed_match is None
         assert "proposed_match" not in entry
+
+    def test_soft_match_provider_failure_returns_none(self, tmp_path, caplog):
+        class _DummyProvider:
+            def create_client(self, *, api_key_env: str, base_url_env: str):
+                return object()
+
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="Alice Chen", type="person", source="import")],
+        )
+
+        with (
+            patch("folio.pipeline.entity_resolution.get_provider", return_value=_DummyProvider()),
+            patch("folio.pipeline.entity_resolution.execute_with_retry", side_effect=RuntimeError("boom")),
+            caplog.at_level(logging.WARNING, logger="folio.pipeline.entity_resolution"),
+        ):
+            result = resolve_interaction_entities(
+                entities_path=path,
+                extracted_entities=_entities(people=["Mystery Person"]),
+                source_text="Mystery Person asked for the numbers.",
+                provider_name="openai",
+                model="gpt-5.4",
+            )
+
+        saved = json.loads(path.read_text())
+        entry = saved["entities"]["person"]["mystery_person"]
+        assert result.created_entities[0].proposed_match is None
+        assert "proposed_match" not in entry
+        assert "Entity soft-match provider 'openai/gpt-5.4' failed: boom" in caplog.text
 
     @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_skipped_when_no_candidates(self, mock_run, tmp_path):

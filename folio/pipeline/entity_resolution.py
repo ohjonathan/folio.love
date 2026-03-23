@@ -30,7 +30,7 @@ _ENTITY_TYPE_MAP = {
 }
 _RESULT_TEMPLATE = {key: [] for key in _ENTITY_TYPE_MAP}
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*\})\s*```", re.DOTALL)
-_JSON_OBJECT_RE = re.compile(r"(\{.*\})", re.DOTALL)
+_JSON_OBJECT_RE = re.compile(r"(\{.*?\})", re.DOTALL)
 _WHITESPACE_RE = re.compile(r"\s+")
 _SOFT_MATCH_SYSTEM_PROMPT = """You are matching one extracted Folio entity mention to an existing entity registry.
 Return exactly one JSON object and no surrounding prose:
@@ -166,7 +166,7 @@ def resolve_interaction_entities(
                     )
                 except Exception as exc:
                     warnings.append(
-                        f"Could not auto-create {singular_type} '{normalized}': {exc}. "
+                        f"Unexpected error auto-creating {singular_type} '{normalized}': {exc}. "
                         f"Keeping unresolved wikilink."
                     )
                 else:

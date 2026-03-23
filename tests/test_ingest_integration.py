@@ -22,7 +22,6 @@ from folio.tracking.registry import save_registry
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "ingest"
 ROOT_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
-ROOT_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 def _fixture(name: str) -> Path:
@@ -332,6 +331,113 @@ class TestIngestIntegration:
 
         assert second.version == 2
         assert "- [[Bob Martinez]]" in second.output_path.read_text()
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_reingest_preserves_promoted_fields(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "expert_interview.md"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("expert_interview.md"), source)
+
+        config = FolioConfig(library_root=library)
+        first_analysis = _analysis_result()
+        second_analysis = _analysis_result()
+        second_analysis.summary = "Updated re-ingest summary."
+        mock_analyze.side_effect = [first_analysis, second_analysis]
+
+        first = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        edited_markdown = (
+            first.output_path.read_text()
+            .replace("authority: captured\n", "authority: reviewed\n", 1)
+            .replace("curation_level: L0\n", "curation_level: L2\n", 1)
+        )
+        first.output_path.write_text(edited_markdown)
+
+        second = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        assert second.version == 2
+        fm = _parse_frontmatter(second.output_path)
+        assert fm["authority"] == "reviewed"
+        assert fm["curation_level"] == "L2"
+
+        registry = json.loads((library / "registry.json").read_text())
+        entry = registry["decks"][second.interaction_id]
+        assert entry["authority"] == "reviewed"
+        assert entry["curation_level"] == "L2"
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_reingest_overwrites_analysis(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "expert_interview.md"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("expert_interview.md"), source)
+
+        config = FolioConfig(library_root=library)
+        first_analysis = _analysis_result(review_status="clean")
+        first_analysis.summary = "First pass summary."
+        first_analysis.review_flags = []
+        first_analysis.extraction_confidence = 0.91
+
+        second_analysis = _analysis_result(review_status="flagged")
+        second_analysis.summary = "Second pass summary."
+        second_analysis.review_flags = ["manual_review"]
+        second_analysis.extraction_confidence = 0.31
+
+        mock_analyze.side_effect = [first_analysis, second_analysis]
+
+        first = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+        first_fm = _parse_frontmatter(first.output_path)
+        assert first_fm["review_status"] == "clean"
+        assert first_fm["review_flags"] == []
+        assert first_fm["extraction_confidence"] == 0.91
+        assert "First pass summary." in first.output_path.read_text()
+
+        second = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        assert second.version == 2
+        fm = _parse_frontmatter(second.output_path)
+        assert fm["review_status"] == "flagged"
+        assert fm["review_flags"] == ["manual_review"]
+        assert fm["extraction_confidence"] == 0.31
+
+        body = second.output_path.read_text()
+        assert "Second pass summary." in body
+        assert "First pass summary." not in body
+
+        registry = json.loads((library / "registry.json").read_text())
+        entry = registry["decks"][second.interaction_id]
+        assert entry["review_status"] == "flagged"
+        assert entry["review_flags"] == ["manual_review"]
+        assert entry["extraction_confidence"] == 0.31
 
     @patch("folio.ingest.analyze_interaction_text")
     def test_ingest_resolution_does_not_modify_frontmatter(self, mock_analyze, tmp_path):
