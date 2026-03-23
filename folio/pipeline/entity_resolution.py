@@ -343,8 +343,9 @@ def _run_soft_match(
     if not match_name:
         return None
 
+    match_name_lower = match_name.lower()
     for candidate in candidates:
-        if candidate.canonical_name == match_name:
+        if candidate.canonical_name.lower() == match_name_lower:
             return candidate.key
     return None
 
@@ -414,6 +415,7 @@ def _run_with_fallback(
     fallback_profiles: list[FallbackProfileSpec],
     all_provider_settings: dict[str, ProviderRuntimeSettings],
 ) -> Optional[str]:
+    """Thin seam for soft-match tests to stub provider execution directly."""
     return _execute_with_fallback(
         prompt=prompt,
         system_prompt=system_prompt,

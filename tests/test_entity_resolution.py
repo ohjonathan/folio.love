@@ -87,6 +87,23 @@ class TestEntityResolution:
         assert result.entities["people"] == ["Alice Chen"]
         assert result.registry_changed is False
 
+    def test_resolve_case_insensitive(self, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="Jane Smith", type="person", source="import")],
+        )
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["jane smith"]),
+            source_text="jane smith joined the meeting.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        assert result.entities["people"] == ["Jane Smith"]
+        assert result.registry_changed is False
+
     def test_resolve_ambiguous_keeps_original(self, tmp_path):
         path = _write_registry_data(
             tmp_path,
@@ -275,12 +292,55 @@ class TestEntityResolution:
         assert mock_run.call_count == 1
 
     @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    def test_soft_match_proposed_accepts_case_insensitive_canonical_name(self, mock_run, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="Alice Chen", type="person", source="import")],
+        )
+        mock_run.return_value = SimpleNamespace(raw_text='{"match":"alice chen"}')
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["Alyce Chen"]),
+            source_text="Alyce Chen asked for the numbers.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        saved = json.loads(path.read_text())
+        entry = saved["entities"]["person"]["alyce_chen"]
+        assert result.registry_changed is True
+        assert result.created_entities[0].proposed_match == "alice_chen"
+        assert entry["proposed_match"] == "alice_chen"
+
+    @patch("folio.pipeline.entity_resolution._run_with_fallback")
     def test_soft_match_no_match(self, mock_run, tmp_path):
         path = _make_registry(
             tmp_path,
             [EntityEntry(canonical_name="Alice Chen", type="person", source="import")],
         )
         mock_run.return_value = SimpleNamespace(raw_text='{"match": null}')
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["Mystery Person"]),
+            source_text="Mystery Person asked for the numbers.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        saved = json.loads(path.read_text())
+        entry = saved["entities"]["person"]["mystery_person"]
+        assert result.created_entities[0].proposed_match is None
+        assert "proposed_match" not in entry
+
+    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    def test_soft_match_malformed_json_returns_none(self, mock_run, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="Bob Martinez", type="person", source="import")],
+        )
+        mock_run.return_value = SimpleNamespace(raw_text="I think it's Bob")
 
         result = resolve_interaction_entities(
             entities_path=path,

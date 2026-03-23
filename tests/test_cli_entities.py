@@ -124,7 +124,7 @@ class TestEntitiesList:
         assert result.exit_code == 0
         assert "Unconfirmed" in result.output
 
-    def test_entities_list_unconfirmed_shows_proposed_match(self, tmp_path):
+    def test_entities_list_unconfirmed_shows_proposed_match_for_intern(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()
         data = _full_registry_data()
@@ -145,7 +145,7 @@ class TestEntitiesList:
         assert result.exit_code == 0
         assert "proposed: Alice Chen" in result.output
 
-    def test_entities_list_unconfirmed_shows_no_proposed_match(self, tmp_path):
+    def test_entities_list_unconfirmed_shows_no_proposed_match_for_intern(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()
         data = _full_registry_data()
@@ -180,7 +180,7 @@ class TestEntitiesList:
         data = json.loads(result.output)
         assert "_schema_version" in data
 
-    def test_entities_list_unconfirmed_shows_proposed_match(self, tmp_path):
+    def test_entities_list_unconfirmed_shows_proposed_match_for_mystery_person(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()
         data = _full_registry_data()
@@ -201,7 +201,7 @@ class TestEntitiesList:
         assert result.exit_code == 0
         assert "proposed: Alice Chen" in result.output
 
-    def test_entities_list_unconfirmed_shows_no_proposed_match(self, tmp_path):
+    def test_entities_list_unconfirmed_shows_no_proposed_match_for_mystery_person(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()
         data = _full_registry_data()
@@ -326,7 +326,7 @@ class TestEntitiesShow:
         assert result.exit_code == 0
         assert "Operations" in result.output
 
-    def test_entities_show_unconfirmed_displays_proposed_match(self, tmp_path):
+    def test_entities_show_unconfirmed_displays_proposed_match_for_mystery_person(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()
         data = _full_registry_data()
@@ -347,7 +347,7 @@ class TestEntitiesShow:
         assert result.exit_code == 0
         assert "Proposed match: Alice Chen" in result.output
 
-    def test_entities_show_unconfirmed_displays_proposed_match(self, tmp_path):
+    def test_entities_show_unconfirmed_displays_proposed_match_for_intern(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()
         data = _full_registry_data()

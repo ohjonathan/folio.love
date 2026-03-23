@@ -670,6 +670,63 @@ class TestIngestIntegration:
         assert "systems" not in fm
         assert "processes" not in fm
 
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_resolution_preserves_existing_evidence_registry_entries(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+        config = FolioConfig(library_root=library)
+        _import_org_chart(library)
+
+        evidence_entry = {
+            "id": "clienta_ddq126_slide_20260321_market_map",
+            "title": "Market Map",
+            "markdown_path": "ClientA/slides/market_map/market_map.md",
+            "deck_dir": "ClientA/slides/market_map",
+            "source_relative_path": "../../../sources/market_map.pdf",
+            "source_hash": "evidencehash123",
+            "version": 2,
+            "converted": "2026-03-21T10:00:00Z",
+            "modified": "2026-03-21T10:00:00Z",
+            "client": "ClientA",
+            "engagement": "DD Q1 2026",
+            "authority": "captured",
+            "curation_level": "L0",
+            "staleness_status": "current",
+            "type": "evidence",
+        }
+        save_registry(
+            library / "registry.json",
+            {
+                "_schema_version": 1,
+                "updated_at": "2026-03-21T10:00:00Z",
+                "decks": {evidence_entry["id"]: evidence_entry},
+            },
+        )
+
+        mock_analyze.return_value = _analysis_result(
+            entities={
+                "people": ["Bob"],
+                "departments": ["Engineering"],
+                "systems": [],
+                "processes": [],
+            }
+        )
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        registry = json.loads((library / "registry.json").read_text())
+        assert evidence_entry["id"] in registry["decks"]
+        assert registry["decks"][evidence_entry["id"]]["type"] == "evidence"
+        assert registry["decks"][evidence_entry["id"]]["markdown_path"] == evidence_entry["markdown_path"]
+        assert registry["decks"][result.interaction_id]["type"] == "interaction"
+
     @patch("folio.ingest.analyze_interaction_text", side_effect=EndpointNotAllowedError())
     def test_ingest_provider_failure_writes_degraded_note(self, mock_analyze, tmp_path):
         library = _make_library(tmp_path)
