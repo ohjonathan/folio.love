@@ -16,6 +16,7 @@ from ..tracking.entities import (
     EntityAliasCollisionError,
     EntityEntry,
     EntityRegistry,
+    EntitySlugCollisionError,
     sanitize_wikilink_name,
 )
 
@@ -129,8 +130,8 @@ def resolve_interaction_entities(
             elif len(matches) > 1:
                 resolved_name = normalized
                 warnings.append(
-                    f'Ambiguous entity: "{normalized}" matches '
-                    f"{_describe_matches(matches)} -> keeping unresolved wikilink: [[{normalized}]]"
+                    f"Ambiguous entity '{normalized}' in {singular_type}: "
+                    f"{_describe_matches(matches)}. Keeping unresolved wikilink."
                 )
             else:
                 proposed_match = _soft_match_or_none(
@@ -158,13 +159,15 @@ def resolve_interaction_entities(
                             proposed_match=proposed_match,
                         )
                     )
-                except (EntityAliasCollisionError, ValueError) as exc:
+                except (EntityAliasCollisionError, EntitySlugCollisionError, ValueError) as exc:
                     warnings.append(
-                        f'Unable to auto-create entity "{normalized}" ({singular_type}): {exc}'
+                        f"Could not auto-create {singular_type} '{normalized}': {exc}. "
+                        f"Keeping unresolved wikilink."
                     )
                 except Exception as exc:
                     warnings.append(
-                        f'Unable to auto-create entity "{normalized}" ({singular_type}): {exc}'
+                        f"Could not auto-create {singular_type} '{normalized}': {exc}. "
+                        f"Keeping unresolved wikilink."
                     )
                 else:
                     registry_changed = True
@@ -314,7 +317,7 @@ def _run_soft_match(
         context=_source_context(source_text, normalized_name),
         candidates="\n".join(candidate_prompt_lines),
     )
-    raw_text = _execute_with_fallback(
+    raw_text = _run_with_fallback(
         prompt=user_prompt,
         system_prompt=_SOFT_MATCH_SYSTEM_PROMPT,
         primary=(provider_name, model, api_key_env, base_url_env),
@@ -323,6 +326,8 @@ def _run_soft_match(
     )
     if raw_text is None:
         return None
+    if hasattr(raw_text, "raw_text"):
+        raw_text = raw_text.raw_text
 
     try:
         payload = _parse_json_object(raw_text)
@@ -399,6 +404,23 @@ def _execute_with_fallback(
             )
             continue
     return None
+
+
+def _run_with_fallback(
+    *,
+    prompt: str,
+    system_prompt: str,
+    primary: tuple[str, str, str, str],
+    fallback_profiles: list[FallbackProfileSpec],
+    all_provider_settings: dict[str, ProviderRuntimeSettings],
+) -> Optional[str]:
+    return _execute_with_fallback(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        primary=primary,
+        fallback_profiles=fallback_profiles,
+        all_provider_settings=all_provider_settings,
+    )
 
 
 def _parse_json_object(raw_text: str) -> dict:
