@@ -12,17 +12,25 @@ import pytest
 import yaml
 
 from folio.config import FolioConfig
+from folio.entity_import import import_csv
 from folio.ingest import IngestAmbiguityError, IngestError, IngestSubtypeMismatchError, ingest_source
 from folio.llm.runtime import EndpointNotAllowedError
 from folio.pipeline.interaction_analysis import InteractionAnalysisResult, InteractionFinding, InteractionQuote
+from folio.tracking.entities import EntityRegistry
 from folio.tracking.registry import save_registry
 
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "ingest"
+ROOT_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+ROOT_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 def _fixture(name: str) -> Path:
     return FIXTURE_DIR / name
+
+
+def _root_fixture(name: str) -> Path:
+    return ROOT_FIXTURE_DIR / name
 
 
 def _make_library(tmp_path: Path) -> Path:
@@ -59,6 +67,7 @@ def _analysis_result(
     llm_status: str = "executed",
     review_status: str = "clean",
     tags: list[str] | None = None,
+    entities: dict[str, list[str]] | None = None,
     provider_name: str | None = "anthropic",
     model_name: str | None = "claude-sonnet-4-20250514",
     fallback_used: bool = False,
@@ -66,7 +75,7 @@ def _analysis_result(
     return InteractionAnalysisResult(
         summary="The team described a successful operational change and a follow-up dependency.",
         tags=tags or ["expert-interview", "operations"],
-        entities={
+        entities=entities or {
             "people": ["Jane Smith", "Johnny Oh"],
             "departments": ["Engineering"],
             "systems": ["ServiceNow"],
@@ -127,6 +136,14 @@ def _parse_frontmatter(md_path: Path) -> dict:
     content = md_path.read_text()
     yaml_block = content.split("---", 2)[1].strip()
     return yaml.safe_load(yaml_block)
+
+
+def _import_org_chart(library: Path) -> Path:
+    entities_path = library / "entities.json"
+    reg = EntityRegistry(entities_path)
+    reg.load()
+    import_csv(reg, ROOT_FIXTURE_DIR / "test_org_chart.csv")
+    return entities_path
 
 
 class TestIngestIntegration:
@@ -205,6 +222,148 @@ class TestIngestIntegration:
         assert entry["type"] == "interaction"
         assert entry["source_relative_path"].endswith("expert_interview.md")
         assert "source_type" not in entry
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_without_entity_registry_preserves_extracted_names(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "test_transcript_entities.txt"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_root_fixture("test_transcript_entities.txt"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+        mock_analyze.return_value.entities = {
+            "people": ["Bob", "the CEO", "the intern"],
+            "departments": ["Engineering"],
+            "systems": ["ServiceNow"],
+            "processes": [],
+        }
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        body = result.output_path.read_text()
+        assert "- [[Bob]]" in body
+        assert "- [[the CEO]]" in body
+        assert "- [[the intern]]" in body
+        assert "- [[ServiceNow]]" in body
+        assert not (library / "entities.json").exists()
+
+    @patch("folio.pipeline.entity_resolution._run_with_fallback", return_value='{"match": null}')
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_with_entity_registry_resolves_and_autocreates(self, mock_analyze, _mock_soft_match, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "test_transcript_entities.txt"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_root_fixture("test_transcript_entities.txt"), source)
+        (library / "entities.json").write_text(_root_fixture("test_entities.json").read_text())
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+        mock_analyze.return_value.entities = {
+            "people": ["Bob", "the CEO", "the intern"],
+            "departments": ["Engineering"],
+            "systems": ["ServiceNow"],
+            "processes": [],
+        }
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        body = result.output_path.read_text()
+        assert "- [[Bob Martinez]]" in body
+        assert "- [[Alice Chen]]" in body
+        assert "- [[Engineering]]" in body
+        assert "- [[the intern]]" in body
+        assert "- [[ServiceNow]]" in body
+
+        entities = json.loads((library / "entities.json").read_text())
+        assert entities["entities"]["person"]["the_intern"]["needs_confirmation"] is True
+        assert entities["entities"]["system"]["servicenow"]["needs_confirmation"] is True
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_reingest_updates_resolution_after_entity_registry_added(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "test_transcript_entities.txt"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_root_fixture("test_transcript_entities.txt"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+        mock_analyze.return_value.entities = {
+            "people": ["Bob"],
+            "departments": [],
+            "systems": [],
+            "processes": [],
+        }
+
+        first = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+        assert "- [[Bob]]" in first.output_path.read_text()
+
+        (library / "entities.json").write_text(_root_fixture("test_entities.json").read_text())
+
+        second = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        assert second.version == 2
+        assert "- [[Bob Martinez]]" in second.output_path.read_text()
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_resolution_does_not_modify_frontmatter(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "test_transcript_entities.txt"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_root_fixture("test_transcript_entities.txt"), source)
+        (library / "entities.json").write_text(_root_fixture("test_entities.json").read_text())
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+        mock_analyze.return_value.entities = {
+            "people": ["Bob", "the CEO"],
+            "departments": ["Engineering"],
+            "systems": ["ServiceNow"],
+            "processes": [],
+        }
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        fm = _parse_frontmatter(result.output_path)
+        assert "participants" not in fm
+        assert "source" not in fm
+        assert "source_type" not in fm
+        assert "slide_count" not in fm
 
     @patch("folio.ingest.analyze_interaction_text")
     def test_ingest_reingest_same_source_path_reuses_identity(self, mock_analyze, tmp_path):
@@ -396,6 +555,120 @@ class TestIngestIntegration:
                 client="ClientA",
                 engagement="DD Q1 2026",
             )
+
+    @patch("folio.pipeline.entity_resolution._run_with_fallback")
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_with_registry_resolves_and_autocreates(
+        self,
+        mock_analyze,
+        mock_soft_match,
+        tmp_path,
+    ):
+        library = _make_library(tmp_path)
+        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+        config = FolioConfig(library_root=library)
+        _import_org_chart(library)
+        mock_analyze.return_value = _analysis_result(
+            entities={
+                "people": ["Bob", "the CEO", "the intern"],
+                "departments": ["Engineering"],
+                "systems": ["ServiceNow"],
+                "processes": [],
+            }
+        )
+        mock_soft_match.return_value = type("SoftMatchResult", (), {"raw_text": '{"match": null}'})()
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+        )
+
+        body = result.output_path.read_text()
+        assert "[[Bob Martinez]]" in body
+        assert "[[Alice Chen]]" in body
+        assert "[[Engineering]]" in body
+        assert "[[ServiceNow]]" in body
+        assert "[[the intern]]" in body
+
+        entities = json.loads((library / "entities.json").read_text())
+        assert entities["entities"]["system"]["servicenow"]["needs_confirmation"] is True
+        assert entities["entities"]["person"]["the_intern"]["needs_confirmation"] is True
+        assert "proposed_match" not in entities["entities"]["person"]["the_intern"]
+
+        registry = json.loads((library / "registry.json").read_text())
+        entry = registry["decks"][result.interaction_id]
+        assert "source_type" not in entry
+        assert "entities" not in entry
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_reingest_updates_resolution_after_registry_import(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result(
+            entities={
+                "people": ["Bob", "the CEO"],
+                "departments": ["Engineering"],
+                "systems": [],
+                "processes": [],
+            }
+        )
+
+        first = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+        )
+        first_body = first.output_path.read_text()
+        assert "[[Bob]]" in first_body
+        assert "[[the CEO]]" in first_body
+
+        _import_org_chart(library)
+
+        second = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+        )
+        second_body = second.output_path.read_text()
+        assert "[[Bob Martinez]]" in second_body
+        assert "[[Alice Chen]]" in second_body
+        assert "[[Bob]]" not in second_body
+        assert "[[the CEO]]" not in second_body
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_resolution_does_not_modify_frontmatter_or_participants(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+        config = FolioConfig(library_root=library)
+        _import_org_chart(library)
+        mock_analyze.return_value = _analysis_result(
+            entities={
+                "people": ["Bob"],
+                "departments": ["Engineering"],
+                "systems": [],
+                "processes": [],
+            }
+        )
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="expert_interview",
+            event_date=date(2026, 3, 21),
+            participants=["Bob"],
+        )
+
+        fm = _parse_frontmatter(result.output_path)
+        assert fm["participants"] == ["Bob"]
+        assert "people" not in fm
+        assert "departments" not in fm
+        assert "systems" not in fm
+        assert "processes" not in fm
 
     @patch("folio.ingest.analyze_interaction_text", side_effect=EndpointNotAllowedError())
     def test_ingest_provider_failure_writes_degraded_note(self, mock_analyze, tmp_path):

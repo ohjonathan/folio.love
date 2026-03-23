@@ -1,0 +1,9 @@
+Alice Chen: Bob has been leading the intake redesign with Engineering over the last six weeks.
+
+Interviewer: What is the CEO asking the team to prioritize before the next steering committee?
+
+Bob Martinez: The CEO wants Engineering to standardize the workflow in ServiceNow before Q3, even though the intern is still shadowing the rollout and documenting gaps.
+
+Interviewer: Where is the team seeing the biggest friction today?
+
+Alice Chen: Engineering is aligned on the target state, but ServiceNow still needs a cleaner intake taxonomy and the intern needs more coaching on escalation paths.
