@@ -293,6 +293,17 @@ class TestEntityResolution:
             == "Dr. Smith mentioned ServiceNow during the update."
         )
 
+    def test_source_context_keeps_company_and_place_abbreviations_in_sentence(self):
+        source_text = (
+            "St. Mary's Inc. mentioned ServiceNow during the update. "
+            "Carol closed the meeting."
+        )
+
+        assert (
+            _source_context(source_text, "ServiceNow")
+            == "St. Mary's Inc. mentioned ServiceNow during the update."
+        )
+
     @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_soft_match_proposed(self, mock_run, tmp_path):
         path = _make_registry(
