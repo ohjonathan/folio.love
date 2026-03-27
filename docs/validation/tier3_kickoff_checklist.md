@@ -42,9 +42,14 @@ Use this as the single operational tracker for Tier 3 sequencing.
   - diagram stage: `anthropic_haiku45`
   - interim Pass 2: `anthropic_haiku45`
   - current single-route default on `main`: `anthropic_haiku45`
+- The Tier 2 real-library rerun is now complete on the McKinsey laptop:
+  - runtime passed operationally on the full 161-file corpus
+  - the `haiku45` scratch rerun did **not** beat the production library at
+    full-corpus scale
+  - the production `sonnet4` library remains the baseline for vault validation
+    and PR C input
 - The next active feature slice is **PR C: `folio enrich` core**.
 - Before PR C, the recommended hardening track is:
-  - real engagement/library rerun
   - real vault validation
 - `folio enrich`, retroactive provenance, and context-doc integration remain
   unstarted.
@@ -83,7 +88,7 @@ So for each remaining PR below:
 | PR #32 | `folio ingest` interaction baseline | Shipped | Completed | Personal Folio dev laptop | Agents implemented, you reviewed/merged | Tier 2 waiver + ingest spec | Week 13-15: Interaction Ingestion | FR-403, FR-500, FR-506, FR-604, FR-607, FR-701 to FR-704 | Ontology-native interaction notes, mixed-library support, degraded-output handling, unresolved entity wikilinks |
 | PR #34 / PR A | Entity registry core + `folio entities` + `folio entities import <csv>` | Shipped | Completed | Personal Folio dev laptop | Agents implemented, you reviewed/merged | Approved entity-system kickoff spec | Week 16-18: Entity System | FR-403, FR-500 family, FR-503, FR-504, roadmap-primary for entity registry/import | Canonical entity store, `folio entities` CLI, org-chart import path, confirm/reject flow, no ingest-time resolution yet |
 | PR #35 / PR B | Ingest-time entity resolution against registry | Shipped | Completed | Personal Folio dev laptop | Agents implemented, you reviewed/merged | PR #34 merged | Week 16-18: Entity System | FR-506, FR-701 to FR-704, FR-403, roadmap-primary for exact match + LLM soft match + human confirmation | `folio ingest` resolves entities against the registry, auto-creates unresolved entities as unconfirmed, adds bounded soft-match proposals, and canonicalizes rendered entity links during ingest |
-| PR C | `folio enrich` core | Next feature slice | 5-7 dev days | Personal Folio dev laptop | Agents implement, you review | PR #34 and PR #35 merged; real library rerun strongly recommended first | Week 19-20: Enrichment & Provenance | FR-402, FR-403, FR-500 family, FR-700, FR-706 | Post-hoc enrichment over existing assets for tags, frontmatter relationships, and entity backfill |
+| PR C | `folio enrich` core | Next feature slice | 5-7 dev days | Personal Folio dev laptop | Agents implement, you review | PR #34 and PR #35 merged; use the production `sonnet4` library after real vault validation | Week 19-20: Enrichment & Provenance | FR-402, FR-403, FR-500 family, FR-700, FR-706 | Post-hoc enrichment over existing assets for tags, frontmatter relationships, and entity backfill |
 | PR D | Retroactive provenance linking | Not started | 4-6 dev days | Personal Folio dev laptop | Agents implement, you review | PR C merged | Week 19-20: Enrichment & Provenance | FR-701 to FR-706, roadmap retroactive provenance bullet | Proposed deliverable-to-evidence links with human confirmation and clear provenance metadata |
 | PR E | Context docs + end-to-end Tier 3 integration + closeout | Not started | 3-5 dev days | Personal Folio dev laptop for templates/tests; McKinsey laptop for real validation | Agents draft/implement, you validate/close out | PR A through PR D merged; rerun and vault validation completed | Week 21-22: Context Documents & Integration | FR-402, FR-403, FR-700 where generated content applies; roadmap-primary for context-doc behavior | Context template, full engagement lifecycle test, Tier 3 validation and closeout package |
 
@@ -181,6 +186,12 @@ Why it is separated:
 - enrichment touches far more existing content than ingest-time resolution
 - it should not be bundled with provenance matching on the first pass
 
+Current baseline note:
+- use the production `sonnet4` library as PR C input
+- do not switch PR C input to the `haiku45` scratch rerun library
+- keep the rerun outputs as comparative evidence, not as the new production
+  baseline
+
 ### PR D: Retroactive provenance linking
 
 What it should deliver:
@@ -216,7 +227,7 @@ and merge readiness.
 | 3 | Entity-system kickoff spec | Yes | Personal Folio dev laptop | Agents draft, you approve | Freezes scope before PR A begins | Done |
 | 4 | Entity-system fixtures | Yes | Personal Folio dev laptop; McKinsey laptop if using real examples | Shared | Gives PR A and PR B grounded fixtures for import and resolution behavior | Done: PR #34 landed import/registry fixtures and PR #35 added resolution-specific fixtures |
 | 5 | Per-stage routing decision | Recommended | Personal Folio dev laptop | Agents draft, you approve | Useful Tier 2/Tier 3 hardening, but not a blocker for PR A or PR B | Done: canonical Tier 2 model-comparison artifacts record Pass 1 = `openai_gpt53`, diagram = `anthropic_haiku45`, interim Pass 2 = `anthropic_haiku45`, current default = `anthropic_haiku45` |
-| 6 | Real engagement/library rerun | Recommended before PR C | McKinsey laptop | You run; agents prepare runbook | Ensures `enrich` starts from the best current library baseline | Not started |
+| 6 | Real engagement/library rerun | Recommended before PR C | McKinsey laptop | You run; agents prepare runbook | Confirms runtime behavior at full-corpus scale and determines the correct library baseline before `enrich` | Done: full 161-file rerun completed; runtime passed, but production `sonnet4` library outperformed the `haiku45` scratch rerun and remains the baseline |
 | 7 | Real vault validation | Recommended before PR C | McKinsey laptop | You | Confirms the production library is usable enough to justify enrichment and provenance work | Not started |
 
 ## Machine Guide
@@ -248,19 +259,22 @@ and merge readiness.
 4. Do not start PR C before PR #34 and PR #35 are merged.
 5. Treat the real library rerun and real vault validation as serious
    prerequisites before PR C and PR D.
-6. Do not bundle retroactive provenance into the first `folio enrich` PR by
+6. Use the production `sonnet4` library, not the `haiku45` scratch rerun, as
+   the current baseline for vault validation and PR C unless a later decision
+   explicitly changes that.
+7. Do not bundle retroactive provenance into the first `folio enrich` PR by
    default.
-7. Do not bundle `.overrides.json` or interaction-specific override UX into
+8. Do not bundle `.overrides.json` or interaction-specific override UX into
    retroactive provenance unless a later spec explicitly requires it.
-8. Keep each Tier 3 PR narrow enough that review can isolate regressions.
+9. Keep each Tier 3 PR narrow enough that review can isolate regressions.
 
 ## Recommended Working Order
 
-1. Run the real engagement/library rerun on the McKinsey laptop.
-2. Validate real vault behavior on the McKinsey laptop.
-3. Implement PR C: `folio enrich` core.
-4. Implement PR D: retroactive provenance.
-5. Implement PR E: context docs and Tier 3 closeout.
+1. Validate real vault behavior on the McKinsey laptop using the production
+   `sonnet4` library.
+2. Implement PR C: `folio enrich` core against the production library.
+3. Implement PR D: retroactive provenance.
+4. Implement PR E: context docs and Tier 3 closeout.
 
 ## Live Checklist
 
@@ -275,7 +289,7 @@ and merge readiness.
 - [x] PR A merged: entity registry core
 - [x] PR B merged: ingest-time entity resolution
 - [x] Per-stage routing decision recorded
-- [ ] Real engagement/library rerun completed on McKinsey laptop
+- [x] Real engagement/library rerun completed on McKinsey laptop
 - [ ] Real vault validation completed on McKinsey laptop
 - [ ] PR C merged: `folio enrich` core
 - [ ] PR D merged: retroactive provenance
