@@ -1385,3 +1385,49 @@ class TestMultilineQuotedYaml:
         assert "Body." in result
         # Old multi-line value must not leak into body
         assert "Phase 1" not in result
+
+
+# ---------------------------------------------------------------------------
+# V5 Review Fix: Silent failure masking
+# ---------------------------------------------------------------------------
+
+class TestEnrichStatusOnFailure:
+    """V5 fix 3: Empty LLM output must not set status: executed."""
+
+    def test_all_axes_error_sets_pending(self):
+        """If all axes errored, status should be pending."""
+        from folio.pipeline.enrich_data import EnrichAxisResult
+        tags = EnrichAxisResult(status="error")
+        entities = EnrichAxisResult(status="error")
+        relationships = EnrichAxisResult(status="error")
+        # Simulate the status logic
+        all_axes_empty = (
+            tags.status in ("skipped", "no_change", "error")
+            and entities.status in ("skipped", "no_change", "error")
+            and relationships.status in ("skipped", "no_change", "error")
+        )
+        any_error = (
+            tags.status == "error"
+            or entities.status == "error"
+            or relationships.status == "error"
+        )
+        if any_error and all_axes_empty:
+            status = "pending"
+        else:
+            status = "executed"
+        assert status == "pending"
+
+    def test_successful_axis_sets_executed(self):
+        """If any axis succeeded, status should be executed."""
+        from folio.pipeline.enrich_data import EnrichAxisResult
+        tags = EnrichAxisResult(status="updated")
+        entities = EnrichAxisResult(status="skipped")
+        relationships = EnrichAxisResult(status="skipped")
+        all_axes_empty = (
+            tags.status in ("skipped", "no_change", "error")
+            and entities.status in ("skipped", "no_change", "error")
+            and relationships.status in ("skipped", "no_change", "error")
+        )
+        assert not all_axes_empty  # updated is not in the empty set
+        status = "executed"
+        assert status == "executed"

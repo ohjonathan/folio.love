@@ -577,13 +577,32 @@ def enrich_note(
         profile.name, ENRICH_SPEC_VERSION,
     )
 
+    # Determine enrich status: if all axes are empty/error/skipped,
+    # the LLM likely failed — mark as pending, not executed (V5 fix 3).
+    all_axes_empty = (
+        tags_axis.status in ("skipped", "no_change", "error")
+        and entities_axis.status in ("skipped", "no_change", "error")
+        and relationships_axis.status in ("skipped", "no_change", "error")
+    )
+    any_axis_error = (
+        tags_axis.status == "error"
+        or entities_axis.status == "error"
+        or relationships_axis.status == "error"
+    )
+    if any_axis_error and all_axes_empty:
+        enrich_status = "pending"
+    elif all_axes_empty and not analysis_output.tag_candidates and not analysis_output.entity_mention_candidates:
+        enrich_status = "pending"
+    else:
+        enrich_status = "executed"
+
     enrich_block = {
         "requested_profile": llm_profile or profile.name,
         "profile": profile.name,
         "provider": profile.provider,
         "model": profile.model,
         "fallback_used": fallback_used,
-        "status": "executed",
+        "status": enrich_status,
         "timestamp": now_str,
         "spec_version": ENRICH_SPEC_VERSION,
         "input_fingerprint": input_fp,

@@ -392,8 +392,11 @@ Allowed mutation surface:
   - generated trailing `## Related`
 - interaction notes:
   - exact top-level `## Entities Mentioned`
-  - exact top-level `## Impact on Hypotheses`
   - generated trailing `## Related`
+
+> **v1 note:** `## Impact on Hypotheses` is allowed by the ontology but
+> excluded from the v1 managed set because no mutation logic exists yet.
+> See §14.1 for the full v1 exclusion rationale.
 
 Protected surface:
 
