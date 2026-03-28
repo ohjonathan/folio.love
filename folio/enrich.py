@@ -498,9 +498,9 @@ def enrich_note(
             for created in resolution_result.created_entities:
                 unresolved_created.append(created.canonical_name)
                 if created.proposed_match:
-                    resolution = f"proposed_match:{created.entity_type}/{created.key}"
+                    resolution = f"proposed_match:{created.entity_type}/{created.canonical_name}"
                 else:
-                    resolution = f"unconfirmed:{created.entity_type}/{created.key}"
+                    resolution = f"unconfirmed:{created.entity_type}/{created.canonical_name}"
                 entity_mention_records.append({
                     "text": created.canonical_name,
                     "type": created.entity_type,
