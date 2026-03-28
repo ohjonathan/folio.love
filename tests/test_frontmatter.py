@@ -711,3 +711,166 @@ class TestDiagramFrontmatter:
         assert "architecture" in tags
         assert "postgresql" in tags
         assert "tam-sam-som" in tags
+
+
+# --- Enrich passthrough (D12 compatibility) ---
+
+class TestEnrichPassthrough:
+    """Test that generate() and generate_interaction() preserve enrich fields."""
+
+    def test_generate_preserves_relationship_fields(self):
+        preserved = {
+            "supersedes": "older_note_id",
+            "impacts": ["some_interaction"],
+        }
+        fm_str = _generate_simple(preserved_enrich_fields=preserved)
+        fm = _parse_frontmatter(fm_str)
+        assert fm["supersedes"] == "older_note_id"
+        assert fm["impacts"] == ["some_interaction"]
+
+    def test_generate_preserves_enrich_metadata(self):
+        preserved = {
+            "_llm_metadata": {
+                "enrich": {
+                    "status": "executed",
+                    "spec_version": 2,
+                    "input_fingerprint": "sha256:abc",
+                }
+            }
+        }
+        fm_str = _generate_simple(
+            preserved_enrich_fields=preserved,
+        )
+        fm = _parse_frontmatter(fm_str)
+        assert fm["_llm_metadata"]["enrich"]["status"] == "executed"
+        assert fm["_llm_metadata"]["enrich"]["input_fingerprint"] == "sha256:abc"
+
+    def test_non_allowlisted_fields_not_passed(self):
+        preserved = {
+            "supersedes": "older_note_id",
+            "custom_junk_field": "should_not_appear",
+            "tags": ["should_not_override"],
+        }
+        fm_str = _generate_simple(preserved_enrich_fields=preserved)
+        fm = _parse_frontmatter(fm_str)
+        assert fm["supersedes"] == "older_note_id"
+        assert "custom_junk_field" not in fm
+        # tags should be from generate(), not from preserved
+        assert fm.get("tags") != ["should_not_override"]
+
+    def test_generate_interaction_preserves_enrich_fields(self):
+        from folio.pipeline.interaction_analysis import InteractionAnalysisResult
+        from folio.tracking.versions import ChangeSet, VersionInfo
+
+        vi = VersionInfo(
+            version=1,
+            timestamp="2026-01-01T00:00:00Z",
+            source_hash="abc123def456",
+            source_path="transcript.md",
+            note=None,
+            slide_count=0,
+            changes=ChangeSet(),
+        )
+        analysis = InteractionAnalysisResult(
+            summary="Test summary",
+        )
+        preserved = {
+            "impacts": ["target_id_1"],
+            "_llm_metadata": {
+                "enrich": {
+                    "status": "executed",
+                    "spec_version": 2,
+                }
+            }
+        }
+        fm_str = generate_interaction(
+            interaction_id="test_interaction",
+            title="Test Meeting",
+            subtype="meeting",
+            event_date="2026-01-01",
+            version_info=vi,
+            source_transcript="transcript.md",
+            source_hash="abc123def456",
+            analysis_result=analysis,
+            preserved_enrich_fields=preserved,
+        )
+        fm = _parse_frontmatter(fm_str)
+        # impacts is already preserved by generate_interaction's own logic,
+        # but enrich passthrough should also work
+        assert fm["_llm_metadata"]["enrich"]["status"] == "executed"
+
+    def test_none_preserved_is_noop(self):
+        fm_str = _generate_simple(preserved_enrich_fields=None)
+        fm = _parse_frontmatter(fm_str)
+        assert "supersedes" not in fm
+        assert "impacts" not in fm
+
+
+class TestExtractEnrichPassthrough:
+    """Test the _extract_enrich_passthrough helper from cli."""
+
+    def test_extracts_relationship_fields(self):
+        from folio.cli import _extract_enrich_passthrough
+        fm = {
+            "id": "test",
+            "supersedes": "older_id",
+            "impacts": ["other_id"],
+            "tags": ["existing"],
+        }
+        result = _extract_enrich_passthrough(fm)
+        assert result is not None
+        assert result["supersedes"] == "older_id"
+        assert result["impacts"] == ["other_id"]
+        assert "tags" not in result
+        assert "id" not in result
+
+    def test_extracts_enrich_metadata(self):
+        from folio.cli import _extract_enrich_passthrough
+        fm = {
+            "_llm_metadata": {
+                "convert": {"provider": "anthropic"},
+                "enrich": {"status": "executed", "spec_version": 2},
+            }
+        }
+        result = _extract_enrich_passthrough(fm)
+        assert result is not None
+        enrich = result["_llm_metadata"]["enrich"]
+        assert enrich["status"] == "executed"
+
+    def test_returns_none_when_nothing_to_preserve(self):
+        from folio.cli import _extract_enrich_passthrough
+        fm = {"id": "test", "tags": ["a"]}
+        result = _extract_enrich_passthrough(fm)
+        assert result is None
+
+    def test_stale_transition_clears_fingerprints(self):
+        from folio.cli import _extract_enrich_passthrough, _mark_enrich_stale
+        fm = {
+            "supersedes": "older_id",
+            "_llm_metadata": {
+                "enrich": {
+                    "status": "executed",
+                    "input_fingerprint": "sha256:abc",
+                    "managed_body_fingerprint": "sha256:def",
+                    "entity_resolution_fingerprint": "sha256:ghi",
+                    "relationship_context_fingerprint": "sha256:jkl",
+                    "axes": {
+                        "relationships": {
+                            "proposals": [{"relation": "supersedes", "target_id": "x"}]
+                        }
+                    }
+                }
+            }
+        }
+        preserved = _extract_enrich_passthrough(fm)
+        _mark_enrich_stale(preserved)
+
+        enrich = preserved["_llm_metadata"]["enrich"]
+        assert enrich["status"] == "stale"
+        assert "input_fingerprint" not in enrich
+        assert "managed_body_fingerprint" not in enrich
+        assert "entity_resolution_fingerprint" not in enrich
+        assert "relationship_context_fingerprint" not in enrich
+        assert "proposals" not in enrich["axes"]["relationships"]
+        # Canonical relationship field should survive
+        assert preserved["supersedes"] == "older_id"

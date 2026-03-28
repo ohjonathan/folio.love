@@ -42,6 +42,7 @@ def generate(
     review_status: Optional[str] = None,
     review_flags: Optional[list[str]] = None,
     extraction_confidence: Optional[float] = None,
+    preserved_enrich_fields: Optional[dict] = None,
 ) -> str:
     """Generate YAML frontmatter conforming to Folio Ontology v2 schema.
 
@@ -180,6 +181,9 @@ def generate(
     if llm_metadata:
         frontmatter["_llm_metadata"] = llm_metadata
 
+    # Enrich state passthrough (D12 compatibility)
+    _inject_enrich_passthrough(frontmatter, preserved_enrich_fields)
+
     # Use block style for lists, flow style would be less readable
     yaml_str = yaml.dump(
         frontmatter,
@@ -208,6 +212,7 @@ def generate_interaction(
     source_recording: Optional[str] = None,
     existing_frontmatter: Optional[dict] = None,
     llm_metadata: Optional[dict] = None,
+    preserved_enrich_fields: Optional[dict] = None,
 ) -> str:
     """Generate YAML frontmatter for ontology-native interaction notes."""
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -312,6 +317,9 @@ def generate_interaction(
     if llm_metadata:
         frontmatter["_llm_metadata"] = llm_metadata
 
+    # Enrich state passthrough (D12 compatibility)
+    _inject_enrich_passthrough(frontmatter, preserved_enrich_fields)
+
     yaml_str = yaml.dump(
         frontmatter,
         default_flow_style=False,
@@ -353,6 +361,42 @@ def resolve_interaction_preserved_metadata(
         "engagement": preserved_engagement,
         "participants": preserved_participants,
     }
+
+
+# ---------------------------------------------------------------------------
+# Enrich passthrough allowlist (D12)
+# ---------------------------------------------------------------------------
+
+_ENRICH_RELATIONSHIP_FIELDS = (
+    "depends_on", "draws_from", "impacts",
+    "relates_to", "supersedes", "instantiates",
+)
+
+
+def _inject_enrich_passthrough(
+    frontmatter: dict,
+    preserved_enrich_fields: Optional[dict],
+) -> None:
+    """Inject allowlisted enrich fields into frontmatter dict.
+
+    This is an ALLOWLISTED passthrough, not a free-form merge.
+    Only canonical relationship fields and ``_llm_metadata.enrich``
+    are passed through.
+    """
+    if not preserved_enrich_fields:
+        return
+
+    # Pass through canonical relationship fields
+    for field_name in _ENRICH_RELATIONSHIP_FIELDS:
+        if field_name in preserved_enrich_fields:
+            frontmatter[field_name] = preserved_enrich_fields[field_name]
+
+    # Pass through _llm_metadata.enrich
+    enrich_meta = preserved_enrich_fields.get("_llm_metadata", {}).get("enrich")
+    if enrich_meta:
+        if "_llm_metadata" not in frontmatter:
+            frontmatter["_llm_metadata"] = {}
+        frontmatter["_llm_metadata"]["enrich"] = enrich_meta
 
 
 def _collect_unique(
