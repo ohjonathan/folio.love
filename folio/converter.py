@@ -122,6 +122,7 @@ class FolioConverter:
         industry: Optional[list[str]] = None,
         extra_tags: Optional[list[str]] = None,
         llm_profile: Optional[str] = None,
+        preserved_enrich_fields: Optional[dict] = None,
     ) -> ConversionResult:
         """Convert a single PPTX/PDF to Folio markdown.
 
@@ -629,6 +630,7 @@ class FolioConverter:
             review_status=review_assessment.review_status,
             review_flags=review_assessment.review_flags,
             extraction_confidence=review_assessment.extraction_confidence,
+            preserved_enrich_fields=preserved_enrich_fields,
         )
 
         # PR 6: Build slide classification map for markdown assembly

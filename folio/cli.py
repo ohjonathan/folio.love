@@ -34,6 +34,71 @@ def _matches_scope(path: str, scope: str) -> bool:
     return path == scope or path.startswith(norm_scope)
 
 
+# Enrich relationship fields for D12 passthrough
+_ENRICH_RELATIONSHIP_FIELDS = (
+    "depends_on", "draws_from", "impacts",
+    "relates_to", "supersedes", "instantiates",
+)
+
+_ENRICH_FINGERPRINT_FIELDS = (
+    "input_fingerprint", "managed_body_fingerprint",
+    "entity_resolution_fingerprint", "relationship_context_fingerprint",
+)
+
+
+def _extract_enrich_passthrough(fm: dict) -> dict | None:
+    """Extract enrich passthrough fields from existing frontmatter.
+
+    Returns a dict suitable for ``preserved_enrich_fields`` parameter,
+    or None if nothing to preserve. Implements D12 refresh compatibility:
+    if the source_hash changed and enrich metadata exists, marks the
+    enrich block as stale and clears fingerprints and proposals.
+    """
+    if not isinstance(fm, dict):
+        return None
+
+    result: dict = {}
+
+    # Preserve canonical relationship fields (human-owned)
+    for field_name in _ENRICH_RELATIONSHIP_FIELDS:
+        if field_name in fm:
+            result[field_name] = fm[field_name]
+
+    # Preserve _llm_metadata.enrich
+    llm_meta = fm.get("_llm_metadata")
+    if isinstance(llm_meta, dict) and "enrich" in llm_meta:
+        enrich_block = dict(llm_meta["enrich"])  # shallow copy
+        result["_llm_metadata"] = {"enrich": enrich_block}
+
+    if not result:
+        return None
+
+    return result
+
+
+def _mark_enrich_stale(preserved: dict) -> None:
+    """Mark enrich metadata as stale when source hash changes.
+
+    Clears fingerprints and relationship proposals per D12.
+    """
+    enrich = preserved.get("_llm_metadata", {}).get("enrich")
+    if not enrich:
+        return
+
+    enrich["status"] = "stale"
+
+    # Clear fingerprints
+    for fp_field in _ENRICH_FINGERPRINT_FIELDS:
+        enrich.pop(fp_field, None)
+
+    # Clear relationship proposals
+    axes = enrich.get("axes")
+    if isinstance(axes, dict):
+        relationships = axes.get("relationships")
+        if isinstance(relationships, dict):
+            relationships.pop("proposals", None)
+
+
 # Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
 _RESTART_CADENCE = 15
 
@@ -929,6 +994,13 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
             # Read existing frontmatter to preserve metadata across refresh
             existing_fm = _read_existing_frontmatter(library_root / entry.markdown_path)
 
+            # Extract enrich passthrough fields (D12 compatibility)
+            preserved = _extract_enrich_passthrough(existing_fm) if existing_fm else None
+
+            # If source changed (stale entry), mark enrich as stale
+            if preserved and entry.staleness_status == "stale":
+                _mark_enrich_stale(preserved)
+
             result = converter.convert(
                 source_path=source_path,
                 client=entry.client,
@@ -937,6 +1009,7 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
                 subtype=existing_fm.get("subtype", "research") if existing_fm else "research",
                 industry=existing_fm.get("industry") if existing_fm else None,
                 extra_tags=existing_fm.get("tags") if existing_fm else None,
+                preserved_enrich_fields=preserved,
             )
             click.echo(f"✓ {entry.id} (v{result.version}, {result.slide_count} slides)")
             success += 1
