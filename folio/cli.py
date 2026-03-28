@@ -1022,6 +1022,53 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
 
 
 @cli.command()
+@click.argument("scope", required=False, default=None)
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show what would happen without writing files or calling LLM APIs.")
+@click.option("--llm-profile", default=None,
+              help="Override LLM profile (defined in folio.yaml).")
+@click.option("--force", is_flag=True, default=False,
+              help="Bypass fingerprint skip; still respects body protection rules.")
+@click.pass_context
+def enrich(ctx, scope, dry_run, llm_profile, force):
+    """Enrich existing evidence and interaction notes with tags, entities, and relationships.
+
+    Examples:
+
+        folio enrich
+
+        folio enrich ClientA
+
+        folio enrich ClientA/DD_Q1_2026 --dry-run
+
+        folio enrich --llm-profile anthropic_sonnet --force
+    """
+    config = ctx.obj["config"]
+
+    from .enrich import enrich_batch
+
+    try:
+        result = enrich_batch(
+            config,
+            scope=scope,
+            dry_run=dry_run,
+            llm_profile=llm_profile,
+            force=force,
+            echo=click.echo,
+        )
+    except ValueError as e:
+        click.echo(f"✗ Configuration error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"✗ Fatal error: {e}")
+        logger.exception("Enrich fatal error")
+        sys.exit(1)
+
+    if result.failed > 0:
+        sys.exit(1)
+
+
+@cli.command()
 @click.argument("deck_id")
 @click.argument("level", type=click.Choice(["L1", "L2", "L3"]))
 @click.pass_context
