@@ -36,6 +36,9 @@ llm:
     convert:
       primary: anthropic_sonnet
       fallbacks: [openai_gpt4o, google_gemini]
+    enrich:
+      primary: anthropic_sonnet
+      fallbacks: [openai_gpt4o]
 
 conversion:
   image_dpi: 150
