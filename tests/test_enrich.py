@@ -1271,3 +1271,117 @@ class TestEntityFingerprintNoDuplicates:
         assert ("unconfirmed", "New Person") in records
         # Must NOT have confirmed entry for created entity
         assert ("confirmed", "New Person") not in records
+
+
+# ---------------------------------------------------------------------------
+# V4 Review Fixes
+# ---------------------------------------------------------------------------
+
+class TestWikilinkWordBoundary:
+    """V4 fix 2: Wikilink replacement must use word boundaries."""
+
+    def test_substring_not_corrupted(self):
+        """'Art' must not replace inside 'Artifacts'."""
+        body = "**Visual Description:** The Artifacts dashboard shows Art trends.\n"
+        wikilink_map = {"Art": "[[Art]]"}
+        result = _insert_wikilinks_in_analysis(body, wikilink_map)
+        assert "[[Art]]ifacts" not in result
+        assert "Artifacts" in result
+        assert "[[Art]]" in result
+
+    def test_exact_match_replaced(self):
+        body = "**Key Data:** Art department metrics.\n"
+        wikilink_map = {"Art": "[[Art]]"}
+        result = _insert_wikilinks_in_analysis(body, wikilink_map)
+        assert "[[Art]] department" in result
+
+    def test_longer_name_replaced_first(self):
+        body = "**Visual Description:** Engineering Team lead reported.\n"
+        wikilink_map = {
+            "Engineering": "[[Engineering]]",
+            "Engineering Team": "[[Engineering Team]]",
+        }
+        result = _insert_wikilinks_in_analysis(body, wikilink_map)
+        assert "[[Engineering Team]]" in result
+
+
+class TestLiveEntityFingerprint:
+    """V4 fix 1: Skip check must recompute entity fp from live entities.json."""
+
+    def test_recompute_detects_confirmation(self, tmp_path):
+        """Confirming an entity must change the fingerprint."""
+        from folio.enrich import _recompute_live_entity_fp
+        from folio.tracking.entities import EntityRegistry
+        import json
+
+        # Set up entities.json with an unconfirmed entity
+        entities_data = {
+            "entities": {
+                "person": {
+                    "jane_doe": {
+                        "canonical_name": "Jane Doe",
+                        "type": "person",
+                        "aliases": [],
+                        "needs_confirmation": True,
+                        "source": "extracted",
+                    }
+                }
+            }
+        }
+        entities_path = tmp_path / "entities.json"
+        entities_path.write_text(json.dumps(entities_data))
+
+        enrich_meta = {
+            "entity_resolution_fingerprint": "sha256:old",
+            "axes": {
+                "entities": {
+                    "mentions": [
+                        {"text": "Jane Doe", "type": "person",
+                         "resolution": "unconfirmed:person/jane_doe"},
+                    ]
+                }
+            },
+        }
+
+        fp_before = _recompute_live_entity_fp(enrich_meta, entities_path)
+
+        # Now confirm the entity
+        entities_data["entities"]["person"]["jane_doe"]["needs_confirmation"] = False
+        entities_path.write_text(json.dumps(entities_data))
+
+        fp_after = _recompute_live_entity_fp(enrich_meta, entities_path)
+
+        # Fingerprints must differ — confirmation detected
+        assert fp_before != fp_after
+
+    def test_no_mentions_returns_stored(self):
+        """No stored mentions → use stored fingerprint."""
+        from folio.enrich import _recompute_live_entity_fp
+        enrich_meta = {
+            "entity_resolution_fingerprint": "sha256:stored",
+            "axes": {"entities": {}},
+        }
+        fp = _recompute_live_entity_fp(enrich_meta, None)
+        assert fp == "sha256:stored"
+
+
+class TestMultilineQuotedYaml:
+    """V4 fix 5: Multi-line quoted strings must not truncate frontmatter."""
+
+    def test_multiline_double_quoted_with_dashes(self):
+        content = (
+            '---\n'
+            'id: test\n'
+            'title: "Phase 1\n'
+            '---\n'
+            'Phase 2"\n'
+            'type: evidence\n'
+            '---\n'
+            '\n# Title\n\nBody.\n'
+        )
+        fm = {"id": "new"}
+        result = _replace_frontmatter(content, fm)
+        assert "id: new" in result
+        assert "Body." in result
+        # Old multi-line value must not leak into body
+        assert "Phase 1" not in result

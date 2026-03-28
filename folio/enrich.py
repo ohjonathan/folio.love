@@ -244,6 +244,7 @@ def plan_enrichment(
             doc_type=doc_type,
             profile_name=profile_name,
             force=force,
+            entities_path=library_root / "entities.json",
         )
 
         plan.append(EnrichPlanEntry(
@@ -266,6 +267,7 @@ def _determine_disposition(
     doc_type: str,
     profile_name: str,
     force: bool,
+    entities_path: Path | None = None,
 ) -> tuple[str, str]:
     """Determine the enrichment disposition for a note.
 
@@ -304,10 +306,13 @@ def _determine_disposition(
     if not force:
         stored_input_fp = enrich_meta.get("input_fingerprint")
         if stored_input_fp:
-            # Compute current input fingerprint
             stripped = _strip_managed_content(doc.content, doc, doc_type)
-            entity_fp = enrich_meta.get("entity_resolution_fingerprint", "")
+
+            # Recompute entity_resolution_fingerprint from live entities.json
+            # so that human confirmations trigger re-enrichment (V4 fix 1).
+            entity_fp = _recompute_live_entity_fp(enrich_meta, entities_path)
             relationship_fp = enrich_meta.get("relationship_context_fingerprint", "")
+
             current_input_fp = compute_input_fingerprint(
                 stripped, entity_fp, relationship_fp,
                 profile_name, ENRICH_SPEC_VERSION,
@@ -316,6 +321,51 @@ def _determine_disposition(
                 return "skip", "fingerprint match"
 
     return "analyze", "eligible"
+
+
+def _recompute_live_entity_fp(
+    enrich_meta: dict,
+    entities_path: Path | None,
+) -> str:
+    """Recompute entity_resolution_fingerprint from live entities.json.
+
+    Reads the stored mention records from enrich metadata, then looks up
+    each mention's current resolution status in the live entity registry.
+    This ensures human confirmations change the fingerprint.
+    """
+    axes = enrich_meta.get("axes", {})
+    mentions = axes.get("entities", {}).get("mentions", [])
+    if not mentions or not entities_path or not entities_path.exists():
+        return enrich_meta.get("entity_resolution_fingerprint", "")
+
+    from .tracking.entities import EntityRegistry
+
+    registry = EntityRegistry(entities_path)
+    try:
+        registry.load()
+    except Exception:
+        return enrich_meta.get("entity_resolution_fingerprint", "")
+
+    pairs: list[tuple[str, str]] = []
+    for m in mentions:
+        text = m.get("text", "")
+        etype = m.get("type", "")
+        # Look up current status in live registry
+        results = registry.lookup(text, entity_type=etype)
+        if results:
+            _et, key, entry = results[0]
+            if entry.needs_confirmation:
+                if entry.proposed_match:
+                    resolution = f"proposed_match:{_et}/{key}"
+                else:
+                    resolution = f"unconfirmed:{_et}/{key}"
+            else:
+                resolution = f"confirmed:{_et}/{key}"
+        else:
+            resolution = "unresolved"
+        pairs.append((text, resolution))
+
+    return compute_entity_resolution_fingerprint(pairs)
 
 
 # ---------------------------------------------------------------------------
@@ -1035,10 +1085,26 @@ def _insert_wikilinks_in_analysis(body: str, wikilink_map: dict[str, str]) -> st
             for prefix in ("**Visual Description:**", "**Key Data:**", "**Main Insight:**")
         )
         if is_prose_field:
-            for name, wikilink in wikilink_map.items():
+            # Sort by name length descending so longer names replace first,
+            # preventing "Art" from matching inside "Artifacts" (V4 fix 2).
+            replaced_names: set[str] = set()
+            for name, wikilink in sorted(
+                wikilink_map.items(), key=lambda x: len(x[0]), reverse=True,
+            ):
+                # Skip if a longer name containing this one was already replaced
+                if any(name in rn for rn in replaced_names):
+                    continue
                 if name in line and wikilink not in line:
-                    # Simple first-occurrence replacement
-                    line = line.replace(name, wikilink, 1)
+                    # Word-boundary replacement to avoid substring corruption
+                    new_line = re.sub(
+                        r'\b' + re.escape(name) + r'\b',
+                        wikilink,
+                        line,
+                        count=1,
+                    )
+                    if new_line != line:
+                        line = new_line
+                        replaced_names.add(name)
 
         result_lines.append(line)
 
@@ -1184,16 +1250,28 @@ def _replace_frontmatter(content: str, fm: dict) -> str:
 
     # Find closing --- by scanning lines, skipping the opening delimiter.
     # The closing delimiter must be a line that is exactly '---' (possibly
-    # with trailing whitespace), outside any YAML block scalar.
+    # with trailing whitespace), outside any YAML block scalar or multi-line
+    # quoted string.
     lines = content.split("\n")
     in_block_scalar = False
     block_indent: int | None = None
+    in_quoted: str | None = None  # tracks open quote char (' or ")
 
     for i, line in enumerate(lines):
         if i == 0:
             continue  # skip opening ---
 
         stripped = line.rstrip()
+
+        # Track multi-line quoted strings (V4 fix 5).
+        # A quoted value that spans multiple lines keeps the quote open.
+        if in_quoted:
+            # Count unescaped quote chars to detect close
+            if in_quoted in stripped:
+                # Simple heuristic: if the quote char appears, the string ends
+                in_quoted = None
+            # While inside a quoted string, skip all other checks
+            continue
 
         # Track YAML block scalars (| or > indicators)
         if in_block_scalar:
@@ -1225,7 +1303,19 @@ def _replace_frontmatter(content: str, fm: dict) -> str:
                 ahead = lines[j]
                 if ahead.strip():
                     block_indent = len(ahead) - len(ahead.lstrip())
-                    break
+
+        # Detect multi-line quoted string opening.
+        # Pattern: key: "value without closing quote  OR  key: 'value without closing quote
+        if not in_block_scalar:
+            m = re.match(r'^[^#]*:\s+(["\'])', line)
+            if m:
+                quote_char = m.group(1)
+                # Count occurrences of the quote char after the opening one
+                after_open = line[m.end():]
+                # If the quote isn't closed on this line, we're in a multi-line string
+                if after_open.count(quote_char) % 2 == 0:
+                    # Even count (0, 2, ...) means no unmatched close
+                    in_quoted = quote_char
 
     # Fallback: no closing delimiter found, prepend
     return new_fm + "\n\n" + content
