@@ -20,9 +20,17 @@ from dataclasses import dataclass, field
 # ---------------------------------------------------------------------------
 
 def _fenced_block_ranges(content: str) -> list[tuple[int, int]]:
-    """Return (start, end) char ranges of all fenced code blocks in content."""
+    """Return (start, end) char ranges of all fenced code blocks in content.
+
+    Handles both backtick (```) and tilde (~~~) fences per CommonMark.
+    The closing fence must use the same character as the opening fence.
+    """
     ranges = []
-    for m in re.finditer(r"^```[^\n]*\n.*?^```", content, re.MULTILINE | re.DOTALL):
+    for m in re.finditer(
+        r"^(`{3,}|~{3,})[^\n]*\n.*?^\1",
+        content,
+        re.MULTILINE | re.DOTALL,
+    ):
         ranges.append((m.start(), m.end()))
     return ranges
 

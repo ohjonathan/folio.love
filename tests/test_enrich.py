@@ -1161,3 +1161,113 @@ class TestSingularSupersedesConfidence:
         assert len(supersedes) == 1
         assert supersedes[0].confidence == "high"
         assert supersedes[0].target_id == "t2"
+
+
+# ---------------------------------------------------------------------------
+# V2 Review Fixes
+# ---------------------------------------------------------------------------
+
+class TestFrontmatterBlockScalarFalsePositive:
+    """B1-V2: > in normal YAML values must not trigger block-scalar mode."""
+
+    def test_greater_than_in_quoted_value(self):
+        content = (
+            "---\n"
+            "id: test\n"
+            "note: 'value > comparison'\n"
+            "---\n"
+            "\n# Title\n\nBody.\n"
+        )
+        fm = {"id": "updated"}
+        result = _replace_frontmatter(content, fm)
+        assert "id: updated" in result
+        assert "Body." in result
+        # Old frontmatter must be fully replaced
+        assert "value > comparison" not in result
+
+    def test_greater_than_unquoted_value(self):
+        content = (
+            "---\n"
+            "id: test\n"
+            "compare: x > y\n"
+            "---\n"
+            "\n# Title\n\nBody.\n"
+        )
+        fm = {"id": "new"}
+        result = _replace_frontmatter(content, fm)
+        assert "id: new" in result
+        assert "Body." in result
+
+    def test_real_block_scalar_still_works(self):
+        content = (
+            "---\n"
+            "id: test\n"
+            "description: |\n"
+            "  line one\n"
+            "  ---\n"
+            "  line two\n"
+            "---\n"
+            "\n# Title\n\nBody.\n"
+        )
+        fm = {"id": "new"}
+        result = _replace_frontmatter(content, fm)
+        assert "id: new" in result
+        assert "Body." in result
+        assert "line one" not in result
+
+    def test_block_scalar_with_chomping(self):
+        content = (
+            "---\n"
+            "id: test\n"
+            "text: |+\n"
+            "  keep trailing\n"
+            "  ---\n"
+            "---\n"
+            "\n# Title\n\nBody.\n"
+        )
+        fm = {"id": "new"}
+        result = _replace_frontmatter(content, fm)
+        assert "id: new" in result
+        assert "Body." in result
+
+
+class TestEntityFingerprintNoDuplicates:
+    """B2-V2: Created entities must not be duplicated in mention records."""
+
+    def test_created_entity_not_stamped_as_confirmed(self):
+        """Auto-created entity should appear once with unconfirmed prefix."""
+        from folio.pipeline.entity_resolution import ResolutionResult, CreatedEntity
+
+        result = ResolutionResult(
+            entities={"people": ["Known Person", "New Person"]},
+            warnings=[],
+            created_entities=[
+                CreatedEntity(
+                    entity_type="person",
+                    key="new_person",
+                    canonical_name="New Person",
+                    proposed_match=None,
+                ),
+            ],
+        )
+
+        # Simulate the mention record building logic
+        created_names = {c.canonical_name for c in result.created_entities}
+        records = []
+
+        for category, names in result.entities.items():
+            for name in names:
+                if name in created_names:
+                    continue
+                records.append(("confirmed", name))
+
+        for created in result.created_entities:
+            prefix = "proposed_match" if created.proposed_match else "unconfirmed"
+            records.append((prefix, created.canonical_name))
+
+        # "Known Person" confirmed, "New Person" unconfirmed — no duplicates
+        assert len(records) == 2
+        assert ("confirmed", "Known Person") in records
+        assert ("unconfirmed", "New Person") in records
+        # Must NOT have confirmed entry for created entity
+        assert ("confirmed", "New Person") not in records

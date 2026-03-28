@@ -395,9 +395,16 @@ def enrich_note(
             warnings.extend(resolution_result.warnings)
 
             # Build mention records with spec-defined status prefixes
-            # (confirmed/unconfirmed/proposed_match/unresolved)
+            # (confirmed/unconfirmed/proposed_match/unresolved).
+            # created_entities overlap with resolution_result.entities
+            # (both contain auto-created names), so build a skip set to
+            # avoid duplicates and wrong confirmed: labels (B2 fix).
+            created_names = {c.canonical_name for c in resolution_result.created_entities}
+
             for category, names in resolution_result.entities.items():
                 for name in names:
+                    if name in created_names:
+                        continue  # handled below with correct prefix
                     entity_mention_records.append({
                         "text": name,
                         "type": category,
@@ -1205,9 +1212,11 @@ def _replace_frontmatter(content: str, fm: dict) -> str:
             rest_start = sum(len(l) + 1 for l in lines[:i + 1])
             return new_fm + content[rest_start - 1:]
 
-        # Detect block scalar start: line ending with | or > (with optional
-        # chomping/indentation indicators)
-        if not in_block_scalar and re.match(r"^[^#]*:\s+[|>]", line):
+        # Detect block scalar start: value is a block scalar indicator
+        # (| or >) optionally followed by chomping (+/-) and/or indent digit.
+        # Must be the sole value content to avoid false positives on strings
+        # containing > (e.g. "note: x > y").
+        if not in_block_scalar and re.match(r"^[^#]*:\s+[|>][+-]?\d*\s*(#.*)?$", line):
             in_block_scalar = True
             # Block indent determined by first non-empty continuation line
             block_indent = None

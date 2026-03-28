@@ -308,6 +308,48 @@ Content.
         assert "## Real 1" in headings
         assert "## Real 2" in headings
 
+    def test_tilde_fence_headings_ignored(self):
+        """B3-V2: ~~~ fences must also suppress heading detection."""
+        content = """\
+# Title
+
+~~~markdown
+## Fake Heading In Tilde Fence
+
+Not a real section.
+~~~
+
+## Real Section
+
+Real content.
+"""
+        doc = MarkdownDocument(content)
+        headings = [s.heading for s in doc.all_sections]
+        assert "## Fake Heading In Tilde Fence" not in headings
+        assert "# Title" in headings
+        assert "## Real Section" in headings
+
+    def test_tilde_fence_does_not_close_backtick_fence(self):
+        """Tilde closing fence must not close a backtick opening fence."""
+        content = """\
+# Title
+
+```
+## Inside Backtick
+~~~
+## Still Inside Backtick
+```
+
+## After Fence
+
+Content.
+"""
+        doc = MarkdownDocument(content)
+        headings = [s.heading for s in doc.all_sections]
+        assert "## Inside Backtick" not in headings
+        assert "## Still Inside Backtick" not in headings
+        assert "## After Fence" in headings
+
 
 # ---------------------------------------------------------------------------
 # Managed sections
