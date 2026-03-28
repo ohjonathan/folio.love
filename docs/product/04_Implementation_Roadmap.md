@@ -18,7 +18,7 @@ generated_by: ontos_scaffold
 
 ## March 2026 Status Update
 
-Since this roadmap was published, `main` has shipped eight important baseline
+Since this roadmap was published, `main` has shipped ten important baseline
 changes:
 
 - PR #8: multi-provider LLM analysis for `folio convert` / `folio batch`
@@ -46,14 +46,31 @@ changes:
   `interaction` notes, mixed-library registry generalization, `routing.ingest`,
   degraded-output handling, and interaction-aware `status` / `scan` /
   `refresh`)
+- PR #34: Tier 3 entity registry foundation (`entities.json`, `folio entities`,
+  `folio entities import <csv>`, confirmation workflow, and entity-aware
+  status summaries)
+- PR #35: Tier 3 ingest-time entity resolution (confirmed-only exact and alias
+  matching, bounded LLM soft-match proposals, canonical wikilink rendering,
+  and unresolved-entity review flow)
 
 This does **not** change the roadmap hierarchy. It does change the current
 implementation baseline: multi-provider LLM support is now shipped foundation,
 the managed-mac automated PPTX conversion path has been rerun successfully on
 the real Tier 1 corpus, and the enterprise-scale batch path now includes the
 first round of runtime-waste controls discovered in field deployment. Tier 3 is
-no longer purely planned scope: the first Week 13-15 slice (`folio ingest`) is
-now shipped on `main`.
+no longer purely planned scope: the Week 13-15 interaction-ingestion slice and
+the Week 16-18 entity-system slice are now shipped on `main`.
+
+Late-March validation also changed the **operational baseline**. The Tier 2
+platform model-comparison package is finalized, and its recorded per-stage
+winners differ from the single-route runtime path currently available on
+`main`. A full-corpus rerun with `anthropic_haiku45` did **not** beat the
+existing production `anthropic_sonnet4` library overall, so the production
+library was retained and selectively improved with 12 blind-validated
+`haiku45` merges. Real vault validation then passed that production library to
+PR C (`folio enrich`). See
+`docs/product/2026-03_late_march_status_update.md` for the full status delta
+since the last shared PRD/roadmap sync.
 
 Current Tier 1 reality after PR #14:
 
@@ -109,9 +126,11 @@ The brainstorm session confirmed a dual ontology (Space + Time) and introduced s
 - `engagement` field required at L1+ for engagement-scoped types
 - Frontmatter as single source of truth for relationships (wikilinks derived by `folio enrich`)
 
+**Already shipped on `main`:**
+- Interaction ingestion pipeline (Tier 3, PR #32)
+- Entity registry, import, and ingest-time name resolution (Tier 3, PR #34/#35)
+
 **Build later (requires infrastructure):**
-- Interaction ingestion pipeline (Tier 3)
-- Entity extraction, registry, and name resolution (Tier 3)
 - Enrichment engine that generates wikilinks from frontmatter and promotes manual wikilinks (Tier 3)
 - Temporal roll-ups as Analysis/digest documents (Tier 4)
 - Semantic search (Tier 4)
@@ -322,16 +341,20 @@ The unchecked boxes remain the canonical gate list.
 | Configuration supports named LLM profiles and credential references | Achieved | Named profiles, credential env-var references, route-based selection, and single-command override are all in current `main` and exercised in the accelerated run |
 | Johnny uses it daily on real engagement for 2+ weeks | Not yet complete | The accelerated pre-closeout explicitly does not satisfy the formal 2-week daily-use criterion |
 
-Current program status after PR #32:
+Current program status after the late-March validation cycle:
 
-- Tier 2 implementation is on `main`
-- Accelerated operational validation found no systematic blockers
-- Tier 3 planning can proceed in parallel
-- Formal Tier 2 closeout is still pending the remaining gate items above
-- Tier 3 implementation began under the explicit waiver recorded in
+- Tier 2 implementation remains on `main`, though formal Tier 2 closeout is
+  still pending the remaining gate items above
+- Tier 3 implementation is proceeding under the explicit waiver recorded in
   `docs/validation/tier2_to_tier3_waiver_note.md`
-- Week 13-15 interaction ingestion is now shipped on `main` via PR #32
-- The next active Tier 3 slice is Week 16-18: Entity System
+- Week 13-15 interaction ingestion is shipped on `main` via PR #32
+- Week 16-18 entity registry and ingest-time resolution are shipped on `main`
+  via PR #34 and PR #35
+- The Tier 2 model-comparison package, full-corpus rerun, and real vault
+  validation have all completed
+- The production `sonnet4` library, selectively improved with 12 blind-
+  validated `haiku45` merges, is the baseline for the next slice
+- The next active Tier 3 slice is Week 19-20 / PR C: `folio enrich`
 
 ---
 
@@ -371,26 +394,38 @@ structured, linked interaction note.
 
 ### Week 16-18: Entity System
 
-**Status:** Next active Tier 3 slice.
+**Status:** Shipped on `main` in PR #34 and PR #35.
 
-- Entity registry (JSON file or markdown directory) for known people, departments, systems
-- Name resolution during ingest: LLM proposes matches against registry, flags ambiguous cases
-- `folio entities` command to view/manage registry
-- `folio entities import <csv>` for bulk import (org chart)
-- Entity wikilinks auto-created during ingest and enrich
-- Person nodes with: name, title, department, reports_to
+- `entities.json` registry for known people, departments, systems, and processes
+- `folio entities` command family for list/show/import/confirm/reject
+- `folio entities import <csv>` for org-chart bulk import
+- Ingest-time name resolution against confirmed entities using exact
+  canonical-name and alias matching
+- Bounded LLM-proposed soft matches with human confirmation
+- Unresolved entities auto-created as unconfirmed so they are visible for
+  follow-up but excluded from future resolution until confirmed
+- Canonical entity wikilinks rendered during ingest and re-ingest
 
 **Design constraint:** v1 entity resolution is exact-match + LLM-proposed soft-match with human confirmation. No fuzzy matching algorithm. Keep it simple.
 
-**Deliverable:** People and departments are linked across interactions. "Show me all interviews mentioning Engineering" works via Obsidian search.
+**Deliverable:** Achieved. People, departments, systems, and processes can be
+tracked in a canonical registry, and interaction notes can resolve common cases
+to stable entity names during ingest.
 
 ### Week 19-20: Enrichment & Provenance
+
+**Status:** Next active Tier 3 slice.
 
 - `folio enrich [scope]` command for post-hoc LLM enrichment
 - Enrichment pass adds: tags, relationship links, entity extraction to existing assets
 - Retroactive provenance linking: match deliverable claims against library evidence
 - Human confirmation step for proposed provenance links
 - Relationship types active: depends_on, draws_from, impacts
+
+**Current baseline for this phase:** start from the production
+`anthropic_sonnet4` library plus the 12 blind-validated `haiku45` merges
+confirmed during the late-March rerun/validation cycle. PR C is no longer
+blocked on entity-system work or rerun completion.
 
 **Deliverable:** Even messy, fast-produced deliverables get connected to the clean library.
 
@@ -418,9 +453,9 @@ structured, linked interaction note.
 | Checkpoint | Current Status | Evidence / Notes |
 |-----------|----------------|------------------|
 | `folio ingest` converts transcript to structured interaction in <60 seconds | Shipped, but real-engagement timing still needs explicit field validation | PR #32 merged the feature and passing tests; formal timing validation on engagement materials is still outstanding |
-| Entity registry tracks people, departments, systems | Not started | Week 16-18 is now the next active slice |
-| Name resolution works for common cases | Not started | Deferred to the entity system slice |
-| `folio enrich` adds tags and links to existing assets | Not started | Still blocked behind the entity system and real-library rerun |
+| Entity registry tracks people, departments, systems | Shipped | PR #34 added the registry, CLI, CSV import, and confirmation workflow on `main` |
+| Name resolution works for common cases | Shipped for exact/alias matching plus LLM-proposed soft match with human confirmation | PR #35 added confirmed-only exact/alias resolution, bounded soft-match proposals, and unresolved-entity review flow |
+| `folio enrich` adds tags and links to existing assets | Not started | Next active slice. Use the production `sonnet4` library plus the 12 validated `haiku45` merges as the PR C input baseline |
 | Retroactive provenance links deliverable slides to evidence | Not started | Still a later Tier 3 slice |
 | Context documents provide engagement scaffolding | Not started | Planned for Week 21-22 |
 | Full engagement lifecycle tested end-to-end | Not started | Depends on entities, enrich, and context docs landing first |
@@ -498,8 +533,12 @@ folio promote <id> <level>
 ### Tier 3 (engagement intelligence)
 ```bash
 folio ingest <file> --type <subtype> --date YYYY-MM-DD [--client X] [--engagement Y] [--participants "A, B"] [--llm-profile profile]
+folio entities [--type person|department|system|process] [--unconfirmed]
+folio entities show <name> [--type person|department|system|process]
+folio entities import <csv>
+folio entities confirm <name>
+folio entities reject <name>
 folio enrich [scope]
-folio entities [view|import <csv>]
 folio link <id> <id> [type]
 ```
 
@@ -566,19 +605,19 @@ folio vocab
 - ID convention: **Date-based.** `{client}_{engagement-short}_{type-short}_{date}_{descriptor}`.
 - Impact on Hypotheses at L0: **Empty stub.** Human fills at L1, enrichment refines at L2.
 - `project` vs `engagement`: **Resolved in docs/schema.** `engagement` is the metadata field; filesystem paths may still use project-like folder names.
+- Entity resolution in v1: **Resolved.** Exact canonical-name match + alias match + bounded LLM soft match + human confirmation. No algorithmic fuzzy matcher.
+- Org chart import format: **Resolved for v1.** CSV via `folio entities import <csv>`.
 
 **Still open:**
 
 | # | Question | Tier | Notes |
 |---|----------|------|-------|
 | 1 | Semantic search architecture (embedding model, index, query interface) | 4 | Don't decide until query patterns are clear. |
-| 2 | Entity resolution specifics (fuzzy matching approach) | 3 | v1: exact match + LLM soft match + human confirmation. |
-| 3 | File watcher vs manual trigger for digest | 4 | Manual trigger for v1. |
-| 4 | Context as standalone type vs metadata | 3 | Current spec: standalone document. Validate during Tier 3. |
-| 5 | Org chart export format | 3 | Research what Johnny can actually export. CSV likely. |
-| 6 | OneNote → Markdown pathway | 3 | Copy-paste for v1. Research better paths as side task. |
-| 7 | PyPI package name availability (`folio`) | 2 | Check before Tier 2 packaging work. |
-| 8 | LLM cost management at scale | 2 | Estimate per-deck cost. Consider capping batch operations. |
+| 2 | File watcher vs manual trigger for digest | 4 | Manual trigger for v1. |
+| 3 | Context as standalone type vs metadata | 3 | Current spec: standalone document. Validate during Tier 3. |
+| 4 | OneNote → Markdown pathway | 3 | Copy-paste for v1. Research better paths as side task. |
+| 5 | PyPI package name availability (`folio`) | 2 | Check before Tier 2 packaging work. |
+| 6 | LLM cost management at scale | 2 | Estimate per-deck cost. Consider capping batch operations. |
 
 ---
 
