@@ -17,7 +17,7 @@ PR #34, and PR #35. Expanded the FR-400 and FR-500 families to cover
 `entities.json`, the `folio entities` command family, and ingest-time entity
 resolution. Clarified the current late-March pre-PR-C baseline and linked the
 detailed status delta in
-`docs/product/2026-03_late_march_status_update.md`. See
+`docs/product/tier3_baseline_decision_memo.md`. See
 `docs/product/strategic_direction_memo.md` for governing principles.
 
 ---
@@ -341,6 +341,13 @@ The system SHALL maintain a separate `entities.json` at the library root with:
 
 The entity registry is distinct from `registry.json`: entities are graph nodes,
 not managed markdown documents.
+
+For the current shipped Tier 3 baseline, the registry contract is broader than
+the most heavily exercised ingest-time extraction path: registry storage,
+import, and review support all four entity types, while the first production
+ingest-resolution pass has been exercised most heavily on people and
+departments. Broader production-scale entity backfill remains later Tier 3
+work.
 
 **Acceptance Criteria:**
 - [ ] `entities.json` persists the four shipped entity types

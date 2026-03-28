@@ -69,7 +69,7 @@ existing production `anthropic_sonnet4` library overall, so the production
 library was retained and selectively improved with 12 blind-validated
 `haiku45` merges. Real vault validation then passed that production library to
 PR C (`folio enrich`). See
-`docs/product/2026-03_late_march_status_update.md` for the full status delta
+`docs/product/tier3_baseline_decision_memo.md` for the full status delta
 since the last shared PRD/roadmap sync.
 
 Current Tier 1 reality after PR #14:
@@ -427,6 +427,10 @@ to stable entity names during ingest.
 confirmed during the late-March rerun/validation cycle. PR C is no longer
 blocked on entity-system work or rerun completion.
 
+**Planning note:** A dedicated PRD FR block for `folio enrich` still needs to
+be drafted before PR C implementation starts. The current roadmap status only
+locks the baseline and sequencing.
+
 **Deliverable:** Even messy, fast-produced deliverables get connected to the clean library.
 
 ### Week 21-22: Context Documents & Integration
@@ -613,11 +617,12 @@ folio vocab
 | # | Question | Tier | Notes |
 |---|----------|------|-------|
 | 1 | Semantic search architecture (embedding model, index, query interface) | 4 | Don't decide until query patterns are clear. |
-| 2 | File watcher vs manual trigger for digest | 4 | Manual trigger for v1. |
-| 3 | Context as standalone type vs metadata | 3 | Current spec: standalone document. Validate during Tier 3. |
-| 4 | OneNote → Markdown pathway | 3 | Copy-paste for v1. Research better paths as side task. |
-| 5 | PyPI package name availability (`folio`) | 2 | Check before Tier 2 packaging work. |
-| 6 | LLM cost management at scale | 2 | Estimate per-deck cost. Consider capping batch operations. |
+| 2 | Entity resolution beyond v1 (production-scale exercise, enrichment-time backfill) | 3 | v1 shipped: exact + alias + bounded LLM soft match. Production exercise and enrichment-time entity backfill remain untested. |
+| 3 | File watcher vs manual trigger for digest | 4 | Manual trigger for v1. |
+| 4 | Context as standalone type vs metadata | 3 | Current spec: standalone document. Validate during Tier 3. |
+| 5 | OneNote → Markdown pathway | 3 | Copy-paste for v1. Research better paths as side task. |
+| 6 | PyPI package name availability (`folio`) | 2 | Check before Tier 2 packaging work. |
+| 7 | LLM cost management at scale | 2 | Estimate per-deck cost. Consider capping batch operations. |
 
 ---
 

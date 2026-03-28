@@ -1,5 +1,5 @@
 ---
-id: late_march_status_update_20260327
+id: tier3_baseline_decision_memo_20260327
 type: atom
 status: active
 ontos_schema: 2.2
@@ -15,7 +15,7 @@ depends_on:
   - tier3_kickoff_checklist
 ---
 
-# Late-March 2026 Status Update
+# Tier 3 Baseline Decision Memo
 
 This memo records what changed across the product baseline after the last
 shared PRD/roadmap sync at commit `6c9b25d` (`docs(product): reflect PR30
@@ -65,7 +65,6 @@ and operationally validated Tier 3 state.
 ### 2.1 PR #32 — `folio ingest` interaction baseline
 
 - **Merge commit:** `490f2f9`
-- **PR title:** `feat: folio ingest — interaction ingestion pipeline`
 
 This shipped the first Tier 3 slice:
 
@@ -99,7 +98,6 @@ identity rules.
 ### 2.2 PR #34 — entity registry foundation
 
 - **Merge commit:** `e322660`
-- **PR title:** entity registry / PR A
 
 This shipped the entity-system foundation:
 
@@ -123,7 +121,6 @@ for creating and reviewing entity data.
 ### 2.3 PR #35 — ingest-time entity resolution
 
 - **Merge commit:** `2a61d02`
-- **PR title:** ingest-time entity resolution / PR B
 
 This shipped the second half of the entity system:
 
@@ -255,21 +252,18 @@ another rerun or another model-default experiment.
 
 The most important product-baseline changes are:
 
-### 4.1 Tier 3 baseline is no longer “ingest only”
+### 4.1 Tier 3 baseline now includes ingest plus the first shipped entity layer
 
-Tier 3 baseline now includes three shipped slices:
-
-- PR #32: interaction ingestion
-- PR #34: entity registry foundation
-- PR #35: ingest-time entity resolution
-
-That means the current shipped Tier 3 baseline already supports:
+The current shipped Tier 3 baseline already supports:
 
 - interaction notes as a real document family
 - entity registry management
 - org-chart CSV import
 - confirmed/unconfirmed entity review flow
 - canonicalization of common entity mentions during ingest
+
+This is the baseline shift from “Tier 3 planning” to “Tier 3 already in
+production use for ingest and entity management.”
 
 ### 4.2 Production library baseline is now “best-of-both,” not pure sonnet4
 
@@ -372,6 +366,8 @@ PR C should assume:
 - interaction ingestion is already shipped
 - entity registry and ingest-time resolution are already shipped
 - per-stage routing is not a prerequisite
+- a dedicated PRD FR family for `folio enrich` still needs to be drafted
+  before implementation
 
 PR C should likely absorb or explicitly plan around two known follow-up issues:
 

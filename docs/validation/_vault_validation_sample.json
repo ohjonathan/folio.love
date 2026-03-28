@@ -1,0 +1,317 @@
+[
+  {
+    "category": "simple_narrative",
+    "sample_id": "SIMPLE_01",
+    "path": "GROUP_A/SIMPLE_01/SIMPLE_01.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 1,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 1,
+    "diagram_notes_count": 1,
+    "body_sections": 4,
+    "body_length": 1003,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_001/SOURCE_001.pdf"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "simple_narrative",
+    "sample_id": "SIMPLE_02",
+    "path": "GROUP_A/SIMPLE_02/SIMPLE_02.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 1,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 1,
+    "diagram_notes_count": 1,
+    "body_sections": 4,
+    "body_length": 1528,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_002/SOURCE_002.pptx"
+    ],
+    "extraction_confidence": 0.59
+  },
+  {
+    "category": "simple_narrative",
+    "sample_id": "SIMPLE_03",
+    "path": "GROUP_A/SIMPLE_03/SIMPLE_03.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 2,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 2,
+    "diagram_notes_count": 1,
+    "body_sections": 8,
+    "body_length": 6206,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_003/SOURCE_003.pdf"
+    ],
+    "extraction_confidence": 0.88
+  },
+  {
+    "category": "dense_multipage",
+    "sample_id": "DENSE_01",
+    "path": "GROUP_B/DENSE_01/DENSE_01.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 137,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 137,
+    "diagram_notes_count": 130,
+    "body_sections": 409,
+    "body_length": 393335,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_004/SOURCE_004.pdf"
+    ],
+    "extraction_confidence": 0.59
+  },
+  {
+    "category": "dense_multipage",
+    "sample_id": "DENSE_02",
+    "path": "GROUP_B/DENSE_02/DENSE_02.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 44,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 44,
+    "diagram_notes_count": 44,
+    "body_sections": 131,
+    "body_length": 132060,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_005/SOURCE_005.pdf"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "dense_multipage",
+    "sample_id": "DENSE_03",
+    "path": "GROUP_B/DENSE_03/DENSE_03.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 90,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 90,
+    "diagram_notes_count": 85,
+    "body_sections": 270,
+    "body_length": 251033,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_006/SOURCE_006.pdf"
+    ],
+    "extraction_confidence": 0.59
+  },
+  {
+    "category": "diagram_heavy",
+    "sample_id": "DIAGRAM_01",
+    "path": "GROUP_C/DIAGRAM_01/DIAGRAM_01.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 1,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 1,
+    "diagram_notes_count": 1,
+    "body_sections": 5,
+    "body_length": 4882,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_007/SOURCE_007.pdf"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "diagram_heavy",
+    "sample_id": "DIAGRAM_02",
+    "path": "GROUP_C/DIAGRAM_02/DIAGRAM_02.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 3,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 3,
+    "diagram_notes_count": 3,
+    "body_sections": 11,
+    "body_length": 11635,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_008/SOURCE_008.pdf"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "diagram_heavy",
+    "sample_id": "DIAGRAM_03",
+    "path": "GROUP_C/DIAGRAM_03/DIAGRAM_03.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 1,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 1,
+    "diagram_notes_count": 1,
+    "body_sections": 5,
+    "body_length": 3930,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_009/SOURCE_009.pdf"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "merged_haiku45",
+    "sample_id": "MERGED_01",
+    "path": "GROUP_D/MERGED_01/MERGED_01.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 20,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 20,
+    "diagram_notes_count": 15,
+    "body_sections": 27,
+    "body_length": 23598,
+    "issues": [
+      "Source file missing: CURRENT_ARCHITECTURE_SOURCE_ROOT/DIR_010/SOURCE_010.pdf"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "merged_haiku45",
+    "sample_id": "MERGED_02",
+    "path": "GROUP_D/MERGED_02/MERGED_02.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 20,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 20,
+    "diagram_notes_count": 20,
+    "body_sections": 27,
+    "body_length": 28667,
+    "issues": [
+      "Source file missing: CURRENT_ARCHITECTURE_SOURCE_ROOT/DIR_011/SOURCE_011.pptx"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "merged_haiku45",
+    "sample_id": "MERGED_03",
+    "path": "GROUP_D/MERGED_03/MERGED_03.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 2,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 2,
+    "diagram_notes_count": 1,
+    "body_sections": 8,
+    "body_length": 6192,
+    "issues": [
+      "Source file missing: CURRENT_ARCHITECTURE_SOURCE_ROOT/DIR_012/SOURCE_012.pdf"
+    ],
+    "extraction_confidence": 0.88
+  },
+  {
+    "category": "merged_haiku45",
+    "sample_id": "MERGED_04",
+    "path": "GROUP_D/MERGED_04/MERGED_04.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 6,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 6,
+    "diagram_notes_count": 0,
+    "body_sections": 19,
+    "body_length": 20679,
+    "issues": [
+      "Source file missing: CURRENT_ARCHITECTURE_SOURCE_ROOT/DIR_013/SOURCE_013.pptx"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "entity_heavy",
+    "sample_id": "ENTITY_01",
+    "path": "GROUP_E/ENTITY_01/ENTITY_01.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 29,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 29,
+    "diagram_notes_count": 19,
+    "body_sections": 88,
+    "body_length": 80871,
+    "issues": [
+      "Source file missing: LEGACY_SOURCE_ROOT/DIR_014/SOURCE_014.pdf"
+    ],
+    "extraction_confidence": 0.9
+  },
+  {
+    "category": "entity_heavy",
+    "sample_id": "ENTITY_02",
+    "path": "GROUP_E/ENTITY_02/ENTITY_02.md",
+    "exists": true,
+    "yaml_ok": true,
+    "fields_ok": true,
+    "missing_fields": [],
+    "review_status": "flagged",
+    "slide_count": 1,
+    "source_exists": false,
+    "slides_dir_exists": true,
+    "slide_images_count": 1,
+    "diagram_notes_count": 1,
+    "body_sections": 5,
+    "body_length": 7253,
+    "issues": [
+      "Source file missing: CURRENT_ARCHITECTURE_SOURCE_ROOT/DIR_015/SOURCE_015.pdf"
+    ],
+    "extraction_confidence": 0.9
+  }
+]

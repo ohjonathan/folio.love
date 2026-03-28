@@ -9,7 +9,7 @@ generated_by: ontos_scaffold
 
 # Folio: Feature Prioritization Matrix
 
-**Version 2.0 | February 2026**  
+**Version 2.1 | March 2026**
 **folio.love**
 
 ---
@@ -74,22 +74,22 @@ CLI, multi-project organization, and Obsidian compatibility. This is what makes 
 
 ---
 
-## Tier 3: Engagement Intelligence (Build During/After First Full Engagement)
+## Tier 3: Engagement Intelligence (Partly Shipped, Continue During Engagement)
 
 This is where the February brainstorm features land. They require Tier 1+2 to be live and generating real content.
 
 | ID | Feature | Value | Effort | Risk | Rationale |
 |----|---------|-------|--------|------|-----------|
-| F-301 | `folio ingest` (transcript/notes to interaction MD) | **Very High** | 2 weeks | Low | Solves the core pain point: 5 manual steps per meeting → 1 command. LLM summarization + structured output. |
-| F-302 | Interaction subtypes (client_meeting, expert_interview, etc.) | High | 0.5 weeks | Low | Frontmatter classification. Drives different summary templates. |
-| F-303 | Basic entity extraction (people, depts as wikilinks) | High | 1.5 weeks | Medium | LLM extracts entities during ingest. Creates `[[wikilinks]]`. No registry yet, just inline linking. |
-| F-304 | Entity registry (people/depts/systems) | High | 2 weeks | Medium | Markdown files or JSON registry for known entities. Name resolution against registry during ingest. |
+| F-301 | `folio ingest` (transcript/notes to interaction MD) | **Very High** | 2 weeks | Low | **Shipped on `main` (PR #32).** Converts transcript/notes sources into ontology-native interaction notes with re-ingest identity and degraded-output handling. |
+| F-302 | Interaction subtypes (client_meeting, expert_interview, etc.) | High | 0.5 weeks | Low | **Shipped on `main` (PR #32).** Subtype-specific interaction analysis and output shapes now exist in the baseline. |
+| F-303 | Ingest-time entity extraction and canonical wikilinks | High | 1.5 weeks | Medium | **Shipped on `main` (PR #35).** v1 supports exact/alias resolution, bounded LLM soft-match proposals, and unresolved-entity follow-up; broader production-scale entity backfill remains open. |
+| F-304 | Entity registry and review workflow | High | 2 weeks | Medium | **Shipped on `main` (PR #34/#35).** `entities.json`, `folio entities`, CSV import, confirmation/rejection flow, and ingest-time registry use are in the current baseline. |
 | F-305 | `folio enrich` (LLM enrichment pass) | High | 1.5 weeks | Medium | Post-hoc tagging, linking, entity extraction. Generates wikilink "Related" section from frontmatter. Detects manual wikilinks and offers to promote to frontmatter. |
 | F-306 | Retroactive provenance linking | Medium | 1 week | Medium | During enrich, match deliverable claims against library evidence. Human confirms. |
 | F-307 | Relationship types (depends_on, draws_from, impacts) | Medium | 1 week | Low | Frontmatter is source of truth. Wikilinks derived. Start with 3 types per recommendation. |
 | F-308 | Context documents (engagement scaffolding) | Medium | 0.5 weeks | Low | Template for client/engagement/SOW context. Single source of engagement metadata. |
 
-**Tier 3 total: ~10 weeks**  
+**Tier 3 remaining planned work: ~4 weeks**
 **Exit criteria:** Full engagement lifecycle captured in Folio. Meetings ingested with one command. Entities linked across documents.
 
 ---
@@ -175,7 +175,7 @@ F-101 through F-108 (core pipeline)
 
 | Feature | Risk | Mitigation |
 |---------|------|------------|
-| F-304 Entity registry | Name resolution is genuinely hard ("Jane" vs "Jane Smith" vs "the CTO") | Start with simple exact-match registry. LLM proposes matches, human confirms. Don't try to solve fuzzy matching in v1. |
+| F-304 Entity registry | Name resolution beyond v1 is genuinely hard ("Jane" vs "Jane Smith" vs "the CTO") | v1 shipped with exact match, alias match, bounded LLM soft match, and human confirmation. Do not add an algorithmic fuzzy matcher until production-scale evidence justifies it. |
 | F-406 Org traversal | Dataview can't do recursive queries. This is a different product. | Build flat entity queries first (F-303). Only invest in traversal if Johnny actually needs it on a real engagement. |
 | F-407 Semantic search | Embedding model + vector store is a significant architectural commitment | Obsidian's built-in search + Dataview covers most cases. Defer until search is demonstrably insufficient. |
 | F-405 Cross-asset synthesis | LLM synthesis quality across many documents is unpredictable | Start with pairwise comparison (2 interviews), not N-way synthesis. Build up. |
