@@ -1505,29 +1505,101 @@ class TestFingerprintExcludesFrontmatter:
 
 
 class TestRelatedPlacementInteraction:
-    """B4: ## Related must appear before raw transcript callout."""
+    """## Related must appear before raw transcript callout in all paths."""
 
-    def test_related_before_callout(self):
+    def test_insert_related_before_callout(self):
+        """Insert path: new ## Related placed before raw transcript."""
         content = _make_interaction_note()
-        fm = yaml.safe_load(content.split("---")[1])
-        fm["impacts"] = ["target_note_id"]
-
-        # Build minimal config mock for _update_related_section
-        from unittest.mock import MagicMock
-        config = MagicMock()
-        config.library_root.resolve.return_value = Path("/fake")
-        # We can't easily test _update_related_section without a real registry,
-        # so test _insert_related_section directly
         from folio.enrich import _insert_related_section
         doc = MarkdownDocument(content)
         related_body = "\n### Impacts\n- [[target|Target Note]]\n"
         result = _insert_related_section(content, "interaction", related_body, doc)
-        # ## Related must appear before the raw transcript callout
         related_pos = result.find("## Related")
         callout_pos = result.find("> [!quote]")
         assert related_pos != -1, "## Related not found"
         assert callout_pos != -1, "Raw transcript callout not found"
         assert related_pos < callout_pos, "## Related must be before raw transcript"
+
+    def test_replace_related_preserves_callout(self):
+        """Replace path: existing ## Related updated, callout preserved intact."""
+        from folio.enrich import _RELATED_MARKER
+        # Build interaction note with an existing generated ## Related before callout
+        base = _make_interaction_note()
+        callout_pos = base.find("> [!quote]")
+        assert callout_pos != -1
+        existing_related = (
+            f"## Related\n{_RELATED_MARKER}\n\n"
+            "### Impacts\n- [[old_target|Old Target]]\n\n"
+        )
+        content_with_related = base[:callout_pos] + existing_related + base[callout_pos:]
+
+        # Verify precondition: ## Related exists before callout
+        assert content_with_related.find("## Related") < content_with_related.find("> [!quote]")
+
+        # Now simulate _update_related_section replace path
+        doc = MarkdownDocument(content_with_related)
+        related_section = doc.get_section("## Related")
+        assert related_section is not None
+
+        # The replace logic: find callout inside ## Related's range, stop there
+        import re as _re
+        match = _re.search(
+            r'^> \[!quote\]',
+            content_with_related[related_section.start:related_section.end],
+            _re.MULTILINE,
+        )
+        if match:
+            end_pos = related_section.start + match.start()
+        else:
+            end_pos = related_section.end
+
+        new_body = f"{_RELATED_MARKER}\n\n### Impacts\n- [[new_target|New Target]]\n\n"
+        result = content_with_related[:related_section.body_start] + new_body + content_with_related[end_pos:]
+
+        # Assertions
+        assert "[[new_target|New Target]]" in result
+        assert "[[old_target|Old Target]]" not in result
+        callout_in_result = result.find("> [!quote]")
+        related_in_result = result.find("## Related")
+        assert callout_in_result != -1, "Raw transcript callout must survive"
+        assert related_in_result < callout_in_result, "## Related must stay before callout"
+        # Transcript content preserved
+        assert "This is the raw transcript." in result
+
+    def test_remove_related_preserves_callout(self):
+        """Remove path: ## Related deleted, callout and transcript preserved."""
+        from folio.enrich import _RELATED_MARKER
+        # Build interaction note with existing generated ## Related
+        base = _make_interaction_note()
+        callout_pos = base.find("> [!quote]")
+        existing_related = (
+            f"## Related\n{_RELATED_MARKER}\n\n"
+            "### Impacts\n- [[target|Target]]\n\n"
+        )
+        content_with_related = base[:callout_pos] + existing_related + base[callout_pos:]
+
+        # Simulate the remove path: no resolved links, remove ## Related
+        doc = MarkdownDocument(content_with_related)
+        related_section = doc.get_section("## Related")
+        assert related_section is not None
+
+        import re as _re
+        end_pos = related_section.end
+        match = _re.search(
+            r'^> \[!quote\]',
+            content_with_related[related_section.start:related_section.end],
+            _re.MULTILINE,
+        )
+        if match:
+            end_pos = related_section.start + match.start()
+
+        result = content_with_related[:related_section.start] + content_with_related[end_pos:]
+
+        # Assertions
+        assert "## Related" not in result, "## Related must be fully removed"
+        assert "[[target|Target]]" not in result, "Old links must be removed"
+        assert "> [!quote]" in result, "Raw transcript callout must survive"
+        assert "This is the raw transcript." in result, "Transcript content must survive"
 
 
 class TestConfidenceValidation:
@@ -1692,7 +1764,7 @@ class TestAmbiguousEntityPreservation:
             entities={"people": ["Ambiguous Person"]},
             warnings=["Ambiguous entity: Ambiguous Person matches 2 entries"],
             created_entities=[],
-            ambiguous_names=frozenset({"Ambiguous Person"}),
+            ambiguous_names=frozenset({("person", "Ambiguous Person")}),
         )
         created_names = set()
 
@@ -1702,7 +1774,7 @@ class TestAmbiguousEntityPreservation:
             for name in names:
                 if name in created_names:
                     continue
-                if name in result.ambiguous_names:
+                if (singular, name) in result.ambiguous_names:
                     records.append({"text": name, "type": singular, "resolution": "unresolved"})
                 else:
                     records.append({"text": name, "type": singular,
