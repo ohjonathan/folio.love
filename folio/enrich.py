@@ -577,7 +577,7 @@ def enrich_note(
                     if name in created_names:
                         continue  # handled below with correct prefix
                     # B4 fix: ambiguous matches are unresolved, not confirmed
-                    if name in resolution_result.ambiguous_names:
+                    if (singular_type, name) in resolution_result.ambiguous_names:
                         entity_mention_records.append({
                             "text": name,
                             "type": singular_type,
@@ -1370,7 +1370,14 @@ def _update_related_section(
     if not resolved_links:
         # Remove stale generated ## Related if it exists and is ours
         if existing_related and has_ownership:
-            return doc.remove_section("## Related")
+            end_pos = existing_related.end
+            if doc_type == "interaction":
+                # The callout is not a heading, so it gets grouped into ## Related.
+                # Stop removal at the callout to preserve the raw transcript.
+                match = re.search(r'^> \[!quote\]', content[existing_related.start:existing_related.end], re.MULTILINE)
+                if match:
+                    end_pos = existing_related.start + match.start()
+            return content[:existing_related.start] + content[end_pos:]
         return content
 
     related_content = _render_related_section(resolved_links)
@@ -1378,6 +1385,14 @@ def _update_related_section(
     if existing_related and has_ownership:
         # Replace our existing generated ## Related (include marker in body)
         marked_content = f"{_RELATED_MARKER}\n{related_content}"
+        
+        end_pos = existing_related.end
+        if doc_type == "interaction":
+            match = re.search(r'^> \[!quote\]', content[existing_related.start:existing_related.end], re.MULTILINE)
+            if match:
+                end_pos = existing_related.start + match.start()
+                return content[:existing_related.body_start] + marked_content + content[end_pos:]
+
         return doc.replace_section_body(existing_related, marked_content)
     elif existing_related and not has_ownership:
         # Human-authored ## Related — don't touch it, warn

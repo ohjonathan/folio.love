@@ -66,7 +66,7 @@ class ResolutionResult:
     warnings: list[str]
     created_entities: list[CreatedEntity]
     registry_changed: bool = False
-    ambiguous_names: frozenset[str] = frozenset()
+    ambiguous_names: frozenset[tuple[str, str]] = frozenset()
     _deferred_creations: list | None = None  # internal: pending persistence
 
 
@@ -148,7 +148,7 @@ def resolve_interaction_entities(
     processed_cache: dict[tuple[str, str], str] = {}
     soft_match_cache: dict[tuple[str, str], Optional[str]] = {}
     pending_creations: list[_PendingCreation] = []
-    ambiguous_names: set[str] = set()
+    ambiguous_names: set[tuple[str, str]] = set()
     all_provider_settings = all_provider_settings or {}
 
     resolved_entities = _copy_entities(extracted_entities)
@@ -174,7 +174,7 @@ def resolve_interaction_entities(
                 resolved_name = matches[0][2].canonical_name
             elif len(matches) > 1:
                 resolved_name = normalized
-                ambiguous_names.add(normalized)
+                ambiguous_names.add((singular_type, normalized))
                 warnings.append(_format_ambiguity_warning(normalized, matches))
             else:
                 proposed_match = _soft_match_or_none(
