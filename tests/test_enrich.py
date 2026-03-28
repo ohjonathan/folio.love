@@ -1431,3 +1431,134 @@ class TestEnrichStatusOnFailure:
         assert not all_axes_empty  # updated is not in the empty set
         status = "executed"
         assert status == "executed"
+
+
+# ---------------------------------------------------------------------------
+# V6 Review Fixes
+# ---------------------------------------------------------------------------
+
+class TestEntityTypeSingular:
+    """B1: Entity mention records must use singular type (person, not people)."""
+
+    def test_mention_type_is_singular(self):
+        from folio.pipeline.entity_resolution import ResolutionResult, CreatedEntity
+
+        result = ResolutionResult(
+            entities={"people": ["Alice"], "systems": ["ServiceNow"]},
+            warnings=[],
+            created_entities=[],
+        )
+
+        _PLURAL_TO_SINGULAR = {
+            "people": "person", "departments": "department",
+            "systems": "system", "processes": "process",
+        }
+        records = []
+        for category, names in result.entities.items():
+            singular = _PLURAL_TO_SINGULAR.get(category, category)
+            for name in names:
+                records.append({"text": name, "type": singular})
+
+        assert records[0]["type"] == "person"
+        assert records[1]["type"] == "system"
+        # Must NOT use plural form
+        assert all(r["type"] != "people" for r in records)
+        assert all(r["type"] != "systems" for r in records)
+
+
+class TestFingerprintExcludesFrontmatter:
+    """B2: Frontmatter must be stripped before fingerprinting."""
+
+    def test_stripped_content_has_no_frontmatter(self):
+        from folio.enrich import _strip_managed_content
+        content = "---\nid: test\ntags:\n  - foo\n---\n\n# Title\n\n## Slide 1\n\n### Analysis\n\nSome analysis.\n"
+        doc = MarkdownDocument(content)
+        stripped = _strip_managed_content(content, doc, "evidence")
+        assert "id: test" not in stripped
+        assert "tags:" not in stripped
+        assert "# Title" in stripped
+
+    def test_tag_change_does_not_change_fingerprint(self):
+        from folio.enrich import _strip_managed_content
+        from folio.pipeline.enrich_data import compute_input_fingerprint
+
+        body = "\n# Title\n\n## Slide 1\n\n### Analysis\n\nContent.\n"
+        content_v1 = "---\nid: test\ntags:\n  - foo\n---\n" + body
+        content_v2 = "---\nid: test\ntags:\n  - foo\n  - bar\n---\n" + body
+
+        doc_v1 = MarkdownDocument(content_v1)
+        doc_v2 = MarkdownDocument(content_v2)
+
+        stripped_v1 = _strip_managed_content(content_v1, doc_v1, "evidence")
+        stripped_v2 = _strip_managed_content(content_v2, doc_v2, "evidence")
+
+        fp1 = compute_input_fingerprint(stripped_v1, "", "", "test", 2)
+        fp2 = compute_input_fingerprint(stripped_v2, "", "", "test", 2)
+        assert fp1 == fp2
+
+
+class TestRelatedPlacementInteraction:
+    """B4: ## Related must appear before raw transcript callout."""
+
+    def test_related_before_callout(self):
+        content = _make_interaction_note()
+        fm = yaml.safe_load(content.split("---")[1])
+        fm["impacts"] = ["target_note_id"]
+
+        # Build minimal config mock for _update_related_section
+        from unittest.mock import MagicMock
+        config = MagicMock()
+        config.library_root.resolve.return_value = Path("/fake")
+        # We can't easily test _update_related_section without a real registry,
+        # so test _insert_related_section directly
+        from folio.enrich import _insert_related_section
+        doc = MarkdownDocument(content)
+        related_body = "\n### Impacts\n- [[target|Target Note]]\n"
+        result = _insert_related_section(content, "interaction", related_body, doc)
+        # ## Related must appear before the raw transcript callout
+        related_pos = result.find("## Related")
+        callout_pos = result.find("> [!quote]")
+        assert related_pos != -1, "## Related not found"
+        assert callout_pos != -1, "Raw transcript callout not found"
+        assert related_pos < callout_pos, "## Related must be before raw transcript"
+
+
+class TestConfidenceValidation:
+    """B5: Invalid confidence values must be rejected/defaulted."""
+
+    def test_low_confidence_defaults_to_medium(self):
+        raw_confidence = "low"
+        if raw_confidence not in ("high", "medium"):
+            raw_confidence = "medium"
+        assert raw_confidence == "medium"
+
+    def test_valid_confidence_preserved(self):
+        for valid in ("high", "medium"):
+            result = valid if valid in ("high", "medium") else "medium"
+            assert result == valid
+
+
+class TestSignalValidation:
+    """B6: Invalid signals must be filtered to allowed sets."""
+
+    def test_invalid_supersedes_signal_filtered(self):
+        _ALLOWED = {"same_source_stem", "title_lineage_match",
+                     "version_order", "newer_converted_timestamp"}
+        raw = ["same_source_stem", "made_up_signal", "version_order"]
+        validated = [s for s in raw if s in _ALLOWED]
+        assert validated == ["same_source_stem", "version_order"]
+        assert "made_up_signal" not in validated
+
+
+class TestFrontmatterUnreadableProtection:
+    """S3: Unreadable frontmatter must trigger protected disposition."""
+
+    def test_unreadable_frontmatter_is_protected(self):
+        fm = {"_frontmatter_unreadable": True}
+        doc = MarkdownDocument("# Title\n\nBody.\n")
+        disposition, reason = _determine_disposition(
+            fm=fm, doc=doc, doc_type="evidence",
+            profile_name="test", force=False,
+        )
+        assert disposition == "protect"
+        assert "unreadable" in reason

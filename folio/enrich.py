@@ -80,14 +80,28 @@ def _sha256_content(content: str) -> str:
 
 
 def _strip_managed_content(content: str, doc: MarkdownDocument, doc_type: str) -> str:
-    """Strip enrich-managed sections from content for fingerprinting.
+    """Strip frontmatter and enrich-managed sections from content for fingerprinting.
 
-    This gives a stable fingerprint of the note's non-enrich content.
+    Removes frontmatter so that metadata updates (tags, timestamps) don't
+    change the fingerprint (B2 fix). Also removes managed sections so that
+    enrich output doesn't self-invalidate.
     """
-    managed = doc.get_managed_sections(doc_type)
+    # Strip frontmatter first (B2 fix)
     result = content
-    # Remove managed sections from the content (process in reverse order
+    if result.startswith("---"):
+        # Find end of frontmatter
+        fm_end = result.find("\n---", 3)
+        if fm_end != -1:
+            # Skip past the closing --- and its newline
+            body_start = fm_end + 4
+            if body_start < len(result) and result[body_start] == '\n':
+                body_start += 1
+            result = result[body_start:]
+
+    # Remove managed sections from the body (process in reverse order
     # by start position to avoid offset drift)
+    body_doc = MarkdownDocument(result)
+    managed = body_doc.get_managed_sections(doc_type)
     sections_by_pos = sorted(managed.values(), key=lambda s: s.start, reverse=True)
     for section in sections_by_pos:
         result = result[:section.start] + result[section.end:]
@@ -232,7 +246,11 @@ def plan_enrichment(
 
         fm = _read_frontmatter(md_path)
         if fm is None:
-            fm = {}
+            # Frontmatter parse failure on existing file — treat as protected
+            # to avoid body mutation on a note whose curation_level/review_status
+            # are unknown (S3 fix).
+            logger.warning("Frontmatter unreadable for %s; treating as protected", md_path.name)
+            fm = {"_frontmatter_unreadable": True}
 
         doc_type = entry.type or "evidence"
         doc = MarkdownDocument(content)
@@ -275,6 +293,10 @@ def _determine_disposition(
     """
     enrich_meta = _get_enrich_meta(fm)
     managed_sections = doc.get_managed_sections(doc_type)
+
+    # S3: unreadable frontmatter → protect
+    if fm.get("_frontmatter_unreadable"):
+        return "protect", "frontmatter unreadable"
 
     # Protection checks (still get metadata-only updates)
     curation = fm.get("curation_level", "L0")
@@ -450,15 +472,24 @@ def enrich_note(
             # (both contain auto-created names), so build a skip set to
             # avoid duplicates and wrong confirmed: labels (B2 fix).
             created_names = {c.canonical_name for c in resolution_result.created_entities}
+            # Map plural categories to singular entity types for registry
+            # consistency (B1 fix: "people" → "person", etc.)
+            _PLURAL_TO_SINGULAR = {
+                "people": "person",
+                "departments": "department",
+                "systems": "system",
+                "processes": "process",
+            }
 
             for category, names in resolution_result.entities.items():
+                singular_type = _PLURAL_TO_SINGULAR.get(category, category)
                 for name in names:
                     if name in created_names:
                         continue  # handled below with correct prefix
                     entity_mention_records.append({
                         "text": name,
-                        "type": category,
-                        "resolution": f"confirmed:{category}/{name}",
+                        "type": singular_type,
+                        "resolution": f"confirmed:{singular_type}/{name}",
                     })
                     resolved_names.append(name)
 
@@ -484,6 +515,10 @@ def enrich_note(
             logger.warning("Entity resolution failed: %s", exc)
             warnings.append(f"Entity resolution failed: {exc}")
             entities_axis = EnrichAxisResult(status="error")
+
+    # Compute entity fingerprint early so relationship evaluation can use it
+    # for basis_fingerprint (B3 fix: use fresh value, not stale metadata)
+    entity_fp = _compute_current_entity_fp(entity_mention_records)
 
     # Step 9: relationship evaluation (optional)
     relationships_axis = EnrichAxisResult(status="skipped")
@@ -516,14 +551,32 @@ def enrich_note(
                 # Compute basis fingerprint
                 target_id = raw_p.get("target_id", "")
                 basis_fp = _compute_proposal_basis_fingerprint(
-                    content, _get_enrich_meta(fm), target_id, config,
+                    content, entity_fp, target_id, config,
                 )
+                # Validate confidence (spec allows only high/medium)
+                raw_confidence = raw_p.get("confidence", "medium")
+                if raw_confidence not in ("high", "medium"):
+                    raw_confidence = "medium"
+
+                # Validate signals (spec §13.2 defines allowed sets)
+                _ALLOWED_SIGNALS = {
+                    "supersedes": {"same_source_stem", "title_lineage_match",
+                                   "version_order", "newer_converted_timestamp"},
+                    "impacts": {"explicit_document_reference",
+                                "explicit_hypothesis_change",
+                                "shared_named_asset"},
+                }
+                raw_relation = raw_p.get("relation", "")
+                allowed = _ALLOWED_SIGNALS.get(raw_relation, set())
+                raw_signals = raw_p.get("signals", [])
+                validated_signals = [s for s in raw_signals if s in allowed] if allowed else raw_signals
+
                 proposal = RelationshipProposal(
-                    relation=raw_p.get("relation", ""),
+                    relation=raw_relation,
                     target_id=target_id,
                     basis_fingerprint=basis_fp,
-                    confidence=raw_p.get("confidence", "medium"),
-                    signals=raw_p.get("signals", []),
+                    confidence=raw_confidence,
+                    signals=validated_signals,
                     rationale=raw_p.get("rationale", ""),
                     status="pending_human_confirmation",
                 )
@@ -563,8 +616,7 @@ def enrich_note(
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     fallback_used = False  # simplified for v1
 
-    # Compute fingerprints
-    entity_fp = _compute_current_entity_fp(entity_mention_records)
+    # Compute remaining fingerprints (entity_fp already computed above)
     canonical_targets = _get_canonical_targets(fm)
     proposal_targets = [p.target_id for p in proposals]
     relationship_fp = compute_relationship_context_fingerprint(
@@ -824,12 +876,15 @@ def _remove_promoted_proposals(
 
 def _compute_proposal_basis_fingerprint(
     note_content: str,
-    enrich_meta: dict,
+    entity_fp: str,
     target_id: str,
     config: FolioConfig,
 ) -> str:
-    """Compute basis_fingerprint for a relationship proposal."""
-    entity_fp = enrich_meta.get("entity_resolution_fingerprint", "")
+    """Compute basis_fingerprint for a relationship proposal.
+
+    Uses the freshly computed entity_fp, not the stored value from prior
+    run metadata (B3 fix).
+    """
     # Get target note's source info from registry
     target_hash = ""
     target_version = ""
@@ -1231,10 +1286,23 @@ def _insert_related_section(
         return content.rstrip() + "\n\n" + full_section
 
     elif doc_type == "interaction":
-        # After ## Impact on Hypotheses, before raw transcript
+        # After ## Impact on Hypotheses, before raw transcript callout.
+        # The raw transcript callout starts with "> [!quote]" and may be
+        # the last content in the note. We must insert BEFORE it, not after
+        # impact.end which may include or follow the callout (B4 fix).
+        import re as _re
+        callout_match = _re.search(r'^> \[!quote\]', content, _re.MULTILINE)
+        if callout_match:
+            # Insert before the callout
+            insert_pos = callout_match.start()
+            return (
+                content[:insert_pos].rstrip()
+                + "\n\n" + full_section + "\n"
+                + content[insert_pos:]
+            )
+        # No callout — insert after ## Impact on Hypotheses
         impact = doc.get_section("## Impact on Hypotheses")
         if impact:
-            # Insert after impact section ends
             return (
                 content[:impact.end]
                 + "\n" + full_section
