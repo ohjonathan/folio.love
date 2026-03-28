@@ -336,11 +336,12 @@ class TestManagedSections:
         managed = doc.get_managed_sections("evidence")
         assert "## Related" not in managed
 
-    def test_interaction_managed_returns_entities_and_impact(self):
+    def test_interaction_managed_returns_entities_only(self):
+        """## Impact on Hypotheses excluded: no mutation logic in v1."""
         doc = MarkdownDocument(INTERACTION_NOTE)
         managed = doc.get_managed_sections("interaction")
         assert "## Entities Mentioned" in managed
-        assert "## Impact on Hypotheses" in managed
+        assert "## Impact on Hypotheses" not in managed
 
     def test_interaction_managed_does_not_include_summary(self):
         doc = MarkdownDocument(INTERACTION_NOTE)

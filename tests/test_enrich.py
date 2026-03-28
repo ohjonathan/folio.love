@@ -23,6 +23,7 @@ from folio.enrich import (
     _enforce_singular_supersedes,
     _insert_wikilinks_in_analysis,
     _merge_tags,
+    _remove_promoted_proposals,
     _replace_frontmatter,
     _suppress_rejected_proposals,
     _update_related_section,
@@ -994,11 +995,12 @@ class TestInteractionBodySafety:
         managed = doc.get_managed_sections("interaction")
         assert "## Entities Mentioned" in managed
 
-    def test_impact_on_hypotheses_is_managed(self):
+    def test_impact_on_hypotheses_not_managed_in_v1(self):
+        """Excluded from managed set: no mutation logic in v1 (B6 fix)."""
         content = _make_interaction_note()
         doc = MarkdownDocument(content)
         managed = doc.get_managed_sections("interaction")
-        assert "## Impact on Hypotheses" in managed
+        assert "## Impact on Hypotheses" not in managed
 
 
 # ---------------------------------------------------------------------------
@@ -1015,3 +1017,147 @@ class TestFrontmatterReplacement:
         assert "id: new" in result
         assert "Body content." in result
         assert result.count("---") == 2  # Opening and closing delimiters
+
+    def test_replace_handles_multiline_yaml_with_dashes(self):
+        """B2: YAML block scalar containing '---' must not corrupt the note."""
+        content = (
+            "---\n"
+            "id: test_note\n"
+            "description: |\n"
+            "  This is a multi-line\n"
+            "  ---\n"
+            "  description with dashes.\n"
+            "tags:\n"
+            "  - foo\n"
+            "---\n"
+            "\n# Title\n\nBody content.\n"
+        )
+        fm = {"id": "updated", "type": "evidence"}
+        result = _replace_frontmatter(content, fm)
+        assert "id: updated" in result
+        assert "Body content." in result
+        # Must not include the old description block in the body
+        assert "description with dashes" not in result
+
+    def test_replace_handles_nested_yaml_dashes_in_string(self):
+        """B2: Quoted string value containing --- must not confuse parser."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "note: 'line1\\n---\\nline2'\n"
+            "---\n"
+            "\n# Title\n\nBody.\n"
+        )
+        fm = {"id": "new"}
+        result = _replace_frontmatter(content, fm)
+        assert "id: new" in result
+        assert "Body." in result
+
+
+# ---------------------------------------------------------------------------
+# B1: Body safety gate for ## Related
+# ---------------------------------------------------------------------------
+
+class TestRelatedSectionBodySafety:
+    """B1: _update_related_section must not run on protected notes."""
+
+    def test_protected_note_disposition_is_protect(self):
+        """L1 note must get 'protect' disposition, blocking body mutation."""
+        content = _make_evidence_note()
+        fm = yaml.safe_load(content.split("---")[1])
+        fm["curation_level"] = "L1"
+        fm["supersedes"] = "other_note_id"
+
+        doc = MarkdownDocument(content)
+        disposition, reason = _determine_disposition(
+            fm=fm,
+            doc=doc,
+            doc_type="evidence",
+            profile_name="test",
+            force=False,
+        )
+        assert disposition == "protect"
+        assert "curation_level" in reason
+
+
+# ---------------------------------------------------------------------------
+# B4: Promoted-proposal cleanup
+# ---------------------------------------------------------------------------
+
+class TestPromotedProposalCleanup:
+    """B4: Proposals matching canonical fields must be removed."""
+
+    def test_promoted_supersedes_removed(self):
+        proposals = [
+            RelationshipProposal(
+                relation="supersedes",
+                target_id="target_a",
+                basis_fingerprint="sha256:abc",
+                confidence="high",
+                signals=["same_source_stem"],
+                rationale="Same lineage.",
+                status="pending_human_confirmation",
+            ),
+        ]
+        fm = {"supersedes": "target_a"}
+        result = _remove_promoted_proposals(proposals, fm)
+        assert len(result) == 0
+
+    def test_promoted_impacts_removed_from_list(self):
+        proposals = [
+            RelationshipProposal(
+                relation="impacts",
+                target_id="target_b",
+                basis_fingerprint="sha256:def",
+                confidence="medium",
+                signals=["explicit_document_reference"],
+                rationale="Referenced directly.",
+                status="pending_human_confirmation",
+            ),
+        ]
+        fm = {"impacts": ["target_b", "target_c"]}
+        result = _remove_promoted_proposals(proposals, fm)
+        assert len(result) == 0
+
+    def test_non_promoted_proposal_kept(self):
+        proposals = [
+            RelationshipProposal(
+                relation="supersedes",
+                target_id="target_x",
+                basis_fingerprint="sha256:ghi",
+                confidence="high",
+                signals=["version_order"],
+                rationale="Newer version.",
+                status="pending_human_confirmation",
+            ),
+        ]
+        fm = {"supersedes": "different_target"}
+        result = _remove_promoted_proposals(proposals, fm)
+        assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# S3: Singular supersedes sorts by confidence
+# ---------------------------------------------------------------------------
+
+class TestSingularSupersedesConfidence:
+    """S3: When multiple supersedes exist, keep highest confidence."""
+
+    def test_high_confidence_kept_over_medium(self):
+        proposals = [
+            RelationshipProposal(
+                relation="supersedes", target_id="t1",
+                basis_fingerprint="fp1", confidence="medium",
+                signals=[], rationale="", status="pending_human_confirmation",
+            ),
+            RelationshipProposal(
+                relation="supersedes", target_id="t2",
+                basis_fingerprint="fp2", confidence="high",
+                signals=[], rationale="", status="pending_human_confirmation",
+            ),
+        ]
+        result = _enforce_singular_supersedes(proposals)
+        supersedes = [p for p in result if p.relation == "supersedes"]
+        assert len(supersedes) == 1
+        assert supersedes[0].confidence == "high"
+        assert supersedes[0].target_id == "t2"

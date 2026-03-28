@@ -994,7 +994,12 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
             # Read existing frontmatter to preserve metadata across refresh
             existing_fm = _read_existing_frontmatter(library_root / entry.markdown_path)
 
-            # Extract enrich passthrough fields (D12 compatibility)
+            # Extract enrich passthrough fields (D12 compatibility).
+            # Note: refresh preserves enrich *frontmatter* (canonical
+            # relationship fields + _llm_metadata.enrich) but regenerates
+            # the note body from scratch. The ## Related body section is
+            # lost on refresh; re-run `folio enrich` to restore it from
+            # the preserved canonical relationship fields.
             preserved = _extract_enrich_passthrough(existing_fm) if existing_fm else None
 
             # If source changed (stale entry), mark enrich as stale

@@ -394,18 +394,28 @@ def enrich_note(
             )
             warnings.extend(resolution_result.warnings)
 
-            # Build mention records for metadata
+            # Build mention records with spec-defined status prefixes
+            # (confirmed/unconfirmed/proposed_match/unresolved)
             for category, names in resolution_result.entities.items():
                 for name in names:
                     entity_mention_records.append({
                         "text": name,
                         "type": category,
-                        "resolution": f"resolved:{category}/{name}",
+                        "resolution": f"confirmed:{category}/{name}",
                     })
                     resolved_names.append(name)
 
             for created in resolution_result.created_entities:
                 unresolved_created.append(created.canonical_name)
+                if created.proposed_match:
+                    resolution = f"proposed_match:{created.entity_type}/{created.key}"
+                else:
+                    resolution = f"unconfirmed:{created.entity_type}/{created.key}"
+                entity_mention_records.append({
+                    "text": created.canonical_name,
+                    "type": created.entity_type,
+                    "resolution": resolution,
+                })
 
             entities_axis = EnrichAxisResult(
                 status="updated" if resolution_result.entities else "no_change",
@@ -471,6 +481,9 @@ def enrich_note(
                 existing_meta=_get_enrich_meta(fm),
                 force=force,
             )
+
+            # Remove proposals already promoted to canonical fields (spec 9.2.7)
+            proposals = _remove_promoted_proposals(proposals, fm)
 
             if proposals:
                 relationships_axis = EnrichAxisResult(
@@ -551,12 +564,14 @@ def enrich_note(
         )
 
     # Generate/update/remove ## Related from canonical frontmatter
-    new_content = _update_related_section(
-        content=new_content,
-        doc_type=doc_type,
-        fm=fm,
-        config=config,
-    )
+    # Only mutate body (including ## Related) when body is safe (B1 fix)
+    if body_safe:
+        new_content = _update_related_section(
+            content=new_content,
+            doc_type=doc_type,
+            fm=fm,
+            config=config,
+        )
 
     # Compute managed body fingerprint after changes
     new_doc = MarkdownDocument(new_content)
@@ -655,13 +670,25 @@ def _get_allowed_relations(doc_type: str) -> list[str]:
 def _enforce_singular_supersedes(
     proposals: list[RelationshipProposal],
 ) -> list[RelationshipProposal]:
-    """Enforce singular cardinality for supersedes."""
+    """Enforce singular cardinality for supersedes.
+
+    When multiple supersedes proposals exist, keep only the highest
+    confidence one (``high`` > ``medium``).
+    """
+    _CONFIDENCE_RANK = {"high": 0, "medium": 1}
+    # Sort supersedes proposals by confidence descending so the best one
+    # comes first and survives the dedup pass.
+    proposals = sorted(
+        proposals,
+        key=lambda p: _CONFIDENCE_RANK.get(p.confidence, 2)
+        if p.relation == "supersedes" else -1,
+    )
     seen_supersedes = False
     filtered = []
     for p in proposals:
         if p.relation == "supersedes":
             if seen_supersedes:
-                continue  # Skip duplicate supersedes
+                continue  # Skip lower-confidence duplicate
             seen_supersedes = True
         filtered.append(p)
     return filtered
@@ -695,6 +722,26 @@ def _suppress_rejected_proposals(
             if old_basis and old_basis == proposal.basis_fingerprint:
                 # Basis unchanged — suppress even with --force
                 continue
+        result.append(proposal)
+    return result
+
+
+def _remove_promoted_proposals(
+    proposals: list[RelationshipProposal],
+    fm: dict,
+) -> list[RelationshipProposal]:
+    """Remove proposals whose (relation, target_id) already exists in canonical fields.
+
+    Spec rule 9.2.7: if a human copies a target into the canonical frontmatter
+    field, the next enrich run removes that proposal from the active list.
+    """
+    result = []
+    for proposal in proposals:
+        canonical_val = fm.get(proposal.relation)
+        if isinstance(canonical_val, str) and canonical_val == proposal.target_id:
+            continue  # Already promoted to canonical
+        if isinstance(canonical_val, list) and proposal.target_id in canonical_val:
+            continue  # Already promoted to canonical
         result.append(proposal)
     return result
 
@@ -1033,6 +1080,12 @@ def _update_related_section(
                 link_path = md_path.removesuffix(".md") if md_path.endswith(".md") else md_path
                 link = f"[[{link_path}|{title}]]"
                 resolved_links.setdefault(relation, []).append(link)
+            else:
+                logger.warning(
+                    "Canonical %s target '%s' not found in registry; "
+                    "skipping from ## Related but preserving in frontmatter",
+                    relation, tid,
+                )
 
     # Build ## Related content
     doc = MarkdownDocument(content)
@@ -1106,7 +1159,11 @@ def _insert_related_section(
 # ---------------------------------------------------------------------------
 
 def _replace_frontmatter(content: str, fm: dict) -> str:
-    """Replace the YAML frontmatter in content with updated dict."""
+    """Replace the YAML frontmatter in content with updated dict.
+
+    Uses line-by-line scanning to find the closing ``---`` delimiter,
+    which safely handles multi-line YAML values that may contain ``---``.
+    """
     yaml_str = yaml.dump(
         fm,
         default_flow_style=False,
@@ -1115,19 +1172,54 @@ def _replace_frontmatter(content: str, fm: dict) -> str:
     )
     new_fm = f"---\n{yaml_str}---"
 
-    # Find and replace existing frontmatter
-    if content.startswith("---\n"):
-        # Find closing ---
-        end_idx = content.index("\n---", 4)
-        end_idx = end_idx + 4  # include the \n---
-        return new_fm + content[end_idx:]
-    elif content.startswith("---\r\n"):
-        end_idx = content.index("\r\n---", 5)
-        end_idx = end_idx + 5
-        return new_fm + content[end_idx:]
-    else:
-        # No existing frontmatter, prepend
+    if not (content.startswith("---\n") or content.startswith("---\r\n")):
         return new_fm + "\n\n" + content
+
+    # Find closing --- by scanning lines, skipping the opening delimiter.
+    # The closing delimiter must be a line that is exactly '---' (possibly
+    # with trailing whitespace), outside any YAML block scalar.
+    lines = content.split("\n")
+    in_block_scalar = False
+    block_indent: int | None = None
+
+    for i, line in enumerate(lines):
+        if i == 0:
+            continue  # skip opening ---
+
+        stripped = line.rstrip()
+
+        # Track YAML block scalars (| or > indicators)
+        if in_block_scalar:
+            # Block scalar ends when we see a line at or below block_indent
+            if stripped and not line[:1].isspace():
+                in_block_scalar = False
+                block_indent = None
+            elif stripped:
+                current_indent = len(line) - len(line.lstrip())
+                if block_indent is not None and current_indent < block_indent:
+                    in_block_scalar = False
+                    block_indent = None
+
+        if not in_block_scalar and stripped == "---":
+            # Found closing delimiter
+            rest_start = sum(len(l) + 1 for l in lines[:i + 1])
+            return new_fm + content[rest_start - 1:]
+
+        # Detect block scalar start: line ending with | or > (with optional
+        # chomping/indentation indicators)
+        if not in_block_scalar and re.match(r"^[^#]*:\s+[|>]", line):
+            in_block_scalar = True
+            # Block indent determined by first non-empty continuation line
+            block_indent = None
+            # Look ahead to determine indent
+            for j in range(i + 1, len(lines)):
+                ahead = lines[j]
+                if ahead.strip():
+                    block_indent = len(ahead) - len(ahead.lstrip())
+                    break
+
+    # Fallback: no closing delimiter found, prepend
+    return new_fm + "\n\n" + content
 
 
 # ---------------------------------------------------------------------------

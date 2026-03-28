@@ -248,16 +248,18 @@ class MarkdownDocument:
         return managed
 
     def _get_interaction_managed(self) -> dict[str, Section]:
-        """Get managed sections for interaction notes."""
+        """Get managed sections for interaction notes.
+
+        Note: ``## Impact on Hypotheses`` is listed as allowed in the spec
+        (D10, §14.1) but no mutation logic exists for it in v1. It is
+        excluded from the managed set to avoid false conflict positives
+        when humans edit that section.
+        """
         managed: dict[str, Section] = {}
 
         entities = self.get_section("## Entities Mentioned")
         if entities is not None:
             managed["## Entities Mentioned"] = entities
-
-        impact = self.get_section("## Impact on Hypotheses")
-        if impact is not None:
-            managed["## Impact on Hypotheses"] = impact
 
         related = self.get_section("## Related")
         if related is not None:
