@@ -191,16 +191,27 @@ def compute_entity_resolution_fingerprint(
 def compute_relationship_context_fingerprint(
     canonical_targets: list[str],
     proposal_targets: list[str],
+    target_identifiers: dict[str, tuple[str, str]] | None = None,
 ) -> str:
     """Compute relationship context fingerprint.
 
     Note-scoped: derived only from the note's own canonical relationship
-    targets and stored proposal targets.
+    targets, stored proposal targets, and their current source/version
+    identifiers (spec §D9).
+
+    ``target_identifiers`` maps target_id to (source_hash, version).
     """
+    ident_data = {}
+    if target_identifiers:
+        for tid in sorted(target_identifiers):
+            sh, ver = target_identifiers[tid]
+            ident_data[tid] = [sh, ver]
+
     combined = json.dumps(
         {
             "canonical": sorted(canonical_targets),
             "proposals": sorted(proposal_targets),
+            "target_identifiers": ident_data,
         },
         sort_keys=True,
     )

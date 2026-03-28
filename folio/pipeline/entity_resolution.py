@@ -66,6 +66,8 @@ class ResolutionResult:
     warnings: list[str]
     created_entities: list[CreatedEntity]
     registry_changed: bool = False
+    ambiguous_names: frozenset[str] = frozenset()
+    _deferred_creations: list | None = None  # internal: pending persistence
 
 
 @dataclass(frozen=True)
@@ -92,10 +94,13 @@ def resolve_entities(
     base_url_env: str = "",
     fallback_profiles: list[FallbackProfileSpec] | None = None,
     all_provider_settings: dict[str, ProviderRuntimeSettings] | None = None,
+    defer_persistence: bool = False,
 ) -> ResolutionResult:
     """Generic entity resolution using the shipped policy.
 
     Reuses the same resolution semantics as ingest-time resolution.
+    When ``defer_persistence`` is True, new entities are resolved but not
+    written to ``entities.json`` until ``commit_deferred_entities()`` is called.
     """
     return resolve_interaction_entities(
         entities_path=entities_path,
@@ -107,6 +112,7 @@ def resolve_entities(
         base_url_env=base_url_env,
         fallback_profiles=fallback_profiles,
         all_provider_settings=all_provider_settings,
+        defer_persistence=defer_persistence,
     )
 
 
@@ -121,6 +127,7 @@ def resolve_interaction_entities(
     base_url_env: str = "",
     fallback_profiles: list[FallbackProfileSpec] | None = None,
     all_provider_settings: dict[str, ProviderRuntimeSettings] | None = None,
+    defer_persistence: bool = False,
 ) -> ResolutionResult:
     """Resolve interaction entities against the library registry."""
 
@@ -141,6 +148,7 @@ def resolve_interaction_entities(
     processed_cache: dict[tuple[str, str], str] = {}
     soft_match_cache: dict[tuple[str, str], Optional[str]] = {}
     pending_creations: list[_PendingCreation] = []
+    ambiguous_names: set[str] = set()
     all_provider_settings = all_provider_settings or {}
 
     resolved_entities = _copy_entities(extracted_entities)
@@ -166,6 +174,7 @@ def resolve_interaction_entities(
                 resolved_name = matches[0][2].canonical_name
             elif len(matches) > 1:
                 resolved_name = normalized
+                ambiguous_names.add(normalized)
                 warnings.append(_format_ambiguity_warning(normalized, matches))
             else:
                 proposed_match = _soft_match_or_none(
@@ -208,6 +217,26 @@ def resolve_interaction_entities(
 
         resolved_entities[plural_type] = _dedupe_preserve_order(resolved_values)
 
+    if defer_persistence:
+        # Build created_entities from pending (keys not yet assigned)
+        created_entities = [
+            CreatedEntity(
+                entity_type=pc.entry.type,
+                key=sanitize_wikilink_name(pc.entry.canonical_name).lower().replace(" ", "_"),
+                canonical_name=pc.entry.canonical_name,
+                proposed_match=pc.entry.proposed_match,
+            )
+            for pc in pending_creations
+        ]
+        return ResolutionResult(
+            entities=resolved_entities,
+            warnings=warnings,
+            created_entities=created_entities,
+            registry_changed=bool(created_entities),
+            ambiguous_names=frozenset(ambiguous_names),
+            _deferred_creations=pending_creations,
+        )
+
     committed_creations, persist_warnings = _persist_pending_creations(
         entities_path=entities_path,
         pending_creations=pending_creations,
@@ -228,6 +257,7 @@ def resolve_interaction_entities(
         warnings=warnings,
         created_entities=created_entities,
         registry_changed=bool(created_entities),
+        ambiguous_names=frozenset(ambiguous_names),
     )
 
 
@@ -482,6 +512,23 @@ def _is_abbreviation_terminator(prefix: str) -> bool:
     }:
         return True
     return bool(re.fullmatch(r"(?:[a-z]\.){1,}[a-z]?\.?", token))
+
+
+def commit_deferred_entities(
+    entities_path: Path,
+    result: ResolutionResult,
+) -> list[str]:
+    """Persist deferred entity creations after a successful note write.
+
+    Returns a list of warnings from the persistence step.
+    """
+    if not result._deferred_creations:
+        return []
+    _, persist_warnings = _persist_pending_creations(
+        entities_path=entities_path,
+        pending_creations=result._deferred_creations,
+    )
+    return persist_warnings
 
 
 def _persist_pending_creations(

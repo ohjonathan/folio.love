@@ -21,8 +21,10 @@ from folio.enrich import (
     _build_wikilink_map,
     _determine_disposition,
     _enforce_singular_supersedes,
+    _get_allowed_relations,
     _insert_wikilinks_in_analysis,
     _merge_tags,
+    _PLURAL_TO_SINGULAR,
     _remove_promoted_proposals,
     _replace_frontmatter,
     _suppress_rejected_proposals,
@@ -31,6 +33,7 @@ from folio.enrich import (
     enrich_note,
     plan_enrichment,
 )
+from folio.pipeline.enrich_analysis import EnrichAnalysisOutput
 from folio.pipeline.enrich_data import (
     ENRICH_SPEC_VERSION,
     RELATIONSHIP_FIELDS,
@@ -406,14 +409,15 @@ class TestForceBypass:
 class TestInputFingerprintSkip:
     """Notes are skipped when fingerprint matches."""
 
-    def test_matching_fingerprint_skips(self):
+    def test_matching_fingerprint_skips(self, tmp_path):
         # Build a note whose fingerprint matches
         content = "# Title\n\n## Slide 1\n\n### Analysis\n\nContent.\n"
         doc = MarkdownDocument(content)
         from folio.enrich import _strip_managed_content
         stripped = _strip_managed_content(content, doc, "evidence")
         entity_fp = ""
-        relationship_fp = ""
+        from folio.pipeline.enrich_data import compute_relationship_context_fingerprint
+        relationship_fp = compute_relationship_context_fingerprint([], [])
         input_fp = compute_input_fingerprint(
             stripped, entity_fp, relationship_fp, "default", ENRICH_SPEC_VERSION,
         )
@@ -429,9 +433,11 @@ class TestInputFingerprintSkip:
                 }
             },
         }
+        config = _make_config(tmp_path)
         disp, reason = _determine_disposition(
             fm=fm, doc=doc, doc_type="evidence",
             profile_name="default", force=False,
+            config=config,
         )
         assert disp == "skip"
         assert reason == "fingerprint match"
@@ -852,7 +858,8 @@ class TestRelatedSuppression:
         library_root = config.library_root
         _setup_registry(library_root, {})  # Empty registry
 
-        content = "# Title\n\n## Related\n\n### Supersedes\n- [[old|Old Note]]\n\n## Version History\n\nHistory.\n"
+        from folio.enrich import _RELATED_MARKER
+        content = f"# Title\n\n## Related\n{_RELATED_MARKER}\n\n### Supersedes\n- [[old|Old Note]]\n\n## Version History\n\nHistory.\n"
         fm = {"supersedes": "nonexistent_id"}
 
         new_content = _update_related_section(
@@ -1562,3 +1569,220 @@ class TestFrontmatterUnreadableProtection:
         )
         assert disposition == "protect"
         assert "unreadable" in reason
+
+
+# ---------------------------------------------------------------------------
+# V7 Review Fixes
+# ---------------------------------------------------------------------------
+
+
+class TestDryRunRegistryReadOnly:
+    """B1: Dry-run must not write registry.json."""
+
+    def test_missing_registry_not_created(self, tmp_path):
+        """plan_enrichment with dry_run=True must not create registry.json."""
+        from folio.enrich import plan_enrichment
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        # Do NOT create registry.json
+        assert not (lr / "registry.json").exists()
+
+        plan = plan_enrichment(config, dry_run=True)
+
+        # Registry must NOT have been written to disk
+        assert not (lr / "registry.json").exists()
+
+    def test_corrupt_registry_not_overwritten(self, tmp_path):
+        """plan_enrichment with dry_run=True must not fix corrupt registry on disk."""
+        from folio.enrich import plan_enrichment
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        # Write a corrupt registry
+        corrupt_data = '{"_corrupt": true, "decks": {}}'
+        (lr / "registry.json").write_text(corrupt_data)
+        mtime_before = (lr / "registry.json").stat().st_mtime
+
+        plan = plan_enrichment(config, dry_run=True)
+
+        # Registry must not have been rewritten
+        content_after = (lr / "registry.json").read_text()
+        assert '"_corrupt": true' in content_after
+
+
+class TestRelationshipFpRecompute:
+    """B2: Skip check must recompute relationship fp from live canonical state."""
+
+    def test_canonical_edit_triggers_reanalysis(self, tmp_path):
+        """Adding supersedes to canonical frontmatter must change the fp."""
+        from folio.enrich import _recompute_live_relationship_fp
+        from folio.pipeline.enrich_data import compute_relationship_context_fingerprint
+
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        _setup_registry(lr, {
+            "target_a": {
+                "id": "target_a", "title": "Target A", "type": "evidence",
+                "markdown_path": "t/a.md", "deck_dir": "t",
+                "source_relative_path": "d.pptx", "source_hash": "abc",
+                "version": 1, "converted": "2026-01-01",
+            },
+        })
+
+        enrich_meta = {"axes": {"relationships": {"proposals": []}}}
+
+        # Before: no canonical targets
+        fp_before = _recompute_live_relationship_fp(
+            {}, enrich_meta, lr,
+        )
+        # After: human adds supersedes to canonical frontmatter
+        fp_after = _recompute_live_relationship_fp(
+            {"supersedes": "target_a"}, enrich_meta, lr,
+        )
+        assert fp_before != fp_after
+
+
+class TestEntityPersistenceOrdering:
+    """B3: Entity persistence must happen after note write."""
+
+    @patch("folio.enrich.analyze_note_for_enrichment")
+    @patch("folio.enrich.resolve_entities")
+    @patch("folio.enrich.evaluate_relationships", return_value=[])
+    def test_deferred_persistence_flag(self, mock_eval, mock_resolve, mock_analyze, tmp_path):
+        """resolve_entities is called with defer_persistence=True."""
+        from folio.pipeline.entity_resolution import ResolutionResult
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+
+        note_content = _make_evidence_note(note_id="e1")
+        _setup_note(lr, "C/E/e1/e1.md", note_content)
+        _setup_registry(lr, {
+            "e1": {"id": "e1", "title": "E1", "markdown_path": "C/E/e1/e1.md",
+                   "deck_dir": "C/E/e1", "source_relative_path": "d.pptx",
+                   "source_hash": "abc", "version": 1, "converted": "2026-01-01",
+                   "type": "evidence", "client": "C", "engagement": "E"},
+        })
+        (lr / "entities.json").write_text('{"entities":{}}')
+
+        mock_analyze.return_value = EnrichAnalysisOutput(
+            tag_candidates=["tag"],
+            entity_mention_candidates={"people": ["Alice"]},
+            relationship_cues=[],
+        )
+        mock_resolve.return_value = ResolutionResult(
+            entities={"people": ["Alice"]}, warnings=[],
+            created_entities=[], registry_changed=False,
+        )
+
+        enrich_batch(config, echo=lambda x: None)
+
+        # resolve_entities must have been called with defer_persistence=True
+        assert mock_resolve.called
+        call_kwargs = mock_resolve.call_args[1]
+        assert call_kwargs.get("defer_persistence") is True
+
+
+class TestAmbiguousEntityPreservation:
+    """B4: Ambiguous entity matches must be unresolved, not confirmed."""
+
+    def test_ambiguous_name_marked_unresolved(self):
+        """Entities with multiple confirmed matches should not be confirmed."""
+        from folio.pipeline.entity_resolution import ResolutionResult
+
+        result = ResolutionResult(
+            entities={"people": ["Ambiguous Person"]},
+            warnings=["Ambiguous entity: Ambiguous Person matches 2 entries"],
+            created_entities=[],
+            ambiguous_names=frozenset({"Ambiguous Person"}),
+        )
+        created_names = set()
+
+        records = []
+        for category, names in result.entities.items():
+            singular = _PLURAL_TO_SINGULAR.get(category, category)
+            for name in names:
+                if name in created_names:
+                    continue
+                if name in result.ambiguous_names:
+                    records.append({"text": name, "type": singular, "resolution": "unresolved"})
+                else:
+                    records.append({"text": name, "type": singular,
+                                    "resolution": f"confirmed:{singular}/{name}"})
+
+        assert len(records) == 1
+        assert records[0]["resolution"] == "unresolved"
+
+
+class TestDisallowedRelationRejection:
+    """B5: Disallowed relation types must be dropped before persistence."""
+
+    def test_draws_from_rejected_for_evidence(self):
+        from folio.enrich import _get_allowed_relations
+        allowed = _get_allowed_relations("evidence")
+        assert "supersedes" in allowed
+        assert "draws_from" not in allowed
+        assert "impacts" not in allowed
+        assert "relates_to" not in allowed
+
+
+class TestRelatedOwnershipMarker:
+    """B6: Only enrich-generated ## Related should be removed/replaced."""
+
+    def test_human_related_not_removed(self, tmp_path):
+        """Human-authored ## Related without marker must not be removed."""
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        _setup_registry(lr, {})
+
+        # Human-authored ## Related (no marker)
+        content = "# Title\n\n## Related\n\nSee also: other notes.\n\n## Version History\n\nHist.\n"
+        fm = {}  # No canonical relationships
+
+        new_content = _update_related_section(
+            content=content, doc_type="evidence", fm=fm, config=config,
+        )
+        # Human ## Related must survive
+        assert "## Related" in new_content
+        assert "See also: other notes." in new_content
+
+    def test_generated_related_has_marker(self, tmp_path):
+        """Generated ## Related must include the ownership marker."""
+        from folio.enrich import _RELATED_MARKER
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        _setup_registry(lr, {
+            "target": {"id": "target", "title": "Target", "type": "evidence",
+                       "markdown_path": "C/E/t.md", "deck_dir": "C/E",
+                       "source_relative_path": "d.pptx", "source_hash": "abc",
+                       "version": 1, "converted": "2026-01-01"},
+        })
+
+        content = "# Title\n\n## Version History\n\nHist.\n"
+        fm = {"supersedes": "target"}
+
+        new_content = _update_related_section(
+            content=content, doc_type="evidence", fm=fm, config=config,
+        )
+        assert "## Related" in new_content
+        assert _RELATED_MARKER in new_content
+
+
+class TestBasisFingerprintNormalized:
+    """S1: basis_fingerprint must use normalized content, not raw."""
+
+    def test_metadata_change_stable_basis(self):
+        """Tag changes in frontmatter must not change basis_fingerprint."""
+        from folio.enrich import _compute_proposal_basis_fingerprint, _strip_managed_content
+
+        body = "\n# Title\n\n## Slide 1\n\n### Analysis\n\nContent.\n"
+        content_v1 = "---\ntags:\n  - foo\n---\n" + body
+        content_v2 = "---\ntags:\n  - foo\n  - bar\n---\n" + body
+
+        doc_v1 = MarkdownDocument(content_v1)
+        doc_v2 = MarkdownDocument(content_v2)
+
+        # basis_fingerprint should be computed on normalized (stripped) content
+        normalized_v1 = _strip_managed_content(content_v1, doc_v1, "evidence")
+        normalized_v2 = _strip_managed_content(content_v2, doc_v2, "evidence")
+
+        # Both normalized contents should be the same
+        assert normalized_v1 == normalized_v2

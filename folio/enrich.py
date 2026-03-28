@@ -36,12 +36,15 @@ from .pipeline.enrich_analysis import (
     analyze_note_for_enrichment,
     evaluate_relationships,
 )
-from .pipeline.entity_resolution import resolve_entities
+from .pipeline.entity_resolution import resolve_entities, commit_deferred_entities
 from .pipeline.section_parser import MarkdownDocument
 from .tracking import registry as registry_mod
 from .tracking.entities import sanitize_wikilink_name
 
 logger = logging.getLogger(__name__)
+
+# Ownership marker for generated ## Related sections (B6)
+_RELATED_MARKER = "<!-- enrich:generated -->"
 
 # Plural category keys from resolution_result.entities → singular registry types
 _PLURAL_TO_SINGULAR = {
@@ -145,6 +148,31 @@ def _get_proposal_targets(enrich_meta: dict) -> list[str]:
     return targets
 
 
+def _get_target_identifiers(
+    target_ids: set[str],
+    config: FolioConfig,
+) -> dict[str, tuple[str, str]]:
+    """Look up source_hash and version for target IDs from the registry."""
+    if not target_ids:
+        return {}
+    library_root = config.library_root.resolve()
+    registry_path = library_root / "registry.json"
+    if not registry_path.exists():
+        return {}
+    try:
+        reg_data = registry_mod.load_registry(registry_path)
+    except Exception:
+        return {}
+    result: dict[str, tuple[str, str]] = {}
+    for tid in target_ids:
+        entry = reg_data.get("decks", {}).get(tid, {})
+        result[tid] = (
+            entry.get("source_hash", ""),
+            str(entry.get("version", "")),
+        )
+    return result
+
+
 def _get_enrich_meta(fm: dict) -> dict:
     """Get _llm_metadata.enrich block, defaulting to empty dict."""
     llm_meta = fm.get("_llm_metadata", {})
@@ -201,24 +229,30 @@ def plan_enrichment(
     scope: str | None = None,
     force: bool = False,
     llm_profile: str | None = None,
+    dry_run: bool = False,
 ) -> list[EnrichPlanEntry]:
     """Build the deterministic enrichment plan.
 
     Bootstrap/load registry, filter by scope and type, compute fingerprints,
     and determine disposition for each eligible note.
+
+    When ``dry_run`` is True, the registry is built in memory but never
+    written to disk (B1 fix: dry-run writes nothing).
     """
     library_root = config.library_root.resolve()
 
-    # Bootstrap or load registry
+    # Bootstrap or load registry (read-only in dry-run)
     registry_path = library_root / "registry.json"
     if registry_path.exists():
         data = registry_mod.load_registry(registry_path)
         if data.get("_corrupt"):
             data = registry_mod.rebuild_registry(library_root)
-            registry_mod.save_registry(registry_path, data)
+            if not dry_run:
+                registry_mod.save_registry(registry_path, data)
     else:
         data = registry_mod.rebuild_registry(library_root)
-        registry_mod.save_registry(registry_path, data)
+        if not dry_run:
+            registry_mod.save_registry(registry_path, data)
 
     # Resolve profile name for fingerprinting
     try:
@@ -271,6 +305,7 @@ def plan_enrichment(
             profile_name=profile_name,
             force=force,
             entities_path=library_root / "entities.json",
+            config=config,
         )
 
         plan.append(EnrichPlanEntry(
@@ -294,6 +329,7 @@ def _determine_disposition(
     profile_name: str,
     force: bool,
     entities_path: Path | None = None,
+    config: FolioConfig | None = None,
 ) -> tuple[str, str]:
     """Determine the enrichment disposition for a note.
 
@@ -341,7 +377,12 @@ def _determine_disposition(
             # Recompute entity_resolution_fingerprint from live entities.json
             # so that human confirmations trigger re-enrichment (V4 fix 1).
             entity_fp = _recompute_live_entity_fp(enrich_meta, entities_path)
-            relationship_fp = enrich_meta.get("relationship_context_fingerprint", "")
+            # Recompute relationship_context_fingerprint from live canonical
+            # targets so human-confirmed relationship edits trigger
+            # re-enrichment and ## Related regeneration (B2 fix).
+            relationship_fp = _recompute_live_relationship_fp(
+                fm, enrich_meta, config.library_root.resolve(),
+            )
 
             current_input_fp = compute_input_fingerprint(
                 stripped, entity_fp, relationship_fp,
@@ -398,6 +439,52 @@ def _recompute_live_entity_fp(
         pairs.append((text, resolution))
 
     return compute_entity_resolution_fingerprint(pairs)
+
+
+def _recompute_live_relationship_fp(
+    fm: dict,
+    enrich_meta: dict,
+    library_root: Path,
+) -> str:
+    """Recompute relationship_context_fingerprint from live canonical state.
+
+    Reads canonical relationship targets directly from current frontmatter
+    and proposal targets from stored metadata so that human-confirmed
+    relationship edits (e.g., adding ``supersedes: target_id``) trigger
+    re-enrichment and ``## Related`` regeneration (B2 fix).
+
+    Also includes target source/version identifiers per spec §D9.
+    """
+    canonical_targets = _get_canonical_targets(fm)
+    # Get stored proposal targets
+    proposals = (
+        enrich_meta
+        .get("axes", {})
+        .get("relationships", {})
+        .get("proposals", [])
+    )
+    proposal_targets = [p.get("target_id", "") for p in proposals if p.get("target_id")]
+
+    # Look up target source/version identifiers from registry
+    target_identifiers: dict[str, tuple[str, str]] = {}
+    all_targets = set(canonical_targets) | set(proposal_targets)
+    if all_targets:
+        registry_path = library_root / "registry.json"
+        if registry_path.exists():
+            try:
+                reg_data = registry_mod.load_registry(registry_path)
+                for tid in all_targets:
+                    entry = reg_data.get("decks", {}).get(tid, {})
+                    target_identifiers[tid] = (
+                        entry.get("source_hash", ""),
+                        str(entry.get("version", "")),
+                    )
+            except Exception:
+                pass
+
+    return compute_relationship_context_fingerprint(
+        canonical_targets, proposal_targets, target_identifiers,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -473,6 +560,7 @@ def enrich_note(
                 base_url_env=profile.base_url_env,
                 fallback_profiles=fallback_specs,
                 all_provider_settings=provider_settings,
+                defer_persistence=True,
             )
             warnings.extend(resolution_result.warnings)
 
@@ -488,12 +576,20 @@ def enrich_note(
                 for name in names:
                     if name in created_names:
                         continue  # handled below with correct prefix
-                    entity_mention_records.append({
-                        "text": name,
-                        "type": singular_type,
-                        "resolution": f"confirmed:{singular_type}/{name}",
-                    })
-                    resolved_names.append(name)
+                    # B4 fix: ambiguous matches are unresolved, not confirmed
+                    if name in resolution_result.ambiguous_names:
+                        entity_mention_records.append({
+                            "text": name,
+                            "type": singular_type,
+                            "resolution": "unresolved",
+                        })
+                    else:
+                        entity_mention_records.append({
+                            "text": name,
+                            "type": singular_type,
+                            "resolution": f"confirmed:{singular_type}/{name}",
+                        })
+                        resolved_names.append(name)
 
             for created in resolution_result.created_entities:
                 unresolved_created.append(created.canonical_name)
@@ -549,11 +645,19 @@ def enrich_note(
                 all_provider_settings=provider_settings,
             )
 
+            # S1 fix: normalize content for basis_fingerprint (strip
+            # frontmatter and prior enrich output per spec §9.3)
+            normalized_content = _strip_managed_content(content, doc, doc_type)
+
             for raw_p in raw_proposals:
+                # B5 defense-in-depth: reject disallowed relation types
+                raw_relation = raw_p.get("relation", "")
+                if raw_relation not in allowed_relations:
+                    continue
                 # Compute basis fingerprint
                 target_id = raw_p.get("target_id", "")
                 basis_fp = _compute_proposal_basis_fingerprint(
-                    content, entity_fp, target_id, config,
+                    normalized_content, entity_fp, target_id, config,
                 )
                 # Validate confidence (spec allows only high/medium)
                 raw_confidence = raw_p.get("confidence", "medium")
@@ -568,7 +672,6 @@ def enrich_note(
                                 "explicit_hypothesis_change",
                                 "shared_named_asset"},
                 }
-                raw_relation = raw_p.get("relation", "")
                 allowed = _ALLOWED_SIGNALS.get(raw_relation, set())
                 raw_signals = raw_p.get("signals", [])
                 validated_signals = [s for s in raw_signals if s in allowed] if allowed else raw_signals
@@ -621,8 +724,12 @@ def enrich_note(
     # Compute remaining fingerprints (entity_fp already computed above)
     canonical_targets = _get_canonical_targets(fm)
     proposal_targets = [p.target_id for p in proposals]
+    # Include target source/version identifiers per spec §D9
+    target_identifiers = _get_target_identifiers(
+        set(canonical_targets) | set(proposal_targets), config,
+    )
     relationship_fp = compute_relationship_context_fingerprint(
-        canonical_targets, proposal_targets,
+        canonical_targets, proposal_targets, target_identifiers,
     )
 
     stripped_content = _strip_managed_content(content, doc, doc_type)
@@ -729,8 +836,14 @@ def enrich_note(
     # Rewrite frontmatter in the note content
     new_content = _replace_frontmatter(new_content, fm)
 
-    # Atomic write
+    # Step 15: Atomic write
     _atomic_write_text(plan_entry.md_path, new_content)
+
+    # Step 16: Persist deferred entity creations AFTER successful note write
+    # (B3 fix: entities.json must not be updated if note write fails)
+    if resolution_result is not None:
+        persist_warnings = commit_deferred_entities(entities_path, resolution_result)
+        warnings.extend(persist_warnings)
 
     # Determine outcome
     if body_safe and (tags_axis.status == "updated" or
@@ -1247,19 +1360,34 @@ def _update_related_section(
     doc = MarkdownDocument(content)
     existing_related = doc.get_section("## Related")
 
+    # B6 fix: only remove/replace ## Related if it has the enrich ownership
+    # marker, to avoid destroying human-authored ## Related sections.
+    has_ownership = (
+        existing_related is not None
+        and _RELATED_MARKER in content[existing_related.start:existing_related.end]
+    )
+
     if not resolved_links:
-        # Remove stale ## Related if it exists
-        if existing_related:
+        # Remove stale generated ## Related if it exists and is ours
+        if existing_related and has_ownership:
             return doc.remove_section("## Related")
         return content
 
     related_content = _render_related_section(resolved_links)
 
-    if existing_related:
-        # Replace existing ## Related
-        return doc.replace_section_body(existing_related, related_content)
+    if existing_related and has_ownership:
+        # Replace our existing generated ## Related (include marker in body)
+        marked_content = f"{_RELATED_MARKER}\n{related_content}"
+        return doc.replace_section_body(existing_related, marked_content)
+    elif existing_related and not has_ownership:
+        # Human-authored ## Related — don't touch it, warn
+        logger.warning(
+            "Skipping ## Related update: section exists but was not "
+            "generated by enrich (no ownership marker)"
+        )
+        return content
     else:
-        # Insert ## Related at the appropriate position
+        # Insert new ## Related at the appropriate position
         return _insert_related_section(content, doc_type, related_content, doc)
 
 
@@ -1284,7 +1412,7 @@ def _insert_related_section(
     doc: MarkdownDocument,
 ) -> str:
     """Insert ## Related at the correct position."""
-    full_section = f"## Related\n{related_body}\n"
+    full_section = f"## Related\n{_RELATED_MARKER}\n{related_body}\n"
 
     if doc_type == "evidence":
         # Before ## Version History
@@ -1442,7 +1570,7 @@ def enrich_batch(
         echo = print
 
     # Plan phase
-    plan = plan_enrichment(config, scope=scope, force=force, llm_profile=llm_profile)
+    plan = plan_enrichment(config, scope=scope, force=force, llm_profile=llm_profile, dry_run=dry_run)
 
     if not plan:
         echo("No eligible documents found.")
