@@ -81,6 +81,35 @@ class _PendingCreation:
     entry: EntityEntry
 
 
+def resolve_entities(
+    *,
+    entities_path: Path,
+    extracted_entities: dict[str, list[str]],
+    source_text: str,
+    provider_name: str,
+    model: str,
+    api_key_env: str = "",
+    base_url_env: str = "",
+    fallback_profiles: list[FallbackProfileSpec] | None = None,
+    all_provider_settings: dict[str, ProviderRuntimeSettings] | None = None,
+) -> ResolutionResult:
+    """Generic entity resolution using the shipped policy.
+
+    Reuses the same resolution semantics as ingest-time resolution.
+    """
+    return resolve_interaction_entities(
+        entities_path=entities_path,
+        extracted_entities=extracted_entities,
+        source_text=source_text,
+        provider_name=provider_name,
+        model=model,
+        api_key_env=api_key_env,
+        base_url_env=base_url_env,
+        fallback_profiles=fallback_profiles,
+        all_provider_settings=all_provider_settings,
+    )
+
+
 def resolve_interaction_entities(
     *,
     entities_path: Path,
