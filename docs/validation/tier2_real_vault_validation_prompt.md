@@ -30,7 +30,7 @@ The production baseline for this run is locked by
 
 ## Required Outputs
 
-Produce the standard validation artifacts in `docs/validation/` using the label
+Produce the standard validation artifacts in `VALIDATION_OUTPUT_ROOT/` using the label
 `tier2_real_vault_validation`:
 
 1. `tier2_real_vault_validation_prompt.md`
@@ -47,14 +47,12 @@ manual review checks. Do not create extra artifacts casually.
 
 ## Read Before Doing Anything
 
-Read these first:
-
-1. [AGENTS.md](/Users/jonathanoh/Dev/folio.love/AGENTS.md)
-2. [tier2_real_library_rerun_report.md](/Users/jonathanoh/Dev/folio.love/docs/validation/tier2_real_library_rerun_report.md)
-3. [tier2_platform_model_comparison_report.md](/Users/jonathanoh/Dev/folio.love/docs/validation/tier2_platform_model_comparison_report.md)
-4. [tier3_kickoff_checklist.md](/Users/jonathanoh/Dev/folio.love/docs/validation/tier3_kickoff_checklist.md)
-5. [tier2_accelerated_precloseout_report.md](/Users/jonathanoh/Dev/folio.love/docs/validation/tier2_accelerated_precloseout_report.md)
-6. [obsidian_transclusion_test_result.md](/Users/jonathanoh/Dev/folio.love/docs/validation/obsidian_transclusion_test_result.md)
+1. `AGENTS.md` (folio.love)
+2. `tier2_real_library_rerun_report.md`
+3. `tier2_platform_model_comparison_report.md`
+4. `tier2_accelerated_precloseout_report.md` (folio.love)
+5. `obsidian_transclusion_test_result.md` (folio.love)
+6. `tier2_real_library_rerun_session_summary.md`
 
 ## Environment Rules
 
@@ -97,7 +95,7 @@ Out of scope:
 
 Use:
 
-- the **production `sonnet4` library**
+- the **production `sonnet4` library** (with 12 LLM-validated haiku45 merges)
 
 Do **not** validate against:
 

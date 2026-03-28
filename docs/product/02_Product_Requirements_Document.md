@@ -9,16 +9,16 @@ generated_by: ontos_scaffold
 
 # Folio: Product Requirements Document
 
-**Version 1.2 | March 2026**
+**Version 1.3 | March 2026**
 **folio.love**
 
-**v1.2 changes:** Added the shipped `folio ingest` interaction-ingestion
-baseline and mixed-library command behavior. Expanded FR-500 to cover
-interaction ingestion and mixed evidence/interaction libraries. Updated FR-600
-task routing to include `routing.ingest`. Clarified that FR-607 and FR-700
-apply to transcript- and notes-based interaction outputs as well as deck
-conversion. See `docs/product/strategic_direction_memo.md` for governing
-principles.
+**v1.3 changes:** Added the shipped entity-system baseline after PR #32,
+PR #34, and PR #35. Expanded the FR-400 and FR-500 families to cover
+`entities.json`, the `folio entities` command family, and ingest-time entity
+resolution. Clarified the current late-March pre-PR-C baseline and linked the
+detailed status delta in
+`docs/product/tier3_baseline_decision_memo.md`. See
+`docs/product/strategic_direction_memo.md` for governing principles.
 
 ---
 
@@ -35,6 +35,8 @@ Folio's output must be trustworthy enough for direct use in active McKinsey enga
 Folio v1.0 encompasses:
 - Document conversion pipeline (PPTX/PDF to Markdown)
 - Interaction ingestion pipeline (txt/md transcripts and notes to interaction markdown)
+- Entity registry and CSV import for known people, departments, systems, and processes
+- Ingest-time entity resolution against confirmed registry entries
 - Source file tracking with relative paths
 - Version tracking and change detection
 - Optional LLM analysis with bring-your-own provider credentials
@@ -63,6 +65,10 @@ Folio v1.0 encompasses:
 | Extraction Confidence | Aggregate score (0.0-1.0) reflecting reliability of LLM analysis for a document |
 | Review Status | Machine-tracked state indicating whether a document needs human attention |
 | Human Override | A correction made by a human reviewer that persists across re-conversion |
+| Entity Registry | Library-local `entities.json` store of canonical people, departments, systems, and processes |
+| Confirmed Entity | Registry entry eligible for exact/alias resolution during ingest |
+| Unconfirmed Entity | Auto-created or imported-for-review entity that is visible to humans but excluded from future resolution until confirmed |
+| Proposed Match | LLM-suggested link from an unresolved extracted entity to an existing confirmed registry entry, surfaced for human confirmation |
 
 ---
 
@@ -324,6 +330,31 @@ The system SHALL maintain a `registry.json` with:
 - Current staleness status
 - Review status and extraction confidence (for library-wide review queries)
 
+#### FR-404: Entity Registry
+
+The system SHALL maintain a separate `entities.json` at the library root with:
+- Canonical entities for `person`, `department`, `system`, and `process`
+- Canonical names plus aliases
+- Confirmation state (`confirmed` or `unconfirmed`)
+- Optional proposed-match metadata for human review
+- Type-specific metadata such as title, department, owner, or reports-to
+
+The entity registry is distinct from `registry.json`: entities are graph nodes,
+not managed markdown documents.
+
+For the current shipped Tier 3 baseline, the registry contract is broader than
+the most heavily exercised ingest-time extraction path: registry storage,
+import, and review support all four entity types, while the first production
+ingest-resolution pass has been exercised most heavily on people and
+departments. Broader production-scale entity backfill remains later Tier 3
+work.
+
+**Acceptance Criteria:**
+- [ ] `entities.json` persists the four shipped entity types
+- [ ] Confirmed and unconfirmed entities are distinguishable
+- [ ] Aliases participate in lookup for confirmed entities
+- [ ] Proposed matches are retained for human review instead of silently applied
+
 ---
 
 ### 2.5 CLI Commands (FR-500) — P1
@@ -356,6 +387,8 @@ folio status [<scope>]
 - Flag stale documents
 - Flag missing source files
 - Flag documents with `review_status: flagged`
+- When `entities.json` exists, include an entity summary with total and
+  unconfirmed counts
 - Scope to client/engagement or any library-relative path (any path relative to
   `library_root`) if specified
 
@@ -389,6 +422,12 @@ folio ingest <source_file> --type <subtype> --date YYYY-MM-DD [--client <name>] 
   `internal_sync`, `partner_check_in`, `workshop`
 - Preserve note identity on re-ingest by matching explicit target,
   `source_transcript`, or `source_hash`
+- Resolve extracted entities against confirmed registry entries using exact
+  canonical-name or alias matching
+- When exact/alias matching fails and same-type candidates exist, record a
+  bounded LLM-proposed soft match for human review
+- Auto-create unresolved extracted entities as unconfirmed registry entries
+- Render resolved mentions as canonical wikilinks in the output interaction note
 - If analysis cannot run, still write a degraded interaction note that is
   visibly flagged for review
 
@@ -400,6 +439,32 @@ folio ingest <source_file> --type <subtype> --date YYYY-MM-DD [--client <name>] 
   Quotes / Evidence, Impact on Hypotheses, and Raw Transcript sections
 - [ ] Re-ingesting the same source reuses the existing note path and increments
   versioning instead of creating duplicates
+- [ ] Exact canonical-name and alias matches resolve to confirmed registry entities
+- [ ] Unresolved extracted entities are preserved as visible unconfirmed follow-up work
+- [ ] LLM soft-match proposals are reviewable rather than silently canonicalized
+
+#### FR-507: Entities Command Family
+
+```bash
+folio entities [--type <entity_type>] [--unconfirmed]
+folio entities show <name> [--type <entity_type>]
+folio entities import <csv>
+folio entities confirm <name>
+folio entities reject <name>
+```
+
+- List entities grouped by type with confirmation status
+- Filter to a specific type or only unconfirmed entities
+- Show a single entity with aliases, type-specific metadata, and proposed match
+- Import org-chart style CSV data into the registry
+- Confirm an unconfirmed entity for future resolution
+- Reject an unconfirmed entity from the registry
+
+**Acceptance Criteria:**
+- [ ] `folio entities` shows grouped entity totals and unconfirmed counts
+- [ ] `folio entities import <csv>` creates or upgrades registry entries
+- [ ] `folio entities confirm <name>` clears pending review state and keeps the entity
+- [ ] `folio entities reject <name>` removes only unconfirmed entities
 
 ---
 
