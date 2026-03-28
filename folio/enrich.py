@@ -43,6 +43,14 @@ from .tracking.entities import sanitize_wikilink_name
 
 logger = logging.getLogger(__name__)
 
+# Plural category keys from resolution_result.entities → singular registry types
+_PLURAL_TO_SINGULAR = {
+    "people": "person",
+    "departments": "department",
+    "systems": "system",
+    "processes": "process",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -375,14 +383,16 @@ def _recompute_live_entity_fp(
         # Look up current status in live registry
         results = registry.lookup(text, entity_type=etype)
         if results:
-            _et, key, entry = results[0]
+            _et, _key, entry = results[0]
+            # Use canonical_name (not key) to match what enrich_note stores
+            cname = entry.canonical_name
             if entry.needs_confirmation:
                 if entry.proposed_match:
-                    resolution = f"proposed_match:{_et}/{key}"
+                    resolution = f"proposed_match:{_et}/{cname}"
                 else:
-                    resolution = f"unconfirmed:{_et}/{key}"
+                    resolution = f"unconfirmed:{_et}/{cname}"
             else:
-                resolution = f"confirmed:{_et}/{key}"
+                resolution = f"confirmed:{_et}/{cname}"
         else:
             resolution = "unresolved"
         pairs.append((text, resolution))
@@ -472,14 +482,6 @@ def enrich_note(
             # (both contain auto-created names), so build a skip set to
             # avoid duplicates and wrong confirmed: labels (B2 fix).
             created_names = {c.canonical_name for c in resolution_result.created_entities}
-            # Map plural categories to singular entity types for registry
-            # consistency (B1 fix: "people" → "person", etc.)
-            _PLURAL_TO_SINGULAR = {
-                "people": "person",
-                "departments": "department",
-                "systems": "system",
-                "processes": "process",
-            }
 
             for category, names in resolution_result.entities.items():
                 singular_type = _PLURAL_TO_SINGULAR.get(category, category)
@@ -962,6 +964,10 @@ def _build_peer_context(config: FolioConfig, plan_entry: EnrichPlanEntry) -> str
                     val = peer_fm.get(rf)
                     if val:
                         desc += f"{rf}: {val}\n"
+                # Add grounding_summary (spec D3 allowed peer context)
+                gs = peer_fm.get("grounding_summary")
+                if gs:
+                    desc += f"Grounding: {gs}\n"
         peers.append(desc)
 
     return "\n---\n".join(peers[:20])  # Bounded peer context
@@ -1015,6 +1021,9 @@ def _build_peer_descriptors(
             f"Source hash: {entry_data.get('source_hash', '')}\n"
             f"Version: {entry_data.get('version', 1)}\n"
         )
+        gs = entry_data.get("grounding_summary")
+        if gs:
+            desc += f"Grounding: {gs}\n"
         descriptors.append(desc)
 
     return descriptors[:20]
@@ -1290,8 +1299,7 @@ def _insert_related_section(
         # The raw transcript callout starts with "> [!quote]" and may be
         # the last content in the note. We must insert BEFORE it, not after
         # impact.end which may include or follow the callout (B4 fix).
-        import re as _re
-        callout_match = _re.search(r'^> \[!quote\]', content, _re.MULTILINE)
+        callout_match = re.search(r'^> \[!quote\]', content, re.MULTILINE)
         if callout_match:
             # Insert before the callout
             insert_pos = callout_match.start()

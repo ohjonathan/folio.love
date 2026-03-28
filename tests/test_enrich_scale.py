@@ -192,6 +192,7 @@ def _setup_scale_fixture(tmp_path: Path) -> tuple[FolioConfig, dict]:
     - 5 evidence notes (L1, protected)
     - 3 evidence notes (reviewed, protected)
     - 2 evidence notes (with stale enrich)
+    - 2 evidence notes (with stale managed_body_fingerprint → conflict)
     - 5 diagram entries (should be skipped)
     """
     config = _make_config(tmp_path)
@@ -308,6 +309,31 @@ def _setup_scale_fixture(tmp_path: Path) -> tuple[FolioConfig, dict]:
             "engagement": "Eng_0",
         }
 
+    # 2 conflict notes (stale managed_body_fingerprint)
+    for i in range(2):
+        note_id = f"conflict_{i:03d}"
+        rel_path = f"ClientA/Eng_0/{note_id}.md"
+        enrich_meta = {
+            "status": "executed",
+            "managed_body_fingerprint": "sha256:stale_fingerprint_wont_match",
+        }
+        content = _make_evidence_note(note_id, enrich_meta=enrich_meta)
+        (lr / rel_path).parent.mkdir(parents=True, exist_ok=True)
+        (lr / rel_path).write_text(content)
+        entries[note_id] = {
+            "id": note_id,
+            "title": note_id.replace("_", " ").title(),
+            "type": "evidence",
+            "markdown_path": rel_path,
+            "deck_dir": str(Path(rel_path).parent),
+            "source_relative_path": "deck.pptx",
+            "source_hash": f"hash_{note_id}",
+            "version": 1,
+            "converted": "2026-01-01T00:00:00Z",
+            "client": "ClientA",
+            "engagement": "Eng_0",
+        }
+
     # 5 diagram entries (should be skipped at eligibility)
     for i in range(5):
         note_id = f"diagram_{i:03d}"
@@ -352,14 +378,14 @@ class TestScaleBatch:
     def test_fixture_has_50_plus_notes(self, tmp_path):
         """Verify the fixture produces enough notes."""
         config, entries = _setup_scale_fixture(tmp_path)
-        # 30 + 10 + 5 + 3 + 2 + 5 = 55 entries
-        assert len(entries) == 55
+        # 30 + 10 + 5 + 3 + 2 + 2 + 5 = 57 entries
+        assert len(entries) == 57
         # Diagram entries should be filtered at eligibility
         eligible_types = sum(
             1 for e in entries.values()
             if e.get("type") in ("evidence", "interaction")
         )
-        assert eligible_types == 50
+        assert eligible_types == 52  # 30 + 10 + 5 + 3 + 2 + 2 = 52 (excl. 5 diagrams)
 
     def test_dry_run_planning(self, tmp_path):
         """Dry-run plans all notes without LLM calls."""
@@ -522,10 +548,14 @@ class TestScaleBatch:
 
         # Should have protected notes (L1 + reviewed = 8)
         assert result.protected >= 8
+        # Should have conflict notes (stale managed_body_fingerprint = 2)
+        assert result.conflicted >= 2
 
-        # Check that protected notes appear in output
+        # Check that protected and conflicted notes appear in output
         protected_messages = [m for m in messages if "protected" in m]
         assert len(protected_messages) >= 8
+        conflict_messages = [m for m in messages if "conflict" in m]
+        assert len(conflict_messages) >= 2
 
     def test_scope_filtering(self, tmp_path):
         """Scope filter limits to matching entries."""

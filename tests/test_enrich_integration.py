@@ -449,7 +449,8 @@ class TestProtectedNote:
 class TestRefreshAfterSourceChange:
     """Canonical relationships survive, enrich becomes stale."""
 
-    def test_stale_transition(self):
+    def test_stale_transition_helpers(self):
+        """Unit-level verification of extract + stale helpers."""
         from folio.cli import _extract_enrich_passthrough, _mark_enrich_stale
 
         fm = {
@@ -480,8 +481,71 @@ class TestRefreshAfterSourceChange:
         assert "input_fingerprint" not in enrich
         assert "managed_body_fingerprint" not in enrich
         assert "proposals" not in enrich.get("axes", {}).get("relationships", {})
-        # Canonical relationship preserved
         assert preserved["supersedes"] == "older_note_id"
+
+    def test_end_to_end_refresh_preserves_enrich(self, tmp_path):
+        """S1: End-to-end refresh flow preserves canonical fields and marks stale."""
+        from folio.output.frontmatter import generate
+
+        # Simulate an enriched note with canonical supersedes and enrich metadata
+        enriched_fm = {
+            "id": "e1",
+            "title": "Test Evidence",
+            "type": "evidence",
+            "curation_level": "L0",
+            "source": "deck.pptx",
+            "source_hash": "original_hash",
+            "version": 1,
+            "supersedes": "older_note_id",
+            "_llm_metadata": {
+                "convert": {"status": "executed"},
+                "enrich": {
+                    "status": "executed",
+                    "input_fingerprint": "sha256:abc",
+                    "entity_resolution_fingerprint": "sha256:ghi",
+                },
+            },
+        }
+
+        # Simulate what refresh does: call frontmatter.generate() with
+        # preserved_enrich_fields extracted from the existing frontmatter
+        from folio.cli import _extract_enrich_passthrough, _mark_enrich_stale
+        preserved = _extract_enrich_passthrough(enriched_fm)
+
+        # Simulate source change → mark stale
+        _mark_enrich_stale(preserved)
+
+        # Generate new frontmatter (as converter would) with passthrough
+        from folio.tracking.versions import VersionInfo, ChangeSet
+        vi = VersionInfo(
+            version=2,
+            timestamp="2026-01-02T00:00:00Z",
+            source_hash="new_hash",
+            source_path="deck.pptx",
+            note=None,
+            slide_count=1,
+            changes=ChangeSet(),
+        )
+        new_fm_str = generate(
+            title="Test Evidence",
+            deck_id="e1",
+            source_relative_path="deck.pptx",
+            source_hash="new_hash",
+            source_type="pptx",
+            version_info=vi,
+            analyses={},
+            preserved_enrich_fields=preserved,
+        )
+
+        # Parse the output
+        result_fm = yaml.safe_load(new_fm_str.strip().strip("---"))
+
+        # Canonical relationship survived
+        assert result_fm.get("supersedes") == "older_note_id"
+        # Enrich metadata preserved but marked stale
+        enrich = result_fm.get("_llm_metadata", {}).get("enrich", {})
+        assert enrich.get("status") == "stale"
+        assert "input_fingerprint" not in enrich
 
 
 # ---------------------------------------------------------------------------
@@ -569,18 +633,78 @@ class TestUnrelatedEntityChange:
     """Unaffected notes don't re-enrich when unrelated entities change."""
 
     def test_fingerprint_unaffected_by_unrelated_entity(self, tmp_path):
-        """Note fingerprint doesn't change from unrelated entity registry updates."""
+        """Unit: Note fingerprint doesn't change from unrelated entity updates."""
         from folio.pipeline.enrich_data import compute_entity_resolution_fingerprint
 
-        # Note A has entity mentions: Alice
         note_a_fp = compute_entity_resolution_fingerprint(
             [("Alice", "confirmed:person/alice")]
         )
-
-        # Unrelated entity "Zed" is added to entities.json elsewhere
-        # Note A's entity resolution fingerprint should be unchanged
         note_a_fp_after = compute_entity_resolution_fingerprint(
             [("Alice", "confirmed:person/alice")]
         )
-
         assert note_a_fp == note_a_fp_after
+
+    @patch("folio.enrich.analyze_note_for_enrichment")
+    @patch("folio.enrich.resolve_entities")
+    @patch("folio.enrich.evaluate_relationships", return_value=[])
+    def test_batch_skip_after_unrelated_entity_change(
+        self, mock_eval_rel, mock_resolve, mock_analyze, tmp_path
+    ):
+        """S2: Adding an unrelated entity to entities.json doesn't re-enrich a note."""
+        from folio.pipeline.entity_resolution import ResolutionResult
+        config = _make_config(tmp_path)
+        library_root = config.library_root.resolve()
+
+        note_content = _make_evidence_note(note_id="e1")
+        _setup_note(library_root, "ClientA/DD_Q1/e1/e1.md", note_content)
+        _setup_registry(library_root, {
+            "e1": {
+                "id": "e1", "title": "E1", "markdown_path": "ClientA/DD_Q1/e1/e1.md",
+                "deck_dir": "ClientA/DD_Q1/e1", "source_relative_path": "deck.pptx",
+                "source_hash": "abc123", "version": 1, "converted": "2026-01-01",
+                "type": "evidence", "client": "ClientA", "engagement": "DD_Q1",
+            },
+        })
+
+        entities_data = {
+            "_schema_version": 1, "updated_at": "2026-01-01T00:00:00Z",
+            "entities": {"person": {
+                "alice": {"canonical_name": "Alice", "type": "person",
+                          "aliases": [], "needs_confirmation": False, "source": "import"},
+            }, "department": {}, "system": {}, "process": {}},
+        }
+        (library_root / "entities.json").write_text(json.dumps(entities_data))
+
+        mock_analyze.return_value = EnrichAnalysisOutput(
+            tag_candidates=["new-tag"],
+            entity_mention_candidates={"people": ["Alice"]},
+            relationship_cues=[],
+        )
+        mock_resolve.return_value = ResolutionResult(
+            entities={"people": ["Alice"]}, warnings=[], created_entities=[],
+        )
+
+        # First enrich run
+        result1 = enrich_batch(config, echo=lambda x: None)
+        assert result1.updated == 1
+        assert mock_analyze.call_count == 1
+
+        # Add unrelated entity to entities.json
+        entities_data["entities"]["person"]["zed"] = {
+            "canonical_name": "Zed", "type": "person",
+            "aliases": [], "needs_confirmation": False, "source": "import",
+        }
+        entities_data["updated_at"] = "2026-02-01T00:00:00Z"
+        (library_root / "entities.json").write_text(json.dumps(entities_data))
+
+        # Second enrich run — note should be SKIPPED (Zed is unrelated)
+        mock_analyze.reset_mock()
+        # Re-set return value after reset (reset clears it)
+        mock_analyze.return_value = EnrichAnalysisOutput(
+            tag_candidates=["new-tag"],
+            entity_mention_candidates={"people": ["Alice"]},
+            relationship_cues=[],
+        )
+        result2 = enrich_batch(config, echo=lambda x: None)
+        assert result2.unchanged == 1
+        assert mock_analyze.call_count == 0  # No LLM call — skipped
