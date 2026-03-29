@@ -464,6 +464,13 @@ If a user manually adds a wikilink in the body, `folio enrich` detects it and of
 
 Start with `depends_on`, `draws_from`, and `impacts`. Add `relates_to`, `supersedes`, and `instantiates` when real usage creates the need.
 
+Actual v1 sequencing is corpus-driven. PR C shipped `supersedes` first because
+the registry-managed corpus currently contains evidence and interaction notes,
+and `supersedes` is the only provenance-relevant relationship that is legal on
+evidence notes. PR D therefore seeds provenance from confirmed `supersedes`
+pairs in v1; `depends_on` and `draws_from` provenance remains v2 work when
+analysis and deliverable notes enter the registry.
+
 ---
 
 ## 7. Tag Vocabulary
@@ -794,6 +801,35 @@ Semantic search operates over full text content + metadata, complementing struct
 | `supersedes` | id | all | No |
 | `instantiates` | id | all except reference | No |
 | `impacts` | list[id] | interaction | Yes (L1+) |
+| `provenance_links` | list[ConfirmedProvenanceLink] | evidence | No |
+
+### 12.3.1 Provenance Link Schema
+
+Each `provenance_links` entry records a human-confirmed link between a source
+claim and a target evidence entry in a `supersedes` predecessor:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `link_id` | string | Stable hash ID |
+| `source_slide` | int | Source slide number |
+| `source_claim_index` | int | Source claim index within slide |
+| `source_claim_hash` | string | SHA-256 of source claim text + quote |
+| `source_claim_text_snapshot` | string | Exact source claim text at confirmation |
+| `source_supporting_quote_snapshot` | string or null | Exact source supporting quote at confirmation |
+| `target_doc` | id | Target document ID |
+| `target_slide` | int | Target slide number |
+| `target_claim_index` | int | Target evidence-entry index within slide |
+| `target_claim_hash` | string | SHA-256 of target claim text + quote |
+| `target_claim_text_snapshot` | string | Exact target claim text at confirmation |
+| `target_supporting_quote_snapshot` | string or null | Exact target supporting quote at confirmation |
+| `confidence` | enum | high, medium, low |
+| `confirmed_at` | datetime | Confirmation timestamp |
+| `link_status` | enum | confirmed, acknowledged_stale, re_evaluate_pending |
+| `acknowledged_at_claim_hash` | string or null | Source hash at acknowledgment |
+| `acknowledged_at_target_hash` | string or null | Target hash at acknowledgment |
+
+`provenance_links` is human-owned canonical metadata. Machine proposals and
+repair state live under `_llm_metadata.provenance`.
 
 ### 12.4 Source Fields (Converted Assets)
 
@@ -830,6 +866,10 @@ Semantic search operates over full text content + metadata, complementing struct
 | `review_flags` | list[string] | all | Auto (empty default) |
 | `extraction_confidence` | float or null | all with LLM analysis | Auto |
 | `grounding_summary` | object | evidence, interaction, analysis | Auto |
+
+`review_flags` may include provenance-specific additive signals such as
+`provenance_link_stale`. These flags do not by themselves require
+`review_status: flagged`.
 
 **`review_status` values:**
 

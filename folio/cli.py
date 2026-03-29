@@ -24,6 +24,15 @@ from .llm.runtime import EndpointNotAllowedError
 logger = logging.getLogger(__name__)
 
 
+class ScopeOrCommandGroup(click.Group):
+    """Click group that accepts either a subcommand or a bare scope argument."""
+
+    def parse_args(self, ctx, args):
+        if args and not args[0].startswith("-") and self.get_command(ctx, args[0]) is None:
+            args = ["--scope", args[0], *args[1:]]
+        return super().parse_args(ctx, args)
+
+
 def _matches_scope(path: str, scope: str) -> bool:
     """Check if a path falls under a scope prefix using segment boundaries.
 
@@ -34,7 +43,7 @@ def _matches_scope(path: str, scope: str) -> bool:
     return path == scope or path.startswith(norm_scope)
 
 
-# Enrich relationship fields for D12 passthrough
+# Enrich/provenance relationship fields for D12/PR D passthrough
 _ENRICH_RELATIONSHIP_FIELDS = (
     "depends_on", "draws_from", "impacts",
     "relates_to", "supersedes", "instantiates",
@@ -47,12 +56,10 @@ _ENRICH_FINGERPRINT_FIELDS = (
 
 
 def _extract_enrich_passthrough(fm: dict) -> dict | None:
-    """Extract enrich passthrough fields from existing frontmatter.
+    """Extract enrich/provenance passthrough fields from existing frontmatter.
 
     Returns a dict suitable for ``preserved_enrich_fields`` parameter,
-    or None if nothing to preserve. Implements D12 refresh compatibility:
-    if the source_hash changed and enrich metadata exists, marks the
-    enrich block as stale and clears fingerprints and proposals.
+    or None if nothing to preserve.
     """
     if not isinstance(fm, dict):
         return None
@@ -64,11 +71,19 @@ def _extract_enrich_passthrough(fm: dict) -> dict | None:
         if field_name in fm:
             result[field_name] = fm[field_name]
 
-    # Preserve _llm_metadata.enrich
+    if "provenance_links" in fm:
+        result["provenance_links"] = fm["provenance_links"]
+
+    # Preserve _llm_metadata.enrich / provenance
     llm_meta = fm.get("_llm_metadata")
-    if isinstance(llm_meta, dict) and "enrich" in llm_meta:
-        enrich_block = dict(llm_meta["enrich"])  # shallow copy
-        result["_llm_metadata"] = {"enrich": enrich_block}
+    if isinstance(llm_meta, dict):
+        metadata: dict = {}
+        if isinstance(llm_meta.get("enrich"), dict):
+            metadata["enrich"] = dict(llm_meta["enrich"])
+        if isinstance(llm_meta.get("provenance"), dict):
+            metadata["provenance"] = dict(llm_meta["provenance"])
+        if metadata:
+            result["_llm_metadata"] = metadata
 
     if not result:
         return None
@@ -77,26 +92,44 @@ def _extract_enrich_passthrough(fm: dict) -> dict | None:
 
 
 def _mark_enrich_stale(preserved: dict) -> None:
-    """Mark enrich metadata as stale when source hash changes.
+    """Mark enrich/provenance metadata stale when source hash changes.
 
-    Clears fingerprints and relationship proposals per D12.
+    Clears enrich fingerprints/proposals and provenance pair cache while
+    preserving human-owned canonical relationships and links.
     """
     enrich = preserved.get("_llm_metadata", {}).get("enrich")
-    if not enrich:
-        return
+    if enrich:
+        enrich["status"] = "stale"
 
-    enrich["status"] = "stale"
+        # Clear fingerprints
+        for fp_field in _ENRICH_FINGERPRINT_FIELDS:
+            enrich.pop(fp_field, None)
 
-    # Clear fingerprints
-    for fp_field in _ENRICH_FINGERPRINT_FIELDS:
-        enrich.pop(fp_field, None)
+        # Clear relationship proposals
+        axes = enrich.get("axes")
+        if isinstance(axes, dict):
+            relationships = axes.get("relationships")
+            if isinstance(relationships, dict):
+                relationships.pop("proposals", None)
 
-    # Clear relationship proposals
-    axes = enrich.get("axes")
-    if isinstance(axes, dict):
-        relationships = axes.get("relationships")
-        if isinstance(relationships, dict):
-            relationships.pop("proposals", None)
+    provenance = preserved.get("_llm_metadata", {}).get("provenance")
+    if isinstance(provenance, dict):
+        pairs = provenance.get("pairs")
+        if isinstance(pairs, dict):
+            for pair in pairs.values():
+                if not isinstance(pair, dict):
+                    continue
+                pair.pop("pair_fingerprint", None)
+                pair.pop("repair_error", None)
+                pair.pop("repair_error_detail", None)
+                pair.pop("re_evaluate_requested", None)
+                proposals = pair.get("proposals")
+                if isinstance(proposals, list):
+                    for proposal in proposals:
+                        if not isinstance(proposal, dict):
+                            continue
+                        if proposal.get("status") == "pending_human_confirmation":
+                            proposal["status"] = "stale_pending"
 
 
 # Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
@@ -928,102 +961,104 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
         return
 
     from .tracking import registry
+    from .lock import LibraryLockError, library_lock
 
-    registry_path = library_root / "registry.json"
-    if registry_path.exists():
-        data = registry.load_registry(registry_path)
-        if data.get("_corrupt"):
-            click.echo("⚠ Registry corrupt — rebuilding from library...")
-            data = registry.rebuild_registry(library_root)
-            registry.save_registry(registry_path, data)
-    else:
-        click.echo("Bootstrapping registry from existing library...")
-        data = registry.rebuild_registry(library_root)
-        registry.save_registry(registry_path, data)
+    try:
+        with library_lock(library_root, "refresh"):
+            registry_path = library_root / "registry.json"
+            if registry_path.exists():
+                data = registry.load_registry(registry_path)
+                if data.get("_corrupt"):
+                    click.echo("⚠ Registry corrupt — rebuilding from library...")
+                    data = registry.rebuild_registry(library_root)
+                    registry.save_registry(registry_path, data)
+            else:
+                click.echo("Bootstrapping registry from existing library...")
+                data = registry.rebuild_registry(library_root)
+                registry.save_registry(registry_path, data)
 
-    # Select entries to refresh
-    entries_to_refresh = []
-    skipped_interactions = []
-    for deck_id, entry_data in data.get("decks", {}).items():
-        entry = registry.entry_from_dict(entry_data)
+            # Select entries to refresh
+            entries_to_refresh = []
+            skipped_interactions = []
+            for deck_id, entry_data in data.get("decks", {}).items():
+                entry = registry.entry_from_dict(entry_data)
 
-        # Scope filter
-        if scope:
-            if not (_matches_scope(entry.markdown_path, scope) or
-                    _matches_scope(entry.deck_dir, scope)):
-                continue
+                # Scope filter
+                if scope:
+                    if not (_matches_scope(entry.markdown_path, scope) or
+                            _matches_scope(entry.deck_dir, scope)):
+                        continue
 
-        if entry.type == "interaction":
-            skipped_interactions.append(entry)
-            continue
+                if entry.type == "interaction":
+                    skipped_interactions.append(entry)
+                    continue
 
-        # Refresh staleness
-        entry = registry.refresh_entry_status(library_root, entry)
+                # Refresh staleness
+                entry = registry.refresh_entry_status(library_root, entry)
 
-        if convert_all or entry.staleness_status == "stale":
-            entries_to_refresh.append(entry)
+                if convert_all or entry.staleness_status == "stale":
+                    entries_to_refresh.append(entry)
 
-    for entry in skipped_interactions:
-        click.echo(
-            f"↷ {entry.id}: skipping interaction entry, re-run `folio ingest` instead"
-        )
+            for entry in skipped_interactions:
+                click.echo(
+                    f"↷ {entry.id}: skipping interaction entry, re-run `folio ingest` instead"
+                )
 
-    if skipped_interactions:
-        click.echo(f"Skipped interaction entries: {len(skipped_interactions)}")
+            if skipped_interactions:
+                click.echo(f"Skipped interaction entries: {len(skipped_interactions)}")
 
-    if not entries_to_refresh:
-        click.echo("Nothing to refresh.")
-        return
+            if not entries_to_refresh:
+                click.echo("Nothing to refresh.")
+                return
 
-    click.echo(f"Refreshing {len(entries_to_refresh)} document(s)...")
-    click.echo("")
+            click.echo(f"Refreshing {len(entries_to_refresh)} document(s)...")
+            click.echo("")
 
-    converter = FolioConverter(config)
-    from .converter import _read_existing_frontmatter
-    success = 0
-    failed = 0
+            converter = FolioConverter(config)
+            from .converter import _read_existing_frontmatter
+            success = 0
+            failed = 0
 
-    for entry in entries_to_refresh:
-        source_path = registry.resolve_entry_source(library_root, entry)
-        if not source_path.exists():
-            click.echo(f"✗ {entry.id}: source missing ({entry.source_relative_path})")
-            failed += 1
-            continue
+            for entry in entries_to_refresh:
+                source_path = registry.resolve_entry_source(library_root, entry)
+                if not source_path.exists():
+                    click.echo(f"✗ {entry.id}: source missing ({entry.source_relative_path})")
+                    failed += 1
+                    continue
 
-        try:
-            # Read existing frontmatter to preserve metadata across refresh
-            existing_fm = _read_existing_frontmatter(library_root / entry.markdown_path)
+                try:
+                    # Read existing frontmatter to preserve metadata across refresh
+                    existing_fm = _read_existing_frontmatter(library_root / entry.markdown_path)
 
-            # Extract enrich passthrough fields (D12 compatibility).
-            # Note: refresh preserves enrich *frontmatter* (canonical
-            # relationship fields + _llm_metadata.enrich) but regenerates
-            # the note body from scratch. The ## Related body section is
-            # lost on refresh; re-run `folio enrich` to restore it from
-            # the preserved canonical relationship fields.
-            preserved = _extract_enrich_passthrough(existing_fm) if existing_fm else None
+                    # Refresh preserves canonical relationship and provenance
+                    # fields in frontmatter, but regenerates the note body.
+                    preserved = _extract_enrich_passthrough(existing_fm) if existing_fm else None
 
-            # If source changed (stale entry), mark enrich as stale
-            if preserved and entry.staleness_status == "stale":
-                _mark_enrich_stale(preserved)
+                    # If source changed (stale entry), mark enrich/provenance stale
+                    if preserved and entry.staleness_status == "stale":
+                        _mark_enrich_stale(preserved)
 
-            result = converter.convert(
-                source_path=source_path,
-                client=entry.client,
-                engagement=entry.engagement,
-                target=library_root / entry.deck_dir,
-                subtype=existing_fm.get("subtype", "research") if existing_fm else "research",
-                industry=existing_fm.get("industry") if existing_fm else None,
-                extra_tags=existing_fm.get("tags") if existing_fm else None,
-                preserved_enrich_fields=preserved,
-            )
-            click.echo(f"✓ {entry.id} (v{result.version}, {result.slide_count} slides)")
-            success += 1
-        except Exception as e:
-            click.echo(f"✗ {entry.id}: {e}")
-            failed += 1
+                    result = converter.convert(
+                        source_path=source_path,
+                        client=entry.client,
+                        engagement=entry.engagement,
+                        target=library_root / entry.deck_dir,
+                        subtype=existing_fm.get("subtype", "research") if existing_fm else "research",
+                        industry=existing_fm.get("industry") if existing_fm else None,
+                        extra_tags=existing_fm.get("tags") if existing_fm else None,
+                        preserved_enrich_fields=preserved,
+                    )
+                    click.echo(f"✓ {entry.id} (v{result.version}, {result.slide_count} slides)")
+                    success += 1
+                except Exception as e:
+                    click.echo(f"✗ {entry.id}: {e}")
+                    failed += 1
 
-    click.echo("")
-    click.echo(f"Refresh complete: {success} succeeded, {failed} failed")
+            click.echo("")
+            click.echo(f"Refresh complete: {success} succeeded, {failed} failed")
+    except LibraryLockError as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
 
 
 @cli.command()
@@ -1051,16 +1086,21 @@ def enrich(ctx, scope, dry_run, llm_profile, force):
     config = ctx.obj["config"]
 
     from .enrich import enrich_batch
+    from .lock import LibraryLockError, library_lock
 
     try:
-        result = enrich_batch(
-            config,
-            scope=scope,
-            dry_run=dry_run,
-            llm_profile=llm_profile,
-            force=force,
-            echo=click.echo,
-        )
+        with library_lock(config.library_root.resolve(), "enrich"):
+            result = enrich_batch(
+                config,
+                scope=scope,
+                dry_run=dry_run,
+                llm_profile=llm_profile,
+                force=force,
+                echo=click.echo,
+            )
+    except LibraryLockError as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
     except ValueError as e:
         click.echo(f"✗ Configuration error: {e}")
         sys.exit(1)
@@ -1071,6 +1111,365 @@ def enrich(ctx, scope, dry_run, llm_profile, force):
 
     if result.failed > 0:
         sys.exit(1)
+
+
+@cli.group(cls=ScopeOrCommandGroup, invoke_without_command=True)
+@click.option("--scope", default=None, hidden=True)
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Show what would happen without writing files or calling LLM APIs.")
+@click.option("--llm-profile", default=None,
+              help="Override LLM profile (defined in folio.yaml).")
+@click.option("--limit", type=int, default=None,
+              help="Maximum number of source-target pairs to evaluate.")
+@click.option("--force", is_flag=True, default=False,
+              help="Bypass pair fingerprint skips.")
+@click.option("--clear-rejections", is_flag=True, default=False,
+              help="Clear stored rejection bases in scope. Requires --force.")
+@click.pass_context
+def provenance(ctx, scope: Optional[str], dry_run: bool, llm_profile: Optional[str], limit: Optional[int], force: bool, clear_rejections: bool):
+    """Generate and manage claim-level provenance links."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    config = ctx.obj["config"]
+    from .lock import LibraryLockError, library_lock
+    from .provenance import provenance_batch
+
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            result = provenance_batch(
+                config,
+                scope=scope,
+                dry_run=dry_run,
+                llm_profile=llm_profile,
+                limit=limit,
+                force=force,
+                clear_rejections=clear_rejections,
+                echo=click.echo,
+            )
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"✗ Fatal error: {e}")
+        logger.exception("Provenance fatal error")
+        sys.exit(1)
+
+    if result.failed > 0:
+        sys.exit(1)
+
+
+@provenance.command("review")
+@click.argument("scope", required=False, default=None)
+@click.option("--include-low", is_flag=True, default=False,
+              help="Include low-confidence pending proposals.")
+@click.option("--stale", "stale_only", is_flag=True, default=False,
+              help="Show stale / repair-needed confirmed links instead of pending proposals.")
+@click.option("--doc", "doc_id", default=None,
+              help="Filter to a single source document ID.")
+@click.option("--target", "target_id", default=None,
+              help="Filter to a single target document ID.")
+@click.option("--page", type=int, default=1,
+              help="1-based review page number.")
+@click.pass_context
+def provenance_review_cmd(ctx, scope: Optional[str], include_low: bool, stale_only: bool, doc_id: Optional[str], target_id: Optional[str], page: int):
+    """Read-only review surface for pending or stale provenance items."""
+    from .provenance import PAGE_SIZE, collect_pending_proposals, collect_stale_links, paginate
+
+    config = ctx.obj["config"]
+    page = max(1, page)
+
+    if stale_only:
+        rows = collect_stale_links(config, scope=scope, doc_id=doc_id, target_id=target_id)
+        window, total_pages = paginate(rows, page)
+        click.echo(f"Stale Review ({len(rows)} item(s)) - Page {page}/{total_pages}")
+        for row in window:
+            link = row.link
+            state = row.state
+            orphan = " ORPHANED" if row.orphaned else ""
+            click.echo(
+                f"[{link.get('link_id')}] {row.source_id} -> {row.target_id} "
+                f"slide {link.get('source_slide')}, claim {link.get('source_claim_index')} "
+                f"-> slide {link.get('target_slide')}, claim {link.get('target_claim_index')} "
+                f"({state}{orphan})"
+            )
+        return
+
+    proposals = collect_pending_proposals(
+        config,
+        scope=scope,
+        doc_id=doc_id,
+        target_id=target_id,
+        include_low=include_low,
+    )
+    window, total_pages = paginate(proposals, page)
+    click.echo(f"Pending ({len(proposals)} item(s)) - Page {page}/{total_pages}")
+    for view in window:
+        proposal = view.proposal
+        source_claim = proposal.source_claim
+        target_evidence = proposal.target_evidence
+        click.echo(
+            f"[{proposal.proposal_id}] "
+            f"{view.source_id} slide {source_claim.get('slide_number')}, claim {source_claim.get('claim_index')} "
+            f"-> {view.target_id} slide {target_evidence.get('slide_number')}, claim {target_evidence.get('claim_index')} "
+            f"({proposal.confidence})"
+        )
+        click.echo(f"  Claim: {source_claim.get('claim_text')}")
+        click.echo(f"  Evidence: {target_evidence.get('claim_text')}")
+
+
+@provenance.command("status")
+@click.argument("scope", required=False, default=None)
+@click.pass_context
+def provenance_status_cmd(ctx, scope: Optional[str]):
+    """Summarize provenance coverage and repair state."""
+    from .provenance import provenance_status_summary
+
+    config = ctx.obj["config"]
+    rows = provenance_status_summary(config, scope=scope)
+    total_pairs = 0
+    total_claims = 0
+    total_pending = 0
+    total_confirmed = 0
+    coverage_num = 0
+    for row in rows:
+        total_pairs += row["pairs"]
+        total_claims += row["claims"]
+        total_pending += row["pending"]
+        total_confirmed += row["fresh"] + row["stale"] + row["acknowledged"] + row["re_evaluate_pending"] + row["blocked"]
+        coverage_num += row["coverage_numerator"]
+        click.echo(
+            f"{row['source_id']}: pairs={row['pairs']} claims={row['claims']} "
+            f"pending={row['pending']} fresh={row['fresh']} stale={row['stale']} "
+            f"ack={row['acknowledged']} re-eval={row['re_evaluate_pending']} "
+            f"blocked={row['blocked']} orphaned={row['orphaned']} rejected={row['rejected']}"
+        )
+    coverage_pct = (coverage_num / total_claims * 100.0) if total_claims else 0.0
+    click.echo("")
+    click.echo(
+        f"Total: {total_pairs} pairs, {total_claims} claims, {total_pending} pending, "
+        f"{total_confirmed} confirmed"
+    )
+    click.echo(f"Coverage: {coverage_num}/{total_claims} claims have fresh confirmed provenance ({coverage_pct:.1f}%)")
+
+
+@provenance.command("confirm")
+@click.argument("proposal_id")
+@click.pass_context
+def provenance_confirm_cmd(ctx, proposal_id: str):
+    """Confirm one pending provenance proposal."""
+    from .lock import LibraryLockError, library_lock
+    from .provenance import confirm_proposal
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            link_id = confirm_proposal(config, proposal_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Confirmed {proposal_id} -> {link_id}")
+
+
+@provenance.command("reject")
+@click.argument("proposal_id")
+@click.pass_context
+def provenance_reject_cmd(ctx, proposal_id: str):
+    """Reject one pending provenance proposal."""
+    from .lock import LibraryLockError, library_lock
+    from .provenance import reject_proposal
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            reject_proposal(config, proposal_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Rejected {proposal_id}")
+
+
+def _ordered_pending_ids(config, scope=None, doc_id=None, target_id=None):
+    from .provenance import collect_pending_proposals
+
+    proposals = collect_pending_proposals(
+        config,
+        scope=scope,
+        doc_id=doc_id,
+        target_id=target_id,
+        include_low=True,
+    )
+    return [view.proposal.proposal_id for view in proposals]
+
+
+@provenance.command("confirm-range")
+@click.argument("proposal_range")
+@click.argument("scope", required=False, default=None)
+@click.option("--doc", "doc_id", default=None)
+@click.option("--target", "target_id", default=None)
+@click.pass_context
+def provenance_confirm_range_cmd(ctx, proposal_range: str, scope: Optional[str], doc_id: Optional[str], target_id: Optional[str]):
+    """Confirm a contiguous range in the deterministic pending ordering."""
+    from .lock import LibraryLockError, library_lock
+    from .provenance import confirm_range
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            count = confirm_range(config, proposal_range, scope=scope, doc_id=doc_id, target_id=target_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Confirmed {count} proposal(s)")
+
+
+@provenance.command("confirm-doc")
+@click.argument("doc_id")
+@click.argument("scope", required=False, default=None)
+@click.option("--target", "target_id", default=None)
+@click.pass_context
+def provenance_confirm_doc_cmd(ctx, doc_id: str, scope: Optional[str], target_id: Optional[str]):
+    """Confirm all pending proposals for one source document."""
+    from .lock import LibraryLockError, library_lock
+    from .provenance import confirm_doc
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            count = confirm_doc(config, doc_id, target_id=target_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Confirmed {count} proposal(s)")
+
+
+@provenance.command("reject-doc")
+@click.argument("doc_id")
+@click.argument("scope", required=False, default=None)
+@click.option("--target", "target_id", default=None)
+@click.pass_context
+def provenance_reject_doc_cmd(ctx, doc_id: str, scope: Optional[str], target_id: Optional[str]):
+    """Reject all pending proposals for one source document."""
+    from .lock import LibraryLockError, library_lock
+    from .provenance import reject_doc
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            count = reject_doc(config, doc_id, target_id=target_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Rejected {count} proposal(s)")
+
+
+@provenance.group("stale")
+def provenance_stale_group():
+    """Mutate stale or repair-needed canonical provenance links."""
+
+
+@provenance_stale_group.command("refresh-hashes")
+@click.argument("link_id")
+@click.pass_context
+def provenance_stale_refresh_hashes_cmd(ctx, link_id: str):
+    from .lock import LibraryLockError, library_lock
+    from .provenance import stale_refresh_hashes
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            stale_refresh_hashes(config, link_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Refreshed {link_id}")
+
+
+@provenance_stale_group.command("re-evaluate")
+@click.argument("link_id")
+@click.pass_context
+def provenance_stale_re_evaluate_cmd(ctx, link_id: str):
+    from .lock import LibraryLockError, library_lock
+    from .provenance import stale_re_evaluate
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            stale_re_evaluate(config, link_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Marked {link_id} for re-evaluation")
+
+
+@provenance_stale_group.command("remove")
+@click.argument("link_id")
+@click.pass_context
+def provenance_stale_remove_cmd(ctx, link_id: str):
+    from .lock import LibraryLockError, library_lock
+    from .provenance import stale_remove
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            stale_remove(config, link_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Removed {link_id}")
+
+
+@provenance_stale_group.command("acknowledge")
+@click.argument("link_id")
+@click.pass_context
+def provenance_stale_acknowledge_cmd(ctx, link_id: str):
+    from .lock import LibraryLockError, library_lock
+    from .provenance import stale_acknowledge
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            stale_acknowledge(config, link_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Acknowledged {link_id}")
+
+
+@provenance_stale_group.command("remove-doc")
+@click.argument("doc_id")
+@click.argument("scope", required=False, default=None)
+@click.pass_context
+def provenance_stale_remove_doc_cmd(ctx, doc_id: str, scope: Optional[str]):
+    from .lock import LibraryLockError, library_lock
+    from .provenance import stale_remove_doc
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            count = stale_remove_doc(config, doc_id, scope=scope)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Removed {count} stale link(s)")
+
+
+@provenance_stale_group.command("acknowledge-doc")
+@click.argument("doc_id")
+@click.argument("scope", required=False, default=None)
+@click.pass_context
+def provenance_stale_ack_doc_cmd(ctx, doc_id: str, scope: Optional[str]):
+    from .lock import LibraryLockError, library_lock
+    from .provenance import stale_acknowledge_doc
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "provenance"):
+            count = stale_acknowledge_doc(config, doc_id, scope=scope)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Acknowledged {count} stale link(s)")
 
 
 @cli.command()
