@@ -367,6 +367,20 @@ class TestEntryFromDict:
         entry = entry_from_dict(d)
         assert entry.type == "interaction"
 
+    def test_missing_type_with_stored_interaction_shape_defaults_to_interaction(self):
+        d = {
+            "id": "legacy_interaction_stored",
+            "title": "Legacy Interaction",
+            "markdown_path": "Client/interactions/note.md",
+            "deck_dir": "Client/interactions",
+            "source_relative_path": "../../transcripts/note.md",
+            "source_hash": "abc123",
+            "version": 1,
+            "converted": "2026-03-28T00:00:00Z",
+        }
+        entry = entry_from_dict(d)
+        assert entry.type == "interaction"
+
 
 # ---------------------------------------------------------------------------
 # write safety: locking + disk errors

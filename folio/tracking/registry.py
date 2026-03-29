@@ -269,8 +269,43 @@ def entry_from_dict(d: dict) -> RegistryEntry:
     known_fields = {f.name for f in RegistryEntry.__dataclass_fields__.values()}
     filtered = {k: v for k, v in d.items() if k in known_fields}
     if "type" not in filtered:
-        filtered["type"] = "interaction" if "source_transcript" in d else "evidence"
+        filtered["type"] = _infer_missing_entry_type(d)
     return RegistryEntry(**filtered)
+
+
+def _infer_missing_entry_type(d: dict) -> str:
+    """Infer a missing registry entry type from the stored row shape."""
+    if d.get("source_transcript"):
+        return "interaction"
+    if _looks_like_legacy_interaction_entry(d):
+        return "interaction"
+    return "evidence"
+
+
+def _looks_like_legacy_interaction_entry(d: dict) -> bool:
+    """Return True when the stored row shape looks like a legacy interaction."""
+    source_type = d.get("source_type")
+    if source_type is not None:
+        return False
+
+    for field_name in ("markdown_path", "deck_dir"):
+        if _path_has_segment(d.get(field_name), "interactions"):
+            return True
+
+    source_relative_path = d.get("source_relative_path")
+    if isinstance(source_relative_path, str):
+        path = Path(source_relative_path)
+        lowered_parts = {part.lower() for part in path.parts}
+        if "transcript" in lowered_parts or "transcripts" in lowered_parts:
+            return True
+
+    return False
+
+
+def _path_has_segment(value: object, segment: str) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return segment.lower() in {part.lower() for part in Path(value).parts}
 
 
 # ---------------------------------------------------------------------------

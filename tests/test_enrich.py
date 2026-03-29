@@ -1707,6 +1707,49 @@ class TestLegacyRegistryTypeCompatibility:
         assert plan[0].entry.type == "evidence"
         assert "status --refresh" in caplog.text
 
+    def test_missing_type_stored_interaction_shape_remains_interaction(self, tmp_path):
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        _setup_note(lr, "ClientA/interactions/legacy.md", _make_interaction_note(note_id="legacy_interaction"))
+        _setup_registry(lr, {
+            "legacy_interaction": {
+                "id": "legacy_interaction",
+                "title": "Legacy Interaction",
+                "markdown_path": "ClientA/interactions/legacy.md",
+                "deck_dir": "ClientA/interactions",
+                "source_relative_path": "../../transcripts/legacy.md",
+                "source_hash": "def456abc789",
+                "version": 1,
+                "converted": "2026-03-28T00:00:00Z",
+            }
+        })
+
+        plan = plan_enrichment(config, dry_run=True)
+
+        assert len(plan) == 1
+        assert plan[0].entry.type == "interaction"
+        assert plan[0].doc_type == "interaction"
+
+
+class TestBatchEnrichLogging:
+    def test_empty_plan_logs_refresh_warning_and_echoes_message(self, tmp_path, caplog):
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        (lr / "registry.json").write_text('{"_schema_version": 1, "decks": {}}')
+
+        echoed: list[str] = []
+
+        def _echo(message: str) -> None:
+            echoed.append(message)
+
+        with caplog.at_level(logging.WARNING, logger="folio.enrich"):
+            result = enrich_batch(config, dry_run=True, echo=_echo)
+
+        assert isinstance(result, EnrichBatchResult)
+        assert echoed == ["No eligible documents found."]
+        assert "No eligible documents found." in caplog.text
+        assert "status --refresh" in caplog.text
+
 
 class TestRelationshipFpRecompute:
     """B2: Skip check must recompute relationship fp from live canonical state."""

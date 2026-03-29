@@ -1606,6 +1606,10 @@ def enrich_batch(
     plan = plan_enrichment(config, scope=scope, force=force, llm_profile=llm_profile, dry_run=dry_run)
 
     if not plan:
+        logger.warning(
+            "No eligible documents found. If this library was built by an older "
+            "folio-love version, try 'folio status --refresh' to sync registry fields."
+        )
         echo("No eligible documents found.")
         return EnrichBatchResult()
 
