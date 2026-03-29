@@ -92,14 +92,17 @@ class TestImportReportsTo:
         bob = reg.get_entity("person", "bob_martinez")
         assert bob.reports_to == "alice_chen"
 
-    def test_import_reports_to_unresolved(self, tmp_path):
+    def test_import_reports_to_autocreates_missing_manager(self, tmp_path):
         csv_path = tmp_path / "people.csv"
         _make_csv(csv_path, "name,reports_to\nAlice,Unknown Boss\n")
         reg = _make_registry(tmp_path)
         result = import_csv(reg, csv_path)
         alice = reg.get_entity("person", "alice")
-        assert alice.reports_to == "Unknown Boss"
-        assert any("not found" in w for w in result.warnings)
+        manager = reg.get_entity("person", "unknown_boss")
+        assert alice.reports_to == "unknown_boss"
+        assert manager is not None
+        assert manager.needs_confirmation is False
+        assert manager.source == "import:chain-completed"
 
     def test_import_reports_to_order_independent(self, tmp_path):
         csv_path = tmp_path / "people.csv"
@@ -121,6 +124,19 @@ class TestImportReportsTo:
         bob = reg.get_entity("person", "bob")
         assert bob.reports_to == "alice"
         assert any("self" in w.lower() for w in result.warnings)
+
+    def test_import_reports_to_cycle_warns_and_skips_cycle(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,reports_to\nAlice,Bob\nBob,Alice\n")
+        reg = _make_registry(tmp_path)
+
+        result = import_csv(reg, csv_path)
+
+        alice = reg.get_entity("person", "alice")
+        bob = reg.get_entity("person", "bob")
+        assert alice.reports_to == "bob"
+        assert bob.reports_to is None
+        assert any("circular chain" in w.lower() for w in result.warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -179,9 +195,9 @@ class TestImportDuplicates:
 
     def test_import_alias_collision_warning(self, tmp_path):
         csv_path = tmp_path / "people.csv"
-        _make_csv(csv_path, "name\nJane\n")
+        _make_csv(csv_path, "name,title\nJane,CEO\n")
         reg = _make_registry(tmp_path)
-        # Pre-populate with alias "jane"
+        # Pre-populate with alias "Jane"
         reg.add_entity(EntityEntry(
             canonical_name="Jane Smith",
             type="person",
@@ -190,7 +206,11 @@ class TestImportDuplicates:
         ))
         reg.save()
         result = import_csv(reg, csv_path)
+        assert result.people_updated == 0
+        assert result.people_imported == 0
         assert any("collision" in w.lower() or "collides" in w.lower() for w in result.warnings)
+        jane = reg.get_entity("person", "jane_smith")
+        assert jane.title is None
 
     def test_import_duplicate_rows(self, tmp_path):
         csv_path = tmp_path / "people.csv"
@@ -203,7 +223,7 @@ class TestImportDuplicates:
     def test_import_slug_collision_skips_row(self, tmp_path):
         """Same slug but different canonical name → skip with warning."""
         csv_path = tmp_path / "people.csv"
-        _make_csv(csv_path, "name,title\nJane  Smith,CTO\n")  # double space
+        _make_csv(csv_path, "name,title\nJane-Smith,CTO\n")
         reg = _make_registry(tmp_path)
         reg.add_entity(EntityEntry(
             canonical_name="Jane Smith",
@@ -212,7 +232,7 @@ class TestImportDuplicates:
         ))
         reg.save()
         result = import_csv(reg, csv_path)
-        # "Jane  Smith" produces same slug as "Jane Smith" but different name
+        # "Jane-Smith" produces same slug as "Jane Smith" but different name
         # Must be skipped, not treated as an update
         assert result.people_imported == 0
         assert result.people_updated == 0
@@ -225,7 +245,7 @@ class TestImportDuplicates:
     def test_import_slug_collision_confirmed_entity_unchanged(self, tmp_path):
         """Confirmed entity with same slug but different name → skip, unchanged."""
         csv_path = tmp_path / "people.csv"
-        _make_csv(csv_path, "name,title,department\nJane  Smith,CTO,Acme\n")
+        _make_csv(csv_path, "name,title,department\nJane-Smith,CTO,Acme\n")
         reg = _make_registry(tmp_path)
         reg.add_entity(EntityEntry(
             canonical_name="Jane Smith",
@@ -244,7 +264,7 @@ class TestImportDuplicates:
     def test_import_slug_collision_unconfirmed_entity_unchanged(self, tmp_path):
         """Unconfirmed entity with same slug but different name → skip, unchanged."""
         csv_path = tmp_path / "people.csv"
-        _make_csv(csv_path, "name,title\nJane  Smith,CTO\n")
+        _make_csv(csv_path, "name,title\nJane-Smith,CTO\n")
         reg = _make_registry(tmp_path)
         reg.add_entity(EntityEntry(
             canonical_name="Jane Smith",
@@ -310,6 +330,206 @@ class TestImportAliases:
         assert "Alice" in alice.aliases
         assert "the CEO" in alice.aliases
         assert "AC" in alice.aliases
+
+
+class TestOrgChartImport:
+    def test_org_chart_detection_sets_result_flag(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title,level,reports_to\nAlice,CEO,L1,\n")
+        reg = _make_registry(tmp_path)
+        result = import_csv(reg, csv_path)
+        assert result.org_chart_detected is True
+        alice = reg.get_entity("person", "alice")
+        assert alice.org_level == "L1"
+
+    def test_plain_csv_with_lone_level_does_not_trigger_org_chart_mode(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title,level\nAlice Chen,Janitor,L9\n")
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Alice Chen",
+            type="person",
+            source="import",
+            title="CEO",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.org_chart_detected is False
+        assert result.people_skipped == 1
+        alice = reg.get_entity("person", "alice_chen")
+        assert alice.title == "CEO"
+        assert alice.org_level is None
+
+    def test_org_chart_transposed_name_matches_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title,level,reports_to\n"Link, Rachel",VP,L4,\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Rachel Link",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+        assert result.people_updated == 1
+        person = reg.get_entity("person", "rachel_link")
+        assert person.title == "VP"
+        assert person.org_level == "L4"
+
+    def test_org_chart_transposed_unicode_name_matches_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title,level,reports_to\n"Díaz, José",VP,L4,\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="José Díaz",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+        assert result.people_updated == 1
+        person = reg.get_entity("person", "jos_d_az")
+        assert person.title == "VP"
+        assert person.org_level == "L4"
+
+    def test_plain_csv_transposed_name_does_not_update_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title\n"Link, Rachel",VP\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Rachel Link",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.people_updated == 0
+        assert result.people_imported == 0
+        assert any("skipped" in w.lower() or "collision" in w.lower() for w in result.warnings)
+        person = reg.get_entity("person", "rachel_link")
+        assert person.title is None
+
+    def test_org_chart_reimport_updates_changed_fields(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title,level,reports_to\nAlice Chen,CEO,L1,\n")
+        reg = _make_registry(tmp_path)
+
+        first = import_csv(reg, csv_path)
+        assert first.people_imported == 1
+
+        _make_csv(csv_path, "name,title,level,reports_to\nAlice Chen,President,L2,\n")
+        second = import_csv(reg, csv_path)
+        assert second.people_updated == 1
+        alice = reg.get_entity("person", "alice_chen")
+        assert alice.title == "President"
+        assert alice.org_level == "L2"
+
+    def test_org_chart_chain_completion_uses_existing_manager_match(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(
+            csv_path,
+            'name,title,level,reports_to\n"Link, Rachel",VP,L4,\nRob Cheek,Director,L5,"Link, Rachel"\n',
+        )
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Rachel Link",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+        assert result.people_imported == 1
+        rob = reg.get_entity("person", "rob_cheek")
+        assert rob.reports_to == "rachel_link"
+
+    def test_org_chart_alias_match_updates_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title,level,reports_to\nJane,CEO,L1,\n")
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Jane Smith",
+            type="person",
+            aliases=["Jane"],
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.people_updated == 1
+        jane = reg.get_entity("person", "jane_smith")
+        assert jane.title == "CEO"
+        assert jane.org_level == "L1"
+
+    def test_org_chart_transposed_suffix_name_matches_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title,level,reports_to\n"Link, Rachelrjlink",VP,L4,\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Rachel Link",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+        assert result.people_updated == 1
+        person = reg.get_entity("person", "rachel_link")
+        assert person.title == "VP"
+        assert person.org_level == "L4"
+
+    def test_plain_csv_transposed_suffix_name_does_not_update_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title\n"Link, Rachelrjlink",VP\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Rachel Link",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.people_updated == 0
+        assert result.people_imported == 1
+        existing = reg.get_entity("person", "rachel_link")
+        assert existing.title is None
+        created = reg.get_entity("person", "rachelrjlink_link")
+        assert created is not None
+        assert created.canonical_name == "Rachelrjlink Link"
+        assert created.title == "VP"
+
+    def test_org_chart_transposed_suffix_name_ambiguous_between_people(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title,level,reports_to\n"Smith, Christopherjsmith",VP,L4,\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Christophe Smith",
+            type="person",
+            source="import",
+        ))
+        reg.add_entity(EntityEntry(
+            canonical_name="Christopher Smith",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.people_updated == 0
+        assert result.people_imported == 0
+        assert any("ambiguous match" in w.lower() for w in result.warnings)
+        assert reg.get_entity("person", "christophe_smith").title is None
+        assert reg.get_entity("person", "christopher_smith").title is None
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import yaml
 
 from click.testing import CliRunner
 from folio.cli import cli
+from folio.entity_stubs import AUTO_GENERATED_STUB_MARKER
 from folio.tracking.entities import EntityEntry, EntityRegistry
 
 
@@ -513,6 +514,7 @@ class TestEntitiesImport:
         )
         assert result.exit_code == 0
         assert "5" in result.output  # 5 people
+        assert "generate-stubs --force" in result.output
         assert (library / "entities.json").exists()
 
     def test_entities_import_file_not_found(self, tmp_path):
@@ -526,6 +528,167 @@ class TestEntitiesImport:
             cli, ["--config", str(config_path), "entities", "import", "/nonexistent.csv"]
         )
         assert result.exit_code != 0
+
+
+class TestEntitiesGenerateStubs:
+    def test_generate_stubs_creates_type_directories_and_person_metadata(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["bob_martinez"]["org_level"] = "L4"
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs"]
+        )
+
+        stub_path = library / "_entities" / "person" / "Bob Martinez.md"
+        department_dir = library / "_entities" / "department"
+        assert result.exit_code == 0
+        assert stub_path.exists()
+        assert department_dir.exists()
+        content = stub_path.read_text()
+        assert "entity/person/bob-martinez" in content
+        assert "job_title: CTO" in content
+        assert "org_level: L4" in content
+        assert "reports_to: Alice Chen" in content
+        assert "**Reports to:** [[Alice Chen]]" in content
+        assert "[[Alice Chen]]" in content
+        assert AUTO_GENERATED_STUB_MARKER in content
+
+    def test_generate_stubs_honors_output_dir(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        _make_entity_registry(library, _full_registry_data())
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "entities",
+                "generate-stubs",
+                "--output-dir",
+                "custom_entities",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert (library / "custom_entities" / "person" / "Alice Chen.md").exists()
+        assert not (library / "_entities").exists()
+
+    def test_generate_stubs_second_run_skips_existing(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        _make_entity_registry(library, _full_registry_data())
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        first = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs"]
+        )
+        second = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs"]
+        )
+
+        assert first.exit_code == 0
+        assert second.exit_code == 0
+        assert "skipped" in second.output.lower()
+
+    def test_generate_stubs_force_preserves_manual_files(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        _make_entity_registry(library, _full_registry_data())
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        runner.invoke(cli, ["--config", str(config_path), "entities", "generate-stubs"])
+
+        stub_path = library / "_entities" / "person" / "Alice Chen.md"
+        manual_content = "---\ntitle: Alice Chen\n---\n\n# Alice Chen\n\nManual notes.\n"
+        stub_path.write_text(manual_content)
+
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs", "--force"]
+        )
+
+        assert result.exit_code == 0
+        assert "Manual stubs preserved: 1" in result.output
+        assert stub_path.read_text() == manual_content
+
+    def test_generate_stubs_force_refreshes_auto_generated_files(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        _make_entity_registry(library, _full_registry_data())
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        runner.invoke(cli, ["--config", str(config_path), "entities", "generate-stubs"])
+
+        stub_path = library / "_entities" / "person" / "Alice Chen.md"
+        stub_path.write_text(
+            f"---\ntitle: Alice Chen\n---\n\n# Alice Chen\n\n{AUTO_GENERATED_STUB_MARKER}\n\nSTALE\n"
+        )
+
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs", "--force"]
+        )
+
+        assert result.exit_code == 0
+        refreshed = stub_path.read_text()
+        assert "STALE" not in refreshed
+        assert AUTO_GENERATED_STUB_MARKER in refreshed
+
+    def test_generate_stubs_keeps_legacy_reports_to_visible_when_manager_missing(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["bob_martinez"]["reports_to"] = "Missing Boss"
+        del data["entities"]["person"]["alice_chen"]
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs"]
+        )
+
+        assert result.exit_code == 0
+        content = (library / "_entities" / "person" / "Bob Martinez.md").read_text()
+        assert "reports_to: Missing Boss" in content
+        assert "**Reports to:** [[Missing Boss]]" in content
+
+    def test_import_then_generate_stubs_creates_note_targets(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        csv_path = FIXTURES / "test_org_chart.csv"
+        note_path = library / "ClientA" / "note.md"
+        note_path.parent.mkdir(parents=True, exist_ok=True)
+        note_path.write_text("# Note\n\nMentions [[Alice Chen]].\n")
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        import_result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "import", str(csv_path)]
+        )
+        stub_result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs"]
+        )
+
+        assert import_result.exit_code == 0
+        assert stub_result.exit_code == 0
+        assert (library / "_entities" / "person" / "Alice Chen.md").exists()
 
 
 # ---------------------------------------------------------------------------

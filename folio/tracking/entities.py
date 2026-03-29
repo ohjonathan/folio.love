@@ -7,7 +7,7 @@ import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from .registry import _atomic_write_json as atomic_write_json
 
@@ -18,6 +18,51 @@ VALID_ENTITY_TYPES = frozenset({"person", "department", "system", "process"})
 # Entity types that can be auto-extracted from interaction notes (PR B seam)
 EXTRACTION_ENTITY_TYPES = frozenset({"person", "department"})
 _WIKILINK_UNSAFE_CHARS = set("[]|#^")
+_WHITESPACE_RE = re.compile(r"\s+")
+_PERSON_COMMA_RE = re.compile(
+    r"^(?P<last>[^,]+),\s*(?P<first>[^,]+?)(?:\s+(?P<suffix>Jr\.?|Sr\.?|II|III|IV|V|VI|VII|VIII|IX))?$",
+    re.IGNORECASE,
+)
+_PERSON_NAME_TOKEN_RE = re.compile(r"^[^\W\d_]+(?:[.'-][^\W\d_]+)*\.?$")
+_PERSON_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix"})
+_NON_PERSON_COMMA_TOKENS = frozenset(
+    {
+        "associates",
+        "architecture",
+        "company",
+        "compliance",
+        "consulting",
+        "corp",
+        "corporation",
+        "department",
+        "engineering",
+        "finance",
+        "group",
+        "holdings",
+        "inc",
+        "legal",
+        "llc",
+        "llp",
+        "marketing",
+        "operations",
+        "partners",
+        "payment",
+        "payments",
+        "platform",
+        "product",
+        "products",
+        "review",
+        "sales",
+        "security",
+        "services",
+        "solutions",
+        "support",
+        "systems",
+        "team",
+        "technology",
+        "treasury",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +110,309 @@ def sanitize_wikilink_name(name: str) -> str:
     return "".join(c for c in name if c not in _WIKILINK_UNSAFE_CHARS).strip()
 
 
+def normalize_entity_name(name: str) -> str:
+    """Collapse whitespace and sanitize for consistent name matching."""
+    collapsed = _WHITESPACE_RE.sub(" ", str(name or "")).strip()
+    sanitized = sanitize_wikilink_name(collapsed)
+    return _WHITESPACE_RE.sub(" ", sanitized).strip()
+
+
+def canonicalize_person_import_name(name: str) -> tuple[str, list[str]]:
+    """Return canonical person name for import plus any implicit aliases."""
+    normalized = normalize_entity_name(name)
+    transposed = _transpose_person_name(normalized)
+    canonical = transposed or normalized
+
+    aliases: list[str] = []
+    if canonical and canonical.lower() != normalized.lower():
+        aliases.append(normalized)
+    return canonical, aliases
+
+
+def person_name_variants(name: str) -> list[str]:
+    """Generate ordered exact-match person name variants.
+
+    Variants are exact lookup candidates only. Single-token suffix-stripped
+    fragments are intentionally excluded to avoid partial-name matching.
+    """
+    normalized = normalize_entity_name(name)
+    variants: list[str] = []
+    _append_variant(variants, normalized)
+
+    transposed = _transpose_person_name(normalized)
+    _append_variant(variants, transposed)
+
+    if not transposed:
+        stripped = _strip_person_id_suffix(normalized)
+        if stripped and len(stripped.split()) > 1:
+            _append_variant(variants, stripped)
+
+    stripped_transposed = _strip_person_id_suffix(transposed)
+    if stripped_transposed and len(stripped_transposed.split()) > 1:
+        _append_variant(variants, stripped_transposed)
+
+    return variants
+
+
+def lookup_person_matches(
+    registry: "EntityRegistry",
+    *names: str,
+    confirmed_only: bool = False,
+) -> list[tuple[str, str, "EntityEntry"]]:
+    """Look up person entities across ordered exact-match fallback phases."""
+    phases: list[list[str]] = [[], [], []]
+    for name in names:
+        for phase_idx, candidates in enumerate(_person_lookup_phases(name)):
+            for candidate in candidates:
+                if candidate not in phases[phase_idx]:
+                    phases[phase_idx].append(candidate)
+
+    for candidates in phases:
+        matches = _lookup_person_candidates(
+            registry,
+            candidates,
+            confirmed_only=confirmed_only,
+        )
+        if matches:
+            return matches
+
+    return []
+
+
+def _lookup_person_candidates(
+    registry: "EntityRegistry",
+    candidates: list[str],
+    *,
+    confirmed_only: bool,
+) -> list[tuple[str, str, "EntityEntry"]]:
+    seen: set[tuple[str, str]] = set()
+    matches: list[tuple[str, str, EntityEntry]] = []
+    for candidate in candidates:
+        for match in registry.lookup(
+            candidate,
+            entity_type="person",
+            confirmed_only=confirmed_only,
+        ):
+            key = (match[0], match[1])
+            if key in seen:
+                continue
+            seen.add(key)
+            matches.append(match)
+    return matches
+
+
+def _append_variant(variants: list[str], candidate: Optional[str]) -> None:
+    if not candidate:
+        return
+    if candidate not in variants:
+        variants.append(candidate)
+
+
+def _person_lookup_phases(name: str) -> list[list[str]]:
+    normalized = normalize_entity_name(name)
+    phases: list[list[str]] = [[], [], []]
+    _append_variant(phases[0], normalized)
+
+    transposed = _transpose_person_name(normalized)
+    _append_variant(phases[1], transposed)
+
+    strip_source = transposed or normalized
+    for candidate in _strip_person_id_suffix_candidates(strip_source):
+        if candidate not in phases[0] and candidate not in phases[1]:
+            phases[2].append(candidate)
+
+    return phases
+
+
+def _transpose_person_name(name: str) -> Optional[str]:
+    match = _PERSON_COMMA_RE.match(name)
+    if not match:
+        return None
+    last = normalize_entity_name(match.group("last"))
+    first = normalize_entity_name(match.group("first"))
+    suffix = normalize_entity_name(match.group("suffix") or "")
+    if not _is_person_like_comma_name(name, last=last, first=first, suffix=suffix):
+        return None
+    if not first or not last:
+        return None
+    transposed = f"{first} {last}"
+    if suffix:
+        transposed = f"{transposed} {suffix}"
+    return transposed
+
+
+def _is_person_like_comma_name(
+    original: str,
+    *,
+    last: str,
+    first: str,
+    suffix: str,
+) -> bool:
+    if not original or any(char.isdigit() for char in original):
+        return False
+    if "&" in original or "/" in original:
+        return False
+
+    last_tokens = last.split()
+    first_tokens = first.split()
+    if not last_tokens or not first_tokens:
+        return False
+    if len(last_tokens) > 3 or len(first_tokens) > 3:
+        return False
+
+    for token in last_tokens + first_tokens:
+        if not _PERSON_NAME_TOKEN_RE.fullmatch(token):
+            return False
+        normalized_token = token.rstrip(".").lower()
+        if normalized_token in _NON_PERSON_COMMA_TOKENS:
+            return False
+
+    if suffix:
+        normalized_suffix = suffix.rstrip(".").lower()
+        if normalized_suffix not in _PERSON_SUFFIXES:
+            return False
+
+    return True
+
+
+def _strip_person_id_suffix(name: Optional[str]) -> Optional[str]:
+    if not name:
+        return None
+
+    tokens = name.split()
+    stripped = False
+    result: list[str] = []
+    for idx, token in enumerate(tokens):
+        next_token = tokens[idx + 1] if idx + 1 < len(tokens) else None
+        base = _strip_person_id_suffix_token(token, next_token=next_token)
+        if base is None:
+            result.append(token)
+            continue
+        result.append(base)
+        stripped = True
+    if not stripped:
+        return None
+    return " ".join(result)
+
+
+def _strip_person_id_suffix_candidates(name: Optional[str]) -> list[str]:
+    if not name:
+        return []
+
+    tokens = name.split()
+    candidates: list[str] = []
+    for idx, token in enumerate(tokens):
+        next_token = tokens[idx + 1] if idx + 1 < len(tokens) else None
+        for base in _strip_person_id_suffix_token_candidates(token, next_token=next_token):
+            rewritten = list(tokens)
+            rewritten[idx] = base
+            candidate = " ".join(rewritten)
+            if candidate != name and candidate not in candidates:
+                candidates.append(candidate)
+    return candidates
+
+
+def _strip_person_id_suffix_token(
+    token: str,
+    *,
+    next_token: Optional[str],
+) -> Optional[str]:
+    """Strip a likely appended user-ID suffix from a title-cased name token.
+
+    We prefer the longest exact surname fragment match, but fall back when the
+    winning split leaves a trailing vowel on the base token. That tends to mean
+    we split too early and consumed the real name's final vowel as if it were
+    part of a user-ID prefix, for example ``Christopherasmith``.
+    """
+    if not re.fullmatch(r"[A-Z][a-z]+", token):
+        return None
+    if len(token) < 10 or not next_token:
+        return None
+
+    next_key = re.sub(r"[^A-Za-z]", "", next_token).lower()
+    if len(next_key) < 4:
+        return None
+
+    candidates: list[Tuple[int, int, str, str]] = []
+    for split_idx in range(4, len(token) - 4):
+        base = token[:split_idx]
+        suffix = token[split_idx:].lower()
+        if len(base) < 4 or len(suffix) < 5:
+            continue
+        for initials_len in (2, 1, 0):
+            fragment = suffix[initials_len:]
+            if len(fragment) < 3 or not next_key.startswith(fragment):
+                continue
+            candidates.append((len(fragment), initials_len, base, suffix[:initials_len]))
+
+    if not candidates:
+        return None
+
+    best_choice = max(candidates, key=lambda choice: (choice[0], choice[1], choice[2]))
+    exact_zero_choice = max(
+        (
+            choice for choice in candidates
+            if choice[1] == 0 and choice[0] == len(next_key)
+        ),
+        default=None,
+        key=lambda choice: choice[2],
+    )
+    exact_one_choice = max(
+        (
+            choice for choice in candidates
+            if choice[1] == 1 and choice[0] == len(next_key)
+        ),
+        default=None,
+        key=lambda choice: choice[2],
+    )
+
+    if best_choice[1] == 2 and any(char in "aeiou" for char in best_choice[3]):
+        # If the 2-initial split starts with vowels, prefer a cleaner exact
+        # surname match that does not lop off the real name ending.
+        if exact_one_choice and exact_one_choice[2][-1].lower() not in "aeiou":
+            return exact_one_choice[2]
+        if exact_zero_choice is not None:
+            return exact_zero_choice[2]
+    if (
+        exact_zero_choice is not None
+        and best_choice[1] == 1
+        and best_choice[2][-1].lower() in "aeiou"
+    ):
+        return exact_zero_choice[2]
+
+    return best_choice[2]
+
+
+def _strip_person_id_suffix_token_candidates(
+    token: str,
+    *,
+    next_token: Optional[str],
+) -> list[str]:
+    if not re.fullmatch(r"[A-Z][a-z]+", token):
+        return []
+    if len(token) < 10 or not next_token:
+        return []
+
+    next_key = re.sub(r"[^A-Za-z]", "", next_token).lower()
+    if len(next_key) < 4:
+        return []
+
+    candidates: list[str] = []
+    for split_idx in range(4, len(token) - 4):
+        base = token[:split_idx]
+        suffix = token[split_idx:].lower()
+        if len(base) < 4 or len(suffix) < 5:
+            continue
+        for initials_len in (2, 1, 0):
+            fragment = suffix[initials_len:]
+            if len(fragment) < 3 or fragment != next_key:
+                continue
+            if base not in candidates:
+                candidates.append(base)
+
+    return candidates
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -90,13 +438,14 @@ class EntityEntry:
     type: str                                    # person|department|system|process
     aliases: list[str] = field(default_factory=list)
     needs_confirmation: bool = False
-    source: str = "import"                       # import|extracted|manual
+    source: str = "import"                       # provenance label
     first_seen: str = ""                         # ISO 8601, never overwritten
     created_at: str = ""                         # ISO 8601
     updated_at: str = ""                         # ISO 8601
     proposed_match: Optional[str] = None         # entity key, PR B populates
     # Person-specific
     title: Optional[str] = None
+    org_level: Optional[str] = None
     department: Optional[str] = None             # → department entity key
     reports_to: Optional[str] = None             # → person entity key
     client: Optional[str] = None
@@ -518,4 +867,3 @@ class EntityRegistry:
     def to_json(self) -> str:
         """Serialize the full registry as a JSON string."""
         return json.dumps(self._data, indent=2)
-

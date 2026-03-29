@@ -18,7 +18,7 @@ generated_by: ontos_scaffold
 
 ## March 2026 Status Update
 
-Since this roadmap was published, `main` has shipped ten important baseline
+Since this roadmap was published, `main` has shipped twelve important baseline
 changes:
 
 - PR #8: multi-provider LLM analysis for `folio convert` / `folio batch`
@@ -52,14 +52,22 @@ changes:
 - PR #35: Tier 3 ingest-time entity resolution (confirmed-only exact and alias
   matching, bounded LLM soft-match proposals, canonical wikilink rendering,
   and unresolved-entity review flow)
+- PR C: `folio enrich` shipped and production-tested on the retained
+  production `anthropic_sonnet4` library (115 eligible notes enriched, 0
+  failures, ~17 minutes, 6 high-quality `supersedes` proposals, and visible
+  entity-link insertion across the note set)
+- Post-PR-C follow-on: entity stub generation plus org-chart hierarchy merge
+  (entity stub notes for Obsidian graph connectivity, trusted org-chart merge
+  into person entities, and legacy registry `type` compatibility fallback)
 
 This does **not** change the roadmap hierarchy. It does change the current
 implementation baseline: multi-provider LLM support is now shipped foundation,
 the managed-mac automated PPTX conversion path has been rerun successfully on
 the real Tier 1 corpus, and the enterprise-scale batch path now includes the
 first round of runtime-waste controls discovered in field deployment. Tier 3 is
-no longer purely planned scope: the Week 13-15 interaction-ingestion slice and
-the Week 16-18 entity-system slice are now shipped on `main`.
+no longer purely planned scope: the Week 13-15 interaction-ingestion slice, the
+Week 16-18 entity-system slice, and PR C `folio enrich` are now shipped on
+`main`.
 
 Late-March validation also changed the **operational baseline**. The Tier 2
 platform model-comparison package is finalized, and its recorded per-stage
@@ -354,7 +362,11 @@ Current program status after the late-March validation cycle:
   validation have all completed
 - The production `sonnet4` library, selectively improved with 12 blind-
   validated `haiku45` merges, is the baseline for the next slice
-- The next active Tier 3 slice is Week 19-20 / PR C: `folio enrich`
+- PR C `folio enrich` is shipped and production-tested on the retained
+  production library baseline
+- The entity stubs + org-chart merge follow-on is the current closing slice
+  for the enrich baseline
+- PR D retroactive provenance is the next active Tier 3 slice
 
 ---
 
@@ -414,22 +426,23 @@ to stable entity names during ingest.
 
 ### Week 19-20: Enrichment & Provenance
 
-**Status:** Next active Tier 3 slice.
+**Status:** PR C `folio enrich` is shipped and production-tested. The
+entity-stub/org-chart follow-on is landing now; retroactive provenance remains
+the next active unshipped slice.
 
 - `folio enrich [scope]` command for post-hoc LLM enrichment
 - Enrichment pass adds: tags, relationship links, entity extraction to existing assets
+- Post-PR-C follow-on adds entity stub generation and trusted org-chart
+  hierarchy merge for richer graph connectivity
 - Retroactive provenance linking: match deliverable claims against library evidence
 - Human confirmation step for proposed provenance links
 - Relationship types active: depends_on, draws_from, impacts
 
-**Current baseline for this phase:** start from the production
-`anthropic_sonnet4` library plus the 12 blind-validated `haiku45` merges
-confirmed during the late-March rerun/validation cycle. PR C is no longer
-blocked on entity-system work or rerun completion.
-
-**Planning note:** A dedicated PRD FR block for `folio enrich` still needs to
-be drafted before PR C implementation starts. The current roadmap status only
-locks the baseline and sequencing.
+**Current baseline for this phase:** the retained production
+`anthropic_sonnet4` library plus the 12 blind-validated `haiku45` merges was
+used successfully for PR C production testing: 115/115 eligible notes
+enriched, 0 failures, approximately 17 minutes runtime, 3 generated
+`## Related` sections, and 6 plausible `supersedes` proposals.
 
 **Deliverable:** Even messy, fast-produced deliverables get connected to the clean library.
 
@@ -459,7 +472,7 @@ locks the baseline and sequencing.
 | `folio ingest` converts transcript to structured interaction in <60 seconds | Shipped, but real-engagement timing still needs explicit field validation | PR #32 merged the feature and passing tests; formal timing validation on engagement materials is still outstanding |
 | Entity registry tracks people, departments, systems | Shipped | PR #34 added the registry, CLI, CSV import, and confirmation workflow on `main` |
 | Name resolution works for common cases | Shipped for exact/alias matching plus LLM-proposed soft match with human confirmation | PR #35 added confirmed-only exact/alias resolution, bounded soft-match proposals, and unresolved-entity review flow |
-| `folio enrich` adds tags and links to existing assets | Not started | Next active slice. Use the production `sonnet4` library plus the 12 validated `haiku45` merges as the PR C input baseline |
+| `folio enrich` adds tags and links to existing assets | Shipped and production-tested | PR C enriched 115/115 eligible notes on the retained production `sonnet4` library with 0 failures in about 17 minutes; the current follow-on adds entity stubs and org-chart merge support |
 | Retroactive provenance links deliverable slides to evidence | Not started | Still a later Tier 3 slice |
 | Context documents provide engagement scaffolding | Not started | Planned for Week 21-22 |
 | Full engagement lifecycle tested end-to-end | Not started | Depends on entities, enrich, and context docs landing first |

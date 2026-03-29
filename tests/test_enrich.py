@@ -7,6 +7,7 @@ tests from section 16.2.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, patch, PropertyMock
@@ -1361,6 +1362,113 @@ class TestLiveEntityFingerprint:
         # Fingerprints must differ — confirmation detected
         assert fp_before != fp_after
 
+    def test_ambiguous_live_person_match_invalidates_skip_fingerprint(self, tmp_path):
+        """Ambiguity after a registry change must not keep a stale skip fp."""
+        from folio.enrich import (
+            _determine_disposition,
+            _recompute_live_entity_fp,
+            _strip_managed_content,
+        )
+
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        content = _make_evidence_note(note_id="note_ambiguous")
+        doc = MarkdownDocument(content)
+        stripped = _strip_managed_content(content, doc, "evidence")
+        relationship_fp = compute_relationship_context_fingerprint([], [])
+
+        enrich_meta = {
+            "entity_resolution_fingerprint": "",
+            "relationship_context_fingerprint": relationship_fp,
+            "axes": {
+                "entities": {
+                    "mentions": [
+                        {
+                            "text": "Alex Miller",
+                            "type": "person",
+                            "resolution": "confirmed:person/alex_miller",
+                        }
+                    ]
+                },
+                "relationships": {"proposals": []},
+            },
+        }
+        fm = {
+            "curation_level": "L0",
+            "review_status": "clean",
+            "_llm_metadata": {"enrich": enrich_meta},
+        }
+        entities_path = lr / "entities.json"
+        entities_path.write_text(json.dumps({
+            "entities": {
+                "person": {
+                    "alex_miller": {
+                        "canonical_name": "Alex Miller",
+                        "type": "person",
+                        "aliases": [],
+                        "needs_confirmation": False,
+                    }
+                }
+            }
+        }))
+
+        unique_entity_fp = _recompute_live_entity_fp(enrich_meta, entities_path)
+        assert unique_entity_fp == compute_entity_resolution_fingerprint(
+            [("Alex Miller", "confirmed:person/Alex Miller")]
+        )
+        stored_input_fp = compute_input_fingerprint(
+            stripped,
+            unique_entity_fp,
+            relationship_fp,
+            "default",
+            ENRICH_SPEC_VERSION,
+        )
+        enrich_meta["input_fingerprint"] = stored_input_fp
+
+        entities_path.write_text(json.dumps({
+            "entities": {
+                "person": {
+                    "alex_miller": {
+                        "canonical_name": "Alex Miller",
+                        "type": "person",
+                        "aliases": [],
+                        "needs_confirmation": False,
+                    },
+                    "alexa_miller": {
+                        "canonical_name": "Alexa Miller",
+                        "type": "person",
+                        "aliases": ["Alex Miller"],
+                        "needs_confirmation": False,
+                    },
+                }
+            }
+        }))
+
+        ambiguous_fp = _recompute_live_entity_fp(enrich_meta, entities_path)
+        assert ambiguous_fp == compute_entity_resolution_fingerprint(
+            [("Alex Miller", "unresolved")]
+        )
+        ambiguous_input_fp = compute_input_fingerprint(
+            stripped,
+            ambiguous_fp,
+            relationship_fp,
+            "default",
+            ENRICH_SPEC_VERSION,
+        )
+        assert ambiguous_input_fp != stored_input_fp
+
+        disposition, reason = _determine_disposition(
+            fm=fm,
+            doc=doc,
+            doc_type="evidence",
+            profile_name="default",
+            force=False,
+            entities_path=entities_path,
+            config=config,
+        )
+        assert disposition == "analyze"
+        assert reason == "eligible"
+
     def test_no_mentions_returns_stored(self):
         """No stored mentions → use stored fingerprint."""
         from folio.enrich import _recompute_live_entity_fp
@@ -1679,6 +1787,75 @@ class TestDryRunRegistryReadOnly:
         # Registry must not have been rewritten
         content_after = (lr / "registry.json").read_text()
         assert '"_corrupt": true' in content_after
+
+
+class TestLegacyRegistryTypeCompatibility:
+    def test_missing_type_logs_refresh_warning_and_remains_eligible(self, tmp_path, caplog):
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        _setup_note(lr, "ClientA/legacy.md", _make_evidence_note(note_id="legacy_note"))
+        _setup_registry(lr, {
+            "legacy_note": {
+                "id": "legacy_note",
+                "title": "Legacy Note",
+                "markdown_path": "ClientA/legacy.md",
+                "deck_dir": "ClientA",
+                "source_relative_path": "../../deck.pptx",
+                "source_hash": "abc123def456",
+                "version": 1,
+                "converted": "2026-03-28T00:00:00Z",
+            }
+        })
+
+        with caplog.at_level(logging.WARNING, logger="folio.enrich"):
+            plan = plan_enrichment(config, dry_run=True)
+
+        assert len(plan) == 1
+        assert plan[0].entry.type == "evidence"
+        assert "status --refresh" in caplog.text
+
+    def test_missing_type_stored_interaction_shape_remains_interaction(self, tmp_path):
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        _setup_note(lr, "ClientA/interactions/legacy.md", _make_interaction_note(note_id="legacy_interaction"))
+        _setup_registry(lr, {
+            "legacy_interaction": {
+                "id": "legacy_interaction",
+                "title": "Legacy Interaction",
+                "markdown_path": "ClientA/interactions/legacy.md",
+                "deck_dir": "ClientA/interactions",
+                "source_relative_path": "../../transcripts/legacy.md",
+                "source_hash": "def456abc789",
+                "version": 1,
+                "converted": "2026-03-28T00:00:00Z",
+            }
+        })
+
+        plan = plan_enrichment(config, dry_run=True)
+
+        assert len(plan) == 1
+        assert plan[0].entry.type == "interaction"
+        assert plan[0].doc_type == "interaction"
+
+
+class TestBatchEnrichLogging:
+    def test_empty_plan_logs_refresh_warning_and_echoes_message(self, tmp_path, caplog):
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        (lr / "registry.json").write_text('{"_schema_version": 1, "decks": {}}')
+
+        echoed: list[str] = []
+
+        def _echo(message: str) -> None:
+            echoed.append(message)
+
+        with caplog.at_level(logging.WARNING, logger="folio.enrich"):
+            result = enrich_batch(config, dry_run=True, echo=_echo)
+
+        assert isinstance(result, EnrichBatchResult)
+        assert echoed == ["No eligible documents found."]
+        assert "No eligible documents found." in caplog.text
+        assert "status --refresh" in caplog.text
 
 
 class TestRelationshipFpRecompute:

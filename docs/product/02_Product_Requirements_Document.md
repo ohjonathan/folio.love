@@ -342,6 +342,11 @@ The system SHALL maintain a separate `entities.json` at the library root with:
 The entity registry is distinct from `registry.json`: entities are graph nodes,
 not managed markdown documents.
 
+The system SHALL also support derived entity stub notes under `_entities/`
+within the library root. These stub notes are generated artifacts organized by
+entity type for Obsidian graph connectivity. They are distinct from both
+`entities.json` and `registry.json`, and they are not managed documents.
+
 For the current shipped Tier 3 baseline, the registry contract is broader than
 the most heavily exercised ingest-time extraction path: registry storage,
 import, and review support all four entity types, while the first production
@@ -449,6 +454,7 @@ folio ingest <source_file> --type <subtype> --date YYYY-MM-DD [--client <name>] 
 folio entities [--type <entity_type>] [--unconfirmed]
 folio entities show <name> [--type <entity_type>]
 folio entities import <csv>
+folio entities generate-stubs [--output-dir <path>] [--force]
 folio entities confirm <name>
 folio entities reject <name>
 ```
@@ -456,15 +462,43 @@ folio entities reject <name>
 - List entities grouped by type with confirmation status
 - Filter to a specific type or only unconfirmed entities
 - Show a single entity with aliases, type-specific metadata, and proposed match
-- Import org-chart style CSV data into the registry
+- Import org-chart style CSV data into the registry, auto-detecting hierarchy
+  columns such as `reports_to` or `level`
+- When org-chart hierarchy data is present, merge `title`, `org_level`,
+  `department`, and `reports_to` into existing person entities and auto-create
+  missing manager-chain entries as confirmed people
+- Generate lightweight stub notes for registry entities without tracking those
+  stubs in `registry.json`
 - Confirm an unconfirmed entity for future resolution
 - Reject an unconfirmed entity from the registry
 
 **Acceptance Criteria:**
 - [ ] `folio entities` shows grouped entity totals and unconfirmed counts
 - [ ] `folio entities import <csv>` creates or upgrades registry entries
+- [ ] Org-chart imports merge hierarchy fields into matching people and
+  complete missing `reports_to` chains
 - [ ] `folio entities confirm <name>` clears pending review state and keeps the entity
 - [ ] `folio entities reject <name>` removes only unconfirmed entities
+
+#### FR-508: Entity Stub Generation
+
+```bash
+folio entities generate-stubs [--output-dir <path>] [--force]
+```
+
+- Generate lightweight markdown stub files for all confirmed and unconfirmed
+  entities so existing canonical wikilinks resolve in Obsidian
+- Organize stubs under `_entities/<entity_type>/` by default, with an optional
+  output-directory override
+- Skip existing stubs during normal runs and refresh auto-generated stubs only
+  when `--force` is requested
+- Preserve manually enriched stubs instead of overwriting them
+
+**Acceptance Criteria:**
+- [ ] Every registry entity can have a corresponding generated stub note
+- [ ] Generated stubs resolve canonical entity wikilinks in Obsidian
+- [ ] `generate-stubs` is additive and idempotent by default
+- [ ] Manually enriched stubs survive subsequent generation runs
 
 ---
 
@@ -491,6 +525,7 @@ Folio SHALL support route-based selection of LLM profiles by task:
 - `routing.default` defines the fallback route for unspecified tasks
 - `routing.convert` controls the `folio convert` analysis path in v1.0
 - `routing.ingest` controls the `folio ingest` analysis path in v1.0
+- `routing.enrich` controls the `folio enrich` analysis path in v1.0
 - `--llm-profile` overrides route-based selection for a single command invocation
 
 #### FR-605: Optional Transient Fallback

@@ -261,6 +261,21 @@ def plan_enrichment(
     except ValueError:
         profile_name = "default"
 
+    missing_type_count = sum(
+        1
+        for entry_data in data.get("decks", {}).values()
+        if isinstance(entry_data, dict) and "type" not in entry_data
+    )
+    if missing_type_count:
+        logger.warning(
+            "Detected %d registry entr%s missing 'type'; defaulting to "
+            "'evidence' for compatibility. If this library was built by an older "
+            "folio-love version, run 'folio status --refresh' to persist current "
+            "registry fields.",
+            missing_type_count,
+            "y" if missing_type_count == 1 else "ies",
+        )
+
     plan: list[EnrichPlanEntry] = []
 
     for deck_id, entry_data in data.get("decks", {}).items():
@@ -409,7 +424,7 @@ def _recompute_live_entity_fp(
     if not mentions or not entities_path or not entities_path.exists():
         return enrich_meta.get("entity_resolution_fingerprint", "")
 
-    from .tracking.entities import EntityRegistry
+    from .tracking.entities import EntityRegistry, lookup_person_matches
 
     registry = EntityRegistry(entities_path)
     try:
@@ -422,8 +437,11 @@ def _recompute_live_entity_fp(
         text = m.get("text", "")
         etype = m.get("type", "")
         # Look up current status in live registry
-        results = registry.lookup(text, entity_type=etype)
-        if results:
+        if etype == "person":
+            results = lookup_person_matches(registry, text)
+        else:
+            results = registry.lookup(text, entity_type=etype)
+        if len(results) == 1:
             _et, _key, entry = results[0]
             # Use canonical_name (not key) to match what enrich_note stores
             cname = entry.canonical_name
@@ -435,6 +453,8 @@ def _recompute_live_entity_fp(
             else:
                 resolution = f"confirmed:{_et}/{cname}"
         else:
+            # Ambiguous or missing live matches must not preserve a stale
+            # fingerprint for the first result.
             resolution = "unresolved"
         pairs.append((text, resolution))
 
@@ -1588,6 +1608,10 @@ def enrich_batch(
     plan = plan_enrichment(config, scope=scope, force=force, llm_profile=llm_profile, dry_run=dry_run)
 
     if not plan:
+        logger.warning(
+            "No eligible documents found. If this library was built by an older "
+            "folio-love version, try 'folio status --refresh' to sync registry fields."
+        )
         echo("No eligible documents found.")
         return EnrichBatchResult()
 

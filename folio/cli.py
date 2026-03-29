@@ -1445,6 +1445,63 @@ def import_cmd(ctx, csv_file):
     for w in result.warnings:
         click.echo(f"  ⚠ {w}")
 
+    if result.org_chart_detected:
+        click.echo("  Next: run `folio entities generate-stubs --force` to refresh entity notes.")
+
+
+@entities.command("generate-stubs")
+@click.option("--output-dir", type=click.Path(path_type=Path), default=None,
+              help="Output directory for generated stubs (default: <library>/_entities).")
+@click.option("--force", is_flag=True, default=False,
+              help="Refresh auto-generated stubs that already exist.")
+@click.pass_context
+def generate_stubs_cmd(ctx, output_dir: Optional[Path], force: bool):
+    """Generate lightweight markdown stubs for registry entities."""
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+
+    from .entity_stubs import generate_entity_stubs
+    from .tracking.entities import EntityRegistry, EntityRegistryError
+
+    reg = EntityRegistry(entities_path)
+    try:
+        reg.load()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    resolved_output_dir = output_dir or (library_root / "_entities")
+    if not resolved_output_dir.is_absolute():
+        resolved_output_dir = library_root / resolved_output_dir
+
+    try:
+        result = generate_entity_stubs(
+            registry=reg,
+            output_dir=resolved_output_dir,
+            force=force,
+        )
+    except OSError as e:
+        click.echo(f"✗ Stub generation failed: {e}", err=True)
+        sys.exit(1)
+
+    generated_breakdown = ", ".join(
+        f"{count} {entity_type}"
+        for entity_type, count in sorted(result.generated_by_type.items())
+        if count
+    ) or "0 generated"
+    skipped_total = result.skipped_existing + result.skipped_manual
+
+    click.echo(
+        f"Generated {result.generated} entity stubs ({generated_breakdown}). "
+        f"{skipped_total} skipped."
+    )
+    if result.skipped_manual:
+        click.echo(f"  Manual stubs preserved: {result.skipped_manual}")
+
+    for warning in result.warnings:
+        click.echo(f"  ⚠ {warning}")
+
 
 @entities.command()
 @click.argument("name")

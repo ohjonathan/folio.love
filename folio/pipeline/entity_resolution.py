@@ -20,6 +20,8 @@ from ..tracking.entities import (
     EntityRegistry,
     EntitySlugCollisionError,
     entity_from_dict,
+    lookup_person_matches,
+    normalize_entity_name,
     sanitize_wikilink_name,
 )
 
@@ -34,7 +36,6 @@ _ENTITY_TYPE_MAP = {
 _RESULT_TEMPLATE = {key: [] for key in _ENTITY_TYPE_MAP}
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*\})\s*```", re.DOTALL)
 _JSON_OBJECT_RE = re.compile(r"(\{.*?\})", re.DOTALL)
-_WHITESPACE_RE = re.compile(r"\s+")
 _SOFT_MATCH_SYSTEM_PROMPT = """You are matching one extracted Folio entity mention to an existing entity registry.
 Return exactly one JSON object and no surrounding prose:
 {"match":"<canonical_name>"} or {"match":null}
@@ -165,8 +166,9 @@ def resolve_interaction_entities(
                 resolved_values.append(cached)
                 continue
 
-            matches = registry.lookup(
-                normalized,
+            matches = _lookup_with_variants(
+                registry=registry,
+                name=normalized,
                 entity_type=singular_type,
                 confirmed_only=True,
             )
@@ -271,9 +273,27 @@ def _copy_entities(extracted_entities: dict[str, list[str]]) -> dict[str, list[s
 
 
 def _normalize_entity_name(name: str) -> str:
-    collapsed = _WHITESPACE_RE.sub(" ", str(name or "")).strip()
-    sanitized = sanitize_wikilink_name(collapsed)
-    return _WHITESPACE_RE.sub(" ", sanitized).strip()
+    return normalize_entity_name(name)
+
+
+def _lookup_with_variants(
+    *,
+    registry: EntityRegistry,
+    name: str,
+    entity_type: str,
+    confirmed_only: bool,
+) -> list[tuple[str, str, EntityEntry]]:
+    if entity_type == "person":
+        return lookup_person_matches(
+            registry,
+            name,
+            confirmed_only=confirmed_only,
+        )
+    return registry.lookup(
+        name,
+        entity_type=entity_type,
+        confirmed_only=confirmed_only,
+    )
 
 
 def _describe_matches(matches: list[tuple[str, str, EntityEntry]]) -> str:
