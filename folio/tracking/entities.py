@@ -7,7 +7,7 @@ import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from .registry import _atomic_write_json as atomic_write_json
 
@@ -18,6 +18,8 @@ VALID_ENTITY_TYPES = frozenset({"person", "department", "system", "process"})
 # Entity types that can be auto-extracted from interaction notes (PR B seam)
 EXTRACTION_ENTITY_TYPES = frozenset({"person", "department"})
 _WIKILINK_UNSAFE_CHARS = set("[]|#^")
+_WHITESPACE_RE = re.compile(r"\s+")
+_PERSON_COMMA_RE = re.compile(r"^(?P<last>[^,]+),\s*(?P<first>.+)$")
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +67,142 @@ def sanitize_wikilink_name(name: str) -> str:
     return "".join(c for c in name if c not in _WIKILINK_UNSAFE_CHARS).strip()
 
 
+def normalize_entity_name(name: str) -> str:
+    """Collapse whitespace and sanitize for consistent name matching."""
+    collapsed = _WHITESPACE_RE.sub(" ", str(name or "")).strip()
+    sanitized = sanitize_wikilink_name(collapsed)
+    return _WHITESPACE_RE.sub(" ", sanitized).strip()
+
+
+def canonicalize_person_import_name(name: str) -> tuple[str, list[str]]:
+    """Return canonical person name for import plus any implicit aliases."""
+    normalized = normalize_entity_name(name)
+    transposed = _transpose_person_name(normalized)
+    canonical = transposed or normalized
+
+    aliases: list[str] = []
+    if canonical and canonical.lower() != normalized.lower():
+        aliases.append(normalized)
+    return canonical, aliases
+
+
+def person_name_variants(name: str) -> list[str]:
+    """Generate ordered exact-match person name variants.
+
+    Variants are exact lookup candidates only. Single-token suffix-stripped
+    fragments are intentionally excluded to avoid partial-name matching.
+    """
+    normalized = normalize_entity_name(name)
+    variants: list[str] = []
+    _append_variant(variants, normalized)
+
+    transposed = _transpose_person_name(normalized)
+    _append_variant(variants, transposed)
+
+    if not transposed:
+        stripped = _strip_person_id_suffix(normalized)
+        if stripped and len(stripped.split()) > 1:
+            _append_variant(variants, stripped)
+
+    stripped_transposed = _strip_person_id_suffix(transposed)
+    if stripped_transposed and len(stripped_transposed.split()) > 1:
+        _append_variant(variants, stripped_transposed)
+
+    return variants
+
+
+def lookup_person_matches(
+    registry: "EntityRegistry",
+    *names: str,
+    confirmed_only: bool = False,
+) -> list[tuple[str, str, "EntityEntry"]]:
+    """Look up person entities across ordered exact-match name variants."""
+    seen: set[tuple[str, str]] = set()
+    matches: list[tuple[str, str, EntityEntry]] = []
+    for name in names:
+        for candidate in person_name_variants(name):
+            for match in registry.lookup(
+                candidate,
+                entity_type="person",
+                confirmed_only=confirmed_only,
+            ):
+                key = (match[0], match[1])
+                if key in seen:
+                    continue
+                seen.add(key)
+                matches.append(match)
+    return matches
+
+
+def _append_variant(variants: list[str], candidate: Optional[str]) -> None:
+    if not candidate:
+        return
+    if candidate not in variants:
+        variants.append(candidate)
+
+
+def _transpose_person_name(name: str) -> Optional[str]:
+    match = _PERSON_COMMA_RE.match(name)
+    if not match:
+        return None
+    last = normalize_entity_name(match.group("last"))
+    first = normalize_entity_name(match.group("first"))
+    if not first or not last:
+        return None
+    return f"{first} {last}"
+
+
+def _strip_person_id_suffix(name: Optional[str]) -> Optional[str]:
+    if not name:
+        return None
+
+    tokens = name.split()
+    stripped = False
+    result: list[str] = []
+    for idx, token in enumerate(tokens):
+        next_token = tokens[idx + 1] if idx + 1 < len(tokens) else None
+        base = _strip_person_id_suffix_token(token, next_token=next_token)
+        if base is None:
+            result.append(token)
+            continue
+        result.append(base)
+        stripped = True
+    if not stripped:
+        return None
+    return " ".join(result)
+
+
+def _strip_person_id_suffix_token(
+    token: str,
+    *,
+    next_token: Optional[str],
+) -> Optional[str]:
+    """Strip a likely appended user-ID suffix from a title-cased name token."""
+    if not re.fullmatch(r"[A-Z][a-z]+", token):
+        return None
+    if len(token) < 10 or not next_token:
+        return None
+
+    next_key = re.sub(r"[^A-Za-z]", "", next_token).lower()
+    if len(next_key) < 4:
+        return None
+
+    best_choice: Optional[Tuple[int, int, str]] = None
+    for split_idx in range(4, len(token) - 4):
+        base = token[:split_idx]
+        suffix = token[split_idx:].lower()
+        if len(base) < 4 or len(suffix) < 5:
+            continue
+        for initials_len in (2, 1):
+            fragment = suffix[initials_len:]
+            if len(fragment) < 3 or not next_key.startswith(fragment):
+                continue
+            choice = (len(fragment), initials_len, base)
+            if best_choice is None or choice > best_choice:
+                best_choice = choice
+    return best_choice[2] if best_choice else None
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -97,6 +235,7 @@ class EntityEntry:
     proposed_match: Optional[str] = None         # entity key, PR B populates
     # Person-specific
     title: Optional[str] = None
+    org_level: Optional[str] = None
     department: Optional[str] = None             # → department entity key
     reports_to: Optional[str] = None             # → person entity key
     client: Optional[str] = None
@@ -518,4 +657,3 @@ class EntityRegistry:
     def to_json(self) -> str:
         """Serialize the full registry as a JSON string."""
         return json.dumps(self._data, indent=2)
-

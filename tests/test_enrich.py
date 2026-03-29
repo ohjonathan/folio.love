@@ -7,6 +7,7 @@ tests from section 16.2.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, patch, PropertyMock
@@ -1679,6 +1680,32 @@ class TestDryRunRegistryReadOnly:
         # Registry must not have been rewritten
         content_after = (lr / "registry.json").read_text()
         assert '"_corrupt": true' in content_after
+
+
+class TestLegacyRegistryTypeCompatibility:
+    def test_missing_type_logs_refresh_warning_and_remains_eligible(self, tmp_path, caplog):
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        _setup_note(lr, "ClientA/legacy.md", _make_evidence_note(note_id="legacy_note"))
+        _setup_registry(lr, {
+            "legacy_note": {
+                "id": "legacy_note",
+                "title": "Legacy Note",
+                "markdown_path": "ClientA/legacy.md",
+                "deck_dir": "ClientA",
+                "source_relative_path": "../../deck.pptx",
+                "source_hash": "abc123def456",
+                "version": 1,
+                "converted": "2026-03-28T00:00:00Z",
+            }
+        })
+
+        with caplog.at_level(logging.WARNING, logger="folio.enrich"):
+            plan = plan_enrichment(config, dry_run=True)
+
+        assert len(plan) == 1
+        assert plan[0].entry.type == "evidence"
+        assert "status --refresh" in caplog.text
 
 
 class TestRelationshipFpRecompute:

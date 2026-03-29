@@ -109,6 +109,61 @@ class TestEntityResolution:
         assert result.entities["people"] == ["Jane Smith"]
         assert result.registry_changed is False
 
+    def test_resolve_transposed_person_name(self, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="Rachel Link", type="person", source="import")],
+        )
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["Link, Rachel"]),
+            source_text="Link, Rachel joined the meeting.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        assert result.entities["people"] == ["Rachel Link"]
+        assert result.registry_changed is False
+
+    @patch("folio.pipeline.entity_resolution._execute_with_fallback")
+    def test_resolve_id_suffix_name_stays_unresolved_without_full_name_match(self, mock_run, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="Rachel Link", type="person", source="import")],
+        )
+        mock_run.return_value = '{"match": null}'
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["Rachelrjlink"]),
+            source_text="Rachelrjlink joined the meeting.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        assert result.entities["people"] == ["Rachelrjlink"]
+        assert result.registry_changed is True
+        assert result.created_entities[0].canonical_name == "Rachelrjlink"
+        assert result.created_entities[0].proposed_match is None
+
+    def test_resolve_transposed_name_with_id_suffix(self, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="Rachel Link", type="person", source="import")],
+        )
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["Link, Rachelrjlink"]),
+            source_text="Link, Rachelrjlink joined the meeting.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        assert result.entities["people"] == ["Rachel Link"]
+        assert result.registry_changed is False
+
     def test_resolve_ambiguous_keeps_original(self, tmp_path):
         path = _write_registry_data(
             tmp_path,
