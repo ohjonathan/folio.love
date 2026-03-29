@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
@@ -21,6 +20,14 @@ from .pipeline.provenance_analysis import (
     estimate_tokens,
     evaluate_provenance_matches,
 )
+from .pipeline.provenance_data import (
+    ExtractedEvidenceItem,
+    compute_basis_fingerprint,
+    compute_claim_hash as _claim_hash,
+    compute_pair_fingerprint,
+    make_link_id as _link_id,
+    make_proposal_id as _proposal_id,
+)
 from .tracking import registry as registry_mod
 
 logger = logging.getLogger(__name__)
@@ -29,39 +36,12 @@ PROVENANCE_SPEC_VERSION = 1
 PAIR_SHARD_CEILING = 8
 REVIEW_FLAG_STALE = "provenance_link_stale"
 PAGE_SIZE = 20
-PENDING_PAGE_SIZE = PAGE_SIZE
-PENDING_PAGE_SIZE = PAGE_SIZE
 
 _SLIDE_RE = re.compile(r"^## Slide (\d+)\s*$", re.MULTILINE)
 _EVIDENCE_START_RE = re.compile(r"^\*\*Evidence:\*\*\s*$")
 _TOP_CLAIM_RE = re.compile(r"^\s*-\s*claim:\s*(.*?)\s*$")
 _SUBFIELD_RE = re.compile(r"^\s*-\s*([a-zA-Z_]+):\s*(.*?)\s*$")
 _CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
-
-
-@dataclass
-class ExtractedEvidenceItem:
-    """One structured evidence entry extracted from an evidence note."""
-
-    slide_number: int
-    claim_index: int
-    claim_text: str
-    supporting_quote: str
-    original_confidence: str = ""
-    element_type: str = ""
-    claim_hash: str = ""
-
-    def to_prompt_dict(self, ref: str) -> dict:
-        return {
-            "ref": ref,
-            "slide_number": self.slide_number,
-            "claim_index": self.claim_index,
-            "claim_text": self.claim_text,
-            "supporting_quote": self.supporting_quote,
-            "original_confidence": self.original_confidence,
-            "element_type": self.element_type,
-        }
-
 
 @dataclass
 class ProvenanceProposal:
@@ -157,44 +137,6 @@ def _matches_scope(path: str, scope: str) -> bool:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _sha256_hex(data: str) -> str:
-    return hashlib.sha256(data.encode("utf-8")).hexdigest()
-
-
-def _claim_hash(claim_text: str, supporting_quote: str) -> str:
-    return f"sha256:{_sha256_hex(f'{claim_text}|{supporting_quote}')}"
-
-
-def _proposal_id(
-    source_doc: str,
-    source_slide: int,
-    source_claim_index: int,
-    target_doc: str,
-    target_slide: int,
-    target_claim_index: int,
-) -> str:
-    payload = json.dumps(
-        [source_doc, source_slide, source_claim_index, target_doc, target_slide, target_claim_index],
-        sort_keys=True,
-    )
-    return f"prov-{_sha256_hex(payload)[:8]}"
-
-
-def _link_id(
-    source_doc: str,
-    source_slide: int,
-    source_claim_index: int,
-    target_doc: str,
-    target_slide: int,
-    target_claim_index: int,
-) -> str:
-    payload = json.dumps(
-        [source_doc, source_slide, source_claim_index, target_doc, target_slide, target_claim_index],
-        sort_keys=True,
-    )
-    return f"plink-{_sha256_hex(payload)[:8]}"
 
 
 def _read_markdown(path: Path) -> tuple[str, dict | None]:
@@ -318,8 +260,8 @@ def _extract_items_from_slide(section_text: str, slide_number: int) -> list[Extr
             supporting_quote=supporting_quote,
             original_confidence=str(item.get("confidence", "")).strip(),
             element_type=str(item.get("element_type", "")).strip(),
+            claim_hash=_claim_hash(claim_text, supporting_quote),
         )
-        evidence_item.claim_hash = _claim_hash(claim_text, supporting_quote)
         items.append(evidence_item)
     return items
 
@@ -340,25 +282,20 @@ def _pair_fingerprint(
     target_items: list[ExtractedEvidenceItem],
     profile_name: str,
 ) -> str:
-    payload = {
-        "source": sorted(
-            [(i.slide_number, i.claim_index, i.claim_hash) for i in source_items]
-        ),
-        "target": sorted(
-            [(i.slide_number, i.claim_index, i.claim_hash) for i in target_items]
-        ),
-        "profile": profile_name,
-        "spec_version": PROVENANCE_SPEC_VERSION,
-    }
-    return f"sha256:{_sha256_hex(json.dumps(payload, sort_keys=True))}"
+    return compute_pair_fingerprint(
+        source_items,
+        target_items,
+        profile_name,
+        spec_version=PROVENANCE_SPEC_VERSION,
+    )
 
 
 def _basis_fingerprint(source_item: ExtractedEvidenceItem, target_item: ExtractedEvidenceItem, profile_name: str) -> str:
-    payload = json.dumps(
-        [source_item.claim_hash, target_item.claim_hash, profile_name],
-        sort_keys=True,
+    return compute_basis_fingerprint(
+        source_item.claim_hash,
+        target_item.claim_hash,
+        profile_name,
     )
-    return f"sha256:{_sha256_hex(payload)}"
 
 
 def _serialize_link(
@@ -546,6 +483,7 @@ def _build_shards(
                 supporting_quote=trimmed,
                 original_confidence=item.original_confidence,
                 element_type=item.element_type,
+                claim_hash=item.claim_hash,
             )
         ) > budget:
             trimmed = trimmed[:- max(1, len(trimmed) // 10)]
@@ -560,8 +498,8 @@ def _build_shards(
             supporting_quote=trimmed,
             original_confidence=item.original_confidence,
             element_type=item.element_type,
+            claim_hash=item.claim_hash,
         )
-        updated.claim_hash = _claim_hash(updated.claim_text, updated.supporting_quote)
         return updated
 
     source_items = [truncate_item(item, effective_budget, "source claim") for item in source_items]
@@ -1556,131 +1494,6 @@ def paginate(items: list, page: int) -> tuple[list, int]:
     start = (current_page - 1) * PAGE_SIZE
     end = start + PAGE_SIZE
     return items[start:end], total_pages
-
-
-def list_pending_proposals(
-    config: FolioConfig,
-    *,
-    scope: str | None = None,
-    include_low: bool = False,
-    doc_id: str | None = None,
-    target_id: str | None = None,
-) -> list[dict]:
-    """Compatibility wrapper returning CLI-shaped pending proposal dicts."""
-    rows = []
-    for view in collect_pending_proposals(
-        config,
-        scope=scope,
-        include_low=include_low,
-        doc_id=doc_id,
-        target_id=target_id,
-    ):
-        proposal = view.proposal.to_dict()
-        proposal["source_doc"] = view.source_id
-        proposal["target_doc"] = view.target_id
-        rows.append(proposal)
-    return rows
-
-
-def list_stale_links(
-    config: FolioConfig,
-    *,
-    scope: str | None = None,
-    doc_id: str | None = None,
-    target_id: str | None = None,
-) -> list[dict]:
-    """Compatibility wrapper returning stale-link rows as plain dicts."""
-    rows = []
-    for view in collect_stale_links(config, scope=scope, doc_id=doc_id, target_id=target_id):
-        rows.append(
-            {
-                "source_doc": view.source_id,
-                "target_doc": view.target_id,
-                "link": view.link,
-                "state": view.state,
-                "orphaned": view.orphaned,
-                "title": view.title,
-            }
-        )
-    return rows
-
-
-def summarize_status(config: FolioConfig, *, scope: str | None = None) -> list[dict]:
-    """Compatibility wrapper for the per-source provenance status summary."""
-    rows = []
-    for row in provenance_status_summary(config, scope=scope):
-        row = dict(row)
-        row["source_doc"] = row.pop("source_id")
-        row["coverage_numerator"] = len(row.pop("fresh_claims"))
-        row["coverage_denominator"] = row["claims"]
-        rows.append(row)
-    return rows
-
-
-def run_provenance(
-    config: FolioConfig,
-    *,
-    scope: str | None = None,
-    dry_run: bool = False,
-    llm_profile: str | None = None,
-    force: bool = False,
-    clear_rejections: bool = False,
-    limit: int | None = None,
-    echo: Optional[Callable[[str], None]] = None,
-) -> dict:
-    """Compatibility wrapper returning a plain summary dict."""
-    result = provenance_batch(
-        config,
-        scope=scope,
-        dry_run=dry_run,
-        llm_profile=llm_profile,
-        force=force,
-        clear_rejections=clear_rejections,
-        limit=limit,
-        echo=echo,
-    )
-    return {
-        "evaluated": result.evaluated,
-        "proposed": result.proposed,
-        "unchanged": result.unchanged,
-        "protected": result.protected,
-        "blocked": result.blocked,
-        "failed": result.failed,
-        "skipped": result.skipped,
-        "candidate_pairs": result.candidate_pairs,
-        "estimated_calls": result.estimated_calls,
-        "pending_repairs": result.pending_repairs,
-    }
-
-
-def confirm_proposals_in_order(config: FolioConfig, proposal_ids: list[str]) -> list[str]:
-    """Compatibility helper for bulk confirmation."""
-    return [confirm_proposal(config, proposal_id) for proposal_id in proposal_ids]
-
-
-def reject_proposals_in_order(config: FolioConfig, proposal_ids: list[str]) -> list[None]:
-    """Compatibility helper for bulk rejection."""
-    return [reject_proposal(config, proposal_id) for proposal_id in proposal_ids]
-
-
-def refresh_stale_link_hashes(config: FolioConfig, link_id: str) -> None:
-    """Compatibility alias for stale hash refresh."""
-    stale_refresh_hashes(config, link_id)
-
-
-def re_evaluate_stale_link(config: FolioConfig, link_id: str) -> None:
-    """Compatibility alias for stale re-evaluation."""
-    stale_re_evaluate(config, link_id)
-
-
-def remove_stale_link(config: FolioConfig, link_id: str) -> None:
-    """Compatibility alias for stale removal."""
-    stale_remove(config, link_id)
-
-
-def acknowledge_stale_link(config: FolioConfig, link_id: str) -> None:
-    """Compatibility alias for stale acknowledgement."""
-    stale_acknowledge(config, link_id)
 
 
 def run_provenance(

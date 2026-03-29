@@ -10,9 +10,11 @@ from unittest.mock import patch
 import yaml
 from click.testing import CliRunner
 
+import folio.provenance as provenance_mod
 from folio.cli import _extract_enrich_passthrough, _mark_enrich_stale, cli
 from folio.output.frontmatter import generate
 from folio.pipeline.provenance_analysis import ProvenanceMatch
+from folio.pipeline.provenance_data import ExtractedEvidenceItem, compute_claim_hash
 from folio.tracking.versions import ChangeSet, VersionInfo
 
 
@@ -133,6 +135,45 @@ def _write_note(library_root: Path, rel_path: str, content: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def test_provenance_uses_shared_evidence_model_and_normalized_claim_hashes():
+    assert provenance_mod.ExtractedEvidenceItem is ExtractedEvidenceItem
+    assert compute_claim_hash("Revenue  growth", "Revenue   grew  15%") == compute_claim_hash(
+        "Revenue growth",
+        "Revenue grew 15%",
+    )
+
+
+def test_build_shards_preserves_original_claim_hash_when_truncating_quotes():
+    long_quote = "growth " * 5000
+    source_item = ExtractedEvidenceItem(
+        slide_number=1,
+        claim_index=0,
+        claim_text="Revenue growth is 15% YoY",
+        supporting_quote=long_quote,
+        original_confidence="high",
+        element_type="metric",
+        claim_hash=compute_claim_hash("Revenue growth is 15% YoY", long_quote),
+    )
+    target_item = ExtractedEvidenceItem(
+        slide_number=1,
+        claim_index=0,
+        claim_text="Revenue grew 15% YoY",
+        supporting_quote=long_quote,
+        original_confidence="high",
+        element_type="metric",
+        claim_hash=compute_claim_hash("Revenue grew 15% YoY", long_quote),
+    )
+
+    shards, warnings = provenance_mod._build_shards([source_item], [target_item], 2500)
+
+    assert warnings
+    shard_source, shard_target = shards[0]
+    assert shard_source[0].supporting_quote != long_quote
+    assert shard_target[0].supporting_quote != long_quote
+    assert shard_source[0].claim_hash == source_item.claim_hash
+    assert shard_target[0].claim_hash == target_item.claim_hash
 
 
 def test_passthrough_helpers_preserve_provenance_and_mark_pairs_stale():

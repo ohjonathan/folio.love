@@ -1,4 +1,4 @@
-"""Data model and deterministic helpers for retroactive provenance linking."""
+"""Shared data model and deterministic helpers for retroactive provenance linking."""
 
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ class ExtractedEvidenceItem:
     claim_index: int
     claim_hash: str = ""
 
-    def to_prompt_dict(self) -> dict:
-        return {
+    def to_prompt_dict(self, ref: str | None = None) -> dict:
+        payload = {
             "slide_number": self.slide_number,
             "claim_index": self.claim_index,
             "claim_text": self.claim_text,
@@ -40,52 +40,9 @@ class ExtractedEvidenceItem:
             "original_confidence": self.original_confidence,
             "element_type": self.element_type,
         }
-
-
-@dataclass(frozen=True)
-class ProvenanceProposal:
-    """A machine-generated provenance proposal for one source claim."""
-
-    proposal_id: str
-    source_claim: ExtractedEvidenceItem
-    target_doc: str
-    target_evidence: ExtractedEvidenceItem
-    confidence: str
-    rationale: str
-    basis_fingerprint: str
-    model: str
-    timestamp_proposed: str
-    status: str = "pending_human_confirmation"
-    replaces_link_id: str | None = None
-
-    def to_dict(self) -> dict:
-        result = {
-            "proposal_id": self.proposal_id,
-            "source_claim": {
-                "slide_number": self.source_claim.slide_number,
-                "claim_index": self.source_claim.claim_index,
-                "claim_text": self.source_claim.claim_text,
-                "supporting_quote": self.source_claim.supporting_quote,
-                "claim_hash": self.source_claim.claim_hash,
-            },
-            "target_doc": self.target_doc,
-            "target_evidence": {
-                "slide_number": self.target_evidence.slide_number,
-                "claim_index": self.target_evidence.claim_index,
-                "claim_text": self.target_evidence.claim_text,
-                "supporting_quote": self.target_evidence.supporting_quote,
-                "claim_hash": self.target_evidence.claim_hash,
-            },
-            "confidence": self.confidence,
-            "rationale": self.rationale,
-            "basis_fingerprint": self.basis_fingerprint,
-            "model": self.model,
-            "timestamp_proposed": self.timestamp_proposed,
-            "status": self.status,
-        }
-        if self.replaces_link_id:
-            result["replaces_link_id"] = self.replaces_link_id
-        return result
+        if ref is not None:
+            payload["ref"] = ref
+        return payload
 
 
 def compute_claim_hash(claim_text: str, supporting_quote: str) -> str:
