@@ -1362,6 +1362,113 @@ class TestLiveEntityFingerprint:
         # Fingerprints must differ — confirmation detected
         assert fp_before != fp_after
 
+    def test_ambiguous_live_person_match_invalidates_skip_fingerprint(self, tmp_path):
+        """Ambiguity after a registry change must not keep a stale skip fp."""
+        from folio.enrich import (
+            _determine_disposition,
+            _recompute_live_entity_fp,
+            _strip_managed_content,
+        )
+
+        config = _make_config(tmp_path)
+        lr = config.library_root.resolve()
+        content = _make_evidence_note(note_id="note_ambiguous")
+        doc = MarkdownDocument(content)
+        stripped = _strip_managed_content(content, doc, "evidence")
+        relationship_fp = compute_relationship_context_fingerprint([], [])
+
+        enrich_meta = {
+            "entity_resolution_fingerprint": "",
+            "relationship_context_fingerprint": relationship_fp,
+            "axes": {
+                "entities": {
+                    "mentions": [
+                        {
+                            "text": "Alex Miller",
+                            "type": "person",
+                            "resolution": "confirmed:person/alex_miller",
+                        }
+                    ]
+                },
+                "relationships": {"proposals": []},
+            },
+        }
+        fm = {
+            "curation_level": "L0",
+            "review_status": "clean",
+            "_llm_metadata": {"enrich": enrich_meta},
+        }
+        entities_path = lr / "entities.json"
+        entities_path.write_text(json.dumps({
+            "entities": {
+                "person": {
+                    "alex_miller": {
+                        "canonical_name": "Alex Miller",
+                        "type": "person",
+                        "aliases": [],
+                        "needs_confirmation": False,
+                    }
+                }
+            }
+        }))
+
+        unique_entity_fp = _recompute_live_entity_fp(enrich_meta, entities_path)
+        assert unique_entity_fp == compute_entity_resolution_fingerprint(
+            [("Alex Miller", "confirmed:person/Alex Miller")]
+        )
+        stored_input_fp = compute_input_fingerprint(
+            stripped,
+            unique_entity_fp,
+            relationship_fp,
+            "default",
+            ENRICH_SPEC_VERSION,
+        )
+        enrich_meta["input_fingerprint"] = stored_input_fp
+
+        entities_path.write_text(json.dumps({
+            "entities": {
+                "person": {
+                    "alex_miller": {
+                        "canonical_name": "Alex Miller",
+                        "type": "person",
+                        "aliases": [],
+                        "needs_confirmation": False,
+                    },
+                    "alexa_miller": {
+                        "canonical_name": "Alexa Miller",
+                        "type": "person",
+                        "aliases": ["Alex Miller"],
+                        "needs_confirmation": False,
+                    },
+                }
+            }
+        }))
+
+        ambiguous_fp = _recompute_live_entity_fp(enrich_meta, entities_path)
+        assert ambiguous_fp == compute_entity_resolution_fingerprint(
+            [("Alex Miller", "unresolved")]
+        )
+        ambiguous_input_fp = compute_input_fingerprint(
+            stripped,
+            ambiguous_fp,
+            relationship_fp,
+            "default",
+            ENRICH_SPEC_VERSION,
+        )
+        assert ambiguous_input_fp != stored_input_fp
+
+        disposition, reason = _determine_disposition(
+            fm=fm,
+            doc=doc,
+            doc_type="evidence",
+            profile_name="default",
+            force=False,
+            entities_path=entities_path,
+            config=config,
+        )
+        assert disposition == "analyze"
+        assert reason == "eligible"
+
     def test_no_mentions_returns_stored(self):
         """No stored mentions → use stored fingerprint."""
         from folio.enrich import _recompute_live_entity_fp

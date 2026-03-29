@@ -126,6 +126,25 @@ class TestEntityResolution:
         assert result.entities["people"] == ["Rachel Link"]
         assert result.registry_changed is False
 
+    def test_non_person_comma_phrase_does_not_resolve_to_existing_person(self, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="Architecture Review", type="person", source="import")],
+        )
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["Review, Architecture"]),
+            source_text="Review, Architecture joined the meeting.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        assert result.entities["people"] == ["Review, Architecture"]
+        assert result.registry_changed is True
+        assert result.created_entities[0].canonical_name == "Review, Architecture"
+        assert all(person != "Architecture Review" for person in result.entities["people"])
+
     @patch("folio.pipeline.entity_resolution._execute_with_fallback")
     def test_resolve_id_suffix_name_stays_unresolved_without_full_name_match(self, mock_run, tmp_path):
         path = _make_registry(

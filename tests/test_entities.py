@@ -76,6 +76,7 @@ class TestPersonNameHelpers:
     def test_transpose_person_name_rejects_non_person_comma_strings(self):
         assert _transpose_person_name("Jordan, Systems") is None
         assert _transpose_person_name("Ernst & Young, LLP") is None
+        assert _transpose_person_name("Review, Architecture") is None
 
     def test_strip_person_id_suffix(self):
         assert _strip_person_id_suffix("Rachelrjlink Link") == "Rachel Link"
@@ -92,6 +93,7 @@ class TestPersonNameHelpers:
 
     def test_person_name_variants_do_not_transpose_non_person_comma_strings(self):
         assert person_name_variants("Jordan, Systems") == ["Jordan, Systems"]
+        assert person_name_variants("Review, Architecture") == ["Review, Architecture"]
 
 
 # ---------------------------------------------------------------------------

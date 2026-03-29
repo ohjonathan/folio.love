@@ -28,6 +28,7 @@ _PERSON_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "v", "vi", "vii", "
 _NON_PERSON_COMMA_TOKENS = frozenset(
     {
         "associates",
+        "architecture",
         "company",
         "compliance",
         "consulting",
@@ -50,6 +51,7 @@ _NON_PERSON_COMMA_TOKENS = frozenset(
         "platform",
         "product",
         "products",
+        "review",
         "sales",
         "security",
         "services",

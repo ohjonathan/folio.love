@@ -441,7 +441,7 @@ def _recompute_live_entity_fp(
             results = lookup_person_matches(registry, text)
         else:
             results = registry.lookup(text, entity_type=etype)
-        if results:
+        if len(results) == 1:
             _et, _key, entry = results[0]
             # Use canonical_name (not key) to match what enrich_note stores
             cname = entry.canonical_name
@@ -453,6 +453,8 @@ def _recompute_live_entity_fp(
             else:
                 resolution = f"confirmed:{_et}/{cname}"
         else:
+            # Ambiguous or missing live matches must not preserve a stale
+            # fingerprint for the first result.
             resolution = "unresolved"
         pairs.append((text, resolution))
 
