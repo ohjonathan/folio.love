@@ -102,7 +102,7 @@ class TestImportReportsTo:
         assert alice.reports_to == "unknown_boss"
         assert manager is not None
         assert manager.needs_confirmation is False
-        assert manager.source == "import"
+        assert manager.source == "import:chain-completed"
 
     def test_import_reports_to_order_independent(self, tmp_path):
         csv_path = tmp_path / "people.csv"
@@ -124,6 +124,19 @@ class TestImportReportsTo:
         bob = reg.get_entity("person", "bob")
         assert bob.reports_to == "alice"
         assert any("self" in w.lower() for w in result.warnings)
+
+    def test_import_reports_to_cycle_warns_and_skips_cycle(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,reports_to\nAlice,Bob\nBob,Alice\n")
+        reg = _make_registry(tmp_path)
+
+        result = import_csv(reg, csv_path)
+
+        alice = reg.get_entity("person", "alice")
+        bob = reg.get_entity("person", "bob")
+        assert alice.reports_to == "bob"
+        assert bob.reports_to is None
+        assert any("circular chain" in w.lower() for w in result.warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +339,26 @@ class TestOrgChartImport:
         assert result.org_chart_detected is True
         alice = reg.get_entity("person", "alice")
         assert alice.org_level == "L1"
+
+    def test_plain_csv_with_lone_level_does_not_trigger_org_chart_mode(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title,level\nAlice Chen,Janitor,L9\n")
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Alice Chen",
+            type="person",
+            source="import",
+            title="CEO",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.org_chart_detected is False
+        assert result.people_skipped == 1
+        alice = reg.get_entity("person", "alice_chen")
+        assert alice.title == "CEO"
+        assert alice.org_level is None
 
     def test_org_chart_transposed_name_matches_existing_person(self, tmp_path):
         csv_path = tmp_path / "people.csv"

@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from folio.tracking.entities import (
+    _strip_person_id_suffix,
+    _transpose_person_name,
     EntityAliasCollisionError,
     EntityAmbiguousError,
     EntityEntry,
@@ -16,6 +18,7 @@ from folio.tracking.entities import (
     EntitySchemaVersionError,
     EntitySlugCollisionError,
     entity_from_dict,
+    person_name_variants,
     sanitize_wikilink_name,
     slugify,
 )
@@ -58,6 +61,27 @@ class TestSlugify:
         assert sanitize_wikilink_name("Topic#Heading") == "TopicHeading"
         assert sanitize_wikilink_name("Item^ref") == "Itemref"
         assert sanitize_wikilink_name("  padded  ") == "padded"
+
+
+class TestPersonNameHelpers:
+    def test_transpose_person_name(self):
+        assert _transpose_person_name("Link, Rachel") == "Rachel Link"
+
+    def test_transpose_person_name_preserves_suffix(self):
+        assert _transpose_person_name("Doe, John Jr.") == "John Doe Jr."
+
+    def test_strip_person_id_suffix(self):
+        assert _strip_person_id_suffix("Rachelrjlink Link") == "Rachel Link"
+
+    def test_strip_person_id_suffix_allows_zero_initial_suffixes(self):
+        assert _strip_person_id_suffix("Christophersmith Smith") == "Christopher Smith"
+
+    def test_person_name_variants_include_transposed_and_stripped_forms(self):
+        assert person_name_variants("Link, Rachelrjlink") == [
+            "Link, Rachelrjlink",
+            "Rachelrjlink Link",
+            "Rachel Link",
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -412,4 +436,3 @@ class TestUpdateEntityAliasCollision:
         john = reg.get_entity("person", "john_doe")
         assert "JD" in john.aliases
         assert "Johnny" in john.aliases
-

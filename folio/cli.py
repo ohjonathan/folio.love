@@ -1446,7 +1446,7 @@ def import_cmd(ctx, csv_file):
         click.echo(f"  ⚠ {w}")
 
     if result.org_chart_detected:
-        click.echo("  Next: run `folio entities generate-stubs` to refresh entity notes.")
+        click.echo("  Next: run `folio entities generate-stubs --force` to refresh entity notes.")
 
 
 @entities.command("generate-stubs")

@@ -13,6 +13,7 @@ from .tracking.entities import (
     EntityRegistry,
     EntitySlugCollisionError,
     canonicalize_person_import_name,
+    lookup_person_matches,
     normalize_entity_name,
     person_name_variants,
     slugify,
@@ -23,7 +24,6 @@ logger = logging.getLogger(__name__)
 _KNOWN_COLUMNS = frozenset(
     {"name", "title", "level", "org_level", "department", "reports_to", "aliases", "client"}
 )
-_ORG_CHART_COLUMNS = frozenset({"reports_to", "level", "org_level"})
 
 
 @dataclass
@@ -86,7 +86,7 @@ def import_csv(registry: EntityRegistry, csv_path: Path) -> ImportResult:
             f"Found columns: {', '.join(headers)}"
         )
 
-    result.org_chart_detected = any(col in headers for col in _ORG_CHART_COLUMNS)
+    result.org_chart_detected = _detect_org_chart_headers(headers)
 
     for h in headers:
         if h and h not in _KNOWN_COLUMNS:
@@ -225,21 +225,17 @@ def _parse_aliases(raw_aliases: str) -> list[str]:
     return aliases
 
 
-def _lookup_person_matches(
-    registry: EntityRegistry,
-    *names: str,
-) -> list[tuple[str, str, EntityEntry]]:
-    seen: set[str] = set()
-    matches: list[tuple[str, str, EntityEntry]] = []
-    for name in names:
-        for candidate in person_name_variants(name):
-            for match in registry.lookup(candidate, entity_type="person"):
-                key = match[1]
-                if key in seen:
-                    continue
-                seen.add(key)
-                matches.append(match)
-    return matches
+def _detect_org_chart_headers(headers: list[str]) -> bool:
+    """Detect org-chart CSVs conservatively.
+
+    A lone ``level`` column is too weak a signal because it would make the
+    import authoritative and allow silent overwrites on generic people CSVs.
+    Treat the file as an org chart only when it includes ``reports_to`` or a
+    level-plus-department pair.
+    """
+    header_set = set(headers)
+    has_level = "level" in header_set or "org_level" in header_set
+    return "reports_to" in header_set or (has_level and "department" in header_set)
 
 
 def _merge_aliases(*groups: list[str]) -> list[str]:
@@ -265,10 +261,11 @@ def _create_or_update_person(
     result: ImportResult,
     authoritative: bool,
 ) -> tuple[Optional[str], str]:
-    matches = _lookup_person_matches(
+    matches = lookup_person_matches(
         registry,
         prepared.raw_name,
         prepared.canonical_name,
+        confirmed_only=False,
     )
     if len(matches) > 1:
         names = ", ".join(match[2].canonical_name for match in matches)
@@ -418,6 +415,12 @@ def _link_reports_to(
                 f"'{prepared.raw_name}' reports_to self — ignored."
             )
             continue
+        if _would_create_reports_to_cycle(registry, person_key, manager_key):
+            manager_name = registry.resolve_key_to_name(manager_key, "person")
+            result.warnings.append(
+                f"'{prepared.raw_name}' reports_to '{manager_name}' would create a circular chain — ignored."
+            )
+            continue
         changed = registry.update_entity("person", person_key, {"reports_to": manager_key})
         if changed:
             changed_rows.add(prepared.row_idx)
@@ -430,7 +433,11 @@ def _resolve_or_create_manager(
     reports_to: str,
     result: ImportResult,
 ) -> Optional[str]:
-    matches = _lookup_person_matches(registry, reports_to)
+    matches = lookup_person_matches(
+        registry,
+        reports_to,
+        confirmed_only=False,
+    )
     if len(matches) > 1:
         names = ", ".join(match[2].canonical_name for match in matches)
         result.warnings.append(
@@ -453,7 +460,7 @@ def _resolve_or_create_manager(
         type="person",
         aliases=implicit_aliases,
         needs_confirmation=False,
-        source="import",
+        source="import:chain-completed",
     )
     try:
         key = registry.add_entity(entry)
@@ -464,3 +471,25 @@ def _resolve_or_create_manager(
             f"Could not auto-create reports_to '{reports_to}': {exc}"
         )
         return None
+
+
+def _would_create_reports_to_cycle(
+    registry: EntityRegistry,
+    person_key: str,
+    manager_key: str,
+) -> bool:
+    current_key = manager_key
+    seen: set[str] = set()
+
+    while current_key:
+        if current_key == person_key:
+            return True
+        if current_key in seen:
+            return True
+        seen.add(current_key)
+        current_entry = registry.get_entity("person", current_key)
+        if current_entry is None or not current_entry.reports_to:
+            return False
+        current_key = current_entry.reports_to
+
+    return False

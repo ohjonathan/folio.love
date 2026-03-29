@@ -269,7 +269,7 @@ def entry_from_dict(d: dict) -> RegistryEntry:
     known_fields = {f.name for f in RegistryEntry.__dataclass_fields__.values()}
     filtered = {k: v for k, v in d.items() if k in known_fields}
     if "type" not in filtered:
-        filtered["type"] = "evidence"
+        filtered["type"] = "interaction" if "source_transcript" in d else "evidence"
     return RegistryEntry(**filtered)
 
 

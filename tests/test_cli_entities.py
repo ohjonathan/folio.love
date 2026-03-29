@@ -514,7 +514,7 @@ class TestEntitiesImport:
         )
         assert result.exit_code == 0
         assert "5" in result.output  # 5 people
-        assert "generate-stubs" in result.output
+        assert "generate-stubs --force" in result.output
         assert (library / "entities.json").exists()
 
     def test_entities_import_file_not_found(self, tmp_path):
@@ -554,8 +554,34 @@ class TestEntitiesGenerateStubs:
         assert "entity/person/bob-martinez" in content
         assert "job_title: CTO" in content
         assert "org_level: L4" in content
+        assert "reports_to: Alice Chen" in content
+        assert "**Reports to:** [[Alice Chen]]" in content
         assert "[[Alice Chen]]" in content
         assert AUTO_GENERATED_STUB_MARKER in content
+
+    def test_generate_stubs_honors_output_dir(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        _make_entity_registry(library, _full_registry_data())
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "entities",
+                "generate-stubs",
+                "--output-dir",
+                "custom_entities",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert (library / "custom_entities" / "person" / "Alice Chen.md").exists()
+        assert not (library / "_entities").exists()
 
     def test_generate_stubs_second_run_skips_existing(self, tmp_path):
         library = tmp_path / "library"

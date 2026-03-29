@@ -19,7 +19,10 @@ VALID_ENTITY_TYPES = frozenset({"person", "department", "system", "process"})
 EXTRACTION_ENTITY_TYPES = frozenset({"person", "department"})
 _WIKILINK_UNSAFE_CHARS = set("[]|#^")
 _WHITESPACE_RE = re.compile(r"\s+")
-_PERSON_COMMA_RE = re.compile(r"^(?P<last>[^,]+),\s*(?P<first>.+)$")
+_PERSON_COMMA_RE = re.compile(
+    r"^(?P<last>[^,]+),\s*(?P<first>[^,]+?)(?:\s+(?P<suffix>Jr\.?|Sr\.?|II|III|IV|V))?$",
+    re.IGNORECASE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +150,13 @@ def _transpose_person_name(name: str) -> Optional[str]:
         return None
     last = normalize_entity_name(match.group("last"))
     first = normalize_entity_name(match.group("first"))
+    suffix = normalize_entity_name(match.group("suffix") or "")
     if not first or not last:
         return None
-    return f"{first} {last}"
+    transposed = f"{first} {last}"
+    if suffix:
+        transposed = f"{transposed} {suffix}"
+    return transposed
 
 
 def _strip_person_id_suffix(name: Optional[str]) -> Optional[str]:
@@ -187,20 +194,52 @@ def _strip_person_id_suffix_token(
     if len(next_key) < 4:
         return None
 
-    best_choice: Optional[Tuple[int, int, str]] = None
+    candidates: list[Tuple[int, int, str, str]] = []
     for split_idx in range(4, len(token) - 4):
         base = token[:split_idx]
         suffix = token[split_idx:].lower()
         if len(base) < 4 or len(suffix) < 5:
             continue
-        for initials_len in (2, 1):
+        for initials_len in (2, 1, 0):
             fragment = suffix[initials_len:]
             if len(fragment) < 3 or not next_key.startswith(fragment):
                 continue
-            choice = (len(fragment), initials_len, base)
-            if best_choice is None or choice > best_choice:
-                best_choice = choice
-    return best_choice[2] if best_choice else None
+            candidates.append((len(fragment), initials_len, base, suffix[:initials_len]))
+
+    if not candidates:
+        return None
+
+    best_choice = max(candidates, key=lambda choice: (choice[0], choice[1], choice[2]))
+    exact_zero_choice = max(
+        (
+            choice for choice in candidates
+            if choice[1] == 0 and choice[0] == len(next_key)
+        ),
+        default=None,
+        key=lambda choice: choice[2],
+    )
+    exact_one_choice = max(
+        (
+            choice for choice in candidates
+            if choice[1] == 1 and choice[0] == len(next_key)
+        ),
+        default=None,
+        key=lambda choice: choice[2],
+    )
+
+    if best_choice[1] == 2 and any(char in "aeiou" for char in best_choice[3]):
+        if exact_one_choice and exact_one_choice[2][-1].lower() not in "aeiou":
+            return exact_one_choice[2]
+        if exact_zero_choice is not None:
+            return exact_zero_choice[2]
+    if (
+        exact_zero_choice is not None
+        and best_choice[1] == 1
+        and best_choice[2][-1].lower() in "aeiou"
+    ):
+        return exact_zero_choice[2]
+
+    return best_choice[2]
 
 
 def _now_iso() -> str:
@@ -228,7 +267,7 @@ class EntityEntry:
     type: str                                    # person|department|system|process
     aliases: list[str] = field(default_factory=list)
     needs_confirmation: bool = False
-    source: str = "import"                       # import|extracted|manual
+    source: str = "import"                       # provenance label
     first_seen: str = ""                         # ISO 8601, never overwritten
     created_at: str = ""                         # ISO 8601
     updated_at: str = ""                         # ISO 8601
