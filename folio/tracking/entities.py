@@ -23,7 +23,7 @@ _PERSON_COMMA_RE = re.compile(
     r"^(?P<last>[^,]+),\s*(?P<first>[^,]+?)(?:\s+(?P<suffix>Jr\.?|Sr\.?|II|III|IV|V|VI|VII|VIII|IX))?$",
     re.IGNORECASE,
 )
-_PERSON_NAME_TOKEN_RE = re.compile(r"^[A-Za-z]+(?:[.'-][A-Za-z]+)*\.?$")
+_PERSON_NAME_TOKEN_RE = re.compile(r"^[^\W\d_]+(?:[.'-][^\W\d_]+)*\.?$")
 _PERSON_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix"})
 _NON_PERSON_COMMA_TOKENS = frozenset(
     {

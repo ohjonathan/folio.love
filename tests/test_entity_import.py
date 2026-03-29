@@ -379,6 +379,23 @@ class TestOrgChartImport:
         assert person.title == "VP"
         assert person.org_level == "L4"
 
+    def test_org_chart_transposed_unicode_name_matches_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title,level,reports_to\n"Díaz, José",VP,L4,\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="José Díaz",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+        assert result.people_updated == 1
+        person = reg.get_entity("person", "jos_d_az")
+        assert person.title == "VP"
+        assert person.org_level == "L4"
+
     def test_plain_csv_transposed_name_does_not_update_existing_person(self, tmp_path):
         csv_path = tmp_path / "people.csv"
         _make_csv(csv_path, 'name,title\n"Link, Rachel",VP\n')

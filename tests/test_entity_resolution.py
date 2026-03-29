@@ -126,6 +126,23 @@ class TestEntityResolution:
         assert result.entities["people"] == ["Rachel Link"]
         assert result.registry_changed is False
 
+    def test_resolve_transposed_unicode_person_name(self, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [EntityEntry(canonical_name="José Díaz", type="person", source="import")],
+        )
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["Díaz, José"]),
+            source_text="Díaz, José joined the meeting.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        assert result.entities["people"] == ["José Díaz"]
+        assert result.registry_changed is False
+
     def test_non_person_comma_phrase_does_not_resolve_to_existing_person(self, tmp_path):
         path = _make_registry(
             tmp_path,
