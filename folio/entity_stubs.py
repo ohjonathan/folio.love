@@ -120,6 +120,11 @@ def _render_stub(
 
 
 def _reports_to_display_name(registry: EntityRegistry, reports_to: str | None) -> str | None:
+    """Return a display-safe manager name for stub rendering.
+
+    Missing registry references fall back to the stored raw value so legacy
+    data still renders visibly instead of dropping the relationship.
+    """
     if not reports_to:
         return None
     resolved = registry.resolve_key_to_name(reports_to, "person")

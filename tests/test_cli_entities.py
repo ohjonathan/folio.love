@@ -648,6 +648,26 @@ class TestEntitiesGenerateStubs:
         assert "STALE" not in refreshed
         assert AUTO_GENERATED_STUB_MARKER in refreshed
 
+    def test_generate_stubs_keeps_legacy_reports_to_visible_when_manager_missing(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = _full_registry_data()
+        data["entities"]["person"]["bob_martinez"]["reports_to"] = "Missing Boss"
+        del data["entities"]["person"]["alice_chen"]
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs"]
+        )
+
+        assert result.exit_code == 0
+        content = (library / "_entities" / "person" / "Bob Martinez.md").read_text()
+        assert "reports_to: Missing Boss" in content
+        assert "**Reports to:** [[Missing Boss]]" in content
+
     def test_import_then_generate_stubs_creates_note_targets(self, tmp_path):
         library = tmp_path / "library"
         library.mkdir()

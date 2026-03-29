@@ -20,7 +20,7 @@ EXTRACTION_ENTITY_TYPES = frozenset({"person", "department"})
 _WIKILINK_UNSAFE_CHARS = set("[]|#^")
 _WHITESPACE_RE = re.compile(r"\s+")
 _PERSON_COMMA_RE = re.compile(
-    r"^(?P<last>[^,]+),\s*(?P<first>[^,]+?)(?:\s+(?P<suffix>Jr\.?|Sr\.?|II|III|IV|V))?$",
+    r"^(?P<last>[^,]+),\s*(?P<first>[^,]+?)(?:\s+(?P<suffix>Jr\.?|Sr\.?|II|III|IV|V|VI|VII|VIII|IX))?$",
     re.IGNORECASE,
 )
 
@@ -184,7 +184,13 @@ def _strip_person_id_suffix_token(
     *,
     next_token: Optional[str],
 ) -> Optional[str]:
-    """Strip a likely appended user-ID suffix from a title-cased name token."""
+    """Strip a likely appended user-ID suffix from a title-cased name token.
+
+    We prefer the longest exact surname fragment match, but fall back when the
+    winning split leaves a trailing vowel on the base token. That tends to mean
+    we split too early and consumed the real name's final vowel as if it were
+    part of a user-ID prefix, for example ``Christopherasmith``.
+    """
     if not re.fullmatch(r"[A-Z][a-z]+", token):
         return None
     if len(token) < 10 or not next_token:
@@ -228,6 +234,8 @@ def _strip_person_id_suffix_token(
     )
 
     if best_choice[1] == 2 and any(char in "aeiou" for char in best_choice[3]):
+        # If the 2-initial split starts with vowels, prefer a cleaner exact
+        # surname match that does not lop off the real name ending.
         if exact_one_choice and exact_one_choice[2][-1].lower() not in "aeiou":
             return exact_one_choice[2]
         if exact_zero_choice is not None:

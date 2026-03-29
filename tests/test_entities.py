@@ -70,6 +70,9 @@ class TestPersonNameHelpers:
     def test_transpose_person_name_preserves_suffix(self):
         assert _transpose_person_name("Doe, John Jr.") == "John Doe Jr."
 
+    def test_transpose_person_name_supports_extended_roman_suffixes(self):
+        assert _transpose_person_name("Doe, Jane VIII") == "Jane Doe VIII"
+
     def test_strip_person_id_suffix(self):
         assert _strip_person_id_suffix("Rachelrjlink Link") == "Rachel Link"
 
