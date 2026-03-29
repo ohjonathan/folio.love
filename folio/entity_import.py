@@ -112,7 +112,11 @@ def import_csv(registry: EntityRegistry, csv_path: Path) -> ImportResult:
                 row_dict["level" if header == "org_level" else header] = val
         parsed_rows.append(row_dict)
 
-    prepared_rows = _prepare_rows(parsed_rows, result)
+    prepared_rows = _prepare_rows(
+        parsed_rows,
+        result,
+        broad_match=result.org_chart_detected,
+    )
     departments_to_create: set[str] = set()
     person_keys: dict[int, str] = {}
     row_status: dict[int, str] = {}
@@ -123,6 +127,7 @@ def import_csv(registry: EntityRegistry, csv_path: Path) -> ImportResult:
             prepared=prepared,
             result=result,
             authoritative=result.org_chart_detected,
+            broad_match=result.org_chart_detected,
         )
         if key is None:
             continue
@@ -152,7 +157,12 @@ def import_csv(registry: EntityRegistry, csv_path: Path) -> ImportResult:
     return result
 
 
-def _prepare_rows(parsed_rows: list[dict[str, str]], result: ImportResult) -> list[_PreparedRow]:
+def _prepare_rows(
+    parsed_rows: list[dict[str, str]],
+    result: ImportResult,
+    *,
+    broad_match: bool,
+) -> list[_PreparedRow]:
     prepared_rows: list[_PreparedRow] = []
     seen_candidates: dict[str, int] = {}
 
@@ -165,11 +175,14 @@ def _prepare_rows(parsed_rows: list[dict[str, str]], result: ImportResult) -> li
         canonical_name, implicit_aliases = canonicalize_person_import_name(raw_name)
         explicit_aliases = _parse_aliases(row.get("aliases", ""))
 
-        first_seen_row = _find_duplicate_row(
-            raw_name=raw_name,
-            canonical_name=canonical_name,
-            seen_candidates=seen_candidates,
-        )
+        if broad_match:
+            first_seen_row = _find_duplicate_row(
+                raw_name=raw_name,
+                canonical_name=canonical_name,
+                seen_candidates=seen_candidates,
+            )
+        else:
+            first_seen_row = seen_candidates.get(raw_name.lower())
         if first_seen_row is not None:
             result.warnings.append(
                 f"Row {row_idx}: duplicate name '{raw_name}' "
@@ -177,8 +190,11 @@ def _prepare_rows(parsed_rows: list[dict[str, str]], result: ImportResult) -> li
             )
             continue
 
-        for candidate in _row_lookup_candidates(raw_name, canonical_name):
-            seen_candidates[candidate.lower()] = row_idx
+        if broad_match:
+            for candidate in _row_lookup_candidates(raw_name, canonical_name):
+                seen_candidates[candidate.lower()] = row_idx
+        else:
+            seen_candidates[raw_name.lower()] = row_idx
 
         prepared_rows.append(
             _PreparedRow(
@@ -260,13 +276,20 @@ def _create_or_update_person(
     prepared: _PreparedRow,
     result: ImportResult,
     authoritative: bool,
+    broad_match: bool,
 ) -> tuple[Optional[str], str]:
-    matches = lookup_person_matches(
-        registry,
-        prepared.raw_name,
-        prepared.canonical_name,
-        confirmed_only=False,
-    )
+    if broad_match:
+        matches = lookup_person_matches(
+            registry,
+            prepared.raw_name,
+            prepared.canonical_name,
+            confirmed_only=False,
+        )
+    else:
+        matches = _lookup_exact_canonical_person_matches(
+            registry,
+            prepared.raw_name,
+        )
     if len(matches) > 1:
         names = ", ".join(match[2].canonical_name for match in matches)
         result.warnings.append(
@@ -339,6 +362,18 @@ def _create_or_update_person(
     except EntityAliasCollisionError as e:
         result.warnings.append(f"Row {prepared.row_idx}: {e}, skipped.")
         return None, "skipped"
+
+
+def _lookup_exact_canonical_person_matches(
+    registry: EntityRegistry,
+    raw_name: str,
+) -> list[tuple[str, str, EntityEntry]]:
+    matches: list[tuple[str, str, EntityEntry]] = []
+    for match in registry.lookup(raw_name, entity_type="person", confirmed_only=False):
+        if match[2].canonical_name.lower() != raw_name.lower():
+            continue
+        matches.append(match)
+    return matches
 
 
 def _create_departments(

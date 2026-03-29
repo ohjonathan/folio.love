@@ -193,11 +193,11 @@ class TestImportDuplicates:
         assert alice.source == "import"
         assert alice.needs_confirmation is False
 
-    def test_import_alias_match_updates_existing(self, tmp_path):
+    def test_import_alias_collision_warning(self, tmp_path):
         csv_path = tmp_path / "people.csv"
         _make_csv(csv_path, "name,title\nJane,CEO\n")
         reg = _make_registry(tmp_path)
-        # Pre-populate with alias "jane"
+        # Pre-populate with alias "Jane"
         reg.add_entity(EntityEntry(
             canonical_name="Jane Smith",
             type="person",
@@ -206,9 +206,11 @@ class TestImportDuplicates:
         ))
         reg.save()
         result = import_csv(reg, csv_path)
-        assert result.people_updated == 1
+        assert result.people_updated == 0
+        assert result.people_imported == 0
+        assert any("collision" in w.lower() or "collides" in w.lower() for w in result.warnings)
         jane = reg.get_entity("person", "jane_smith")
-        assert jane.title == "CEO"
+        assert jane.title is None
 
     def test_import_duplicate_rows(self, tmp_path):
         csv_path = tmp_path / "people.csv"
@@ -377,6 +379,25 @@ class TestOrgChartImport:
         assert person.title == "VP"
         assert person.org_level == "L4"
 
+    def test_plain_csv_transposed_name_does_not_update_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title\n"Link, Rachel",VP\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Rachel Link",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.people_updated == 0
+        assert result.people_imported == 0
+        assert any("skipped" in w.lower() or "collision" in w.lower() for w in result.warnings)
+        person = reg.get_entity("person", "rachel_link")
+        assert person.title is None
+
     def test_org_chart_reimport_updates_changed_fields(self, tmp_path):
         csv_path = tmp_path / "people.csv"
         _make_csv(csv_path, "name,title,level,reports_to\nAlice Chen,CEO,L1,\n")
@@ -411,6 +432,25 @@ class TestOrgChartImport:
         rob = reg.get_entity("person", "rob_cheek")
         assert rob.reports_to == "rachel_link"
 
+    def test_org_chart_alias_match_updates_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, "name,title,level,reports_to\nJane,CEO,L1,\n")
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Jane Smith",
+            type="person",
+            aliases=["Jane"],
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.people_updated == 1
+        jane = reg.get_entity("person", "jane_smith")
+        assert jane.title == "CEO"
+        assert jane.org_level == "L1"
+
     def test_org_chart_transposed_suffix_name_matches_existing_person(self, tmp_path):
         csv_path = tmp_path / "people.csv"
         _make_csv(csv_path, 'name,title,level,reports_to\n"Link, Rachelrjlink",VP,L4,\n')
@@ -427,6 +467,52 @@ class TestOrgChartImport:
         person = reg.get_entity("person", "rachel_link")
         assert person.title == "VP"
         assert person.org_level == "L4"
+
+    def test_plain_csv_transposed_suffix_name_does_not_update_existing_person(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title\n"Link, Rachelrjlink",VP\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Rachel Link",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.people_updated == 0
+        assert result.people_imported == 1
+        existing = reg.get_entity("person", "rachel_link")
+        assert existing.title is None
+        created = reg.get_entity("person", "rachelrjlink_link")
+        assert created is not None
+        assert created.canonical_name == "Rachelrjlink Link"
+        assert created.title == "VP"
+
+    def test_org_chart_transposed_suffix_name_ambiguous_between_people(self, tmp_path):
+        csv_path = tmp_path / "people.csv"
+        _make_csv(csv_path, 'name,title,level,reports_to\n"Smith, Christopherjsmith",VP,L4,\n')
+        reg = _make_registry(tmp_path)
+        reg.add_entity(EntityEntry(
+            canonical_name="Christophe Smith",
+            type="person",
+            source="import",
+        ))
+        reg.add_entity(EntityEntry(
+            canonical_name="Christopher Smith",
+            type="person",
+            source="import",
+        ))
+        reg.save()
+
+        result = import_csv(reg, csv_path)
+
+        assert result.people_updated == 0
+        assert result.people_imported == 0
+        assert any("ambiguous match" in w.lower() for w in result.warnings)
+        assert reg.get_entity("person", "christophe_smith").title is None
+        assert reg.get_entity("person", "christopher_smith").title is None
 
 
 # ---------------------------------------------------------------------------

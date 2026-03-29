@@ -73,6 +73,10 @@ class TestPersonNameHelpers:
     def test_transpose_person_name_supports_extended_roman_suffixes(self):
         assert _transpose_person_name("Doe, Jane VIII") == "Jane Doe VIII"
 
+    def test_transpose_person_name_rejects_non_person_comma_strings(self):
+        assert _transpose_person_name("Jordan, Systems") is None
+        assert _transpose_person_name("Ernst & Young, LLP") is None
+
     def test_strip_person_id_suffix(self):
         assert _strip_person_id_suffix("Rachelrjlink Link") == "Rachel Link"
 
@@ -85,6 +89,9 @@ class TestPersonNameHelpers:
             "Rachelrjlink Link",
             "Rachel Link",
         ]
+
+    def test_person_name_variants_do_not_transpose_non_person_comma_strings(self):
+        assert person_name_variants("Jordan, Systems") == ["Jordan, Systems"]
 
 
 # ---------------------------------------------------------------------------

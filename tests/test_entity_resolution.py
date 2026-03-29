@@ -164,6 +164,28 @@ class TestEntityResolution:
         assert result.entities["people"] == ["Rachel Link"]
         assert result.registry_changed is False
 
+    def test_resolve_transposed_suffix_name_does_not_pick_wrong_person(self, tmp_path):
+        path = _make_registry(
+            tmp_path,
+            [
+                EntityEntry(canonical_name="Christophe Smith", type="person", source="import"),
+                EntityEntry(canonical_name="Christopher Smith", type="person", source="import"),
+            ],
+        )
+
+        result = resolve_interaction_entities(
+            entities_path=path,
+            extracted_entities=_entities(people=["Smith, Christopherjsmith"]),
+            source_text="Smith, Christopherjsmith joined the meeting.",
+            provider_name="openai",
+            model="gpt-5.4",
+        )
+
+        assert result.entities["people"] == ["Smith, Christopherjsmith"]
+        assert any('⚠ Ambiguous entity: "Smith, Christopherjsmith" matches' in warning for warning in result.warnings)
+        assert all(person != "Christophe Smith" for person in result.entities["people"])
+        assert result.registry_changed is False
+
     def test_resolve_ambiguous_keeps_original(self, tmp_path):
         path = _write_registry_data(
             tmp_path,
