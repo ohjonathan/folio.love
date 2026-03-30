@@ -61,7 +61,7 @@ def _sample_entry(**overrides) -> RegistryEntry:
 class TestRegistryLoadSave:
     def test_load_missing_file_returns_empty(self, tmp_path):
         data = load_registry(tmp_path / "registry.json")
-        assert data["_schema_version"] == 1
+        assert data["_schema_version"] == 2
         assert data["decks"] == {}
 
     def test_save_and_load_roundtrip(self, tmp_path):

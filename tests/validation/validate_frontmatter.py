@@ -81,6 +81,10 @@ def validate_deck(md_path: Path) -> dict:
         _validate_interaction_markdown_structure(content, result)
         return result
 
+    if fm.get("type") == "context":
+        _validate_context_note(fm, content, result)
+        return result
+
     _validate_required_fields(fm, result, "evidence")
     _validate_field_types(fm, result, "evidence")
     _validate_enum_values(fm, result)
@@ -440,6 +444,106 @@ def _validate_diagram_note(fm: dict, result: dict):
     # the consulting analysis portion still needs fresh extraction. This is
     # documented behavior, not a bug. Only the diagram extraction/rendering
     # portions are bypassed on frozen mixed pages.
+
+
+# --- Context document validation ---
+
+_ALLOWED_SUBTYPES_CONTEXT = {"engagement", "client_profile", "workstream"}
+
+_CONTEXT_REQUIRED_FIELDS = [
+    "id", "title", "type", "subtype", "status", "authority",
+    "curation_level", "review_status", "review_flags",
+    "client", "engagement", "tags", "created", "modified",
+]
+
+_CONTEXT_REQUIRED_BODY_SECTIONS = [
+    "## Client Background",
+    "## Engagement Snapshot",
+    "## Objectives / SOW",
+    "## Timeline",
+    "## Team",
+    "## Stakeholders",
+    "## Starting Hypotheses",
+    "## Risks / Open Questions",
+]
+
+
+def _validate_context_note(fm: dict, content: str, result: dict):
+    """Validate a context document (type: context)."""
+    # Required fields
+    for field_name in _CONTEXT_REQUIRED_FIELDS:
+        if field_name not in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter", f"Context note missing: {field_name}")
+            )
+        elif fm[field_name] is None and field_name not in ("extraction_confidence",):
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter", f"Context note null field: {field_name}")
+            )
+
+    # extraction_confidence must be explicitly null
+    if "extraction_confidence" in fm and fm["extraction_confidence"] is not None:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter",
+             "Context note extraction_confidence must be null")
+        )
+
+    # Subtype validation
+    if fm.get("subtype") and fm["subtype"] not in _ALLOWED_SUBTYPES_CONTEXT:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", f"Invalid context subtype: {fm['subtype']}")
+        )
+
+    # review_status should be "clean" for context docs
+    if fm.get("review_status") != "clean":
+        result["warnings"].append(
+            f"Context note review_status is '{fm.get('review_status')}', expected 'clean'"
+        )
+
+    # review_flags must be empty list
+    if fm.get("review_flags") and len(fm["review_flags"]) > 0:
+        result["warnings"].append(
+            f"Context note has review_flags: {fm['review_flags']}"
+        )
+
+    # Must NOT have source-backed fields
+    for source_field in ("source", "source_hash", "source_type", "slide_count",
+                         "version", "converted", "source_transcript", "date"):
+        if source_field in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter",
+                 f"Context note must not contain source field: {source_field}")
+            )
+
+    # Must NOT have evidence-only generated fields
+    for gen_field in ("grounding_summary", "_llm_metadata"):
+        if gen_field in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter",
+                 f"Context note must not contain generated field: {gen_field}")
+            )
+
+    # Validate enum values shared with other types
+    if fm.get("status") and fm["status"] not in ALLOWED_STATUS:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", f"Invalid status: {fm['status']}")
+        )
+    if fm.get("authority") and fm["authority"] not in ALLOWED_AUTHORITY:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", f"Invalid authority: {fm['authority']}")
+        )
+    if fm.get("curation_level") and fm["curation_level"] not in ALLOWED_CURATION_LEVELS:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", f"Invalid curation_level: {fm['curation_level']}")
+        )
+
+    # Required body sections
+    for section in _CONTEXT_REQUIRED_BODY_SECTIONS:
+        if section not in content:
+            result["errors"].append(
+                ("Silent-Missing-Content",
+                 f"Context note missing required section: {section}")
+            )
 
 def validate_all() -> list[dict]:
     """Validate all converted markdown files in the output directory."""
