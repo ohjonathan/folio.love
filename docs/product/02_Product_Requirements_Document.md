@@ -9,8 +9,14 @@ generated_by: ontos_scaffold
 
 # Folio: Product Requirements Document
 
-**Version 1.3 | March 2026**
+**Version 1.4 | March 2026**
 **folio.love**
+
+**v1.4 changes:** Added context document support after PR E (PR #40).
+Updated FR-403 for registry schema v2 and source-less managed documents.
+Added FR-510 for the `folio context` command family. Updated scope to
+include context documents alongside evidence and interaction notes.
+See the closeout at `docs/validation/tier3_closeout_report.md`.
 
 **v1.3 changes:** Added the shipped entity-system baseline after PR #32,
 PR #34, and PR #35. Expanded the FR-400 and FR-500 families to cover
@@ -35,13 +41,14 @@ Folio's output must be trustworthy enough for direct use in active McKinsey enga
 Folio v1.0 encompasses:
 - Document conversion pipeline (PPTX/PDF to Markdown)
 - Interaction ingestion pipeline (txt/md transcripts and notes to interaction markdown)
+- Context document management (engagement scaffolding notes)
 - Entity registry and CSV import for known people, departments, systems, and processes
 - Ingest-time entity resolution against confirmed registry entries
 - Source file tracking with relative paths
 - Version tracking and change detection
 - Optional LLM analysis with bring-your-own provider credentials
 - Knowledge library organization (multi-client, multi-engagement)
-- Mixed-library registry/status/scan behavior across evidence and interaction documents
+- Mixed-library registry/status/scan behavior across evidence, interaction, and context documents
 - Obsidian-compatible output format
 - CLI for all operations
 - Source grounding and extraction confidence scoring
@@ -337,13 +344,15 @@ changing the frontmatter contract.
 #### FR-403: Registry
 
 The system SHALL maintain a `registry.json` with:
-- All managed documents (including evidence decks and interaction notes)
-- Document type, source paths/transcripts, and source hashes
+- All managed documents (including evidence decks, interaction notes, and context documents)
+- Document type (`evidence`, `interaction`, `context`), with optional `subtype` for context docs
+- Source paths/transcripts and source hashes (where applicable; context docs are source-less)
 - Last processing timestamp
 - Current staleness status
 - Review status and extraction confidence (for library-wide review queries)
 - Canonical relationship context sufficient to resolve provenance targets
   (including confirmed `supersedes` predecessor IDs for evidence notes)
+- Registry schema version tracking (`_schema_version: 2` as of PR E)
 
 #### FR-404: Entity Registry
 
@@ -375,7 +384,38 @@ work.
 - [ ] Aliases participate in lookup for confirmed entities
 - [ ] Proposed matches are retained for human review instead of silently applied
 
----
+#### FR-405: Context Documents
+
+The system SHALL support context documents as first-class managed documents in
+`registry.json`. Context documents provide engagement-level scaffolding
+(client background, SOW, team, timeline, hypotheses) without a backing source
+file.
+
+Context document requirements:
+- `type: context` with `subtype: engagement` for the v1 template
+- Source-less frontmatter: no `source`, `source_hash`, `source_type`, or
+  `source_transcript` fields
+- Fixed review defaults: `review_status: clean`, `review_flags: []`,
+  `extraction_confidence: null`
+- Deterministic date-based ID: `{client}_{engagement}_{context}_{date}_{subtype}`
+- Registry schema v2 required for source-less row compatibility
+- Body template with required sections: Client Background, Engagement Snapshot,
+  Objectives / SOW, Timeline, Team, Stakeholders, Starting Hypotheses,
+  Risks / Open Questions
+
+Context documents are first-class registry citizens but do not participate in:
+- `folio scan` (no source file to track)
+- `folio refresh` (no conversion to redo)
+- `folio enrich` (not an analysis target in v1)
+- `folio provenance` (not an evidence document)
+
+**Acceptance Criteria:**
+- [ ] Context docs are registered with `type: context` in `registry.json`
+- [ ] Context frontmatter is source-less and uses fixed review defaults
+- [ ] Context body template includes all required sections
+- [ ] `folio status` displays context docs in per-type summary
+- [ ] `folio scan`, `folio refresh`, `folio enrich`, and `folio provenance`
+      safely skip context rows
 
 ### 2.5 CLI Commands (FR-500) — P1
 
@@ -553,6 +593,28 @@ folio provenance stale acknowledge-doc <doc_id> [scope]
 - [ ] Confirmed links persist through refresh and support stale detection /
   repair
 - [ ] Blocked repairs surface explicitly; they do not silently disappear
+
+#### FR-510: Context Command
+```bash
+folio context init --client <name> --engagement <name> [--target <path>]
+```
+
+- Create an engagement context document at the canonical library path
+- Populate ontology-aligned frontmatter (`type: context`, `subtype: engagement`)
+- Generate a complete human-editable template with required body sections
+- Register the context document in `registry.json` as a source-less managed row
+- Reject duplicate creation (error if context doc already exists at that path)
+- Context documents are first-class registry citizens but do not participate in
+  `folio scan` (no source to track) or `folio refresh` (no conversion to redo)
+- `folio enrich` and `folio provenance` skip context docs in v1
+
+**Acceptance Criteria:**
+- [ ] `folio context init` creates a valid context document at the canonical path
+- [ ] Context doc appears in `registry.json` with `type: context` and `subtype: engagement`
+- [ ] Context doc is visible in `folio status` output with per-type summary
+- [ ] Duplicate `folio context init` for the same client/engagement is rejected
+- [ ] `folio scan`, `folio refresh` do not crash on libraries containing context rows
+- [ ] Frontmatter validator accepts valid context docs and rejects malformed ones
 
 ---
 

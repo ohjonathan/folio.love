@@ -14,22 +14,40 @@ from .sources import check_staleness, compute_file_hash
 
 logger = logging.getLogger(__name__)
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+
+
+def _str_or_none(value: object) -> str | None:
+    """Cast a value to ``str`` if non-None.
+
+    YAML parsers auto-coerce bare dates like ``2026-03-30`` to
+    ``datetime.date`` objects.  ``json.dumps`` cannot serialise those,
+    so all rebuilt frontmatter strings pass through this helper.
+    """
+    if value is None:
+        return None
+    return str(value)
 
 
 @dataclass
 class RegistryEntry:
-    """A single deck in the registry."""
+    """A single managed document in the registry.
+
+    Schema v2 generalizes the registry to support source-less managed
+    documents (e.g. context docs).  Source-backed fields are optional;
+    source-less rows leave them as ``None``.
+    """
     id: str
     title: str
     markdown_path: str          # relative to library_root
     deck_dir: str               # relative to library_root
-    source_relative_path: str   # frontmatter source field
-    source_hash: str
-    version: int
-    converted: str
+    source_relative_path: Optional[str] = None   # None for source-less docs
+    source_hash: Optional[str] = None             # None for source-less docs
+    version: Optional[int] = None                 # None for source-less docs
+    converted: Optional[str] = None               # None for source-less docs
     source_type: Optional[str] = None
     type: Optional[str] = None
+    subtype: Optional[str] = None                 # round-trip context subtypes
     modified: Optional[str] = None
     client: Optional[str] = None
     engagement: Optional[str] = None
@@ -90,7 +108,7 @@ def save_registry(registry_path: Path, data: dict) -> None:
     """Write registry atomically."""
     data.pop("_corrupt", None)  # internal flag, not persisted
     data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    data.setdefault("_schema_version", _SCHEMA_VERSION)
+    data["_schema_version"] = _SCHEMA_VERSION
     _atomic_write_json(registry_path, data)
 
 
@@ -119,6 +137,7 @@ def rebuild_registry(library_root: Path) -> dict:
     entry for each note carrying either:
     - ``source`` + ``source_hash`` (evidence-style docs)
     - ``source_transcript`` + ``source_hash`` (interaction docs)
+    - ``type: context`` (source-less managed docs)
     """
     library_root = Path(library_root).resolve()
     data = _empty_registry()
@@ -127,6 +146,34 @@ def rebuild_registry(library_root: Path) -> dict:
         fm = _read_frontmatter(md_file)
         if fm is None:
             continue
+
+        # Context docs: source-less managed documents
+        if fm.get("type") == "context":
+            deck_id = fm.get("id", md_file.stem)
+            md_rel = str(md_file.relative_to(library_root)).replace("\\", "/")
+            deck_dir_rel = str(md_file.parent.relative_to(library_root)).replace("\\", "/")
+            if deck_dir_rel == ".":
+                deck_dir_rel = ""
+            entry = RegistryEntry(
+                id=deck_id,
+                title=str(fm.get("title", md_file.stem)),
+                markdown_path=md_rel,
+                deck_dir=deck_dir_rel,
+                type="context",
+                subtype=_str_or_none(fm.get("subtype")),
+                modified=_str_or_none(fm.get("modified")),
+                client=_str_or_none(fm.get("client")),
+                engagement=_str_or_none(fm.get("engagement")),
+                authority=_str_or_none(fm.get("authority")),
+                curation_level=_str_or_none(fm.get("curation_level")),
+                staleness_status="current",
+                review_status=fm.get("review_status"),
+                review_flags=fm.get("review_flags"),
+                extraction_confidence=fm.get("extraction_confidence"),
+            )
+            data["decks"][entry.id] = entry.to_dict()
+            continue
+
         source_field = None
         if "source" in fm:
             source_field = "source"
@@ -157,6 +204,7 @@ def rebuild_registry(library_root: Path) -> dict:
             version=fm.get("version", 1),
             converted=fm.get("converted", ""),
             type=fm.get("type", "evidence"),
+            subtype=fm.get("subtype"),
             modified=fm.get("modified"),
             client=fm.get("client"),
             engagement=fm.get("engagement"),
@@ -203,7 +251,7 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
         # These are intentionally excluded; the registry retains the last-computed
         # values and frontmatter is the source of truth only after re-conversion.
         authoritative = [
-            "title", "type", "client", "engagement", "authority",
+            "title", "type", "subtype", "client", "engagement", "authority",
             "curation_level", "review_status", "review_flags",
         ]
         for field_name in authoritative:
@@ -241,7 +289,13 @@ def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
 
 
 def resolve_entry_source(library_root: Path, entry: RegistryEntry) -> Path:
-    """Resolve the absolute source path for a registry entry."""
+    """Resolve the absolute source path for a source-backed registry entry.
+
+    Raises ``ValueError`` for source-less entries (e.g. context docs).
+    Callers must check ``entry.source_relative_path is not None`` first.
+    """
+    if entry.source_relative_path is None:
+        raise ValueError(f"Entry {entry.id} has no source path (source-less document)")
     library_root = Path(library_root).resolve()
     md_path = library_root / entry.markdown_path
     md_dir = md_path.parent
@@ -251,11 +305,19 @@ def resolve_entry_source(library_root: Path, entry: RegistryEntry) -> Path:
 def refresh_entry_status(library_root: Path, entry: RegistryEntry) -> RegistryEntry:
     """Recompute staleness_status for a registry entry.
 
+    Source-less managed docs use file-presence-only staleness.
+    Source-backed entries use source-hash comparison.
     Mutates ``entry.staleness_status`` in-place and returns the
     same entry for convenience.
     """
     library_root = Path(library_root).resolve()
     md_path = library_root / entry.markdown_path
+
+    # Source-less managed docs: file-presence-only staleness
+    if entry.source_relative_path is None:
+        entry.staleness_status = "current" if md_path.exists() else "missing"
+        return entry
+
     result = check_staleness(md_path, entry.source_relative_path, entry.source_hash)
     entry.staleness_status = result["status"]
     return entry
@@ -265,6 +327,8 @@ def entry_from_dict(d: dict) -> RegistryEntry:
     """Construct a RegistryEntry from a registry dict entry.
 
     Ignores unknown keys for forward compatibility.
+    Schema v1 rows (missing subtype, optional source fields) are
+    loaded transparently thanks to dataclass defaults.
     """
     known_fields = {f.name for f in RegistryEntry.__dataclass_fields__.values()}
     filtered = {k: v for k, v in d.items() if k in known_fields}

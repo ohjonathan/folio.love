@@ -293,7 +293,8 @@ def cli(ctx, verbose: bool, config: Optional[str]):
 
     config_path = Path(config) if config else None
     ctx.ensure_object(dict)
-    ctx.obj["config"] = FolioConfig.load(config_path)
+    if "config" not in ctx.obj:
+        ctx.obj["config"] = FolioConfig.load(config_path)
 
 
 @cli.command()
@@ -763,6 +764,21 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
 
     total = current + stale + missing
     click.echo(f"Library: {total} documents")
+
+    # Per-type summary when multiple types exist
+    type_counts: dict[str, int] = {}
+    for _deck_id, _entry_data in data.get("decks", {}).items():
+        _entry = registry.entry_from_dict(_entry_data)
+        if scope:
+            if not (_matches_scope(_entry.markdown_path, scope) or
+                    _matches_scope(_entry.deck_dir, scope)):
+                continue
+        t = _entry.type or "evidence"
+        type_counts[t] = type_counts.get(t, 0) + 1
+    if len(type_counts) > 1:
+        parts = ", ".join(f"{t} {c}" for t, c in sorted(type_counts.items()))
+        click.echo(f"  By type: {parts}")
+
     if flagged:
         click.echo(f"  ! Flagged: {flagged}")
     click.echo(f"  ✓ Current: {current}")
@@ -807,7 +823,10 @@ def status(ctx, scope: Optional[str], do_refresh: bool):
         click.echo("")
         click.echo("Missing:")
         for entry in missing_decks:
-            click.echo(f"  {entry.markdown_path} (source: {entry.source_relative_path})")
+            if entry.source_relative_path:
+                click.echo(f"  {entry.markdown_path} (source: {entry.source_relative_path})")
+            else:
+                click.echo(f"  {entry.markdown_path} (note file missing)")
 
 
 @cli.command()
@@ -854,6 +873,9 @@ def scan(ctx, scope: Optional[str]):
     source_to_entry = {}
     for entry_data in data.get("decks", {}).values():
         entry = registry.entry_from_dict(entry_data)
+        # Skip source-less managed docs (e.g., context)
+        if entry.source_relative_path is None:
+            continue
         try:
             abs_source = registry.resolve_entry_source(library_root, entry)
             source_to_entry[str(abs_source)] = entry
@@ -903,6 +925,9 @@ def scan(ctx, scope: Optional[str]):
     # Check for missing: registry entries whose sources no longer exist
     for entry_data in data.get("decks", {}).values():
         entry = registry.entry_from_dict(entry_data)
+        # Skip source-less managed docs
+        if entry.source_relative_path is None:
+            continue
         try:
             abs_source = registry.resolve_entry_source(library_root, entry)
             if not abs_source.exists():
@@ -934,7 +959,10 @@ def scan(ctx, scope: Optional[str]):
         click.echo("")
         click.echo("Missing (source file not found):")
         for entry in missing_sources:
-            click.echo(f"  {entry.markdown_path} (source: {entry.source_relative_path})")
+            if entry.source_relative_path:
+                click.echo(f"  {entry.markdown_path} (source: {entry.source_relative_path})")
+            else:
+                click.echo(f"  {entry.markdown_path} (note file missing)")
 
 
 @cli.command()
@@ -980,6 +1008,7 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
             # Select entries to refresh
             entries_to_refresh = []
             skipped_interactions = []
+            skipped_context = []
             for deck_id, entry_data in data.get("decks", {}).items():
                 entry = registry.entry_from_dict(entry_data)
 
@@ -993,11 +1022,23 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
                     skipped_interactions.append(entry)
                     continue
 
+                if entry.type == "context":
+                    skipped_context.append(entry)
+                    continue
+
                 # Refresh staleness
                 entry = registry.refresh_entry_status(library_root, entry)
 
                 if convert_all or entry.staleness_status == "stale":
                     entries_to_refresh.append(entry)
+
+            for entry in skipped_context:
+                click.echo(
+                    f"↷ {entry.id}: skipping context document (human-authored, no source to refresh)"
+                )
+
+            if skipped_context:
+                click.echo(f"Skipped context entries: {len(skipped_context)}")
 
             for entry in skipped_interactions:
                 click.echo(
@@ -2034,6 +2075,55 @@ def reject(ctx, name):
     click.echo(f"Rejected and removed: {entry.canonical_name} ({etype})")
 
 
+# ---------------------------------------------------------------------------
+# Context document management
+# ---------------------------------------------------------------------------
+
+@cli.group()
+@click.pass_context
+def context(ctx):
+    """Context document management."""
+    pass
+
+
+@context.command("init")
+@click.option("--client", required=True, help="Client name.")
+@click.option("--engagement", required=True, help="Engagement name.")
+@click.option("--target", type=click.Path(path_type=Path), default=None,
+              help="Override target path or directory.")
+@click.pass_context
+def context_init(ctx, client: str, engagement: str, target: Optional[Path]):
+    """Create an engagement context document.
+
+    Examples:
+
+        folio context init --client "US Bank" --engagement "Tech Resilience DD"
+
+        folio context init --client Acme --engagement "Ops Sprint 2026" --target ./custom/path/
+    """
+    config = ctx.obj["config"]
+
+    from .context import create_context_document
+
+    try:
+        context_id, output_path = create_context_document(
+            config,
+            client=client,
+            engagement=engagement,
+            target=target,
+        )
+    except FileExistsError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+    except ValueError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    click.echo(f"✓ Created context document: {output_path}")
+    click.echo(f"  ID: {context_id}")
+
+
 def main():
     """Entry point."""
     cli()
+

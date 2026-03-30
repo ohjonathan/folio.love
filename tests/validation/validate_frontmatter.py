@@ -81,6 +81,10 @@ def validate_deck(md_path: Path) -> dict:
         _validate_interaction_markdown_structure(content, result)
         return result
 
+    if fm.get("type") == "context":
+        _validate_context_note(fm, content, result)
+        return result
+
     _validate_required_fields(fm, result, "evidence")
     _validate_field_types(fm, result, "evidence")
     _validate_enum_values(fm, result)
@@ -440,6 +444,137 @@ def _validate_diagram_note(fm: dict, result: dict):
     # the consulting analysis portion still needs fresh extraction. This is
     # documented behavior, not a bug. Only the diagram extraction/rendering
     # portions are bypassed on frozen mixed pages.
+
+
+# --- Context document validation ---
+
+_ALLOWED_SUBTYPES_CONTEXT = {"engagement", "client_profile", "workstream"}
+
+_CONTEXT_REQUIRED_FIELDS = [
+    "id", "title", "type", "subtype", "status", "authority",
+    "curation_level", "review_status", "review_flags",
+    "extraction_confidence",
+    "client", "tags", "created", "modified",
+]
+
+# engagement is required only for subtype=engagement
+_CONTEXT_ENGAGEMENT_REQUIRED_FIELDS = ["engagement"]
+
+_CONTEXT_REQUIRED_BODY_SECTIONS = [
+    "## Client Background",
+    "## Engagement Snapshot",
+    "## Objectives / SOW",
+    "## Timeline",
+    "## Team",
+    "## Stakeholders",
+    "## Starting Hypotheses",
+    "## Risks / Open Questions",
+]
+
+
+def _validate_context_note(fm: dict, content: str, result: dict):
+    """Validate a context document (type: context)."""
+    # Required fields (common to all context subtypes)
+    for field_name in _CONTEXT_REQUIRED_FIELDS:
+        if field_name not in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter", f"Context note missing: {field_name}")
+            )
+        elif fm[field_name] is None and field_name not in ("extraction_confidence",):
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter", f"Context note null field: {field_name}")
+            )
+
+    # engagement is required only for subtype=engagement
+    if fm.get("subtype") == "engagement":
+        for field_name in _CONTEXT_ENGAGEMENT_REQUIRED_FIELDS:
+            if field_name not in fm:
+                result["errors"].append(
+                    ("Silent-Malformed-Frontmatter",
+                     f"Context note (subtype=engagement) missing: {field_name}")
+                )
+            elif fm[field_name] is None:
+                result["errors"].append(
+                    ("Silent-Malformed-Frontmatter",
+                     f"Context note (subtype=engagement) null field: {field_name}")
+                )
+
+    # extraction_confidence must be explicitly null
+    if "extraction_confidence" in fm and fm["extraction_confidence"] is not None:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter",
+             "Context note extraction_confidence must be null")
+        )
+
+    # Subtype validation
+    if fm.get("subtype") and fm["subtype"] not in _ALLOWED_SUBTYPES_CONTEXT:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", f"Invalid context subtype: {fm['subtype']}")
+        )
+
+    # review_status must be "clean" for context docs (hard-fail)
+    if fm.get("review_status") != "clean":
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter",
+             f"Context note review_status is '{fm.get('review_status')}', must be 'clean'")
+        )
+
+    # review_flags must be empty list (hard-fail)
+    if fm.get("review_flags") and len(fm["review_flags"]) > 0:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter",
+             f"Context note has non-empty review_flags: {fm['review_flags']}")
+        )
+
+    # Must NOT have source-backed fields
+    _source_backed_fields = ("source", "source_hash", "source_type", "slide_count",
+                             "version", "converted", "source_transcript", "date")
+    source_field_hits = [f for f in _source_backed_fields if f in fm]
+    for source_field in source_field_hits:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter",
+             f"Context note must not contain source field: {source_field}")
+        )
+
+    # Spoof detection: if 3+ source-backed fields are present, this looks
+    # like an evidence/interaction note masquerading as type: context.
+    if len(source_field_hits) >= 3:
+        result["errors"].append(
+            ("Spoof-Detection",
+             f"Context note contains {len(source_field_hits)} source-backed fields "
+             f"({', '.join(source_field_hits)}); likely an evidence-shaped note "
+             f"mislabelled as type: context")
+        )
+
+    # Must NOT have evidence-only generated fields
+    for gen_field in ("grounding_summary", "_llm_metadata"):
+        if gen_field in fm:
+            result["errors"].append(
+                ("Silent-Malformed-Frontmatter",
+                 f"Context note must not contain generated field: {gen_field}")
+            )
+
+    # Validate enum values shared with other types
+    if fm.get("status") and fm["status"] not in ALLOWED_STATUS:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", f"Invalid status: {fm['status']}")
+        )
+    if fm.get("authority") and fm["authority"] not in ALLOWED_AUTHORITY:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", f"Invalid authority: {fm['authority']}")
+        )
+    if fm.get("curation_level") and fm["curation_level"] not in ALLOWED_CURATION_LEVELS:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter", f"Invalid curation_level: {fm['curation_level']}")
+        )
+
+    # Required body sections
+    for section in _CONTEXT_REQUIRED_BODY_SECTIONS:
+        if section not in content:
+            result["errors"].append(
+                ("Silent-Missing-Content",
+                 f"Context note missing required section: {section}")
+            )
 
 def validate_all() -> list[dict]:
     """Validate all converted markdown files in the output directory."""
