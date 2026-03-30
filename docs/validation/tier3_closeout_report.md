@@ -12,8 +12,8 @@
 | **Library root** | `~/folio-library` |
 | **Python version** | 3.14.x |
 | **folio version** | `0.X.Y` (editable install) |
-| **Git branch** | `feature/context-docs-tier3-closeout` |
-| **Commit SHA** | `abc1234` |
+| **Git branch** | `feature/pr-e-context-docs-tier3-closeout` |
+| **Commit SHA** | (fill at validation time) |
 
 ---
 
@@ -150,12 +150,15 @@ $ pytest tests/test_tier3_lifecycle.py -v
 |----------|------|--------|
 | Context docs spec | `docs/specs/folio_context_docs_tier3_closeout_spec.md` | Approved |
 | Context module | `folio/context.py` | Implemented |
-| Context unit tests | `tests/test_context.py` | 16 passing |
-| Lifecycle integration test | `tests/test_tier3_lifecycle.py` | 4 tests, 12 assertions |
+| Context unit tests | `tests/test_context.py` | Passing |
+| Lifecycle integration test | `tests/test_tier3_lifecycle.py` | Passing |
 | Registry v2 | `folio/tracking/registry.py` | Implemented |
 | CLI guards + `folio context init` | `folio/cli.py` | Implemented |
 | Frontmatter validator | `tests/validation/validate_frontmatter.py` | Updated |
 | Closeout report | `docs/validation/tier3_closeout_report.md` | This document |
+| Session log | `docs/validation/tier3_closeout_session_log.md` | Template |
+| Chat log | `docs/validation/tier3_closeout_chat_log.md` | Template |
+| Validation prompt | `docs/validation/tier3_closeout_prompt.md` | Defined |
 
 ---
 
@@ -165,4 +168,29 @@ $ pytest tests/test_tier3_lifecycle.py -v
 - [ ] Hard-fail conditions met
 - [ ] Production validation completed
 - [ ] Spec compliance verified
+- [ ] §9.7 anti-rubber-stamp rules satisfied
 - [ ] Ready for merge review
+
+---
+
+## §9.7 Anti-Rubber-Stamp Rules
+
+Every PASS decision in the exit-criteria table (§3) must satisfy:
+
+1. **Current evidence required.** Each PASS must cite corroborating evidence
+   from THIS validation run — not a previous session. "It passed before" is
+   not valid.
+2. **Evidence dating.** Each cited piece of evidence must include the date
+   it was produced (e.g., command output timestamp, screenshot date).
+3. **Method of verification.** Each PASS must state how it was verified:
+   automated test, manual CLI repro, production run, or visual inspection.
+4. **Re-run obligation.** If a prior run's evidence is referenced, the report
+   must explain why re-running was not feasible and what compensating check
+   was performed instead.
+5. **Exact output.** Each PASS should include the exact command output,
+   screenshot, or log excerpt that proves the criterion was met — not a
+   paraphrase.
+
+**Rationale:** These rules prevent closeout reports from accumulating
+historical PASS decisions that no longer reflect the current code. A closeout
+package is a snapshot of the system *as shipped*, not a ledger of past runs.

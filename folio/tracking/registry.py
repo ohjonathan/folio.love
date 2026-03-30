@@ -17,6 +17,18 @@ logger = logging.getLogger(__name__)
 _SCHEMA_VERSION = 2
 
 
+def _str_or_none(value: object) -> str | None:
+    """Cast a value to ``str`` if non-None.
+
+    YAML parsers auto-coerce bare dates like ``2026-03-30`` to
+    ``datetime.date`` objects.  ``json.dumps`` cannot serialise those,
+    so all rebuilt frontmatter strings pass through this helper.
+    """
+    if value is None:
+        return None
+    return str(value)
+
+
 @dataclass
 class RegistryEntry:
     """A single managed document in the registry.
@@ -96,7 +108,7 @@ def save_registry(registry_path: Path, data: dict) -> None:
     """Write registry atomically."""
     data.pop("_corrupt", None)  # internal flag, not persisted
     data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    data.setdefault("_schema_version", _SCHEMA_VERSION)
+    data["_schema_version"] = _SCHEMA_VERSION
     _atomic_write_json(registry_path, data)
 
 
@@ -144,16 +156,16 @@ def rebuild_registry(library_root: Path) -> dict:
                 deck_dir_rel = ""
             entry = RegistryEntry(
                 id=deck_id,
-                title=fm.get("title", md_file.stem),
+                title=str(fm.get("title", md_file.stem)),
                 markdown_path=md_rel,
                 deck_dir=deck_dir_rel,
                 type="context",
-                subtype=fm.get("subtype"),
-                modified=fm.get("modified"),
-                client=fm.get("client"),
-                engagement=fm.get("engagement"),
-                authority=fm.get("authority"),
-                curation_level=fm.get("curation_level"),
+                subtype=_str_or_none(fm.get("subtype")),
+                modified=_str_or_none(fm.get("modified")),
+                client=_str_or_none(fm.get("client")),
+                engagement=_str_or_none(fm.get("engagement")),
+                authority=_str_or_none(fm.get("authority")),
+                curation_level=_str_or_none(fm.get("curation_level")),
                 staleness_status="current",
                 review_status=fm.get("review_status"),
                 review_flags=fm.get("review_flags"),

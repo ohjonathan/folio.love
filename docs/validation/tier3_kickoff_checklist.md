@@ -284,8 +284,8 @@ and merge readiness.
 ## Recommended Working Order
 
 1. Use the shipped PR C production library as the provenance baseline.
-2. Implement PR D: retroactive provenance.
-3. Implement PR E: context docs and Tier 3 closeout.
+2. ~~Implement PR D: retroactive provenance.~~ **Shipped** (PR #39, merged).
+3. ~~Implement PR E: context docs and Tier 3 closeout.~~ **In progress** (PR #40).
 
 ## Live Checklist
 

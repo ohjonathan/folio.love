@@ -495,26 +495,39 @@ def _validate_context_note(fm: dict, content: str, result: dict):
             ("Silent-Malformed-Frontmatter", f"Invalid context subtype: {fm['subtype']}")
         )
 
-    # review_status should be "clean" for context docs
+    # review_status must be "clean" for context docs (hard-fail)
     if fm.get("review_status") != "clean":
-        result["warnings"].append(
-            f"Context note review_status is '{fm.get('review_status')}', expected 'clean'"
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter",
+             f"Context note review_status is '{fm.get('review_status')}', must be 'clean'")
         )
 
-    # review_flags must be empty list
+    # review_flags must be empty list (hard-fail)
     if fm.get("review_flags") and len(fm["review_flags"]) > 0:
-        result["warnings"].append(
-            f"Context note has review_flags: {fm['review_flags']}"
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter",
+             f"Context note has non-empty review_flags: {fm['review_flags']}")
         )
 
     # Must NOT have source-backed fields
-    for source_field in ("source", "source_hash", "source_type", "slide_count",
-                         "version", "converted", "source_transcript", "date"):
-        if source_field in fm:
-            result["errors"].append(
-                ("Silent-Malformed-Frontmatter",
-                 f"Context note must not contain source field: {source_field}")
-            )
+    _source_backed_fields = ("source", "source_hash", "source_type", "slide_count",
+                             "version", "converted", "source_transcript", "date")
+    source_field_hits = [f for f in _source_backed_fields if f in fm]
+    for source_field in source_field_hits:
+        result["errors"].append(
+            ("Silent-Malformed-Frontmatter",
+             f"Context note must not contain source field: {source_field}")
+        )
+
+    # Spoof detection: if 3+ source-backed fields are present, this looks
+    # like an evidence/interaction note masquerading as type: context.
+    if len(source_field_hits) >= 3:
+        result["errors"].append(
+            ("Spoof-Detection",
+             f"Context note contains {len(source_field_hits)} source-backed fields "
+             f"({', '.join(source_field_hits)}); likely an evidence-shaped note "
+             f"mislabelled as type: context")
+        )
 
     # Must NOT have evidence-only generated fields
     for gen_field in ("grounding_summary", "_llm_metadata"):

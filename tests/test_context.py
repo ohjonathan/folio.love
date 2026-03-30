@@ -402,3 +402,213 @@ class TestContextValidation:
         result = validate_deck(ctx_path)
         error_msgs = [e[1] for e in result["errors"]]
         assert any("source" in m for m in error_msgs)
+
+    def test_context_with_bad_review_defaults_fails(self, tmp_path):
+        """Context doc with non-clean review_status must FAIL (not warn)."""
+        from tests.validation.validate_frontmatter import validate_deck
+
+        ctx_path = tmp_path / "_context.md"
+        ctx_path.write_text(
+            '---\n'
+            'id: test_context\n'
+            'title: "Test Context"\n'
+            'type: context\n'
+            'subtype: engagement\n'
+            'status: active\n'
+            'authority: aligned\n'
+            'curation_level: L1\n'
+            'review_status: reviewed\n'
+            'review_flags:\n'
+            '  - low_confidence\n'
+            'extraction_confidence: null\n'
+            'client: TestCo\n'
+            'engagement: Demo\n'
+            'tags: []\n'
+            'created: 2026-03-30\n'
+            'modified: 2026-03-30\n'
+            '---\n'
+            '\n'
+            '# Test\n'
+            '## Client Background\n'
+            '## Engagement Snapshot\n'
+            '## Objectives / SOW\n'
+            '## Timeline\n'
+            '## Team\n'
+            '## Stakeholders\n'
+            '## Starting Hypotheses\n'
+            '## Risks / Open Questions\n'
+        )
+        result = validate_deck(ctx_path)
+        # Must be errors, not warnings
+        error_msgs = [e[1] for e in result["errors"]]
+        assert any("review_status" in m for m in error_msgs), (
+            f"Expected error for non-clean review_status, got errors: {result['errors']}"
+        )
+        assert any("review_flags" in m for m in error_msgs), (
+            f"Expected error for non-empty review_flags, got errors: {result['errors']}"
+        )
+
+    def test_spoofed_evidence_as_context_fails(self, tmp_path):
+        """Evidence-shaped note labeled type: context must be caught."""
+        from tests.validation.validate_frontmatter import validate_deck
+
+        ctx_path = tmp_path / "_context.md"
+        ctx_path.write_text(
+            '---\n'
+            'id: test_context\n'
+            'title: "Test Context"\n'
+            'type: context\n'
+            'subtype: engagement\n'
+            'status: active\n'
+            'authority: aligned\n'
+            'curation_level: L1\n'
+            'review_status: clean\n'
+            'review_flags: []\n'
+            'extraction_confidence: null\n'
+            'client: TestCo\n'
+            'engagement: Demo\n'
+            'tags: []\n'
+            'created: 2026-03-30\n'
+            'modified: 2026-03-30\n'
+            'source: "../data/report.pdf"\n'
+            'source_hash: "abc123"\n'
+            'source_type: pdf\n'
+            'slide_count: 12\n'
+            'version: 2\n'
+            'converted: "2026-03-30T00:00:00Z"\n'
+            '---\n'
+            '\n'
+            '# Test\n'
+            '## Client Background\n'
+            '## Engagement Snapshot\n'
+            '## Objectives / SOW\n'
+            '## Timeline\n'
+            '## Team\n'
+            '## Stakeholders\n'
+            '## Starting Hypotheses\n'
+            '## Risks / Open Questions\n'
+        )
+        result = validate_deck(ctx_path)
+        error_categories = [e[0] for e in result["errors"]]
+        assert "Spoof-Detection" in error_categories, (
+            f"Spoofed evidence-shaped context note should trigger Spoof-Detection, "
+            f"got: {result['errors']}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: Issue 1 — Registry contract
+# ---------------------------------------------------------------------------
+
+class TestRegistryContract:
+    def test_schema_v1_upgraded_to_v2_on_save(self, tmp_path):
+        """A schema-v1 registry must be upgraded to v2 on any save/upsert."""
+        reg_path = tmp_path / "registry.json"
+        # Seed a v1 registry
+        v1_data = {
+            "_schema_version": 1,
+            "updated_at": "2026-01-01T00:00:00Z",
+            "decks": {
+                "old_evidence": {
+                    "id": "old_evidence",
+                    "title": "Old",
+                    "markdown_path": "old/deck.md",
+                    "deck_dir": "old",
+                    "source_relative_path": "../src.pdf",
+                    "source_hash": "abc123",
+                    "type": "evidence",
+                }
+            }
+        }
+        reg_path.write_text(json.dumps(v1_data))
+
+        # Upsert a new context entry
+        entry = RegistryEntry(
+            id="test_ctx",
+            title="Test",
+            markdown_path="test/_context.md",
+            deck_dir="test",
+            type="context",
+        )
+        registry.upsert_entry(reg_path, entry)
+
+        # Reload and verify schema upgraded
+        data = json.loads(reg_path.read_text())
+        assert data["_schema_version"] == 2, (
+            f"Schema version should be 2 after save, got {data['_schema_version']}"
+        )
+        # Original entry preserved
+        assert "old_evidence" in data["decks"]
+        assert "test_ctx" in data["decks"]
+
+    def test_corrupt_rebuild_json_safe_with_date_objects(self, tmp_path):
+        """Corrupt-registry recovery must produce JSON-safe data when
+        YAML frontmatter contains bare date objects."""
+        # Create a context doc with bare YAML dates (parsed as datetime.date)
+        ctx_dir = tmp_path / "client" / "eng"
+        ctx_dir.mkdir(parents=True)
+        (ctx_dir / "_context.md").write_text(
+            "---\n"
+            "id: test_context_20260330\n"
+            "title: Test Context\n"
+            "type: context\n"
+            "subtype: engagement\n"
+            "client: Client\n"
+            "engagement: Engagement\n"
+            "modified: 2026-03-30\n"  # YAML parses this as datetime.date
+            "created: 2026-03-30\n"
+            "review_status: clean\n"
+            "review_flags: []\n"
+            "---\n"
+            "# Content\n"
+        )
+
+        # Rebuild should succeed
+        data = registry.rebuild_registry(tmp_path)
+        assert "test_context_20260330" in data["decks"]
+
+        # The rebuilt data must survive json.dumps (no TypeError on date objects)
+        try:
+            serialized = json.dumps(data)
+        except TypeError as exc:
+            pytest.fail(
+                f"Rebuilt registry contains non-JSON-serializable data: {exc}"
+            )
+
+        # Round-trip: re-parse and verify context row is intact
+        reloaded = json.loads(serialized)
+        ctx_row = reloaded["decks"]["test_context_20260330"]
+        assert ctx_row["type"] == "context"
+        assert isinstance(ctx_row.get("modified"), str), (
+            "modified field should be a string after rebuild"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: Issue 2 — Target escape
+# ---------------------------------------------------------------------------
+
+class TestTargetEscapeRejection:
+    def test_target_outside_library_no_orphan(self, tmp_path):
+        """--target pointing outside library must raise before writing."""
+        library = tmp_path / "library"
+        library.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        target = outside / "_context.md"
+
+        config = _minimal_config(library)
+
+        with pytest.raises(ValueError, match="escapes library root"):
+            create_context_document(
+                config,
+                client="Test",
+                engagement="Demo",
+                target=target,
+            )
+
+        # No orphan file should exist
+        assert not target.exists(), (
+            "Target file was written before the escape check — orphan created"
+        )
+

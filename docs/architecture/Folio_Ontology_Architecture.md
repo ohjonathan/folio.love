@@ -198,7 +198,7 @@ Adapted from Project Ontos. Consulting knowledge exists in two dimensions:
 
 ```yaml
 ---
-id: clienta_ddq126_context_engagement
+id: clienta_ddq126_context_20260120_engagement
 type: context
 subtype: engagement
 status: active
@@ -232,7 +232,7 @@ authority: analyzed
 curation_level: L2
 client: ClientA
 engagement: Due Diligence Q1 2026
-depends_on: [clienta_ddq126_context_engagement]
+depends_on: [clienta_ddq126_context_20260120_engagement]
 draws_from: [clienta_ddq126_interview_20260213_01, retail_market_sizing_2025]
 tags: [market-sizing, tam, growth-hypothesis, competitive-dynamics]
 frameworks: [tam-sam-som, porter-five-forces]
@@ -283,7 +283,7 @@ authority: decided
 curation_level: L2
 client: ClientA
 engagement: Due Diligence Q1 2026
-depends_on: [clienta_ddq126_context_engagement]
+depends_on: [clienta_ddq126_context_20260120_engagement]
 draws_from:
   - clienta_ddq126_analysis_market-hypothesis
   - clienta_ddq126_analysis_ops-assessment
@@ -444,7 +444,7 @@ Expected CSV format: `name, title, department, reports_to`. Populates the entity
 **Frontmatter is the source of truth.** Relationships are stored as ID references:
 
 ```yaml
-depends_on: [clienta_ddq126_context_engagement]
+depends_on: [clienta_ddq126_context_20260120_engagement]
 draws_from: [clienta_ddq126_evidence_market-sizing, clienta_ddq126_interview_20260213_01]
 relates_to: [clientb_ddq425_analysis_market-hypothesis]
 ```
@@ -453,7 +453,7 @@ relates_to: [clientb_ddq425_analysis_market-hypothesis]
 
 ```markdown
 ## Related
-- Depends on: [[clienta_ddq126_context_engagement|ClientA DD Engagement Context]]
+- Depends on: [[clienta_ddq126_context_20260120_engagement|ClientA DD Engagement Context]]
 - Draws from: [[clienta_ddq126_evidence_market-sizing|Retail Market Sizing]]
 - See also: [[clientb_ddq425_analysis_market-hypothesis|Similar hypothesis for ClientB]]
 ```
@@ -527,7 +527,7 @@ clienta_ddq126_interview_20260213_02          # Second interview that day
 clienta_ddq126_evidence_20260210_market-sizing # Converted deck
 clienta_ddq126_analysis_20260215_investment-thesis # Hypothesis doc
 clienta_ddq126_deliverable_20260301_final-deck # Final deliverable
-clienta_ddq126_context_engagement              # Engagement context (no date needed)
+clienta_ddq126_context_20260120_engagement     # Engagement context
 ref_dd-interview-guide-template                # Reference (no client, no date)
 ```
 
@@ -648,7 +648,7 @@ authority: analyzed
 curation_level: L3
 client: ClientA
 engagement: Due Diligence Q1 2026
-depends_on: [clienta_ddq126_context_engagement]
+depends_on: [clienta_ddq126_context_20260120_engagement]
 draws_from:
   - clienta_ddq126_interview_20260213_01
   - clienta_ddq126_interview_20260207_02

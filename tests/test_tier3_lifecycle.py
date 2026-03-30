@@ -459,6 +459,14 @@ class TestTier3Lifecycle:
         assert "_llm_metadata" not in ctx_fm_after or \
                "enrich" not in ctx_fm_after.get("_llm_metadata", {}), \
             "Context doc should not be enriched"
+        # Evidence notes SHOULD have enrich metadata from the mock
+        ev_v2_fm_after_enrich = _read_fm(ev_v2_path)
+        assert "_llm_metadata" in ev_v2_fm_after_enrich, (
+            "Evidence note should have _llm_metadata after enrich"
+        )
+        assert "enrich" in ev_v2_fm_after_enrich.get("_llm_metadata", {}), (
+            "Evidence note _llm_metadata should contain 'enrich' key after enrichment"
+        )
 
         # ===== STEP 8 (§8.2 steps 9-10): folio provenance + confirm-doc =====
         from folio.pipeline.provenance_analysis import ProvenanceMatch
@@ -478,10 +486,11 @@ class TestTier3Lifecycle:
             ], obj={"config": config})
         assert result.exit_code == 0, f"provenance failed: {result.output}"
 
-        # Confirm proposals on the v2 note
+        # Confirm proposals on the v2 note, scoped to the v1 target
         result = runner.invoke(cli, [
             "provenance", "confirm-doc",
             "testco_evidence_20260330_market_v2",
+            "--target", "testco_evidence_20260330_market_v1",
         ], obj={"config": config})
         # confirm-doc may return 0 even if no proposals were found (just 0 confirmed)
         assert result.exit_code == 0, f"confirm-doc failed: {result.output}"
@@ -493,12 +502,28 @@ class TestTier3Lifecycle:
             "_llm_metadata" in ev_v2_fm
             and "provenance" in ev_v2_fm.get("_llm_metadata", {})
         )
-        has_provenance_links = bool(ev_v2_fm.get("provenance_links"))
+        prov_links = ev_v2_fm.get("provenance_links", [])
+        has_provenance_links = bool(prov_links)
         prov_pairs = ev_v2_fm.get("_llm_metadata", {}).get("provenance", {}).get("pairs", {})
         pair_info = {k: (v.get("status"), len(v.get("proposals", []))) for k, v in prov_pairs.items()} if isinstance(prov_pairs, dict) else {}
         assert has_provenance_meta and has_provenance_links, (
             f"v2 note should have provenance metadata AND confirmed links after provenance + confirm-doc. "
-            f"meta={has_provenance_meta}, links={ev_v2_fm.get('provenance_links', [])}, pairs={pair_info}"
+            f"meta={has_provenance_meta}, links={prov_links}, pairs={pair_info}"
+        )
+        # Assert the confirmed link references the correct target pair
+        confirmed_links = [
+            link for link in prov_links
+            if isinstance(link, dict) and link.get("link_status") == "confirmed"
+        ]
+        assert len(confirmed_links) >= 1, (
+            f"Expected at least one confirmed provenance link, got: {prov_links}"
+        )
+        assert any(
+            link.get("target_doc") == "testco_evidence_20260330_market_v1"
+            for link in confirmed_links
+        ), (
+            f"No confirmed link targets v1 (testco_evidence_20260330_market_v1). "
+            f"Links: {confirmed_links}"
         )
 
         # ===== STEP 9 (§8.2 steps 11-14): status / scan / refresh =====

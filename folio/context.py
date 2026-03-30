@@ -91,14 +91,14 @@ def create_context_document(
         target=target,
     )
 
-    # Safety: reject paths that escape library root (default routing only)
-    if target is None:
-        try:
-            output_path.relative_to(library_root)
-        except ValueError:
-            raise ValueError(
-                f"Resolved context path escapes library root: {output_path}"
-            )
+    # Safety: reject paths that escape library root — applies to both
+    # default routing and explicit --target to prevent orphan writes.
+    try:
+        output_path.relative_to(library_root)
+    except ValueError:
+        raise ValueError(
+            f"Resolved context path escapes library root: {output_path}"
+        )
 
     if output_path.exists():
         raise FileExistsError(f"Context document already exists: {output_path}")
