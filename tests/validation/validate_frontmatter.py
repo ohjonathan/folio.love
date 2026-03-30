@@ -453,6 +453,7 @@ _ALLOWED_SUBTYPES_CONTEXT = {"engagement", "client_profile", "workstream"}
 _CONTEXT_REQUIRED_FIELDS = [
     "id", "title", "type", "subtype", "status", "authority",
     "curation_level", "review_status", "review_flags",
+    "extraction_confidence",
     "client", "engagement", "tags", "created", "modified",
 ]
 

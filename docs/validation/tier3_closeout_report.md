@@ -1,83 +1,168 @@
 # Tier 3 Closeout Validation Report (PR E)
 
-**Validation date:** YYYY-MM-DD
-**Validator:** [Name / Agent]
-**Spec version:** folio_context_docs_tier3_closeout_spec.md (rev 1)
-**Registry schema:** v2
+## 1. Run Context
+
+| Field | Value |
+|-------|-------|
+| **Validation date** | YYYY-MM-DD |
+| **Validator** | [Name / Agent] |
+| **Spec version** | `folio_context_docs_tier3_closeout_spec.md` (rev 1) |
+| **Registry schema** | v2 |
+| **Environment** | Personal Folio dev laptop / McKinsey laptop |
+| **Library root** | `~/folio-library` |
+| **Python version** | 3.14.x |
+| **folio version** | `0.X.Y` (editable install) |
+| **Git branch** | `feature/context-docs-tier3-closeout` |
+| **Commit SHA** | `abc1234` |
 
 ---
 
-## Gate Decision
+## 2. Executive Summary
 
-| Gate | Result | Notes |
-|------|--------|-------|
-| Context init creates valid document | ☐ PASS / ☐ FAIL | |
-| Context doc in registry as type=context | ☐ PASS / ☐ FAIL | |
-| Schema v2 round-trip (entry_from_dict) | ☐ PASS / ☐ FAIL | |
-| `folio status` no crash w/ context rows | ☐ PASS / ☐ FAIL | |
-| `folio scan` no crash w/ context rows | ☐ PASS / ☐ FAIL | |
-| `folio refresh` skips context rows | ☐ PASS / ☐ FAIL | |
-| Validation tooling passes clean context | ☐ PASS / ☐ FAIL | |
-| Validation rejects source-field context | ☐ PASS / ☐ FAIL | |
-| Duplicate context init blocked | ☐ PASS / ☐ FAIL | |
-| Rebuild recovers context from corrupt registry | ☐ PASS / ☐ FAIL | |
-| Per-type summary in status | ☐ PASS / ☐ FAIL | |
-| Schema v1 evidence rows still load | ☐ PASS / ☐ FAIL | |
+<!-- 2-3 paragraphs: what was validated, what passed, what is the recommendation. -->
 
-**Overall:** ☐ PASS / ☐ FAIL
+TBD.
 
 ---
 
-## Test Results Summary
+## 3. Tier 3 Exit-Criteria Table
+
+| # | Criterion | Result | Evidence § |
+|---|-----------|--------|-----------|
+| EC-1 | `folio ingest` converts transcript to structured interaction in <60 seconds | ☐ PASS / ☐ PARTIAL / ☐ FAIL | §4.1 |
+| EC-2 | Entity registry tracks people, departments, systems | ☐ PASS / ☐ PARTIAL / ☐ FAIL | §4.2 |
+| EC-3 | Name resolution works for common cases | ☐ PASS / ☐ PARTIAL / ☐ FAIL | §4.3 |
+| EC-4 | `folio enrich` adds tags and links to existing assets | ☐ PASS / ☐ PARTIAL / ☐ FAIL | §4.4 |
+| EC-5 | Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs | ☐ PASS / ☐ PARTIAL / ☐ FAIL | §4.5 |
+| EC-6 | Context documents provide engagement scaffolding | ☐ PASS / ☐ PARTIAL / ☐ FAIL | §4.6 |
+| EC-7 | Full engagement lifecycle tested end-to-end | ☐ PASS / ☐ PARTIAL / ☐ FAIL | §4.7 |
+
+### Hard-fail conditions (spec §9.6)
+
+| Condition | Met? |
+|-----------|------|
+| Tier 3 lifecycle integration test passes in CI | ☐ YES / ☐ NO |
+| `folio status --refresh`, `scan`, `refresh` complete without crash on mixed library with context row | ☐ YES / ☐ NO |
+| Production validation: real context doc created and registry-visible in `folio status` | ☐ YES / ☐ NO |
+
+**Overall gate:** ☐ PASS / ☐ PARTIAL / ☐ FAIL
+
+---
+
+## 4. Evidence for Each Exit Criterion
+
+### 4.1 EC-1: Ingest performance
+
+<!-- Command run, wall-clock timing, output excerpt -->
 
 ```
-pytest tests/test_context.py tests/test_tier3_lifecycle.py tests/test_registry.py -v
+$ time folio ingest ...
 ```
 
-| Suite | Passed | Failed | Skipped |
-|-------|--------|--------|---------|
-| test_context.py | | | |
-| test_tier3_lifecycle.py | | | |
-| test_registry.py | | | |
+### 4.2 EC-2: Entity registry coverage
+
+<!-- `folio entities` output, entity counts by type -->
+
+### 4.3 EC-3: Name resolution
+
+<!-- Spot-check examples from current library showing wikilink resolution -->
+
+### 4.4 EC-4: Enrich
+
+<!-- Reference to `folio_enrich_production_test_report.md` + any follow-on spot checks -->
+
+### 4.5 EC-5: Provenance
+
+<!-- Reference to PR #39 baseline + closeout-time provenance check on a confirmed `supersedes` pair -->
+
+### 4.6 EC-6: Context documents
+
+<!-- Real populated context doc for the target engagement, `folio context init` output, `folio status` showing context doc -->
+
+### 4.7 EC-7: Full lifecycle integration test
+
+<!-- pytest output for `test_tier3_lifecycle.py`, all 12 assertions from §8.6 -->
+
+```
+$ pytest tests/test_tier3_lifecycle.py -v
+```
 
 ---
 
-## Comparison to Baseline
+## 5. Library-State Summary
 
-| Metric | Before PR E | After PR E | Delta |
-|--------|-------------|------------|-------|
-| Total tests | | | |
-| Registry schema version | 1 | 2 | +1 |
-| Document types supported | evidence, interaction, diagram | +context | +1 |
-
----
-
-## Code Changes Summary
-
-### New Files
-- `folio/context.py` — context document creation module
-- `tests/test_context.py` — unit tests for context docs
-- `tests/test_tier3_lifecycle.py` — Tier 3 lifecycle integration test
-- `docs/validation/tier3_closeout_report.md` — this template
-
-### Modified Files
-- `folio/tracking/registry.py` — Schema v2, source-less support
-- `folio/cli.py` — CLI guards for source-less rows, context group
-- `tests/validation/validate_frontmatter.py` — context validation branch
-- `tests/test_registry.py` — schema version assertion update
+| Metric | Count |
+|--------|-------|
+| Total managed docs | |
+| Evidence notes | |
+| Interaction notes | |
+| Diagram notes | |
+| Context docs | |
+| Entities (total) | |
+| — person | |
+| — department | |
+| — system | |
+| — process | |
+| Entity stubs | |
+| Enriched notes | |
+| Confirmed `supersedes` pairs | |
+| Confirmed provenance links | |
 
 ---
 
-## Known Limitations
+## 6. What Worked
 
-- LLM-dependent assertions (enrich, provenance scope exclusion) are not exercised in automated tests; require manual validation with live LLM.
-- Context subtypes beyond `engagement` (client_profile, workstream) are structurally supported but not yet exercised with dedicated templates.
+<!-- Bullet list of things that went well -->
+
+- TBD
+
+---
+
+## 7. What Was Awkward
+
+<!-- Bullet list of friction points, surprises, workarounds -->
+
+- TBD
+
+---
+
+## 8. Blockers or Carried-Forward Limitations
+
+<!-- List any known limitations being carried forward into Tier 4 -->
+
+- TBD
+
+---
+
+## 9. Tier 4 Readiness Recommendation
+
+<!-- One of: full closeout / closeout with limitations / partial closeout with waiver -->
+
+**Recommendation:** TBD
+
+**Rationale:** TBD
+
+---
+
+## 10. Artifacts Produced
+
+| Artifact | Path | Status |
+|----------|------|--------|
+| Context docs spec | `docs/specs/folio_context_docs_tier3_closeout_spec.md` | Approved |
+| Context module | `folio/context.py` | Implemented |
+| Context unit tests | `tests/test_context.py` | 16 passing |
+| Lifecycle integration test | `tests/test_tier3_lifecycle.py` | 4 tests, 12 assertions |
+| Registry v2 | `folio/tracking/registry.py` | Implemented |
+| CLI guards + `folio context init` | `folio/cli.py` | Implemented |
+| Frontmatter validator | `tests/validation/validate_frontmatter.py` | Updated |
+| Closeout report | `docs/validation/tier3_closeout_report.md` | This document |
 
 ---
 
 ## Sign-off
 
 - [ ] All automated tests pass
-- [ ] Manual smoke test completed
+- [ ] Hard-fail conditions met
+- [ ] Production validation completed
 - [ ] Spec compliance verified
 - [ ] Ready for merge review

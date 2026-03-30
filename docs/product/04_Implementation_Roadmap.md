@@ -366,7 +366,8 @@ Current program status after the late-March validation cycle:
   production library baseline
 - The entity stubs + org-chart merge follow-on is the current closing slice
   for the enrich baseline
-- PR D retroactive provenance is the next active Tier 3 slice
+- PR D retroactive provenance is shipped on `main`
+- PR E context docs + Tier 3 closeout is the current closing slice
 
 ---
 
@@ -448,12 +449,23 @@ enriched, 0 failures, approximately 17 minutes runtime, 3 generated
 
 ### Week 21-22: Context Documents & Integration
 
-- Context document template (engagement scaffolding: client, SOW, team, industry, timeline)
-- Context as single source for engagement metadata (other docs reference it)
-- End-to-end test: full engagement lifecycle in Folio
-  - Context doc → deck conversions → meeting ingestion → enrichment → linked library
+**Status:** PR E (`folio context init`, registry schema v2, Tier 3 lifecycle
+integration test) is shipping in PR #40.
 
-**Deliverable:** Complete engagement captured in Folio with cross-document relationships.
+- `folio context init` creates engagement context documents at canonical paths
+- Context docs are first-class registry citizens (`type: context`, `subtype: engagement`)
+- Registry schema v2 supports source-less managed documents alongside evidence/interaction rows
+- `folio status` shows per-type summary including context docs
+- `folio scan` and `folio refresh` safely ignore context rows
+- `folio enrich` and `folio provenance` do not consume context docs in v1
+- Frontmatter validator treats context as a distinct first-class type
+- End-to-end synthetic lifecycle test covers:
+  context init → evidence seed → entity import/confirm → ingest (mocked LLM) →
+  entity stubs → enrich (mocked LLM) → provenance (mocked LLM) → confirm-doc →
+  status / scan / refresh → final registry validation
+
+**Deliverable:** Context documents provide engagement scaffolding. Full
+synthetic lifecycle test proves the complete Tier 3 pipeline end-to-end.
 
 ### Tier 3 Exit Criteria
 
@@ -473,9 +485,9 @@ enriched, 0 failures, approximately 17 minutes runtime, 3 generated
 | Entity registry tracks people, departments, systems | Shipped | PR #34 added the registry, CLI, CSV import, and confirmation workflow on `main` |
 | Name resolution works for common cases | Shipped for exact/alias matching plus LLM-proposed soft match with human confirmation | PR #35 added confirmed-only exact/alias resolution, bounded soft-match proposals, and unresolved-entity review flow |
 | `folio enrich` adds tags and links to existing assets | Shipped and production-tested | PR C enriched 115/115 eligible notes on the retained production `sonnet4` library with 0 failures in about 17 minutes; the current follow-on adds entity stubs and org-chart merge support |
-| Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs | Next feature slice | Scope frozen in `docs/specs/folio_provenance_spec.md`; implementation pending. Deliverable-slide provenance remains v2 work. |
-| Context documents provide engagement scaffolding | Not started | Planned for Week 21-22 |
-| Full engagement lifecycle tested end-to-end | Not started | Depends on entities, enrich, and context docs landing first |
+| Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs | Shipped | PR D (#39) shipped the `folio provenance` pipeline on `main`. Production validation pending closeout. |
+| Context documents provide engagement scaffolding | Shipping (PR #40) | PR E implements `folio context init`, registry schema v2, and source-less managed documents |
+| Full engagement lifecycle tested end-to-end | Shipping (PR #40) | PR E includes a 12-assertion synthetic lifecycle integration test covering context → evidence → entity → ingest → enrich → provenance → status/scan/refresh |
 
 ---
 
@@ -559,6 +571,8 @@ folio enrich [scope]
 folio provenance [scope] [--dry-run] [--llm-profile <profile>] [--limit N] [--force] [--clear-rejections]
 folio provenance review [scope] [--include-low] [--stale] [--doc <doc_id>] [--target <doc_id>] [--page N]
 folio provenance status [scope]
+folio provenance confirm-doc <doc_id>
+folio context init --client <name> --engagement <name> [--target <path>]
 folio link <id> <id> [type]
 ```
 
@@ -635,7 +649,7 @@ folio vocab
 | 1 | Semantic search architecture (embedding model, index, query interface) | 4 | Don't decide until query patterns are clear. |
 | 2 | Entity resolution beyond v1 (production-scale exercise, enrichment-time backfill) | 3 | v1 shipped: exact + alias + bounded LLM soft match. Production exercise and enrichment-time entity backfill remain untested. |
 | 3 | File watcher vs manual trigger for digest | 4 | Manual trigger for v1. |
-| 4 | Context as standalone type vs metadata | 3 | Current spec: standalone document. Validate during Tier 3. |
+| 4 | Context as standalone type vs metadata | 3 | **Resolved in PR E.** Context is a standalone first-class managed document type with its own registry schema, CLI surface (`folio context init`), and frontmatter contract. |
 | 5 | OneNote → Markdown pathway | 3 | Copy-paste for v1. Research better paths as side task. |
 | 6 | PyPI package name availability (`folio`) | 2 | Check before Tier 2 packaging work. |
 | 7 | LLM cost management at scale | 2 | Estimate per-deck cost. Consider capping batch operations. |

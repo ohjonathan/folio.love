@@ -50,10 +50,12 @@ Use this as the single operational tracker for Tier 3 sequencing.
     and PR C input
 - `folio enrich` is shipped and production-tested on the retained production
   library baseline.
-- The next active feature slice is **PR D: retroactive provenance linking**.
+- PR D retroactive provenance linking is shipped on `main` (PR #39).
+- The current active feature slice is **PR E: context docs + Tier 3 closeout**
+  (PR #40).
 - The March production validation for PR C is recorded in
   `docs/validation/folio_enrich_production_test_report.md`.
-- Retroactive provenance and context-doc integration remain unstarted.
+- Context docs are shipping in PR #40; Tier 3 closeout is in progress.
 
 ## Source Of Truth
 
@@ -91,8 +93,8 @@ So for each remaining PR below:
 | PR #34 / PR A | Entity registry core + `folio entities` + `folio entities import <csv>` | Shipped | Completed | Personal Folio dev laptop | Agents implemented, you reviewed/merged | Approved entity-system kickoff spec | Week 16-18: Entity System | FR-403, FR-500 family, FR-503, FR-504, roadmap-primary for entity registry/import | Canonical entity store, `folio entities` CLI, org-chart import path, confirm/reject flow, no ingest-time resolution yet |
 | PR #35 / PR B | Ingest-time entity resolution against registry | Shipped | Completed | Personal Folio dev laptop | Agents implemented, you reviewed/merged | PR #34 merged | Week 16-18: Entity System | FR-506, FR-701 to FR-704, FR-403, roadmap-primary for exact match + LLM soft match + human confirmation | `folio ingest` resolves entities against the registry, auto-creates unresolved entities as unconfirmed, adds bounded soft-match proposals, and canonicalizes rendered entity links during ingest |
 | PR C | `folio enrich` core | Shipped | Completed | Personal Folio dev laptop | Agents implemented, you reviewed/merged | PR #34 and PR #35 merged; production `sonnet4` library retained as baseline | Week 19-20: Enrichment & Provenance | FR-402, FR-403, FR-500 family, FR-700, FR-706 | Post-hoc enrichment over existing assets for tags, frontmatter relationships, and entity backfill |
-| PR D | Retroactive provenance linking (infrastructure + evidence version-lineage pilot) | Next feature slice | 4-6 dev days | Personal Folio dev laptop | Agents implement, you review | PR C merged | Week 19-20: Enrichment & Provenance | FR-402, FR-403, FR-505, FR-509, FR-604, FR-606, FR-701, FR-706 | `folio provenance` pipeline over confirmed `supersedes` pairs with human confirmation, stale-link repair, and canonical provenance metadata |
-| PR E | Context docs + end-to-end Tier 3 integration + closeout | Not started | 3-5 dev days | Personal Folio dev laptop for templates/tests; McKinsey laptop for real validation | Agents draft/implement, you validate/close out | PR A through PR D merged; rerun and vault validation completed | Week 21-22: Context Documents & Integration | FR-402, FR-403, FR-700 where generated content applies; roadmap-primary for context-doc behavior | Context template, full engagement lifecycle test, Tier 3 validation and closeout package |
+| PR D | Retroactive provenance linking (infrastructure + evidence version-lineage pilot) | Shipped | Completed | Personal Folio dev laptop | Agents implement, you review | PR C merged | Week 19-20: Enrichment & Provenance | FR-402, FR-403, FR-505, FR-509, FR-604, FR-606, FR-701, FR-706 | `folio provenance` pipeline over confirmed `supersedes` pairs with human confirmation, stale-link repair, and canonical provenance metadata |
+| PR E | Context docs + end-to-end Tier 3 integration + closeout | In progress (PR #40) | 3-5 dev days | Personal Folio dev laptop for templates/tests; McKinsey laptop for real validation | Agents draft/implement, you validate/close out | PR A through PR D merged; rerun and vault validation completed | Week 21-22: Context Documents & Integration | FR-402, FR-403, FR-510, FR-700 where generated content applies; roadmap-primary for context-doc behavior | Context template, registry schema v2, full engagement lifecycle test, Tier 3 validation and closeout package |
 
 ## PR Breakdown Details
 
@@ -212,10 +214,16 @@ Why it is separated:
 
 ### PR E: Context docs + Tier 3 closeout
 
-What it should deliver:
-- context-doc template and behavior
-- end-to-end Tier 3 lifecycle validation
-- final Tier 3 closeout package
+**Status:** In progress (PR #40).
+
+What it delivers:
+- `folio context init` command for engagement scaffolding
+- Registry schema v2 supporting source-less managed documents
+- Context docs as first-class `type: context` registry rows
+- 12-assertion synthetic lifecycle integration test
+- Frontmatter validator updates for context doc type
+- Template rendering from `_BODY_SECTIONS` constant (no drift)
+- Tier 3 closeout validation report (10-section structure)
 
 Why it is separated:
 - this is the integration and validation slice, not a foundational data-model
@@ -295,5 +303,6 @@ and merge readiness.
 - [x] Real engagement/library rerun completed on McKinsey laptop
 - [x] Real vault validation / production-library enrich validation completed
 - [x] PR C merged: `folio enrich` core
-- [ ] PR D merged: retroactive provenance
-- [ ] PR E merged: context docs + Tier 3 closeout
+- [x] PR D merged: retroactive provenance (PR #39)
+- [ ] PR E merged: context docs + Tier 3 closeout (PR #40 in progress)
+

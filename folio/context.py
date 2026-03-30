@@ -150,6 +150,35 @@ def create_context_document(
     return context_id, output_path
 
 
+# Section-specific default content for the template
+_SECTION_DEFAULTS: dict[str, str] = {
+    "Client Background": "TBD.",
+    "Engagement Snapshot": (
+        "- Engagement name: {engagement}\n"
+        "- Engagement type: TBD\n"
+        "- Current phase: TBD"
+    ),
+    "Objectives / SOW": "- TBD",
+    "Timeline": (
+        "- Kickoff: TBD\n"
+        "- Key milestones: TBD\n"
+        "- Decision date: TBD"
+    ),
+    "Team": (
+        "- Engagement lead: [[TBD]]\n"
+        "- Team members:\n"
+        "  - [[TBD]]"
+    ),
+    "Stakeholders": (
+        "- Client sponsor: [[TBD]]\n"
+        "- Key stakeholders:\n"
+        "  - [[TBD]]"
+    ),
+    "Starting Hypotheses": "- TBD",
+    "Risks / Open Questions": "- TBD",
+}
+
+
 def _render_template(
     *,
     context_id: str,
@@ -158,8 +187,12 @@ def _render_template(
     engagement: str,
     today: str,
 ) -> str:
-    """Render the full context document template."""
-    return f"""---
+    """Render the full context document template.
+
+    Body sections are driven by _BODY_SECTIONS to keep the template,
+    validator, and constant in sync.
+    """
+    header = f"""---
 id: {context_id}
 title: "{title}"
 type: context
@@ -181,44 +214,12 @@ modified: {today}
 ---
 
 # {title}
-
-## Client Background
-
-TBD.
-
-## Engagement Snapshot
-
-- Engagement name: {engagement}
-- Engagement type: TBD
-- Current phase: TBD
-
-## Objectives / SOW
-
-- TBD
-
-## Timeline
-
-- Kickoff: TBD
-- Key milestones: TBD
-- Decision date: TBD
-
-## Team
-
-- Engagement lead: [[TBD]]
-- Team members:
-  - [[TBD]]
-
-## Stakeholders
-
-- Client sponsor: [[TBD]]
-- Key stakeholders:
-  - [[TBD]]
-
-## Starting Hypotheses
-
-- TBD
-
-## Risks / Open Questions
-
-- TBD
 """
+    body_parts: list[str] = []
+    for section in _BODY_SECTIONS:
+        default = _SECTION_DEFAULTS.get(section, "- TBD")
+        # Allow {engagement} substitution in defaults
+        default = default.replace("{engagement}", engagement)
+        body_parts.append(f"## {section}\n\n{default}")
+
+    return header + "\n".join(body_parts) + "\n"
