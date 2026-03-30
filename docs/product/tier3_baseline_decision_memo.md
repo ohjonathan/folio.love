@@ -354,28 +354,20 @@ So the late-March lesson is not just “which model won.” The real lesson is:
 
 That is a product-learning change, not just a validation artifact.
 
-## 7. What Comes Next
+## 7. Sequencing Status (Historical)
 
-The next active feature slice is now:
+At the time of this memo, the next active feature slice was:
 
 - **PR C: `folio enrich` core**
 
-PR C should assume:
+That recommendation has since been satisfied. PR C is now shipped and
+production-tested. This memo remains authoritative for the late-March baseline
+decision itself, but it is no longer the primary sequencing source for active
+Tier 3 work. Current sequencing authority lives in:
 
-- the production library is the correct enrichment baseline
-- interaction ingestion is already shipped
-- entity registry and ingest-time resolution are already shipped
-- per-stage routing is not a prerequisite
-- a dedicated PRD FR family for `folio enrich` still needs to be drafted
-  before implementation
-
-PR C should likely absorb or explicitly plan around two known follow-up issues:
-
-- stale evidence-note source paths
-- over-broad review-state triage
-
-But those should be treated as targeted cleanup and enrichment-adjacent work,
-not as reasons to reopen the baseline decision.
+- `docs/product/04_Implementation_Roadmap.md`
+- `docs/validation/tier3_kickoff_checklist.md`
+- `docs/specs/folio_provenance_spec.md` for PR D scope
 
 ## 8. Documents That Now Matter Most
 
@@ -387,6 +379,7 @@ For future planning and review, the most important current references are:
 - `docs/validation/tier2_platform_model_comparison_report.md`
 - `docs/validation/tier2_real_library_rerun_report.md`
 - `docs/validation/tier2_real_vault_validation_report.md`
+- `docs/validation/folio_enrich_production_test_report.md`
 
 Together, these define the real late-March product baseline:
 

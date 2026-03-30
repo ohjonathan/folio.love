@@ -1156,11 +1156,18 @@ Required v1 contract:
 2. `refresh` regenerates the note normally from current conversion output.
 3. Before final write, `refresh` passes through only:
    - human-confirmed canonical relationship fields
+   - `provenance_links`
    - `_llm_metadata.enrich`
+   - `_llm_metadata.provenance`
 4. This passthrough is allowlisted and frontmatter-only; it is not a sidecar
    and not a free-form merge of arbitrary legacy fields.
 5. If refreshed source inputs invalidate prior enrich output, `refresh` sets
    `_llm_metadata.enrich.status: stale`.
+5a. If refreshed source inputs invalidate prior provenance output, `refresh`
+   clears provenance pair fingerprints, sets pending provenance proposals to
+   `stale_pending`, preserves rejected provenance proposals, and preserves
+   confirmed `provenance_links` for stale detection / repair by
+   `folio provenance`.
 6. A stale refresh clears prior enrich fingerprints, entity-resolution
    fingerprint state, and relationship proposal records.
 7. A stale refresh regenerates or removes `## Related` from preserved

@@ -314,6 +314,19 @@ tags:
 review_status: clean         # clean | flagged | reviewed | overridden
 review_flags: []
 extraction_confidence: 0.87
+provenance_links:
+  - link_id: plink-a1b2c3d4e5f6
+    source_slide: 7
+    source_claim_index: 0
+    target_doc: clienta_ddq126_evidence_20260210_market-sizing-v1
+    target_slide: 3
+    target_claim_index: 1
+    confidence: high
+    confirmed_at: 2026-03-29T15:00:00Z
+    link_status: confirmed
+_llm_metadata:
+  provenance:
+    pairs: {}
 ---
 ```
 
@@ -329,6 +342,8 @@ The system SHALL maintain a `registry.json` with:
 - Last processing timestamp
 - Current staleness status
 - Review status and extraction confidence (for library-wide review queries)
+- Canonical relationship context sufficient to resolve provenance targets
+  (including confirmed `supersedes` predecessor IDs for evidence notes)
 
 #### FR-404: Entity Registry
 
@@ -500,6 +515,45 @@ folio entities generate-stubs [--output-dir <path>] [--force]
 - [ ] `generate-stubs` is additive and idempotent by default
 - [ ] Manually enriched stubs survive subsequent generation runs
 
+#### FR-509: Provenance Command
+```bash
+folio provenance [scope] [--dry-run] [--llm-profile <profile>] [--limit N] [--force] [--clear-rejections]
+folio provenance review [scope] [--include-low] [--stale] [--doc <doc_id>] [--target <doc_id>] [--page N]
+folio provenance status [scope]
+folio provenance confirm <proposal_id>
+folio provenance reject <proposal_id>
+folio provenance confirm-range <start_id>..<end_id> [scope] [--doc <doc_id>] [--target <doc_id>]
+folio provenance confirm-doc <doc_id> [scope] [--target <doc_id>]
+folio provenance reject-doc <doc_id> [scope] [--target <doc_id>]
+folio provenance stale refresh-hashes <link_id>
+folio provenance stale re-evaluate <link_id>
+folio provenance stale remove <link_id>
+folio provenance stale acknowledge <link_id>
+folio provenance stale remove-doc <doc_id> [scope]
+folio provenance stale acknowledge-doc <doc_id> [scope]
+```
+
+- Extract grounded source claims and target evidence entries from confirmed
+  `supersedes`-linked evidence-note pairs
+- Use LLM-assisted semantic matching to propose claim-to-evidence links
+- Keep proposed links in `_llm_metadata.provenance` and confirmed links in
+  `provenance_links`
+- Support stale-link review with visual verification, semantic re-evaluation,
+  acknowledgment, and removal
+- Semantic re-evaluation MUST never auto-confirm; replacement matches return
+  as reviewable proposals and blocked repairs surface via status/review
+- Keep review listing read-only; all mutations happen through explicit CLI
+  commands
+
+**Acceptance Criteria:**
+- [ ] `folio provenance` generates reviewable proposals on confirmed
+  `supersedes` pairs
+- [ ] `folio provenance review` is a read-only listing surface with stable IDs
+- [ ] Mutation actions are available through explicit CLI subcommands
+- [ ] Confirmed links persist through refresh and support stale detection /
+  repair
+- [ ] Blocked repairs surface explicitly; they do not silently disappear
+
 ---
 
 ### 2.6 LLM Provider Configuration (FR-600) — P1
@@ -526,6 +580,7 @@ Folio SHALL support route-based selection of LLM profiles by task:
 - `routing.convert` controls the `folio convert` analysis path in v1.0
 - `routing.ingest` controls the `folio ingest` analysis path in v1.0
 - `routing.enrich` controls the `folio enrich` analysis path in v1.0
+- `routing.provenance` controls the `folio provenance` analysis path
 - `--llm-profile` overrides route-based selection for a single command invocation
 
 #### FR-605: Optional Transient Fallback
@@ -534,7 +589,7 @@ Folio SHALL support configured fallback chains for transient provider failures o
 
 #### FR-606: Execution Transparency
 
-Folio SHALL record internal LLM execution metadata in output frontmatter, including the requested profile, actual provider/model used, fallback activation, and Pass 2 status.
+Folio SHALL record internal LLM execution metadata in output frontmatter, including the requested profile, actual provider/model used, fallback activation, Pass 2 status, and provenance-matching metadata in `_llm_metadata.provenance` when `folio provenance` runs.
 
 #### FR-607: Graceful Degradation with Explicit Flagging
 
@@ -576,6 +631,10 @@ fuzzy match), the claim SHALL be flagged as `unvalidated`.
 - [ ] Every LLM claim includes a quoted source span
 - [ ] Validation correctly identifies matching and non-matching quotes
 - [ ] Unvalidated claims are flagged, not silently discarded
+
+When confirmed `supersedes`-linked evidence pairs exist, `folio provenance`
+extends this grounding model across documents by linking a source claim to a
+specific target evidence entry with confidence and rationale.
 
 #### FR-702: Extraction Confidence Scoring
 
@@ -688,6 +747,12 @@ Every LLM extraction SHALL record provenance metadata sufficient to answer
 This metadata extends the existing `_llm_metadata` block in frontmatter.
 Per-slide provenance is recorded in the markdown body alongside evidence blocks.
 Document-level provenance remains in `_llm_metadata`.
+
+`folio provenance` extends extraction provenance to cross-document
+claim-to-evidence lineage:
+- confirmed links live in `provenance_links`
+- machine proposals and repair metadata live in `_llm_metadata.provenance`
+- refresh preserves both structures while clearing stale pair fingerprints
 
 **Acceptance Criteria:**
 - [ ] Every extraction is traceable to a specific model and pass

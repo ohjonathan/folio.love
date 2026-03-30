@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 from folio.config import FolioConfig, LLMConfig, LLMProfile, LLMRoute
+from folio.lock import LibraryLockError, library_lock
 from folio.enrich import (
     EnrichBatchResult,
     EnrichPlanEntry,
@@ -1856,6 +1857,23 @@ class TestBatchEnrichLogging:
         assert echoed == ["No eligible documents found."]
         assert "No eligible documents found." in caplog.text
         assert "status --refresh" in caplog.text
+
+    def test_enrich_batch_respects_existing_library_lock(self, tmp_path):
+        config = _make_config(tmp_path)
+        plan_entry = EnrichPlanEntry(
+            entry=MagicMock(id="source_v2"),
+            md_path=config.library_root / "ClientA/source_v2.md",
+            doc_type="evidence",
+            disposition="analyze",
+            reason="eligible",
+            existing_fm={"client": "ClientA", "engagement": "DD_Q1"},
+            doc=MagicMock(),
+        )
+
+        with patch("folio.enrich.plan_enrichment", return_value=[plan_entry]):
+            with library_lock(config.library_root.resolve(), "provenance"):
+                with pytest.raises(LibraryLockError, match="library lock already held"):
+                    enrich_batch(config, echo=lambda _msg: None)
 
 
 class TestRelationshipFpRecompute:

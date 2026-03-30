@@ -434,9 +434,9 @@ the next active unshipped slice.
 - Enrichment pass adds: tags, relationship links, entity extraction to existing assets
 - Post-PR-C follow-on adds entity stub generation and trusted org-chart
   hierarchy merge for richer graph connectivity
-- Retroactive provenance linking: match deliverable claims against library evidence
+- Retroactive provenance linking (infrastructure + evidence version-lineage pilot): `folio provenance` matches grounded claims in newer evidence notes to structured `**Evidence:**` entries in confirmed `supersedes` predecessors
 - Human confirmation step for proposed provenance links
-- Relationship types active: depends_on, draws_from, impacts
+- Relationship types active: supersedes (shipped), depends_on, draws_from, impacts
 
 **Current baseline for this phase:** the retained production
 `anthropic_sonnet4` library plus the 12 blind-validated `haiku45` merges was
@@ -444,7 +444,7 @@ used successfully for PR C production testing: 115/115 eligible notes
 enriched, 0 failures, approximately 17 minutes runtime, 3 generated
 `## Related` sections, and 6 plausible `supersedes` proposals.
 
-**Deliverable:** Even messy, fast-produced deliverables get connected to the clean library.
+**Deliverable:** Provenance infrastructure is proven on evidence version-lineage pairs in the retained production library. Deliverable-to-evidence provenance remains the v2 extension when deliverable notes enter the registry.
 
 ### Week 21-22: Context Documents & Integration
 
@@ -461,7 +461,7 @@ enriched, 0 failures, approximately 17 minutes runtime, 3 generated
 - [ ] Entity registry tracks people, departments, systems
 - [ ] Name resolution works for common cases (exact match + LLM soft match)
 - [ ] `folio enrich` adds tags and links to existing assets
-- [ ] Retroactive provenance links deliverable slides to evidence
+- [ ] Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs
 - [ ] Context documents provide engagement scaffolding
 - [ ] Full engagement lifecycle tested end-to-end
 
@@ -473,7 +473,7 @@ enriched, 0 failures, approximately 17 minutes runtime, 3 generated
 | Entity registry tracks people, departments, systems | Shipped | PR #34 added the registry, CLI, CSV import, and confirmation workflow on `main` |
 | Name resolution works for common cases | Shipped for exact/alias matching plus LLM-proposed soft match with human confirmation | PR #35 added confirmed-only exact/alias resolution, bounded soft-match proposals, and unresolved-entity review flow |
 | `folio enrich` adds tags and links to existing assets | Shipped and production-tested | PR C enriched 115/115 eligible notes on the retained production `sonnet4` library with 0 failures in about 17 minutes; the current follow-on adds entity stubs and org-chart merge support |
-| Retroactive provenance links deliverable slides to evidence | Not started | Still a later Tier 3 slice |
+| Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs | Next feature slice | Scope frozen in `docs/specs/folio_provenance_spec.md`; implementation pending. Deliverable-slide provenance remains v2 work. |
 | Context documents provide engagement scaffolding | Not started | Planned for Week 21-22 |
 | Full engagement lifecycle tested end-to-end | Not started | Depends on entities, enrich, and context docs landing first |
 
@@ -556,6 +556,9 @@ folio entities import <csv>
 folio entities confirm <name>
 folio entities reject <name>
 folio enrich [scope]
+folio provenance [scope] [--dry-run] [--llm-profile <profile>] [--limit N] [--force] [--clear-rejections]
+folio provenance review [scope] [--include-low] [--stale] [--doc <doc_id>] [--target <doc_id>] [--page N]
+folio provenance status [scope]
 folio link <id> <id> [type]
 ```
 

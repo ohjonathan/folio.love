@@ -364,7 +364,7 @@ def resolve_interaction_preserved_metadata(
 
 
 # ---------------------------------------------------------------------------
-# Enrich passthrough allowlist (D12)
+# Enrich/provenance passthrough allowlist (D12 / PR D)
 # ---------------------------------------------------------------------------
 
 _ENRICH_RELATIONSHIP_FIELDS = (
@@ -377,11 +377,12 @@ def _inject_enrich_passthrough(
     frontmatter: dict,
     preserved_enrich_fields: Optional[dict],
 ) -> None:
-    """Inject allowlisted enrich fields into frontmatter dict.
+    """Inject allowlisted enrich/provenance fields into frontmatter dict.
 
     This is an ALLOWLISTED passthrough, not a free-form merge.
-    Only canonical relationship fields and ``_llm_metadata.enrich``
-    are passed through.
+    Only canonical relationship fields, ``provenance_links``, and the
+    dedicated ``_llm_metadata.enrich`` / ``_llm_metadata.provenance``
+    blocks are passed through.
     """
     if not preserved_enrich_fields:
         return
@@ -391,12 +392,19 @@ def _inject_enrich_passthrough(
         if field_name in preserved_enrich_fields:
             frontmatter[field_name] = preserved_enrich_fields[field_name]
 
-    # Pass through _llm_metadata.enrich
-    enrich_meta = preserved_enrich_fields.get("_llm_metadata", {}).get("enrich")
-    if enrich_meta:
+    if "provenance_links" in preserved_enrich_fields:
+        frontmatter["provenance_links"] = preserved_enrich_fields["provenance_links"]
+
+    llm_meta = preserved_enrich_fields.get("_llm_metadata", {})
+    enrich_meta = llm_meta.get("enrich")
+    provenance_meta = llm_meta.get("provenance")
+    if enrich_meta or provenance_meta:
         if "_llm_metadata" not in frontmatter:
             frontmatter["_llm_metadata"] = {}
-        frontmatter["_llm_metadata"]["enrich"] = enrich_meta
+        if enrich_meta:
+            frontmatter["_llm_metadata"]["enrich"] = enrich_meta
+        if provenance_meta:
+            frontmatter["_llm_metadata"]["provenance"] = provenance_meta
 
 
 def _collect_unique(
