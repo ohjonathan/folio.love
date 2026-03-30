@@ -66,14 +66,16 @@ def _make_evidence_note(
     supersedes: str | None = None,
     provenance_meta: dict | None = None,
     provenance_links: list[dict] | None = None,
+    curation_level: str = "L0",
+    review_status: str = "clean",
 ) -> str:
     fm: dict = {
         "id": note_id,
         "title": title,
         "type": "evidence",
         "status": "active",
-        "curation_level": "L0",
-        "review_status": "clean",
+        "curation_level": curation_level,
+        "review_status": review_status,
         "client": "ClientA",
         "engagement": "DD_Q1",
         "source": "deck.pptx",
@@ -492,3 +494,272 @@ def test_provenance_cli_skips_when_source_changes_during_evaluation(tmp_path):
     pair = fm.get("_llm_metadata", {}).get("provenance", {}).get("pairs", {}).get("source_v1", {})
     assert pair.get("proposals", []) == []
     assert "provenance_links" not in fm
+
+
+def test_provenance_cli_review_and_status_match_spec_output(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+            supersedes="source_v1",
+            provenance_meta={
+                "pairs": {
+                    "source_v1": {
+                        "proposals": [
+                            {
+                                "proposal_id": "prov-000000000321",
+                                "source_claim": {
+                                    "slide_number": 1,
+                                    "claim_index": 0,
+                                    "claim_text": "Revenue growth is 15% YoY",
+                                    "supporting_quote": "Revenue grew 15% YoY.",
+                                    "claim_hash": compute_claim_hash("Revenue growth is 15% YoY", "Revenue grew 15% YoY."),
+                                },
+                                "target_evidence": {
+                                    "target_doc": "source_v1",
+                                    "slide_number": 1,
+                                    "claim_index": 0,
+                                    "claim_text": "Revenue growth is 15% YoY",
+                                    "supporting_quote": "Revenue grew 15% YoY.",
+                                    "claim_hash": compute_claim_hash("Revenue growth is 15% YoY", "Revenue grew 15% YoY."),
+                                },
+                                "confidence": "high",
+                                "rationale": "Same metric",
+                                "basis_fingerprint": "sha256:basis",
+                                "model": "anthropic/test-model",
+                                "timestamp_proposed": "2026-03-29T00:00:00Z",
+                                "status": "pending_human_confirmation",
+                                "replaces_link_id": "plink-000000000654",
+                            }
+                        ]
+                    }
+                }
+            },
+        ),
+    )
+    _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+        ),
+    )
+    fm = _read_fm(source_path)
+    fm["provenance_links"] = [
+        {
+            "link_id": "plink-000000000654",
+            "source_slide": 1,
+            "source_claim_index": 0,
+            "source_claim_hash": "sha256:stale-source",
+            "source_claim_text_snapshot": "Revenue growth is 15% YoY",
+            "source_supporting_quote_snapshot": "Revenue grew 15% YoY.",
+            "target_doc": "source_v1",
+            "target_slide": 1,
+            "target_claim_index": 0,
+            "target_claim_hash": "sha256:stale-target",
+            "target_claim_text_snapshot": "Revenue growth is 15% YoY",
+            "target_supporting_quote_snapshot": "Revenue grew 15% YoY.",
+            "confidence": "high",
+            "confirmed_at": "2026-03-29T00:00:00Z",
+            "link_status": "confirmed",
+        }
+    ]
+    source_path.write_text(provenance_mod._replace_frontmatter(source_path.read_text(encoding="utf-8"), fm), encoding="utf-8")
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md", title="Source V2"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md", title="Source V1"),
+        },
+    )
+
+    runner = CliRunner()
+    review = runner.invoke(cli, ["--config", str(config_path), "provenance", "review", "source_v2"])
+    assert review.exit_code == 0, review.output
+    assert "Rationale: Same metric" in review.output
+    assert "Replaces: plink-000000000654" in review.output
+
+    status = runner.invoke(cli, ["--config", str(config_path), "provenance", "status", "source_v2"])
+    assert status.exit_code == 0, status.output
+    assert "| Source Document |" in status.output
+    assert "| source_v2 |" in status.output
+    assert "Coverage:" in status.output
+
+
+def test_provenance_cli_refresh_hashes_shows_snapshot_comparison(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            claim_text="Revenue growth is 18% YoY",
+            quote_text="Revenue grew 18% YoY.",
+            supersedes="source_v1",
+        ),
+    )
+    target_path = _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md", title="Source V2"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md", title="Source V1"),
+        },
+    )
+
+    source_item = provenance_mod.extract_evidence_items(source_path.read_text(encoding="utf-8"))[0]
+    target_item = provenance_mod.extract_evidence_items(target_path.read_text(encoding="utf-8"))[0]
+    fm = _read_fm(source_path)
+    fm["provenance_links"] = [
+        {
+            "link_id": "plink-000000000777",
+            "source_slide": 1,
+            "source_claim_index": 0,
+            "source_claim_hash": "sha256:old-source",
+            "source_claim_text_snapshot": "Revenue growth is 15% YoY",
+            "source_supporting_quote_snapshot": "Revenue grew 15% YoY.",
+            "target_doc": "source_v1",
+            "target_slide": 1,
+            "target_claim_index": 0,
+            "target_claim_hash": "sha256:old-target",
+            "target_claim_text_snapshot": target_item.claim_text,
+            "target_supporting_quote_snapshot": target_item.supporting_quote,
+            "confidence": "high",
+            "confirmed_at": "2026-03-29T00:00:00Z",
+            "link_status": "confirmed",
+        }
+    ]
+    source_path.write_text(provenance_mod._replace_frontmatter(source_path.read_text(encoding="utf-8"), fm), encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "provenance", "stale", "refresh-hashes", "plink-000000000777"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Persisted Claim:" in result.output
+    assert "Current Claim:" in result.output
+    assert "✓ Refreshed plink-000000000777" in result.output
+
+    refreshed = _read_fm(source_path)["provenance_links"][0]
+    assert refreshed["source_claim_hash"] == source_item.claim_hash
+
+
+def test_provenance_cli_dry_run_respects_limit_and_shows_repair_preview(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+
+    source_v2 = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+            supersedes="source_v1",
+            curation_level="L1",
+        ),
+    )
+    target_v1 = _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+        ),
+    )
+    _write_note(
+        library,
+        "ClientA/source_v3.md",
+        _make_evidence_note(
+            note_id="source_v3",
+            title="Source V3",
+            claim_text="Margin expanded 300 bps",
+            quote_text="Margins improved by 300 bps.",
+            supersedes="source_v0",
+        ),
+    )
+    _write_note(
+        library,
+        "ClientA/source_v0.md",
+        _make_evidence_note(
+            note_id="source_v0",
+            title="Source V0",
+            claim_text="Margin expanded 300 bps",
+            quote_text="Margins improved by 300 bps.",
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md", title="Source V2"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md", title="Source V1"),
+            "source_v3": _registry_entry("source_v3", "ClientA/source_v3.md", title="Source V3"),
+            "source_v0": _registry_entry("source_v0", "ClientA/source_v0.md", title="Source V0"),
+        },
+    )
+
+    source_item = provenance_mod.extract_evidence_items(source_v2.read_text(encoding="utf-8"))[0]
+    target_item = provenance_mod.extract_evidence_items(target_v1.read_text(encoding="utf-8"))[0]
+    fm = _read_fm(source_v2)
+    fm["provenance_links"] = [
+        {
+            "link_id": "plink-000000000888",
+            "source_slide": 1,
+            "source_claim_index": 0,
+            "source_claim_hash": source_item.claim_hash,
+            "source_claim_text_snapshot": source_item.claim_text,
+            "source_supporting_quote_snapshot": source_item.supporting_quote,
+            "target_doc": "source_v1",
+            "target_slide": 1,
+            "target_claim_index": 0,
+            "target_claim_hash": target_item.claim_hash,
+            "target_claim_text_snapshot": target_item.claim_text,
+            "target_supporting_quote_snapshot": target_item.supporting_quote,
+            "confidence": "high",
+            "confirmed_at": "2026-03-29T00:00:00Z",
+            "link_status": "re_evaluate_pending",
+        }
+    ]
+    source_v2.write_text(provenance_mod._replace_frontmatter(source_v2.read_text(encoding="utf-8"), fm), encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "provenance", "ClientA", "--dry-run", "--limit", "1"],
+    )
+    assert result.exit_code == 0, result.output
+    assert result.output.count("planned call(s)") == 1
+    assert "queued_repair=1" in result.output
+    assert "would trigger LLM on protected note [curation_level=L1]" in result.output

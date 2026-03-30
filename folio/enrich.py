@@ -19,6 +19,7 @@ from typing import Optional
 import yaml
 
 from .config import FolioConfig, LLMProfile
+from .lock import library_lock
 from .llm.types import FallbackProfileSpec, ProviderRuntimeSettings
 from .pipeline.enrich_data import (
     ENRICH_SPEC_VERSION,
@@ -1659,50 +1660,51 @@ def enrich_batch(
     echo(f"Enriching {len(plan)} document(s)...")
     result = EnrichBatchResult()
 
-    for plan_entry in plan:
-        if plan_entry.disposition == "skip":
-            echo(f"↷ {plan_entry.entry.id}  unchanged")
-            result.unchanged += 1
-            result.outcomes.append((plan_entry.entry.id, EnrichOutcome.unchanged))
-            continue
-
-        try:
-            enrich_result = enrich_note(
-                config, plan_entry,
-                llm_profile=llm_profile,
-                force=force,
-            )
-
-            if enrich_result.outcome == EnrichOutcome.updated:
-                detail_parts = []
-                if enrich_result.tags_added:
-                    detail_parts.append(f"tags:+{enrich_result.tags_added}")
-                if enrich_result.entities_added:
-                    detail_parts.append(f"entities:+{enrich_result.entities_added}")
-                if enrich_result.proposals_count:
-                    detail_parts.append(f"proposals:{enrich_result.proposals_count}")
-                detail = "  " + " ".join(detail_parts) if detail_parts else ""
-                echo(f"✓ {plan_entry.entry.id}{detail}")
-                result.updated += 1
-            elif enrich_result.outcome == EnrichOutcome.unchanged:
+    with library_lock(config.library_root.resolve(), "enrich"):
+        for plan_entry in plan:
+            if plan_entry.disposition == "skip":
                 echo(f"↷ {plan_entry.entry.id}  unchanged")
                 result.unchanged += 1
-            elif enrich_result.outcome == EnrichOutcome.protected:
-                echo(f"! {plan_entry.entry.id}  protected; metadata only")
-                result.protected += 1
-            elif enrich_result.outcome == EnrichOutcome.conflicted:
-                echo(f"! {plan_entry.entry.id}  conflict; metadata only")
-                result.conflicted += 1
+                result.outcomes.append((plan_entry.entry.id, EnrichOutcome.unchanged))
+                continue
 
-            result.outcomes.append((plan_entry.entry.id, enrich_result.outcome))
+            try:
+                enrich_result = enrich_note(
+                    config, plan_entry,
+                    llm_profile=llm_profile,
+                    force=force,
+                )
 
-            for warning in enrich_result.warnings:
-                logger.warning("%s: %s", plan_entry.entry.id, warning)
+                if enrich_result.outcome == EnrichOutcome.updated:
+                    detail_parts = []
+                    if enrich_result.tags_added:
+                        detail_parts.append(f"tags:+{enrich_result.tags_added}")
+                    if enrich_result.entities_added:
+                        detail_parts.append(f"entities:+{enrich_result.entities_added}")
+                    if enrich_result.proposals_count:
+                        detail_parts.append(f"proposals:{enrich_result.proposals_count}")
+                    detail = "  " + " ".join(detail_parts) if detail_parts else ""
+                    echo(f"✓ {plan_entry.entry.id}{detail}")
+                    result.updated += 1
+                elif enrich_result.outcome == EnrichOutcome.unchanged:
+                    echo(f"↷ {plan_entry.entry.id}  unchanged")
+                    result.unchanged += 1
+                elif enrich_result.outcome == EnrichOutcome.protected:
+                    echo(f"! {plan_entry.entry.id}  protected; metadata only")
+                    result.protected += 1
+                elif enrich_result.outcome == EnrichOutcome.conflicted:
+                    echo(f"! {plan_entry.entry.id}  conflict; metadata only")
+                    result.conflicted += 1
 
-        except Exception as exc:
-            echo(f"✗ {plan_entry.entry.id}  {exc}")
-            result.failed += 1
-            result.outcomes.append((plan_entry.entry.id, EnrichOutcome.failed))
+                result.outcomes.append((plan_entry.entry.id, enrich_result.outcome))
+
+                for warning in enrich_result.warnings:
+                    logger.warning("%s: %s", plan_entry.entry.id, warning)
+
+            except Exception as exc:
+                echo(f"✗ {plan_entry.entry.id}  {exc}")
+                result.failed += 1
+                result.outcomes.append((plan_entry.entry.id, EnrichOutcome.failed))
 
     echo("")
     echo(

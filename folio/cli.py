@@ -1086,18 +1086,17 @@ def enrich(ctx, scope, dry_run, llm_profile, force):
     config = ctx.obj["config"]
 
     from .enrich import enrich_batch
-    from .lock import LibraryLockError, library_lock
+    from .lock import LibraryLockError
 
     try:
-        with library_lock(config.library_root.resolve(), "enrich"):
-            result = enrich_batch(
-                config,
-                scope=scope,
-                dry_run=dry_run,
-                llm_profile=llm_profile,
-                force=force,
-                echo=click.echo,
-            )
+        result = enrich_batch(
+            config,
+            scope=scope,
+            dry_run=dry_run,
+            llm_profile=llm_profile,
+            force=force,
+            echo=click.echo,
+        )
     except LibraryLockError as e:
         click.echo(f"✗ {e}")
         sys.exit(1)
@@ -1181,7 +1180,10 @@ def provenance_review_cmd(ctx, scope: Optional[str], include_low: bool, stale_on
     if stale_only:
         rows = collect_stale_links(config, scope=scope, doc_id=doc_id, target_id=target_id)
         window, total_pages = paginate(rows, page)
-        click.echo(f"Stale Review ({len(rows)} item(s)) - Page {page}/{total_pages}")
+        click.echo(f"Stale Review ({len(rows)} item(s))")
+        click.echo(
+            f"Page {page}/{total_pages} ({len(window)} items, page size {PAGE_SIZE}, ordered: source doc → surfaced state → link_id)"
+        )
         for row in window:
             link = row.link
             state = row.state
@@ -1202,7 +1204,10 @@ def provenance_review_cmd(ctx, scope: Optional[str], include_low: bool, stale_on
         include_low=include_low,
     )
     window, total_pages = paginate(proposals, page)
-    click.echo(f"Pending ({len(proposals)} item(s)) - Page {page}/{total_pages}")
+    click.echo(f"Pending ({len(proposals)} item(s))")
+    click.echo(
+        f"Page {page}/{total_pages} ({len(window)} items, page size {PAGE_SIZE}, ordered: source doc → confidence desc → proposal_id)"
+    )
     for view in window:
         proposal = view.proposal
         source_claim = proposal.source_claim
@@ -1213,8 +1218,10 @@ def provenance_review_cmd(ctx, scope: Optional[str], include_low: bool, stale_on
             f"-> {view.target_id} slide {target_evidence.get('slide_number')}, claim {target_evidence.get('claim_index')} "
             f"({proposal.confidence})"
         )
-        click.echo(f"  Claim: {source_claim.get('claim_text')}")
-        click.echo(f"  Evidence: {target_evidence.get('claim_text')}")
+        click.echo(f"  Claim: {json.dumps(source_claim.get('claim_text', ''), ensure_ascii=False)}")
+        click.echo(f"  Evidence: {json.dumps(target_evidence.get('claim_text', ''), ensure_ascii=False)}")
+        click.echo(f"  Confidence: {proposal.confidence} | Rationale: {proposal.rationale or '-'}")
+        click.echo(f"  Replaces: {proposal.replaces_link_id or '-'}")
 
 
 @provenance.command("status")
@@ -1226,28 +1233,52 @@ def provenance_status_cmd(ctx, scope: Optional[str]):
 
     config = ctx.obj["config"]
     rows = provenance_status_summary(config, scope=scope)
+    if not rows:
+        click.echo("No provenance data found.")
+        return
+
     total_pairs = 0
     total_claims = 0
     total_pending = 0
     total_confirmed = 0
+    total_fresh = 0
+    total_stale = 0
+    total_ack = 0
+    total_re_eval = 0
+    total_blocked = 0
+    total_orphaned = 0
+    total_rejected = 0
     coverage_num = 0
+    click.echo("| Source Document | Pairs | Claims | Pending | Fresh | Stale | Ack'd | Re-eval Pending | Blocked | Orphaned | Rejected |")
+    click.echo("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for row in rows:
         total_pairs += row["pairs"]
         total_claims += row["claims"]
         total_pending += row["pending"]
         total_confirmed += row["fresh"] + row["stale"] + row["acknowledged"] + row["re_evaluate_pending"] + row["blocked"]
+        total_fresh += row["fresh"]
+        total_stale += row["stale"]
+        total_ack += row["acknowledged"]
+        total_re_eval += row["re_evaluate_pending"]
+        total_blocked += row["blocked"]
+        total_orphaned += row["orphaned"]
+        total_rejected += row["rejected"]
         coverage_num += row["coverage_numerator"]
         click.echo(
-            f"{row['source_id']}: pairs={row['pairs']} claims={row['claims']} "
-            f"pending={row['pending']} fresh={row['fresh']} stale={row['stale']} "
-            f"ack={row['acknowledged']} re-eval={row['re_evaluate_pending']} "
-            f"blocked={row['blocked']} orphaned={row['orphaned']} rejected={row['rejected']}"
+            f"| {row['source_id']} | {row['pairs']} | {row['claims']} | {row['pending']} | "
+            f"{row['fresh']} | {row['stale']} | {row['acknowledged']} | "
+            f"{row['re_evaluate_pending']} | {row['blocked']} | {row['orphaned']} | {row['rejected']} |"
         )
     coverage_pct = (coverage_num / total_claims * 100.0) if total_claims else 0.0
     click.echo("")
     click.echo(
         f"Total: {total_pairs} pairs, {total_claims} claims, {total_pending} pending, "
         f"{total_confirmed} confirmed"
+    )
+    click.echo(
+        f"       ({total_fresh} fresh, {total_stale} stale, {total_ack} acknowledged, "
+        f"{total_re_eval} re-evaluate pending, {total_blocked} blocked, {total_orphaned} orphaned), "
+        f"{total_rejected} rejected"
     )
     click.echo(f"Coverage: {coverage_num}/{total_claims} claims have fresh confirmed provenance ({coverage_pct:.1f}%)")
 
@@ -1377,10 +1408,26 @@ def provenance_stale_refresh_hashes_cmd(ctx, link_id: str):
     config = ctx.obj["config"]
     try:
         with library_lock(config.library_root.resolve(), "provenance"):
-            stale_refresh_hashes(config, link_id)
+            preview = stale_refresh_hashes(config, link_id)
     except (LibraryLockError, ValueError) as e:
         click.echo(f"✗ {e}")
         sys.exit(1)
+    click.echo(
+        f"Source: persisted slide {preview.source_before['slide_number']}, claim {preview.source_before['claim_index']} "
+        f"-> current slide {preview.source_after['slide_number']}, claim {preview.source_after['claim_index']}"
+    )
+    click.echo(f"  Persisted Claim: {json.dumps(preview.source_before['claim_text'], ensure_ascii=False)}")
+    click.echo(f"  Persisted Quote: {json.dumps(preview.source_before['supporting_quote'], ensure_ascii=False)}")
+    click.echo(f"  Current Claim:   {json.dumps(preview.source_after['claim_text'], ensure_ascii=False)}")
+    click.echo(f"  Current Quote:   {json.dumps(preview.source_after['supporting_quote'], ensure_ascii=False)}")
+    click.echo(
+        f"Target: persisted slide {preview.target_before['slide_number']}, claim {preview.target_before['claim_index']} "
+        f"-> current slide {preview.target_after['slide_number']}, claim {preview.target_after['claim_index']}"
+    )
+    click.echo(f"  Persisted Claim: {json.dumps(preview.target_before['claim_text'], ensure_ascii=False)}")
+    click.echo(f"  Persisted Quote: {json.dumps(preview.target_before['supporting_quote'], ensure_ascii=False)}")
+    click.echo(f"  Current Claim:   {json.dumps(preview.target_after['claim_text'], ensure_ascii=False)}")
+    click.echo(f"  Current Quote:   {json.dumps(preview.target_after['supporting_quote'], ensure_ascii=False)}")
     click.echo(f"✓ Refreshed {link_id}")
 
 

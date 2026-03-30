@@ -14,6 +14,7 @@ import yaml
 from folio.config import FolioConfig
 from folio.lock import LibraryLockError, library_lock
 import folio.provenance as provenance_mod
+from folio.pipeline.provenance_analysis import ProvenanceMatch
 from folio.pipeline.provenance_data import ExtractedEvidenceItem, compute_claim_hash
 
 
@@ -60,13 +61,14 @@ def _make_evidence_note(
     provenance_links: list[dict] | None = None,
     curation_level: str = "L0",
     review_status: str = "clean",
+    include_curation_level: bool = True,
+    evidence_format: str = "yaml",
 ) -> str:
     fm: dict = {
         "id": note_id,
         "title": title,
         "type": "evidence",
         "status": "active",
-        "curation_level": curation_level,
         "review_status": review_status,
         "review_flags": [],
         "client": "ClientA",
@@ -77,6 +79,8 @@ def _make_evidence_note(
         "created": "2026-03-29T00:00:00Z",
         "modified": "2026-03-29T00:00:00Z",
     }
+    if include_curation_level:
+        fm["curation_level"] = curation_level
     if supersedes:
         fm["supersedes"] = supersedes
     if provenance_links:
@@ -84,17 +88,25 @@ def _make_evidence_note(
     if provenance_meta:
         fm["_llm_metadata"] = {"provenance": provenance_meta}
 
-    evidence_block = "\n".join(
-        [
-            (
-                f"- claim: {claim_text}\n"
-                f'  - quote: "{quote_text}"\n'
-                "  - confidence: high\n"
-                "  - validated: yes"
-            )
-            for claim_text, quote_text in evidence_items
-        ]
-    )
+    if evidence_format == "markdown":
+        evidence_block = "\n".join(
+            [
+                f'- **{claim_text} (high):** "{quote_text}" *(metric)*'
+                for claim_text, quote_text in evidence_items
+            ]
+        )
+    else:
+        evidence_block = "\n".join(
+            [
+                (
+                    f"- claim: {claim_text}\n"
+                    f'  - quote: "{quote_text}"\n'
+                    "  - confidence: high\n"
+                    "  - validated: yes"
+                )
+                for claim_text, quote_text in evidence_items
+            ]
+        )
     yaml_str = yaml.dump(fm, default_flow_style=False, sort_keys=False, allow_unicode=True)
     return f"""\
 ---
@@ -242,6 +254,26 @@ not a field
     assert [(item.slide_number, item.claim_index) for item in items] == [(1, 0), (1, 1), (2, 0)]
     assert items[0].claim_hash == compute_claim_hash("Revenue growth is 15% YoY", "Revenue grew 15% YoY.")
     assert items[1].supporting_quote == ""
+
+
+def test_extract_evidence_items_parses_production_markdown_format():
+    content = """\
+## Slide 1
+
+**Evidence:**
+- **Revenue growth is 15% YoY (high, pass 2):** "Revenue grew 15% YoY." *(metric)*
+- **Margin expanded 300 bps (medium):** "Margins improved by 300 bps." *(body)* [unverified]
+"""
+
+    items = provenance_mod.extract_evidence_items(content)
+
+    assert [(item.slide_number, item.claim_index) for item in items] == [(1, 0), (1, 1)]
+    assert items[0].claim_text == "Revenue growth is 15% YoY"
+    assert items[0].supporting_quote == "Revenue grew 15% YoY."
+    assert items[0].original_confidence == "high"
+    assert items[0].element_type == "metric"
+    assert items[1].original_confidence == "medium"
+    assert items[1].element_type == "body"
 
 
 def test_suppress_rejections_respects_basis_and_clear_rejections():
@@ -819,6 +851,449 @@ def test_protection_gate_skips_evaluation_but_surfaces_stale_links(tmp_path):
     assert result.protected == 1
     assert rows[0]["stale"] == 1
     assert rows[0]["blocked"] == 0
+
+
+def test_missing_curation_level_is_treated_as_l0_and_analyzed(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config = _make_config(library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            supersedes="source_v1",
+            include_curation_level=False,
+            evidence_items=[("Claim 1", "Quote 1")],
+        ),
+    )
+    _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            evidence_items=[("Target 1", "Quote A")],
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md"),
+        },
+    )
+
+    with patch(
+        "folio.provenance.evaluate_provenance_matches",
+        return_value=[ProvenanceMatch(claim_ref="C1", target_ref="T1", confidence="high", rationale="same metric")],
+    ):
+        result = provenance_mod.provenance_batch(config)
+
+    fm = _read_fm(source_path)
+    assert result.protected == 0
+    assert result.proposed == 1
+    assert fm["_llm_metadata"]["provenance"]["pairs"]["source_v1"]["status"] == "proposed"
+
+
+def test_confirm_proposal_clears_ack_fields_on_reconfirm(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config = _make_config(library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            supersedes="source_v1",
+            evidence_items=[("Claim 1", "Quote 1")],
+        ),
+    )
+    target_path = _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            evidence_items=[("Target 1", "Quote A")],
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md"),
+        },
+    )
+
+    source_item = provenance_mod.extract_evidence_items(source_path.read_text(encoding="utf-8"))[0]
+    target_item = provenance_mod.extract_evidence_items(target_path.read_text(encoding="utf-8"))[0]
+    link_id = provenance_mod._link_id("source_v2", 1, 0, "source_v1", 1, 0)
+    fm = _read_fm(source_path)
+    fm["provenance_links"] = [
+        _link_dict(
+            link_id=link_id,
+            target_doc="source_v1",
+            source_item=source_item,
+            target_item=target_item,
+            link_status="acknowledged_stale",
+            acknowledged_source_hash=source_item.claim_hash,
+            acknowledged_target_hash=target_item.claim_hash,
+        )
+    ]
+    fm["_llm_metadata"] = {
+        "provenance": {
+            "pairs": {
+                "source_v1": {
+                    "proposals": [
+                        _proposal_dict(
+                            proposal_id="prov-000000000123",
+                            target_doc="source_v1",
+                            source_item=source_item,
+                            target_item=target_item,
+                        )
+                    ]
+                }
+            }
+        }
+    }
+    source_path.write_text(
+        provenance_mod._replace_frontmatter(source_path.read_text(encoding="utf-8"), fm),
+        encoding="utf-8",
+    )
+
+    provenance_mod.confirm_proposal(config, "prov-000000000123")
+
+    link = _read_fm(source_path)["provenance_links"][0]
+    assert link["link_status"] == "confirmed"
+    assert "acknowledged_at_claim_hash" not in link
+    assert "acknowledged_at_target_hash" not in link
+
+
+def test_repair_link_without_pair_marker_self_heals_to_new_proposal(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config = _make_config(library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            supersedes="source_v1",
+            evidence_items=[("Claim 1", "Quote 1")],
+        ),
+    )
+    target_path = _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            evidence_items=[("Target 1", "Quote A")],
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md"),
+        },
+    )
+
+    source_item = provenance_mod.extract_evidence_items(source_path.read_text(encoding="utf-8"))[0]
+    target_item = provenance_mod.extract_evidence_items(target_path.read_text(encoding="utf-8"))[0]
+    fm = _read_fm(source_path)
+    fm["provenance_links"] = [
+        _link_dict(
+            link_id="plink-000000000555",
+            target_doc="source_v1",
+            source_item=source_item,
+            target_item=target_item,
+            link_status="re_evaluate_pending",
+        )
+    ]
+    source_path.write_text(
+        provenance_mod._replace_frontmatter(source_path.read_text(encoding="utf-8"), fm),
+        encoding="utf-8",
+    )
+
+    with patch(
+        "folio.provenance.evaluate_provenance_matches",
+        return_value=[ProvenanceMatch(claim_ref="C1", target_ref="T1", confidence="high", rationale="same metric")],
+    ):
+        result = provenance_mod.provenance_batch(config)
+
+    pair = _read_fm(source_path)["_llm_metadata"]["provenance"]["pairs"]["source_v1"]
+    assert result.proposed == 1
+    assert pair["proposals"][0]["replaces_link_id"] == "plink-000000000555"
+
+
+def test_stale_pair_marker_without_pending_link_self_clears(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config = _make_config(library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            supersedes="source_v1",
+            provenance_meta={
+                "pairs": {
+                    "source_v1": {
+                        "pair_fingerprint": "sha256:will-be-reset",
+                        "re_evaluate_requested": True,
+                        "repair_error": "llm_error",
+                        "repair_error_detail": "old",
+                        "proposals": [],
+                    }
+                }
+            },
+            evidence_items=[("Claim 1", "Quote 1")],
+        ),
+    )
+    _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            evidence_items=[("Target 1", "Quote A")],
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md"),
+        },
+    )
+    source_items = provenance_mod.extract_evidence_items(source_path.read_text(encoding="utf-8"))
+    target_items = provenance_mod.extract_evidence_items((library / "ClientA/source_v1.md").read_text(encoding="utf-8"))
+    fm = _read_fm(source_path)
+    fm["_llm_metadata"]["provenance"]["pairs"]["source_v1"]["pair_fingerprint"] = provenance_mod._pair_fingerprint(
+        source_items,
+        target_items,
+        "default",
+    )
+    source_path.write_text(
+        provenance_mod._replace_frontmatter(source_path.read_text(encoding="utf-8"), fm),
+        encoding="utf-8",
+    )
+
+    with patch("folio.provenance.evaluate_provenance_matches", side_effect=AssertionError("LLM should not run")):
+        result = provenance_mod.provenance_batch(config)
+
+    pair = _read_fm(source_path)["_llm_metadata"]["provenance"]["pairs"]["source_v1"]
+    assert result.unchanged == 1
+    assert pair["re_evaluate_requested"] is False
+    assert pair["repair_error"] is None
+    assert pair["repair_error_detail"] is None
+
+
+def test_refresh_hashes_clears_pair_repair_metadata_but_keeps_link(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config = _make_config(library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            supersedes="source_v1",
+            provenance_meta={
+                "pairs": {
+                    "source_v1": {
+                        "re_evaluate_requested": True,
+                        "repair_error": "llm_error",
+                        "repair_error_detail": "timeout",
+                        "repair_attempts": 2,
+                        "proposals": [],
+                    }
+                }
+            },
+            evidence_items=[("Claim 1", "Quote 1 updated")],
+        ),
+    )
+    target_path = _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            evidence_items=[("Target 1", "Quote A")],
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md"),
+        },
+    )
+
+    source_item = provenance_mod.extract_evidence_items(source_path.read_text(encoding="utf-8"))[0]
+    target_item = provenance_mod.extract_evidence_items(target_path.read_text(encoding="utf-8"))[0]
+    fm = _read_fm(source_path)
+    fm["provenance_links"] = [
+        _link_dict(
+            link_id="plink-000000000777",
+            target_doc="source_v1",
+            source_item=source_item,
+            target_item=target_item,
+            source_hash="sha256:old-source",
+            target_hash="sha256:old-target",
+            link_status="re_evaluate_pending",
+        )
+    ]
+    source_path.write_text(
+        provenance_mod._replace_frontmatter(source_path.read_text(encoding="utf-8"), fm),
+        encoding="utf-8",
+    )
+
+    provenance_mod.stale_refresh_hashes(config, "plink-000000000777")
+
+    fm = _read_fm(source_path)
+    pair = fm["_llm_metadata"]["provenance"]["pairs"]["source_v1"]
+    assert fm["provenance_links"][0]["link_status"] == "confirmed"
+    assert pair["re_evaluate_requested"] is False
+    assert pair["repair_error"] is None
+    assert pair["repair_error_detail"] is None
+    assert "repair_attempts" not in pair
+
+
+def test_serialize_proposals_matches_repairs_by_full_coordinates():
+    source_item = ExtractedEvidenceItem(
+        claim_text="Claim 1",
+        supporting_quote="Quote 1",
+        original_confidence="high",
+        element_type="metric",
+        slide_number=1,
+        claim_index=0,
+        claim_hash=compute_claim_hash("Claim 1", "Quote 1"),
+    )
+    target_one = ExtractedEvidenceItem(
+        claim_text="Target 1",
+        supporting_quote="Quote A",
+        original_confidence="high",
+        element_type="metric",
+        slide_number=1,
+        claim_index=0,
+        claim_hash=compute_claim_hash("Target 1", "Quote A"),
+    )
+    target_two = ExtractedEvidenceItem(
+        claim_text="Target 2",
+        supporting_quote="Quote B",
+        original_confidence="high",
+        element_type="metric",
+        slide_number=1,
+        claim_index=1,
+        claim_hash=compute_claim_hash("Target 2", "Quote B"),
+    )
+
+    proposals = provenance_mod._serialize_proposals(
+        source_id="source_v2",
+        target_id="source_v1",
+        matches=[ProvenanceMatch(claim_ref="C1", target_ref="T2", confidence="high", rationale="same metric")],
+        claims_lookup={"C1": source_item},
+        target_lookup={"T1": target_one, "T2": target_two},
+        profile_name="default",
+        provider_name="anthropic",
+        model="test-model",
+        repair_links=[
+            _link_dict(
+                link_id="plink-000000000901",
+                target_doc="source_v1",
+                source_item=source_item,
+                target_item=target_one,
+                link_status="re_evaluate_pending",
+            ),
+            _link_dict(
+                link_id="plink-000000000902",
+                target_doc="source_v1",
+                source_item=source_item,
+                target_item=target_two,
+                link_status="re_evaluate_pending",
+            ),
+        ],
+    )
+
+    assert proposals[0].replaces_link_id == "plink-000000000902"
+
+
+def test_repair_retry_limit_blocks_further_reruns(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config = _make_config(library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            supersedes="source_v1",
+            provenance_meta={
+                "pairs": {
+                    "source_v1": {
+                        "repair_attempts": provenance_mod.REPAIR_RETRY_LIMIT,
+                        "proposals": [],
+                    }
+                }
+            },
+            evidence_items=[("Claim 1", "Quote 1")],
+        ),
+    )
+    target_path = _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            evidence_items=[("Target 1", "Quote A")],
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md"),
+        },
+    )
+
+    source_item = provenance_mod.extract_evidence_items(source_path.read_text(encoding="utf-8"))[0]
+    target_item = provenance_mod.extract_evidence_items(target_path.read_text(encoding="utf-8"))[0]
+    fm = _read_fm(source_path)
+    fm["provenance_links"] = [
+        _link_dict(
+            link_id="plink-000000000999",
+            target_doc="source_v1",
+            source_item=source_item,
+            target_item=target_item,
+            link_status="re_evaluate_pending",
+        )
+    ]
+    source_path.write_text(
+        provenance_mod._replace_frontmatter(source_path.read_text(encoding="utf-8"), fm),
+        encoding="utf-8",
+    )
+
+    with patch("folio.provenance.evaluate_provenance_matches", side_effect=AssertionError("LLM should not run")):
+        result = provenance_mod.provenance_batch(config)
+
+    pair = _read_fm(source_path)["_llm_metadata"]["provenance"]["pairs"]["source_v1"]
+    assert result.blocked == 1
+    assert pair["repair_error"] == "repair_retry_limit_exceeded"
 
 
 def test_library_lock_recent_live_lock_blocks_and_old_timestamp_is_stale(tmp_path):

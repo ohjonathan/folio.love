@@ -24,6 +24,8 @@ from .pipeline.provenance_analysis import (
 )
 from .pipeline.provenance_data import (
     ExtractedEvidenceItem,
+    PROVENANCE_REVIEW_FLAG,
+    PROVENANCE_SPEC_VERSION,
     compute_basis_fingerprint,
     compute_claim_hash as _claim_hash,
     compute_pair_fingerprint,
@@ -34,15 +36,17 @@ from .tracking import registry as registry_mod
 
 logger = logging.getLogger(__name__)
 
-PROVENANCE_SPEC_VERSION = 1
 PAIR_SHARD_CEILING = 8
-REVIEW_FLAG_STALE = "provenance_link_stale"
+REPAIR_RETRY_LIMIT = 3
 PAGE_SIZE = 20
 
 _SLIDE_RE = re.compile(r"^## Slide (\d+)\s*$", re.MULTILINE)
 _EVIDENCE_START_RE = re.compile(r"^\*\*Evidence:\*\*\s*$")
 _TOP_CLAIM_RE = re.compile(r"^\s*-\s*claim:\s*(.*?)\s*$")
 _SUBFIELD_RE = re.compile(r"^\s*-\s*([a-zA-Z_]+):\s*(.*?)\s*$")
+_MARKDOWN_EVIDENCE_RE = re.compile(
+    r'^\s*-\s+\*\*(?P<claim>.+?)\s+\((?P<confidence_blob>[^)]*)\):\*\*\s+"(?P<quote>.*?)"\s+\*\((?P<element_type>[^)]*)\)\*(?:\s+\[unverified\])?\s*$'
+)
 _CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
 
 @dataclass
@@ -132,6 +136,16 @@ class StaleLinkView:
     title: str = ""
 
 
+@dataclass(frozen=True)
+class RefreshHashesPreview:
+    """Persisted-vs-current evidence snapshots shown before refresh-hashes."""
+
+    source_before: dict
+    source_after: dict
+    target_before: dict
+    target_after: dict
+
+
 def _matches_scope(path: str, scope: str) -> bool:
     norm_scope = scope.rstrip("/") + "/"
     return path == scope or path.startswith(norm_scope)
@@ -196,6 +210,69 @@ def _clear_pair_repair_state(pair_meta: dict) -> None:
     pair_meta["repair_error"] = None
     pair_meta["repair_error_detail"] = None
     pair_meta["re_evaluate_requested"] = False
+    pair_meta.pop("repair_attempts", None)
+
+
+def _clear_acknowledgement_fields(link: dict) -> None:
+    link.pop("acknowledged_at_claim_hash", None)
+    link.pop("acknowledged_at_target_hash", None)
+
+
+def _evidence_snapshot(*, slide_number: int, claim_index: int, claim_text: str, supporting_quote: str) -> dict:
+    return {
+        "slide_number": slide_number,
+        "claim_index": claim_index,
+        "claim_text": claim_text,
+        "supporting_quote": supporting_quote,
+    }
+
+
+def _pair_stale_counts(stale_views: list[StaleLinkView], *, target_id: str | None = None) -> dict[str, int]:
+    counts = {
+        "stale": 0,
+        "acknowledged": 0,
+        "re_evaluate_pending": 0,
+        "repair_blocked": 0,
+        "orphaned": 0,
+    }
+    for view in stale_views:
+        if target_id and view.target_id != target_id:
+            continue
+        if view.orphaned:
+            counts["orphaned"] += 1
+        if view.state in counts:
+            counts[view.state] += 1
+    return counts
+
+
+def _repair_attempt_count(pair_meta: dict) -> int:
+    raw = pair_meta.get("repair_attempts", 0)
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _repair_link_ids(repair_links: list[dict]) -> set[str]:
+    return {
+        str(link.get("link_id", ""))
+        for link in repair_links
+        if isinstance(link, dict) and link.get("link_id")
+    }
+
+
+def _has_pending_repair_proposals(pair_meta: dict, repair_links: list[dict]) -> bool:
+    repair_ids = _repair_link_ids(repair_links)
+    if not repair_ids:
+        return False
+    for raw in pair_meta.get("proposals", []) or []:
+        if not isinstance(raw, dict):
+            continue
+        if raw.get("status") != "pending_human_confirmation":
+            continue
+        if str(raw.get("replaces_link_id", "")) in repair_ids:
+            return True
+    return False
 
 
 def extract_evidence_items(content: str) -> list[ExtractedEvidenceItem]:
@@ -238,6 +315,20 @@ def _extract_items_from_slide(section_text: str, slide_number: int) -> list[Extr
                 in_block = True
             continue
         if not stripped:
+            continue
+        markdown_match = _MARKDOWN_EVIDENCE_RE.match(line)
+        if markdown_match:
+            finalize_current()
+            confidence_blob = markdown_match.group("confidence_blob").strip()
+            confidence = confidence_blob.split(",", 1)[0].strip()
+            parsed.append(
+                {
+                    "claim": markdown_match.group("claim").strip(),
+                    "quote": markdown_match.group("quote").strip(),
+                    "confidence": confidence,
+                    "element_type": markdown_match.group("element_type").strip(),
+                }
+            )
             continue
         top_match = _TOP_CLAIM_RE.match(line)
         if top_match:
@@ -345,9 +436,9 @@ def _serialize_link(
 
 def _review_flags_with_provenance(fm: dict, has_stale_signal: bool) -> list[str]:
     review_flags = list(fm.get("review_flags", []) or [])
-    review_flags = [flag for flag in review_flags if flag != REVIEW_FLAG_STALE]
+    review_flags = [flag for flag in review_flags if flag != PROVENANCE_REVIEW_FLAG]
     if has_stale_signal:
-        review_flags.append(REVIEW_FLAG_STALE)
+        review_flags.append(PROVENANCE_REVIEW_FLAG)
     return review_flags
 
 
@@ -592,19 +683,44 @@ def _serialize_proposals(
 ) -> list[ProvenanceProposal]:
     proposals: list[ProvenanceProposal] = []
     timestamp = _utc_now()
-    repair_map = {
+    repair_map_exact = {
         (
             int(link.get("source_slide", -1)),
             int(link.get("source_claim_index", -1)),
+            int(link.get("target_slide", -1)),
+            int(link.get("target_claim_index", -1)),
         ): str(link.get("link_id", ""))
         for link in repair_links
+        if isinstance(link, dict) and link.get("link_id")
     }
+    repair_map_by_source: dict[tuple[int, int], list[str]] = {}
+    for link in repair_links:
+        if not isinstance(link, dict) or not link.get("link_id"):
+            continue
+        key = (
+            int(link.get("source_slide", -1)),
+            int(link.get("source_claim_index", -1)),
+        )
+        repair_map_by_source.setdefault(key, []).append(str(link.get("link_id", "")))
     for match in matches:
         source_item = claims_lookup.get(match.claim_ref)
         target_item = target_lookup.get(match.target_ref)
         if source_item is None or target_item is None:
             continue
-        replaces_link_id = repair_map.get((source_item.slide_number, source_item.claim_index))
+        exact_key = (
+            source_item.slide_number,
+            source_item.claim_index,
+            target_item.slide_number,
+            target_item.claim_index,
+        )
+        replaces_link_id = repair_map_exact.get(exact_key)
+        if replaces_link_id is None:
+            same_source_repairs = repair_map_by_source.get(
+                (source_item.slide_number, source_item.claim_index),
+                [],
+            )
+            if len(same_source_repairs) == 1:
+                replaces_link_id = same_source_repairs[0]
         proposal = ProvenanceProposal(
             proposal_id=_proposal_id(
                 source_id,
@@ -764,10 +880,18 @@ def provenance_batch(
         pending_repairs = len(repair_links)
         if pending_repairs:
             result.pending_repairs += pending_repairs
+        stale_pair_request = bool(pair_meta.get("re_evaluate_requested")) and not repair_links
+        if stale_pair_request:
+            pair_meta["re_evaluate_requested"] = False
+            pair_meta["repair_error"] = None
+            pair_meta["repair_error_detail"] = None
+            pair_meta.pop("repair_attempts", None)
 
         target_entry_data = reg_data.get("decks", {}).get(target_id)
         target_entry = registry_mod.entry_from_dict(target_entry_data) if isinstance(target_entry_data, dict) else None
         source_items = extract_evidence_items(content)
+        stale_views = _collect_stale_links_for_note(entry, fm, reg_data, library_root)
+        stale_counts = _pair_stale_counts(stale_views, target_id=target_id)
         target_path: Path | None = None
         target_content_hash: str | None = None
 
@@ -775,10 +899,15 @@ def provenance_batch(
         reason = ""
         target_items: list[ExtractedEvidenceItem] = []
         blocked_reason = None
-        if fm.get("curation_level") != "L0" or fm.get("review_status") in {"reviewed", "overridden"}:
+        protection_reason = ""
+        if fm.get("curation_level", "L0") != "L0":
+            protection_reason = f"curation_level={fm.get('curation_level', 'L0')}"
+        elif fm.get("review_status") in {"reviewed", "overridden"}:
+            protection_reason = f"review_status={fm.get('review_status')}"
+        if protection_reason:
             if not (repair_links or pair_meta.get("re_evaluate_requested")):
                 disposition = "protected"
-                reason = "protected"
+                reason = protection_reason
         if target_entry is None:
             disposition = "blocked" if (repair_links or pair_meta.get("re_evaluate_requested")) else "skip"
             blocked_reason = "target_missing"
@@ -804,12 +933,24 @@ def provenance_batch(
 
         result.candidate_pairs += 1
         if disposition in {"skip", "protected", "blocked"}:
+            preview_bits: list[str] = []
+            if stale_counts["stale"]:
+                preview_bits.append(f"stale={stale_counts['stale']}")
+            if stale_counts["acknowledged"]:
+                preview_bits.append(f"ack={stale_counts['acknowledged']}")
+            if stale_counts["re_evaluate_pending"]:
+                preview_bits.append(f"re-eval={stale_counts['re_evaluate_pending']}")
+            if stale_counts["repair_blocked"]:
+                preview_bits.append(f"blocked={stale_counts['repair_blocked']}")
+            if stale_counts["orphaned"]:
+                preview_bits.append(f"orphaned={stale_counts['orphaned']}")
+            preview_suffix = f"  [{', '.join(preview_bits)}]" if preview_bits else ""
             if disposition == "protected":
                 result.protected += 1
-                planned_lines.append(f"! {entry.id}                                         protected [{reason}]")
+                planned_lines.append(f"! {entry.id}                                         protected [{reason}]{preview_suffix}")
             elif disposition == "blocked":
                 result.blocked += 1
-                planned_lines.append(f"! {entry.id} → {target_id} ({fm.get('supersedes')})            repair blocked [{blocked_reason}]")
+                planned_lines.append(f"! {entry.id} → {target_id}                              repair blocked [{blocked_reason}]{preview_suffix}")
                 if not dry_run and blocked_reason:
                     def persist_blocked(
                         _current_content: str,
@@ -837,24 +978,101 @@ def provenance_batch(
                     )
             else:
                 result.skipped += 1
+                planned_lines.append(f"↷ {entry.id} → {target_id}                              skipped [{reason}]{preview_suffix}")
+                if not dry_run and stale_pair_request:
+                    def persist_stale_pair_cleanup(
+                        _current_content: str,
+                        current_fm: dict,
+                        _current_reg_data: dict,
+                        _current_library_root: Path,
+                    ) -> None:
+                        current_pair_meta = _pair_meta_for_target(current_fm, target_id)
+                        current_pair_meta["re_evaluate_requested"] = False
+                        current_pair_meta["repair_error"] = None
+                        current_pair_meta["repair_error_detail"] = None
+                        current_pair_meta.pop("repair_attempts", None)
+
+                    _write_provenance_note_locked(
+                        config,
+                        md_path=md_path,
+                        mutate=persist_stale_pair_cleanup,
+                    )
             continue
 
         current_pair_fp = _pair_fingerprint(source_items, target_items, profile.name)
         queued_repair = bool(repair_links or pair_meta.get("re_evaluate_requested"))
+        protected_repair_override = protection_reason if protection_reason and queued_repair else ""
         pair_meta.setdefault("proposals", [])
         if clear_rejections and pair_meta.get("proposals"):
             pair_meta["proposals"] = [
                 raw for raw in pair_meta["proposals"]
                 if not isinstance(raw, dict) or raw.get("status") != "rejected"
             ]
+        if _has_pending_repair_proposals(pair_meta, repair_links):
+            result.skipped += 1
+            planned_lines.append(
+                f"↷ {entry.id} → {target_id}                              repair proposal pending review"
+            )
+            continue
+        repair_attempts = _repair_attempt_count(pair_meta)
+        if repair_links and repair_attempts >= REPAIR_RETRY_LIMIT:
+            result.blocked += 1
+            planned_lines.append(
+                f"! {entry.id} → {target_id}                              repair blocked [repair_retry_limit_exceeded: {repair_attempts}]"
+            )
+            if not dry_run:
+                def persist_retry_limit(
+                    _current_content: str,
+                    current_fm: dict,
+                    current_reg_data: dict,
+                    current_library_root: Path,
+                ) -> None:
+                    current_pair_meta = _pair_meta_for_target(current_fm, target_id)
+                    current_pair_meta["repair_error"] = "repair_retry_limit_exceeded"
+                    current_pair_meta["repair_error_detail"] = (
+                        f"{repair_attempts} unsuccessful re-evaluate attempt(s)"
+                    )
+                    current_pair_meta["status"] = "error"
+                    current_pair_meta["timestamp"] = _utc_now()
+                    current_entry = registry_mod.entry_from_dict(current_reg_data["decks"][entry.id])
+                    _apply_review_flag_updates(
+                        current_fm,
+                        current_entry,
+                        current_reg_data,
+                        current_library_root,
+                    )
+
+                _write_provenance_note_locked(
+                    config,
+                    md_path=md_path,
+                    mutate=persist_retry_limit,
+                )
+            continue
         if not force and not queued_repair and pair_meta.get("pair_fingerprint") == current_pair_fp:
             result.unchanged += 1
             planned_lines.append(f"~ {entry.id} → {target_id}                              unchanged")
+            if not dry_run and stale_pair_request:
+                def persist_stale_pair_cleanup_on_unchanged(
+                    _current_content: str,
+                    current_fm: dict,
+                    _current_reg_data: dict,
+                    _current_library_root: Path,
+                ) -> None:
+                    current_pair_meta = _pair_meta_for_target(current_fm, target_id)
+                    current_pair_meta["re_evaluate_requested"] = False
+                    current_pair_meta["repair_error"] = None
+                    current_pair_meta["repair_error_detail"] = None
+                    current_pair_meta.pop("repair_attempts", None)
+
+                _write_provenance_note_locked(
+                    config,
+                    md_path=md_path,
+                    mutate=persist_stale_pair_cleanup_on_unchanged,
+                )
             continue
 
         shard_budget = int(context_window_for_model(profile.model) * 0.80)
         shards, shard_warnings = _build_shards(source_items, target_items, shard_budget)
-        result.estimated_calls += len(shards)
         if len(shards) > PAIR_SHARD_CEILING:
             result.blocked += 1
             planned_lines.append(
@@ -890,13 +1108,33 @@ def provenance_batch(
         if limit is not None and evaluations_done >= limit:
             break
 
+        result.estimated_calls += len(shards)
+        evaluations_done += 1
+
         if dry_run:
+            preview_bits: list[str] = []
+            if stale_counts["stale"]:
+                preview_bits.append(f"stale={stale_counts['stale']}")
+            if stale_counts["acknowledged"]:
+                preview_bits.append(f"ack={stale_counts['acknowledged']}")
+            if stale_counts["re_evaluate_pending"]:
+                preview_bits.append(f"re-eval={stale_counts['re_evaluate_pending']}")
+            if stale_counts["repair_blocked"]:
+                preview_bits.append(f"blocked={stale_counts['repair_blocked']}")
+            if stale_counts["orphaned"]:
+                preview_bits.append(f"orphaned={stale_counts['orphaned']}")
+            if pending_repairs:
+                preview_bits.append(f"queued_repair={pending_repairs}")
+            if protected_repair_override:
+                preview_bits.append(f"would trigger LLM on protected note [{protected_repair_override}]")
+            preview_suffix = f"  [{', '.join(preview_bits)}]" if preview_bits else ""
             planned_lines.append(
-                f"+ {entry.id} → {target_id}                              {len(source_items)} claims, {len(shards)} planned call(s)"
+                f"+ {entry.id} → {target_id}                              {len(source_items)} claims, {len(shards)} planned call(s){preview_suffix}"
             )
+            for warning in shard_warnings:
+                planned_lines.append(f"  ⚠ {warning}")
             continue
 
-        evaluations_done += 1
         aggregate: dict[tuple[int, int, int, int], ProvenanceProposal] = {}
         llm_error = None
         for claim_chunk, target_chunk in shards:
@@ -994,6 +1232,7 @@ def provenance_batch(
             current_library_root: Path,
         ) -> None:
             current_pair_meta = _pair_meta_for_target(current_fm, target_id)
+            prior_repair_attempts = _repair_attempt_count(current_pair_meta)
             if clear_rejections and current_pair_meta.get("proposals"):
                 current_pair_meta["proposals"] = [
                     raw for raw in current_pair_meta["proposals"]
@@ -1008,6 +1247,10 @@ def provenance_batch(
             current_pair_meta["status"] = "proposed" if proposal_payload else "no_change"
             current_pair_meta["timestamp"] = _utc_now()
             _clear_pair_repair_state(current_pair_meta)
+            if repair_links and not proposal_payload:
+                current_pair_meta["repair_attempts"] = prior_repair_attempts + 1
+            else:
+                current_pair_meta.pop("repair_attempts", None)
             _upsert_provenance_root(
                 fm=current_fm,
                 requested_profile=llm_profile or profile.name,
@@ -1048,7 +1291,7 @@ def provenance_batch(
             result.unchanged += 1
             planned_lines.append(f"~ {entry.id} → {target_id}                              unchanged")
         for warning in shard_warnings:
-            echo(f"  ⚠ {warning}")
+            planned_lines.append(f"  ⚠ {warning}")
 
     if entries:
         echo(
@@ -1337,8 +1580,7 @@ def _refresh_hashes_for_link(
         replaces_link_id=None,
     )
     link.update(refreshed)
-    link.pop("acknowledged_at_claim_hash", None)
-    link.pop("acknowledged_at_target_hash", None)
+    _clear_acknowledgement_fields(link)
 
 
 def confirm_proposal(config: FolioConfig, proposal_id: str) -> str:
@@ -1399,6 +1641,7 @@ def confirm_proposal(config: FolioConfig, proposal_id: str) -> str:
             if link.get("link_id") == proposal.replaces_link_id:
                 if proposal.replaces_link_id == link_id:
                     link.update(new_link)
+                    _clear_acknowledgement_fields(link)
                     replaced = True
                     updated_links.append(link)
                 continue
@@ -1407,6 +1650,7 @@ def confirm_proposal(config: FolioConfig, proposal_id: str) -> str:
     for link in links:
         if link.get("link_id") == link_id:
             link.update(new_link)
+            _clear_acknowledgement_fields(link)
             replaced = True
             break
     if not replaced:
@@ -1426,8 +1670,7 @@ def confirm_proposal(config: FolioConfig, proposal_id: str) -> str:
         if not isinstance(raw, dict) or raw.get("proposal_id") != proposal_id
     ]
     if not _repair_links_for_target(fm, view.target_id):
-        pair_meta["repair_error"] = None
-        pair_meta["repair_error_detail"] = None
+        _clear_pair_repair_state(pair_meta)
     _apply_review_flag_updates(fm, source_entry, reg_data, library_root)
     _write_frontmatter_only(view.md_path, content, fm)
     return link_id
@@ -1497,7 +1740,7 @@ def confirm_range(config: FolioConfig, range_expr: str, *, scope: str | None = N
     return count
 
 
-def stale_refresh_hashes(config: FolioConfig, link_id: str) -> None:
+def stale_refresh_hashes(config: FolioConfig, link_id: str) -> RefreshHashesPreview:
     views = [view for view in collect_stale_links(config) if view.link.get("link_id") == link_id]
     if not views:
         raise ValueError(f"Unknown stale link '{link_id}'")
@@ -1516,12 +1759,57 @@ def stale_refresh_hashes(config: FolioConfig, link_id: str) -> None:
     if target_fm is None:
         raise ValueError(f"Cannot read target frontmatter for '{view.target_id}'")
     target_items = extract_evidence_items(target_content)
+    preview: RefreshHashesPreview | None = None
     for link in fm.get("provenance_links", []) or []:
         if isinstance(link, dict) and link.get("link_id") == link_id:
+            source_item = _find_item(
+                source_items,
+                int(link.get("source_slide", -1)),
+                int(link.get("source_claim_index", -1)),
+            )
+            target_item = _find_item(
+                target_items,
+                int(link.get("target_slide", -1)),
+                int(link.get("target_claim_index", -1)),
+            )
+            if source_item is None or target_item is None:
+                raise ValueError(f"Cannot refresh hashes for orphaned link {link.get('link_id')}")
+            preview = RefreshHashesPreview(
+                source_before=_evidence_snapshot(
+                    slide_number=int(link.get("source_slide", -1)),
+                    claim_index=int(link.get("source_claim_index", -1)),
+                    claim_text=str(link.get("source_claim_text_snapshot", "")),
+                    supporting_quote=str(link.get("source_supporting_quote_snapshot", "")),
+                ),
+                source_after=_evidence_snapshot(
+                    slide_number=source_item.slide_number,
+                    claim_index=source_item.claim_index,
+                    claim_text=source_item.claim_text,
+                    supporting_quote=source_item.supporting_quote,
+                ),
+                target_before=_evidence_snapshot(
+                    slide_number=int(link.get("target_slide", -1)),
+                    claim_index=int(link.get("target_claim_index", -1)),
+                    claim_text=str(link.get("target_claim_text_snapshot", "")),
+                    supporting_quote=str(link.get("target_supporting_quote_snapshot", "")),
+                ),
+                target_after=_evidence_snapshot(
+                    slide_number=target_item.slide_number,
+                    claim_index=target_item.claim_index,
+                    claim_text=target_item.claim_text,
+                    supporting_quote=target_item.supporting_quote,
+                ),
+            )
             _refresh_hashes_for_link(source_entry.id, link, source_items, target_items)
             break
+    if preview is None:
+        raise ValueError(f"Unknown stale link '{link_id}'")
+    pair_meta = _pair_meta_for_target(fm, view.target_id)
+    if not _repair_links_for_target(fm, view.target_id):
+        _clear_pair_repair_state(pair_meta)
     _apply_review_flag_updates(fm, source_entry, reg_data, library_root)
     _write_frontmatter_only(view.md_path, content, fm)
+    return preview
 
 
 def stale_re_evaluate(config: FolioConfig, link_id: str) -> None:
@@ -1540,6 +1828,7 @@ def stale_re_evaluate(config: FolioConfig, link_id: str) -> None:
     pair_meta["re_evaluate_requested"] = True
     pair_meta["repair_error"] = None
     pair_meta["repair_error_detail"] = None
+    pair_meta["repair_attempts"] = 0
     library_root = config.library_root.resolve()
     reg_data = _ensure_registry(config, persist=False)
     source_entry = registry_mod.entry_from_dict(reg_data["decks"][view.source_id])
@@ -1559,6 +1848,9 @@ def stale_remove(config: FolioConfig, link_id: str) -> None:
         link for link in fm.get("provenance_links", []) or []
         if not isinstance(link, dict) or link.get("link_id") != link_id
     ]
+    pair_meta = _pair_meta_for_target(fm, view.target_id)
+    if not _repair_links_for_target(fm, view.target_id):
+        _clear_pair_repair_state(pair_meta)
     library_root = config.library_root.resolve()
     reg_data = _ensure_registry(config, persist=False)
     source_entry = registry_mod.entry_from_dict(reg_data["decks"][view.source_id])
@@ -1594,6 +1886,9 @@ def stale_acknowledge(config: FolioConfig, link_id: str) -> None:
         link["acknowledged_at_claim_hash"] = source_item.claim_hash
         link["acknowledged_at_target_hash"] = target_item.claim_hash
         break
+    pair_meta = _pair_meta_for_target(fm, view.target_id)
+    if not _repair_links_for_target(fm, view.target_id):
+        _clear_pair_repair_state(pair_meta)
     _apply_review_flag_updates(fm, source_entry, reg_data, library_root)
     _write_frontmatter_only(view.md_path, content, fm)
 
