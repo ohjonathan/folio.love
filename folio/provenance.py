@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -13,6 +14,7 @@ from typing import Callable, Optional
 
 from .config import FolioConfig
 from .enrich import _atomic_write_text, _replace_frontmatter
+from .lock import library_lock
 from .output.diagram_notes import _parse_frontmatter_from_content
 from .pipeline.provenance_analysis import (
     ProvenanceMatch,
@@ -137,6 +139,10 @@ def _matches_scope(path: str, scope: str) -> bool:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _content_hash(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def _read_markdown(path: Path) -> tuple[str, dict | None]:
@@ -672,6 +678,33 @@ def _upsert_provenance_root(
     return prov
 
 
+def _write_provenance_note_locked(
+    config: FolioConfig,
+    *,
+    md_path: Path,
+    mutate: Callable[[str, dict, dict, Path], None],
+    expected_source_hash: str | None = None,
+    target_path: Path | None = None,
+    expected_target_hash: str | None = None,
+) -> bool:
+    """Write one source note under the library lock, optionally validating inputs."""
+    library_root = config.library_root.resolve()
+    with library_lock(library_root, "provenance"):
+        current_content, current_fm = _read_markdown(md_path)
+        if current_fm is None:
+            raise ValueError(f"Cannot read frontmatter from {md_path}")
+        if expected_source_hash is not None and _content_hash(current_content) != expected_source_hash:
+            return False
+        if target_path is not None and expected_target_hash is not None:
+            target_content, target_fm = _read_markdown(target_path)
+            if target_fm is None or _content_hash(target_content) != expected_target_hash:
+                return False
+        reg_data = _ensure_registry(config, persist=False)
+        mutate(current_content, current_fm, reg_data, library_root)
+        _write_frontmatter_only(md_path, current_content, current_fm)
+        return True
+
+
 def provenance_batch(
     config: FolioConfig,
     *,
@@ -689,7 +722,7 @@ def provenance_batch(
 
     echo = echo or (lambda _msg: None)
     library_root = config.library_root.resolve()
-    reg_data = _ensure_registry(config, persist=not dry_run)
+    reg_data = _ensure_registry(config, persist=False)
     profile = config.llm.resolve_profile(llm_profile, task="provenance")
     fallbacks = config.llm.get_fallbacks(llm_profile, task="provenance")
     provider_settings = getattr(config, "providers", {}) or {}
@@ -717,6 +750,7 @@ def provenance_batch(
         content, fm = _read_markdown(md_path)
         if fm is None:
             continue
+        source_content_hash = _content_hash(content)
         target_id = fm.get("supersedes")
         prov = _get_provenance_root(fm)
         links = [link for link in fm.get("provenance_links", []) or [] if isinstance(link, dict)]
@@ -734,6 +768,8 @@ def provenance_batch(
         target_entry_data = reg_data.get("decks", {}).get(target_id)
         target_entry = registry_mod.entry_from_dict(target_entry_data) if isinstance(target_entry_data, dict) else None
         source_items = extract_evidence_items(content)
+        target_path: Path | None = None
+        target_content_hash: str | None = None
 
         disposition = "evaluate"
         reason = ""
@@ -759,6 +795,7 @@ def provenance_batch(
                 blocked_reason = "frontmatter_unreadable"
                 reason = "target unreadable"
             else:
+                target_content_hash = _content_hash(target_content)
                 target_items = extract_evidence_items(target_content)
                 if not target_items:
                     disposition = "blocked" if (repair_links or pair_meta.get("re_evaluate_requested")) else "skip"
@@ -774,13 +811,30 @@ def provenance_batch(
                 result.blocked += 1
                 planned_lines.append(f"! {entry.id} → {target_id} ({fm.get('supersedes')})            repair blocked [{blocked_reason}]")
                 if not dry_run and blocked_reason:
-                    pair_meta["repair_error"] = blocked_reason
-                    pair_meta["repair_error_detail"] = reason
-                    pair_meta["status"] = "error"
-                    pair_meta["timestamp"] = _utc_now()
-                    _apply_review_flag_updates(fm, entry, reg_data, library_root)
-                    new_content = _replace_frontmatter(content, fm)
-                    _atomic_write_text(md_path, new_content)
+                    def persist_blocked(
+                        _current_content: str,
+                        current_fm: dict,
+                        current_reg_data: dict,
+                        current_library_root: Path,
+                    ) -> None:
+                        current_pair_meta = _pair_meta_for_target(current_fm, target_id)
+                        current_pair_meta["repair_error"] = blocked_reason
+                        current_pair_meta["repair_error_detail"] = reason
+                        current_pair_meta["status"] = "error"
+                        current_pair_meta["timestamp"] = _utc_now()
+                        current_entry = registry_mod.entry_from_dict(current_reg_data["decks"][entry.id])
+                        _apply_review_flag_updates(
+                            current_fm,
+                            current_entry,
+                            current_reg_data,
+                            current_library_root,
+                        )
+
+                    _write_provenance_note_locked(
+                        config,
+                        md_path=md_path,
+                        mutate=persist_blocked,
+                    )
             else:
                 result.skipped += 1
             continue
@@ -807,13 +861,30 @@ def provenance_batch(
                 f"! {entry.id} → {target_id}                              repair blocked [shard_ceiling_exceeded: {len(shards)} > {PAIR_SHARD_CEILING}]"
             )
             if not dry_run:
-                pair_meta["repair_error"] = "shard_ceiling_exceeded"
-                pair_meta["repair_error_detail"] = f"{len(shards)} > {PAIR_SHARD_CEILING}"
-                pair_meta["status"] = "error"
-                pair_meta["timestamp"] = _utc_now()
-                _apply_review_flag_updates(fm, entry, reg_data, library_root)
-                new_content = _replace_frontmatter(content, fm)
-                _atomic_write_text(md_path, new_content)
+                def persist_ceiling(
+                    _current_content: str,
+                    current_fm: dict,
+                    current_reg_data: dict,
+                    current_library_root: Path,
+                ) -> None:
+                    current_pair_meta = _pair_meta_for_target(current_fm, target_id)
+                    current_pair_meta["repair_error"] = "shard_ceiling_exceeded"
+                    current_pair_meta["repair_error_detail"] = f"{len(shards)} > {PAIR_SHARD_CEILING}"
+                    current_pair_meta["status"] = "error"
+                    current_pair_meta["timestamp"] = _utc_now()
+                    current_entry = registry_mod.entry_from_dict(current_reg_data["decks"][entry.id])
+                    _apply_review_flag_updates(
+                        current_fm,
+                        current_entry,
+                        current_reg_data,
+                        current_library_root,
+                    )
+
+                _write_provenance_note_locked(
+                    config,
+                    md_path=md_path,
+                    mutate=persist_ceiling,
+                )
             continue
 
         if limit is not None and evaluations_done >= limit:
@@ -861,14 +932,40 @@ def provenance_batch(
             _merge_shard_matches(aggregate, shard_proposals)
 
         if llm_error:
+            def persist_llm_error(
+                _current_content: str,
+                current_fm: dict,
+                current_reg_data: dict,
+                current_library_root: Path,
+            ) -> None:
+                current_pair_meta = _pair_meta_for_target(current_fm, target_id)
+                current_pair_meta["repair_error"] = "llm_error"
+                current_pair_meta["repair_error_detail"] = llm_error
+                current_pair_meta["status"] = "error"
+                current_pair_meta["timestamp"] = _utc_now()
+                current_entry = registry_mod.entry_from_dict(current_reg_data["decks"][entry.id])
+                _apply_review_flag_updates(
+                    current_fm,
+                    current_entry,
+                    current_reg_data,
+                    current_library_root,
+                )
+
+            wrote_error = _write_provenance_note_locked(
+                config,
+                md_path=md_path,
+                mutate=persist_llm_error,
+                expected_source_hash=source_content_hash,
+                target_path=target_path,
+                expected_target_hash=target_content_hash,
+            )
+            if not wrote_error:
+                result.skipped += 1
+                planned_lines.append(
+                    f"? {entry.id} → {target_id}                              changed during evaluation; rerun"
+                )
+                continue
             result.failed += 1
-            pair_meta["repair_error"] = "llm_error"
-            pair_meta["repair_error_detail"] = llm_error
-            pair_meta["status"] = "error"
-            pair_meta["timestamp"] = _utc_now()
-            _apply_review_flag_updates(fm, entry, reg_data, library_root)
-            new_content = _replace_frontmatter(content, fm)
-            _atomic_write_text(md_path, new_content)
             planned_lines.append(f"x {entry.id} → {target_id}                              <error: {llm_error}>")
             continue
 
@@ -879,11 +976,7 @@ def provenance_batch(
             pair_meta,
             clear_rejections=clear_rejections,
         )
-        existing_rejected = [
-            raw for raw in pair_meta.get("proposals", [])
-            if isinstance(raw, dict) and raw.get("status") == "rejected"
-        ]
-        pair_meta["proposals"] = existing_rejected + [proposal.to_dict() for proposal in sorted(
+        sorted_proposals = sorted(
             proposals,
             key=lambda p: (
                 int(p.source_claim.get("slide_number", -1)),
@@ -891,21 +984,59 @@ def provenance_batch(
                 _CONFIDENCE_RANK.get(p.confidence, 99),
                 p.proposal_id,
             ),
-        )]
-        pair_meta["pair_fingerprint"] = current_pair_fp
-        pair_meta["status"] = "proposed" if proposals else "no_change"
-        pair_meta["timestamp"] = _utc_now()
-        _clear_pair_repair_state(pair_meta)
-        _upsert_provenance_root(
-            fm=fm,
-            requested_profile=llm_profile or profile.name,
-            profile_name=profile.name,
-            provider_name=profile.provider,
-            model=profile.model,
         )
-        _apply_review_flag_updates(fm, entry, reg_data, library_root)
-        new_content = _replace_frontmatter(content, fm)
-        _atomic_write_text(md_path, new_content)
+        proposal_payload = [proposal.to_dict() for proposal in sorted_proposals]
+
+        def persist_proposals(
+            _current_content: str,
+            current_fm: dict,
+            current_reg_data: dict,
+            current_library_root: Path,
+        ) -> None:
+            current_pair_meta = _pair_meta_for_target(current_fm, target_id)
+            if clear_rejections and current_pair_meta.get("proposals"):
+                current_pair_meta["proposals"] = [
+                    raw for raw in current_pair_meta["proposals"]
+                    if not isinstance(raw, dict) or raw.get("status") != "rejected"
+                ]
+            existing_rejected = [
+                raw for raw in current_pair_meta.get("proposals", [])
+                if isinstance(raw, dict) and raw.get("status") == "rejected"
+            ]
+            current_pair_meta["proposals"] = existing_rejected + proposal_payload
+            current_pair_meta["pair_fingerprint"] = current_pair_fp
+            current_pair_meta["status"] = "proposed" if proposal_payload else "no_change"
+            current_pair_meta["timestamp"] = _utc_now()
+            _clear_pair_repair_state(current_pair_meta)
+            _upsert_provenance_root(
+                fm=current_fm,
+                requested_profile=llm_profile or profile.name,
+                profile_name=profile.name,
+                provider_name=profile.provider,
+                model=profile.model,
+            )
+            current_entry = registry_mod.entry_from_dict(current_reg_data["decks"][entry.id])
+            _apply_review_flag_updates(
+                current_fm,
+                current_entry,
+                current_reg_data,
+                current_library_root,
+            )
+
+        wrote_proposals = _write_provenance_note_locked(
+            config,
+            md_path=md_path,
+            mutate=persist_proposals,
+            expected_source_hash=source_content_hash,
+            target_path=target_path,
+            expected_target_hash=target_content_hash,
+        )
+        if not wrote_proposals:
+            result.skipped += 1
+            planned_lines.append(
+                f"? {entry.id} → {target_id}                              changed during evaluation; rerun"
+            )
+            continue
 
         if proposals:
             result.evaluated += 1

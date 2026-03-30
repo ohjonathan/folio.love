@@ -315,7 +315,7 @@ review_status: clean         # clean | flagged | reviewed | overridden
 review_flags: []
 extraction_confidence: 0.87
 provenance_links:
-  - link_id: plink-g7h8
+  - link_id: plink-a1b2c3d4e5f6
     source_slide: 7
     source_claim_index: 0
     target_doc: clienta_ddq126_evidence_20260210_market-sizing-v1

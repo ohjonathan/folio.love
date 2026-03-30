@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import os
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
 class LibraryLockError(RuntimeError):
     """Raised when the library lock cannot be acquired."""
+
+
+LOCK_STALE_AFTER = timedelta(hours=2)
 
 
 def _pid_alive(pid: int) -> bool:
@@ -22,6 +25,34 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _parse_lock_timestamp(value: object) -> datetime | None:
+    """Parse a lock timestamp into an aware UTC datetime."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _lock_is_stale(existing: dict) -> bool:
+    """Return True when an existing lock should be treated as stale."""
+    now = datetime.now(timezone.utc)
+    timestamp = _parse_lock_timestamp(existing.get("timestamp"))
+    if timestamp is not None and now - timestamp > LOCK_STALE_AFTER:
+        return True
+    existing_pid = existing.get("pid")
+    if isinstance(existing_pid, int) and not _pid_alive(existing_pid):
+        return True
+    return False
 
 
 @contextmanager
@@ -45,10 +76,11 @@ def library_lock(library_root: Path, command_name: str):
             except Exception:
                 existing = {}
             existing_pid = existing.get("pid")
-            if isinstance(existing_pid, int) and _pid_alive(existing_pid):
+            if not _lock_is_stale(existing):
                 owner = existing.get("command", "unknown")
+                pid_label = existing_pid if isinstance(existing_pid, int) else "unknown"
                 raise LibraryLockError(
-                    f"library lock already held by pid {existing_pid} ({owner})"
+                    f"library lock already held by pid {pid_label} ({owner})"
                 )
             try:
                 lock_path.unlink()

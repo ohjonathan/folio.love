@@ -334,14 +334,14 @@ folio provenance review ClientA --doc market-sizing-v2 --page 1
 Pending (3 pending, 2 confirmed [2 fresh], 0 stale):
 Page 1/1 (3 items, page size 20, ordered: source doc → confidence desc → proposal_id)
 
-[prov-a1b2] slide 7, claim 0 → market-sizing-v1 slide 3, claim 1
+[prov-a1b2c3d4e5f6] slide 7, claim 0 → market-sizing-v1 slide 3, claim 1
    Claim: "TAM of $2.3B in the Asia-Pacific automotive sector"
    Evidence: "total addressable market estimated at $2.3 billion..."
    Confidence: high | Rationale: Same TAM figure.
-   Replaces: plink-g7h8
+   Replaces: plink-0f1e2d3c4b5a
 
-[prov-c3d4] slide 12, claim 2 → market-sizing-v1 slide 8, claim 0  (medium)
-[prov-e5f6] slide 15, claim 1 → market-sizing-v1 slide 10, claim 2 (medium)
+[prov-b1c2d3e4f5a6] slide 12, claim 2 → market-sizing-v1 slide 8, claim 0  (medium)
+[prov-c1d2e3f4a5b6] slide 15, claim 1 → market-sizing-v1 slide 10, claim 2 (medium)
 ```
 
 No confirm/reject prompts appear in-session. `folio provenance review` is
@@ -400,7 +400,7 @@ Exit `0` on success/skip. Non-zero on failures. Non-zero on lock contention.
 
 ```yaml
 provenance_links:
-  - link_id: plink-g7h8
+  - link_id: plink-0f1e2d3c4b5a
     source_slide: 7
     source_claim_index: 0
     source_claim_hash: "sha256:a1b2..."
@@ -459,8 +459,8 @@ _llm_metadata:
         re_evaluate_requested: false
         timestamp: "2026-03-29T14:30:00Z"
         proposals:
-          - proposal_id: prov-a1b2
-            replaces_link_id: plink-g7h8
+          - proposal_id: prov-a1b2c3d4e5f6
+            replaces_link_id: plink-0f1e2d3c4b5a
             source_claim:
               slide_number: 7
               claim_index: 0
@@ -480,7 +480,7 @@ _llm_metadata:
             status: pending_human_confirmation
 ```
 
-`proposal_id` is a deterministic stable hash of (source_doc, source_slide,
+`proposal_id` is a deterministic 12-hex stable hash of (source_doc, source_slide,
 source_claim_index, target_doc, target_slide, target_claim_index). It does
 not depend on shard order, rationale text, or timestamp.
 
@@ -748,7 +748,7 @@ enrich analysis prompts.
 
 ### 13.1 Pending proposal review
 
-Grouped by source doc. Stable `prov-XXXX` IDs generated from stable logical
+Grouped by source doc. Stable `prov-<12hex>` IDs generated from stable logical
 coordinates (source doc/slide/claim index + target doc/slide/claim index).
 Pagination: page size 20. Order: source doc (registry) → confidence desc →
 `proposal_id` lexicographic (deterministic tie-break). `--page N`.
@@ -757,9 +757,9 @@ Pagination: page size 20. Order: source doc (registry) → confidence desc →
 
 | Action | Syntax | Effect |
 |--------|--------|--------|
-| Confirm one | `folio provenance confirm prov-XXXX` | Promote to `provenance_links` |
-| Reject one | `folio provenance reject prov-XXXX` | `status: rejected` |
-| Confirm range | `folio provenance confirm-range prov-XXXX..prov-YYYY [scope] [--doc <doc_id>] [--target <doc_id>]` | Contiguous range in the current deterministic ordering |
+| Confirm one | `folio provenance confirm prov-<12hex>` | Promote to `provenance_links` |
+| Reject one | `folio provenance reject prov-<12hex>` | `status: rejected` |
+| Confirm range | `folio provenance confirm-range prov-<12hex>..prov-<12hex> [scope] [--doc <doc_id>] [--target <doc_id>]` | Contiguous range in the current deterministic ordering |
 | Confirm doc | `folio provenance confirm-doc <doc_id> [scope] [--target <doc_id>]` | All pending for one source |
 | Reject doc | `folio provenance reject-doc <doc_id> [scope] [--target <doc_id>]` | All pending for one source |
 
@@ -801,10 +801,10 @@ acknowledged) → orphaned label → `link_id` lexicographic. `--page N`.
 
 | Action | Syntax | Effect |
 |--------|--------|--------|
-| Refresh hashes | `folio provenance stale refresh-hashes plink-XXXX` | Shows exact persisted source/target snapshots vs current source/target evidence entries. If human confirms, updates hashes and snapshots. Sets `link_status: confirmed`. |
-| Re-evaluate | `folio provenance stale re-evaluate plink-XXXX` | **Non-destructive.** Sets `link_status: re_evaluate_pending` and `re_evaluate_requested: true` on the pair. Next `folio provenance` run attempts semantic re-matching. Any match returns as a normal pending proposal with `replaces_link_id`; nothing auto-confirms. |
-| Remove | `folio provenance stale remove plink-XXXX` | Delete from `provenance_links`. |
-| Acknowledge | `folio provenance stale acknowledge plink-XXXX` | Set `link_status: acknowledged_stale`. Visible as "Ack'd". Excluded from coverage. Auto-reverts to stale on further content drift. |
+| Refresh hashes | `folio provenance stale refresh-hashes plink-<12hex>` | Shows exact persisted source/target snapshots vs current source/target evidence entries. If human confirms, updates hashes and snapshots. Sets `link_status: confirmed`. |
+| Re-evaluate | `folio provenance stale re-evaluate plink-<12hex>` | **Non-destructive.** Sets `link_status: re_evaluate_pending` and `re_evaluate_requested: true` on the pair. Next `folio provenance` run attempts semantic re-matching. Any match returns as a normal pending proposal with `replaces_link_id`; nothing auto-confirms. |
+| Remove | `folio provenance stale remove plink-<12hex>` | Delete from `provenance_links`. |
+| Acknowledge | `folio provenance stale acknowledge plink-<12hex>` | Set `link_status: acknowledged_stale`. Visible as "Ack'd". Excluded from coverage. Auto-reverts to stale on further content drift. |
 | Remove doc | `folio provenance stale remove-doc <doc_id> [scope]` | Remove all stale/orphaned links for one source. |
 | Acknowledge doc | `folio provenance stale acknowledge-doc <doc_id> [scope]` | Acknowledge all stale links for one source. |
 
@@ -956,13 +956,25 @@ only one process can create the file.
 
 **Lock content:** PID + command name + timestamp.
 
-**On startup:**
+**Batch provenance scope:** `folio provenance` does discovery and LLM
+evaluation outside the lock. It reacquires the library-wide lock only for the
+mutation window that writes pair metadata or frontmatter updates.
+
+**On mutation start:**
 1. Attempt exclusive create of `.folio.lock`.
-2. If file exists: read PID. If process is alive → **error exit**. If dead →
-   remove stale lock, retry create.
-3. On success: proceed.
+2. If file exists: read PID and timestamp.
+3. If the PID is dead, or the timestamp is older than 2 hours, remove the
+   stale lock and retry create.
+4. If the lock is recent and live, **error exit**.
+5. On success: perform the pending mutation, then release the lock.
 
 **On exit:** Remove lock file. On crash: stale lock cleaned by next caller.
+
+**Commit-time drift check:** When `folio provenance` finishes an LLM
+evaluation, it re-reads the full source and target markdown content under the
+write lock. If either changed since evaluation started, the pair is skipped
+and reported as `changed during evaluation; rerun`; no provenance metadata is
+written from that stale evaluation result.
 
 **Scope:** Library-wide lock. Does not protect against non-folio writers or
 processes on different machines (e.g., NFS). The operational constraint
@@ -1080,9 +1092,10 @@ provenance, verify proposals, fingerprints, and frontmatter writes.
 
 1. `L1` → skip LLM, still report stale status
 2. `re-evaluate` on protected note → pair bypasses protection on next run
-3. Lock: atomic exclusive create, second invocation errors
-4. Stale lock cleanup
+3. Lock: atomic exclusive create, mutation windows only, second invocation errors
+4. Stale lock cleanup by dead PID or 2-hour TTL
 5. `folio enrich` blocked by existing `folio provenance` lock (cross-command)
+6. Source/target changed between evaluation and commit → skip pair and require rerun
 
 ### 17.14 Governance/corpus consistency
 

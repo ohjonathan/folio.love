@@ -1132,21 +1132,20 @@ def provenance(ctx, scope: Optional[str], dry_run: bool, llm_profile: Optional[s
         return
 
     config = ctx.obj["config"]
-    from .lock import LibraryLockError, library_lock
+    from .lock import LibraryLockError
     from .provenance import provenance_batch
 
     try:
-        with library_lock(config.library_root.resolve(), "provenance"):
-            result = provenance_batch(
-                config,
-                scope=scope,
-                dry_run=dry_run,
-                llm_profile=llm_profile,
-                limit=limit,
-                force=force,
-                clear_rejections=clear_rejections,
-                echo=click.echo,
-            )
+        result = provenance_batch(
+            config,
+            scope=scope,
+            dry_run=dry_run,
+            llm_profile=llm_profile,
+            limit=limit,
+            force=force,
+            clear_rejections=clear_rejections,
+            echo=click.echo,
+        )
     except (LibraryLockError, ValueError) as e:
         click.echo(f"✗ {e}")
         sys.exit(1)

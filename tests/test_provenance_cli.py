@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -309,12 +311,12 @@ def test_provenance_cli_run_confirm_and_re_evaluate(mock_match, tmp_path):
     proposals = pair["proposals"]
     assert len(proposals) == 1
     proposal_id = proposals[0]["proposal_id"]
-    assert proposal_id.startswith("prov-")
+    assert re.fullmatch(r"prov-[0-9a-f]{12}", proposal_id)
 
     confirm = runner.invoke(cli, ["--config", str(config_path), "provenance", "confirm", proposal_id])
     assert confirm.exit_code == 0, confirm.output
     fm = _read_fm(source_path)
-    assert fm["provenance_links"][0]["link_id"].startswith("plink-")
+    assert re.fullmatch(r"plink-[0-9a-f]{12}", fm["provenance_links"][0]["link_id"])
     link_id = fm["provenance_links"][0]["link_id"]
 
     source_path.write_text(
@@ -336,12 +338,157 @@ def test_provenance_cli_respects_existing_lock(tmp_path):
     library.mkdir()
     config_path = tmp_path / "folio.yaml"
     _make_config(config_path, library)
+    _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+            supersedes="source_v1",
+        ),
+    )
+    _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md", title="Source V2"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md", title="Source V1"),
+        },
+    )
     (library / ".folio.lock").write_text(
-        json.dumps({"pid": os.getpid(), "command": "enrich", "timestamp": "2026-03-29T00:00:00Z"}),
+        json.dumps(
+            {
+                "pid": os.getpid(),
+                "command": "enrich",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ),
         encoding="utf-8",
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["--config", str(config_path), "provenance"])
+    with patch(
+        "folio.provenance.evaluate_provenance_matches",
+        return_value=[ProvenanceMatch(claim_ref="C1", target_ref="T1", confidence="high", rationale="same metric")],
+    ):
+        result = runner.invoke(cli, ["--config", str(config_path), "provenance", "source_v2"])
     assert result.exit_code != 0
     assert "library lock already held" in result.output
+
+
+def test_provenance_cli_evaluates_without_holding_lock(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+            supersedes="source_v1",
+        ),
+    )
+    _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md", title="Source V2"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md", title="Source V1"),
+        },
+    )
+
+    def fake_match(*args, **kwargs):
+        assert not (library / ".folio.lock").exists()
+        return [ProvenanceMatch(claim_ref="C1", target_ref="T1", confidence="high", rationale="same metric")]
+
+    runner = CliRunner()
+    with patch("folio.provenance.evaluate_provenance_matches", side_effect=fake_match):
+        result = runner.invoke(cli, ["--config", str(config_path), "provenance", "source_v2"])
+
+    assert result.exit_code == 0, result.output
+    fm = _read_fm(source_path)
+    assert fm["_llm_metadata"]["provenance"]["pairs"]["source_v1"]["status"] == "proposed"
+
+
+def test_provenance_cli_skips_when_source_changes_during_evaluation(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+
+    source_path = _write_note(
+        library,
+        "ClientA/source_v2.md",
+        _make_evidence_note(
+            note_id="source_v2",
+            title="Source V2",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+            supersedes="source_v1",
+        ),
+    )
+    _write_note(
+        library,
+        "ClientA/source_v1.md",
+        _make_evidence_note(
+            note_id="source_v1",
+            title="Source V1",
+            claim_text="Revenue growth is 15% YoY",
+            quote_text="Revenue grew 15% YoY.",
+        ),
+    )
+    _setup_registry(
+        library,
+        {
+            "source_v2": _registry_entry("source_v2", "ClientA/source_v2.md", title="Source V2"),
+            "source_v1": _registry_entry("source_v1", "ClientA/source_v1.md", title="Source V1"),
+        },
+    )
+
+    def fake_match(*args, **kwargs):
+        source_path.write_text(
+            source_path.read_text(encoding="utf-8").replace(
+                "claim: Revenue growth is 15% YoY",
+                "claim: Revenue growth is 18% YoY",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        return [ProvenanceMatch(claim_ref="C1", target_ref="T1", confidence="high", rationale="same metric")]
+
+    runner = CliRunner()
+    with patch("folio.provenance.evaluate_provenance_matches", side_effect=fake_match):
+        result = runner.invoke(cli, ["--config", str(config_path), "provenance", "source_v2"])
+
+    assert result.exit_code == 0, result.output
+    assert "changed during evaluation; rerun" in result.output
+
+    fm = _read_fm(source_path)
+    pair = fm.get("_llm_metadata", {}).get("provenance", {}).get("pairs", {}).get("source_v1", {})
+    assert pair.get("proposals", []) == []
+    assert "provenance_links" not in fm

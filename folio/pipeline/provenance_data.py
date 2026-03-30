@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 PROVENANCE_SPEC_VERSION = 1
 PROVENANCE_REVIEW_FLAG = "provenance_link_stale"
+PROVENANCE_ID_HEX_LENGTH = 12
 
 
 def _sha256_hex(value: str) -> str:
@@ -105,7 +106,7 @@ def make_proposal_id(
             target_slide,
             target_claim_index,
         ]
-    )[:8]
+    )[:PROVENANCE_ID_HEX_LENGTH]
     return f"prov-{digest}"
 
 
@@ -126,5 +127,5 @@ def make_link_id(
             target_slide,
             target_claim_index,
         ]
-    )[:8]
+    )[:PROVENANCE_ID_HEX_LENGTH]
     return f"plink-{digest}"
