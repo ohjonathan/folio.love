@@ -427,9 +427,8 @@ to stable entity names during ingest.
 
 ### Week 19-20: Enrichment & Provenance
 
-**Status:** PR C `folio enrich` is shipped and production-tested. The
-entity-stub/org-chart follow-on is landing now; retroactive provenance remains
-the next active unshipped slice.
+**Status:** PR C `folio enrich` is shipped and production-tested. PR D
+retroactive provenance (`folio provenance`) is shipped on `main` (PR #39).
 
 - `folio enrich [scope]` command for post-hoc LLM enrichment
 - Enrichment pass adds: tags, relationship links, entity extraction to existing assets

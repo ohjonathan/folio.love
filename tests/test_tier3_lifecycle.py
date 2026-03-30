@@ -402,8 +402,9 @@ class TestTier3Lifecycle:
         interaction_content = interaction_path.read_text()
         interaction_fm = _read_fm(interaction_path)
         assert interaction_fm["type"] == "interaction"
-        # Entity resolution should have produced wikilinks for confirmed entities
-        assert "[[Alice Chen]]" in interaction_content or "Alice Chen" in interaction_content
+        assert "[[Alice Chen]]" in interaction_content, (
+            "Entity resolution should have produced wikilinks for confirmed entities"
+        )
 
         # ===== STEP 6 (§8.2 step 7): folio entities generate-stubs =====
         result = runner.invoke(cli, [
@@ -463,9 +464,10 @@ class TestTier3Lifecycle:
         from folio.pipeline.provenance_analysis import ProvenanceMatch
 
         # Mock returns a match using the C/T ref format that evaluate_provenance_matches uses
+        # Note: _build_prompt_payload uses 1-based indexing (C1, T1, C2, T2, ...)
         mock_match = ProvenanceMatch(
-            claim_ref="C0",
-            target_ref="T0",
+            claim_ref="C1",
+            target_ref="T1",
             confidence="high",
             rationale="Same revenue metric across versions.",
         )
@@ -486,14 +488,17 @@ class TestTier3Lifecycle:
 
         # -- Assertion 11: provenance creates pair metadata and confirm-doc yields links --
         ev_v2_fm = _read_fm(ev_v2_path)
-        # Check that provenance metadata or links exist on v2
+        # Check that provenance metadata AND confirmed links exist on v2
         has_provenance_meta = (
             "_llm_metadata" in ev_v2_fm
             and "provenance" in ev_v2_fm.get("_llm_metadata", {})
         )
         has_provenance_links = bool(ev_v2_fm.get("provenance_links"))
-        assert has_provenance_meta or has_provenance_links, (
-            "v2 note should have provenance metadata or confirmed links after provenance + confirm-doc"
+        prov_pairs = ev_v2_fm.get("_llm_metadata", {}).get("provenance", {}).get("pairs", {})
+        pair_info = {k: (v.get("status"), len(v.get("proposals", []))) for k, v in prov_pairs.items()} if isinstance(prov_pairs, dict) else {}
+        assert has_provenance_meta and has_provenance_links, (
+            f"v2 note should have provenance metadata AND confirmed links after provenance + confirm-doc. "
+            f"meta={has_provenance_meta}, links={ev_v2_fm.get('provenance_links', [])}, pairs={pair_info}"
         )
 
         # ===== STEP 9 (§8.2 steps 11-14): status / scan / refresh =====
@@ -513,6 +518,9 @@ class TestTier3Lifecycle:
         assert result.exit_code == 0, f"scan failed: {result.output}"
         # With source roots configured, scan should actually exercise the guard
         # and NOT emit _context.md as a bogus source-backed entry
+        assert "_context.md" not in result.output, (
+            "Context doc should not appear in scan output"
+        )
 
         # -- Assertion 6: refresh skips context doc --
         result = runner.invoke(cli, [

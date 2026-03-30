@@ -384,7 +384,38 @@ work.
 - [ ] Aliases participate in lookup for confirmed entities
 - [ ] Proposed matches are retained for human review instead of silently applied
 
----
+#### FR-405: Context Documents
+
+The system SHALL support context documents as first-class managed documents in
+`registry.json`. Context documents provide engagement-level scaffolding
+(client background, SOW, team, timeline, hypotheses) without a backing source
+file.
+
+Context document requirements:
+- `type: context` with `subtype: engagement` for the v1 template
+- Source-less frontmatter: no `source`, `source_hash`, `source_type`, or
+  `source_transcript` fields
+- Fixed review defaults: `review_status: clean`, `review_flags: []`,
+  `extraction_confidence: null`
+- Deterministic date-based ID: `{client}_{engagement}_{context}_{date}_{subtype}`
+- Registry schema v2 required for source-less row compatibility
+- Body template with required sections: Client Background, Engagement Snapshot,
+  Objectives / SOW, Timeline, Team, Stakeholders, Starting Hypotheses,
+  Risks / Open Questions
+
+Context documents are first-class registry citizens but do not participate in:
+- `folio scan` (no source file to track)
+- `folio refresh` (no conversion to redo)
+- `folio enrich` (not an analysis target in v1)
+- `folio provenance` (not an evidence document)
+
+**Acceptance Criteria:**
+- [ ] Context docs are registered with `type: context` in `registry.json`
+- [ ] Context frontmatter is source-less and uses fixed review defaults
+- [ ] Context body template includes all required sections
+- [ ] `folio status` displays context docs in per-type summary
+- [ ] `folio scan`, `folio refresh`, `folio enrich`, and `folio provenance`
+      safely skip context rows
 
 ### 2.5 CLI Commands (FR-500) — P1
 
