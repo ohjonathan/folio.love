@@ -62,7 +62,8 @@ All three must be met for PASS:
 python3 -m pytest tests/test_context.py tests/test_registry.py \
     tests/test_tier3_lifecycle.py -v
 
-# 2. Run the frontmatter validator on existing library
+# 2. Run the frontmatter validator on test fixtures
+#    (validate_frontmatter.py is hardwired to tests/validation/output)
 python3 tests/validation/validate_frontmatter.py
 ```
 
@@ -78,7 +79,29 @@ folio status --refresh
 
 # 5. Verify pipeline safety with context row present
 folio scan
-folio refresh --dry-run
+folio refresh --scope "ClientName"
+
+# 6. Spot-validate production vault frontmatter
+#    validate_deck() accepts any .md path — validate the new context doc
+#    and a sample of existing evidence/interaction notes:
+python3 -c "
+from tests.validation.validate_frontmatter import validate_deck
+from pathlib import Path
+import sys
+
+library = Path('~/folio-library').expanduser()
+targets = list(library.rglob('_context.md')) + list(library.rglob('*.md'))[:10]
+failed = 0
+for p in targets:
+    r = validate_deck(p)
+    if r['errors']:
+        print(f'FAIL: {p.name} — {r[\"errors\"]}')
+        failed += 1
+    else:
+        print(f'PASS: {p.name}')
+print(f'\n{len(targets)} checked, {failed} failed')
+sys.exit(1 if failed else 0)
+"
 ```
 
 ### Phase 3: Evidence Collection

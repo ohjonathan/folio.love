@@ -454,8 +454,11 @@ _CONTEXT_REQUIRED_FIELDS = [
     "id", "title", "type", "subtype", "status", "authority",
     "curation_level", "review_status", "review_flags",
     "extraction_confidence",
-    "client", "engagement", "tags", "created", "modified",
+    "client", "tags", "created", "modified",
 ]
+
+# engagement is required only for subtype=engagement
+_CONTEXT_ENGAGEMENT_REQUIRED_FIELDS = ["engagement"]
 
 _CONTEXT_REQUIRED_BODY_SECTIONS = [
     "## Client Background",
@@ -471,7 +474,7 @@ _CONTEXT_REQUIRED_BODY_SECTIONS = [
 
 def _validate_context_note(fm: dict, content: str, result: dict):
     """Validate a context document (type: context)."""
-    # Required fields
+    # Required fields (common to all context subtypes)
     for field_name in _CONTEXT_REQUIRED_FIELDS:
         if field_name not in fm:
             result["errors"].append(
@@ -481,6 +484,20 @@ def _validate_context_note(fm: dict, content: str, result: dict):
             result["errors"].append(
                 ("Silent-Malformed-Frontmatter", f"Context note null field: {field_name}")
             )
+
+    # engagement is required only for subtype=engagement
+    if fm.get("subtype") == "engagement":
+        for field_name in _CONTEXT_ENGAGEMENT_REQUIRED_FIELDS:
+            if field_name not in fm:
+                result["errors"].append(
+                    ("Silent-Malformed-Frontmatter",
+                     f"Context note (subtype=engagement) missing: {field_name}")
+                )
+            elif fm[field_name] is None:
+                result["errors"].append(
+                    ("Silent-Malformed-Frontmatter",
+                     f"Context note (subtype=engagement) null field: {field_name}")
+                )
 
     # extraction_confidence must be explicitly null
     if "extraction_confidence" in fm and fm["extraction_confidence"] is not None:

@@ -33,11 +33,14 @@ def build_context_id(*, client: str, engagement: str) -> str:
     """Build a deterministic context document ID.
 
     Pattern: <client-token>_<engagement-short>_context_<YYYYMMDD>_engagement
+
+    Uses local date (not UTC) so the stamped date matches
+    the operator's calendar day at command time.
     """
     client_token = sanitize_token(client)
     eng_short = derive_engagement_short(engagement)
     engagement_token = sanitize_token(eng_short or engagement)
-    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    date_str = datetime.now().strftime("%Y%m%d")
     return f"{client_token}_{engagement_token}_context_{date_str}_engagement"
 
 
@@ -104,7 +107,7 @@ def create_context_document(
         raise FileExistsError(f"Context document already exists: {output_path}")
 
     context_id = build_context_id(client=client, engagement=engagement)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now().strftime("%Y-%m-%d")
     title = f"{client} {engagement} - Engagement Context"
 
     content = _render_template(
