@@ -37,7 +37,7 @@ python: 3.12.13
 | EC-6: Context Docs | **PASS** |
 | EC-7: Full Lifecycle | **PASS** |
 
-**Recommendation: GO TO TIER 4 with explicit carried-forward limitations.**
+**Recommendation: GO TO TIER 4.**
 
 All seven Tier 3 exit criteria are met. The hard-fail conditions from spec
 Section 9.6 are satisfied:
@@ -75,7 +75,34 @@ Performance note: LLM latency is provider-dependent. The <60s target is met
 for typical transcript lengths with the configured Anthropic Sonnet 4 profile.
 Test infrastructure uses mocked LLM boundaries to keep CI deterministic.
 
-**Date of evidence:** 2026-03-31 (this validation run)
+**Post-closeout production evidence (2026-04-04):**
+
+- Real production-library `folio ingest` completed successfully in ~25 seconds
+  using requested profile `anthropic_sonnet4` and model
+  `claude-sonnet-4-20250514`.
+- The generated interaction note was
+  `us_bank_technologyresilience2026_interview_20260324_20260324_interview_mark_piersak_for_kubernetes`
+  (`20260324 Interview Mark Piersak For Kubernetes`) under
+  `ada-folio/library/us_bank/technologyresilience2026/interactions/`.
+- Reported result quality: extraction confidence `0.96`, review status
+  `clean`, 10 total claims (8 high, 2 medium, 0 low), and 10/10 validated.
+- Frontmatter and body content matched the expected L0 interaction contract:
+  `type: interaction`, `subtype: expert_interview`, `authority: captured`,
+  participants `Mark Piersak`, `Andrew Lee`, and `Bradley Pearce`, 7 generated
+  tags, structured entity sections, an empty Impact on Hypotheses stub, and a
+  preserved Raw Transcript callout.
+- The generated interaction note included Summary, Key Findings, Entities
+  Mentioned, Quotes / Evidence, Impact on Hypotheses, and Raw Transcript
+  sections.
+- Those participant names were not included in the later org-chart bootstrap,
+  so they remain outside the confirmed production registry until a future
+  import or review flow adds them.
+
+This closes the carried-forward EC-1 production-validation follow-up that
+remained open at the time of the original closeout run.
+
+**Date of evidence:** 2026-03-31 (original closeout run), 2026-04-04
+(post-closeout production ingest addendum)
 
 ---
 
@@ -110,7 +137,33 @@ generate-stubs`.
 - 1134 entity stub markdown files under `ada-folio/library/_entities/`
 - Stubs organized by type: `person/`, `processes/`, `systems/`, `other/`
 
-**Date of evidence:** 2026-03-31 (this validation run)
+**Post-closeout production evidence (2026-04-04):**
+
+- Production `entities.json` bootstrap completed from the engagement org
+  chart CSV `ada-output/export-data/org_chart.csv` (1,531 rows), prepared for
+  import as `org_chart_folio_import.csv`.
+- This evidence is operator-attested from a separate McKinsey-laptop checkout
+  and is not independently repo-verifiable from this repository snapshot.
+- The reported import created or updated 1,492 people and 9 departments in
+  the production entity registry (1,501 total imported entities).
+- The operator-reported run summary recorded 55 alias-collision warnings and
+  39 slug-collision skips; the skips were not independently investigated in
+  this repo and may represent either harmless duplicates or real coverage
+  gaps. No unconfirmed entities remained after the import because the
+  supported CSV import path auto-confirms imported rows by design.
+- Post-import verification confirmed that `entities.json` exists, is readable,
+  and is non-empty (~733 KB), and that the production library now has 2,635
+  entity stubs total (1,134 pre-existing + 2,635 total reported after
+  refresh).
+- Recent interaction participants `Mark Piersak`, `Andrew Lee`, and
+  `Bradley Pearce` were not present in the org-chart CSV, so the bootstrap
+  did not force-create or confirm them in the entity registry.
+
+This closes the carried-forward production `entities.json` bootstrap follow-up
+that remained open at the time of the original closeout run.
+
+**Date of evidence:** 2026-03-31 (original closeout run), 2026-04-04
+(post-closeout production bootstrap addendum)
 
 ---
 
@@ -409,18 +462,18 @@ Additional lifecycle tests:
   directory creates files in unexpected locations. This should be fixed in a
   future PR.
 
-- **No production interactions** — the production library has no ingested
-  interaction notes yet. The EC-1 evidence is based on the comprehensive test
-  suite (30+ interaction-related tests) rather than a real production ingest.
-  This is acceptable per the spec's allowance for test-based evidence.
+- **No production interactions at closeout time** — on 2026-03-31, the
+  production library had no ingested interaction notes yet, so EC-1 relied on
+  the comprehensive test suite (30+ interaction-related tests). This was later
+  resolved on 2026-04-04 by a successful real production ingest run in ~25
+  seconds.
 
 ---
 
-## 8. Blockers / Carried-Forward Limitations
+## 8. Blockers / Remaining Limitations
 
 | Limitation | Impact | Recommendation |
 |-----------|--------|----------------|
-| No real production ingest validation | EC-1 relies on test evidence | Validate with a real transcript in the first Tier 4 session |
 | CWD-relative library_root resolution | Operational friction | Fix in a future config PR |
 | `building_blocks` frontmatter validator failure | Known Tier 1 edge case | Not a Tier 3 blocker |
 | 108 flagged docs in production | Review backlog from diagram extraction | Not a Tier 3 blocker |
@@ -429,17 +482,20 @@ Additional lifecycle tests:
 
 ## 9. Tier 4 Readiness Recommendation
 
-**Recommendation: GO TO TIER 4 with the following conditions:**
+**Recommendation: GO TO TIER 4.**
 
-1. Validate a real interaction ingest on the production library early in
-   Tier 4 to close the carried-forward EC-1 gap.
-2. The entity registry has 1134 stubs but no `entities.json` on production
-   yet — import from the existing stubs or org chart CSV in the first Tier 4
-   session.
-3. The Tier 4 scope (temporal roll-ups, semantic search, cross-asset
-   synthesis) depends on library volume. The current 116-doc library is
-   sufficient for initial Tier 4 development but would benefit from
-   continued engagement use.
+The two operational follow-ups carried forward from the original 2026-03-31
+closeout were both closed on 2026-04-04:
+
+1. EC-1 production ingest validation closed with a real production
+   `folio ingest` run in ~25 seconds.
+2. The production entity bootstrap closed with a real org-chart import that
+   created or updated 1,492 people plus 9 departments in `entities.json`.
+
+The Tier 4 scope (temporal roll-ups, semantic search, cross-asset synthesis)
+still depends on library volume. The current retained production library is
+sufficient for initial Tier 4 development but would benefit from continued
+engagement use.
 
 ---
 
