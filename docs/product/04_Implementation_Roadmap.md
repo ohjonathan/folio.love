@@ -9,14 +9,14 @@ generated_by: ontos_scaffold
 
 # Folio: Implementation Roadmap
 
-**February 2026 baseline | March 2026 updated**
+**February 2026 baseline | April 2026 updated**
 **folio.love**
 
 **What changed from v1:** Incorporates features from the February 2026 brainstorming session (dual ontology, interaction ingestion, authority tiers, entity extraction, temporal roll-ups, retroactive provenance). Restructured from 3 phases to 4 tiers. Original Phase 1-2 priorities are unchanged. New features slot into Tiers 3-4 based on dependency chain and real-world validation requirements. Frontmatter schema aligned to the current Folio Ontology Architecture (merged tags/concepts, date-based IDs, engagement requirement, frontmatter as relationship source of truth).
 
 ---
 
-## March 2026 Status Update
+## March-April 2026 Status Update
 
 Since this roadmap was published, `main` has shipped twelve important baseline
 changes:
@@ -66,8 +66,8 @@ the managed-mac automated PPTX conversion path has been rerun successfully on
 the real Tier 1 corpus, and the enterprise-scale batch path now includes the
 first round of runtime-waste controls discovered in field deployment. Tier 3 is
 no longer purely planned scope: the Week 13-15 interaction-ingestion slice, the
-Week 16-18 entity-system slice, and PR C `folio enrich` are now shipped on
-`main`.
+Week 16-18 entity-system slice, PR C `folio enrich`, PR D
+`folio provenance`, and PR E context documents are now shipped on `main`.
 
 Late-March validation also changed the **operational baseline**. The Tier 2
 platform model-comparison package is finalized, and its recorded per-stage
@@ -76,8 +76,12 @@ winners differ from the single-route runtime path currently available on
 existing production `anthropic_sonnet4` library overall, so the production
 library was retained and selectively improved with 12 blind-validated
 `haiku45` merges. Real vault validation then passed that production library to
-PR C (`folio enrich`). See
-`docs/product/tier3_baseline_decision_memo.md` for the full status delta
+PR C (`folio enrich`). Tier 3 closeout then completed on the retained
+production baseline, the carried-forward production ingest validation was
+closed on 2026-04-04 with a real `folio ingest` run in about 25 seconds, and
+the production `entities.json` bootstrap was completed on 2026-04-04 from the
+engagement org chart. See `docs/product/tier3_baseline_decision_memo.md` for
+the full status delta
 since the last shared PRD/roadmap sync.
 
 Current Tier 1 reality after PR #14:
@@ -468,25 +472,25 @@ synthetic lifecycle test proves the complete Tier 3 pipeline end-to-end.
 
 ### Tier 3 Exit Criteria
 
-- [ ] `folio ingest` converts transcript to structured interaction in <60 seconds
-- [ ] Entity registry tracks people, departments, systems
-- [ ] Name resolution works for common cases (exact match + LLM soft match)
-- [ ] `folio enrich` adds tags and links to existing assets
-- [ ] Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs
-- [ ] Context documents provide engagement scaffolding
-- [ ] Full engagement lifecycle tested end-to-end
+- [x] `folio ingest` converts transcript to structured interaction in <60 seconds
+- [x] Entity registry tracks people, departments, systems
+- [x] Name resolution works for common cases (exact match + LLM soft match)
+- [x] `folio enrich` adds tags and links to existing assets
+- [x] Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs
+- [x] Context documents provide engagement scaffolding
+- [x] Full engagement lifecycle tested end-to-end
 
 ### Current Status Against Tier 3 Exit Criteria
 
 | Checkpoint | Current Status | Evidence / Notes |
 |-----------|----------------|------------------|
-| `folio ingest` converts transcript to structured interaction in <60 seconds | Shipped, but real-engagement timing still needs explicit field validation | PR #32 merged the feature and passing tests; formal timing validation on engagement materials is still outstanding |
-| Entity registry tracks people, departments, systems | Shipped | PR #34 added the registry, CLI, CSV import, and confirmation workflow on `main` |
-| Name resolution works for common cases | Shipped for exact/alias matching plus LLM-proposed soft match with human confirmation | PR #35 added confirmed-only exact/alias resolution, bounded soft-match proposals, and unresolved-entity review flow |
-| `folio enrich` adds tags and links to existing assets | Shipped and production-tested | PR C enriched 115/115 eligible notes on the retained production `sonnet4` library with 0 failures in about 17 minutes; the current follow-on adds entity stubs and org-chart merge support |
-| Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs | Shipped | PR D (#39) shipped the `folio provenance` pipeline on `main`. Production validation pending closeout. |
-| Context documents provide engagement scaffolding | Shipping (PR #40) | PR E implements `folio context init`, registry schema v2, and source-less managed documents |
-| Full engagement lifecycle tested end-to-end | Shipping (PR #40) | PR E includes a 12-assertion synthetic lifecycle integration test covering context → evidence → entity → ingest → enrich → provenance → status/scan/refresh |
+| `folio ingest` converts transcript to structured interaction in <60 seconds | Met with production evidence | Tier 3 closeout accepted the shipped baseline, and the remaining field-validation follow-up was closed on 2026-04-04 by a real production transcript ingest in about 25 seconds using `anthropic_sonnet4` / `claude-sonnet-4-20250514`. |
+| Entity registry tracks people, departments, systems | Met with production bootstrap evidence | PR #34 shipped the registry, CLI, CSV import, and confirmation workflow; on 2026-04-04 the production library bootstrap imported 1,492 people plus 9 departments into `entities.json`. |
+| Name resolution works for common cases | Met | PR #35 shipped confirmed-only exact/alias resolution, bounded soft-match proposals, and unresolved-entity review flow on `main`. |
+| `folio enrich` adds tags and links to existing assets | Met | PR C enriched 115/115 eligible notes on the retained production `sonnet4` library with 0 failures in about 17 minutes; Tier 3 closeout accepted the enrich path on the production baseline. |
+| Retroactive provenance infrastructure works on confirmed `supersedes`-linked evidence pairs | Met | PR D (#39) shipped the `folio provenance` pipeline on `main`, and Tier 3 closeout accepted the production-validation gate. |
+| Context documents provide engagement scaffolding | Met | PR E (#40) shipped `folio context init`, registry schema v2, source-less managed documents, and production validation of a real context note visible in `folio status`. |
+| Full engagement lifecycle tested end-to-end | Met | PR E shipped the lifecycle integration test covering context → evidence → entity → ingest → enrich → provenance → status / scan / refresh, and Tier 3 closeout accepted it as the final integration proof. |
 
 ---
 
@@ -495,6 +499,19 @@ synthetic lifecycle test proves the complete Tier 3 pipeline end-to-end.
 **Goal:** The library reveals patterns, generates synthesis, and supports strategic prep. These features require volume (3+ months of daily content) to be useful.
 
 **Only build when the library has enough depth that discovery becomes the bottleneck.**
+
+Tier 4 is now ready to begin on the retained production library. The remaining
+post-closeout operational follow-ups were closed on 2026-04-04, so the first
+implementation slice is `folio digest`.
+
+### Tier 4 Implementation Order
+
+1. Daily digest (`folio digest`)
+2. Weekly digest (`folio digest --week`)
+3. Related links + Maps of Content
+4. `folio synthesize`
+5. Advanced / deferred discovery work (`folio search`, org traversal queries,
+   graph tuning, optional watcher)
 
 ### Week 23-25: Temporal Roll-Ups
 
@@ -516,9 +533,9 @@ synthetic lifecycle test proves the complete Tier 3 pipeline end-to-end.
 ### Week 29-32: Advanced Discovery
 
 - Semantic search architecture (embedding model, index, query interface)
-- Org chart traversal queries (evaluate whether Dataview suffices or custom engine needed)
-- Concept vocabulary management (`folio vocab`)
-- Cross-engagement pattern detection
+- Org traversal queries (evaluate whether Dataview suffices or custom engine needed)
+- Tag vocabulary management (`folio vocab`)
+- Optional file watcher for auto-digest after the manual workflow proves useful
 
 ### Tier 4 Exit Criteria
 
@@ -652,6 +669,7 @@ folio vocab
 | 5 | OneNote → Markdown pathway | 3 | Copy-paste for v1. Research better paths as side task. |
 | 6 | PyPI package name availability (`folio`) | 2 | Check before Tier 2 packaging work. |
 | 7 | LLM cost management at scale | 2 | Estimate per-deck cost. Consider capping batch operations. |
+| 8 | Cross-engagement pattern detection | Future backlog | Keep out of the committed Tier 4 feature set until digest, synthesize, and search prove a concrete multi-engagement need. |
 
 ---
 

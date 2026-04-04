@@ -9,7 +9,7 @@ generated_by: ontos_scaffold
 
 # Folio: Feature Prioritization Matrix
 
-**Version 2.1 | March 2026**
+**Version 2.2 | April 2026**
 **folio.love**
 
 ---
@@ -105,11 +105,11 @@ These features need volume to be useful. Building them before the library has de
 | F-403 | Wiki links between related decks | Medium | 1.5 weeks | Low | Same-project, same-framework auto-linking. |
 | F-404 | Maps of Content (framework/client index pages) | Medium | 1 week | Low | Auto-generated index pages. Updated on conversion. |
 | F-405 | `folio synthesize` (cross-asset synthesis) | High | 2 weeks | High | Interview synthesis across multiple interactions. Needs careful prompt design. |
-| F-406 | Org chart import + traversal queries | Medium | 3 weeks | **High** | CSV import is easy. Recursive org traversal exceeds Dataview capabilities. Needs custom query engine or graph DB. |
+| F-406 | Org traversal queries | Medium | 3 weeks | **High** | The Tier 3 entity import baseline is already shipped. The remaining work is recursive traversal, which exceeds Dataview capabilities and may need a custom query engine or graph DB. |
 | F-407 | Semantic search (`folio search`) | High | 3 weeks | **High** | Embedding model selection, index storage, query interface. Significant architectural decision. |
 | F-408 | Graph view optimization | Low | 2 weeks | Medium | Obsidian graph tuning. Subjective value. |
 | F-409 | File watcher for auto-digest | Low | 1 week | Low | Quality of life. Manual trigger sufficient for v1. |
-| F-410 | `folio vocab` (concept vocabulary) | Low | 1 week | Low | Controlled vocabulary for tags. Nice for consistency, not blocking. |
+| F-410 | `folio vocab` (tag vocabulary) | Low | 1 week | Low | Controlled vocabulary for the unified `tags` field. Nice for consistency, not blocking. |
 
 **Tier 4 total: ~17.5 weeks**  
 **Exit criteria:** Library reveals patterns across engagements. Synthesis features save prep time.
@@ -124,6 +124,7 @@ Features identified but explicitly deferred. Not on any roadmap until a real nee
 |---------|-------------|
 | OneNote → Markdown pathway | Research needed on export mechanism. Copy-paste may be sufficient for v1 of ingest. |
 | Audio file ingestion (direct) | Depends on transcription service selection. Transcript → ingest is the v1 path. |
+| Cross-engagement pattern detection | Keep out of the committed Tier 4 set until digest, synthesize, and search prove a real multi-engagement need. |
 | Multi-user collaboration | Personal tool. No collaboration requirement. |
 | Real-time sync | Obsidian + OneDrive handles this passively. |
 | Custom graph DB migration | Obsidian + Dataview covers 80% of queries. Revisit when queries demonstrably exceed its capability. |

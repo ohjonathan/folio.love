@@ -9,8 +9,16 @@ generated_by: ontos_scaffold
 
 # Folio: Product Requirements Document
 
-**Version 1.4 | March 2026**
+**Version 1.5 | April 2026**
 **folio.love**
+
+**v1.5 changes:** Expanded the planned Tier 4 product surface in the PRD with
+an explicit FR-800 Synthesis & Discovery family covering daily/weekly digests,
+related links, Maps of Content, pairwise-first synthesis, org traversal
+queries, semantic search, tag vocabulary, graph-friendly navigation, and the
+optional auto-digest trigger. Clarified that Tier 4 is planned product scope
+with selective contract locking and intentionally deferred internal
+architecture.
 
 **v1.4 changes:** Added context document support after PR E (PR #40).
 Updated FR-403 for registry schema v2 and source-less managed documents.
@@ -38,7 +46,8 @@ Folio's output must be trustworthy enough for direct use in active McKinsey enga
 
 ### 1.2 Scope
 
-Folio v1.0 encompasses:
+Folio v1.0 encompasses the shipped Tier 1-3 baseline plus the planned Tier 4
+synthesis-and-discovery surface:
 - Document conversion pipeline (PPTX/PDF to Markdown)
 - Interaction ingestion pipeline (txt/md transcripts and notes to interaction markdown)
 - Context document management (engagement scaffolding notes)
@@ -53,6 +62,15 @@ Folio v1.0 encompasses:
 - CLI for all operations
 - Source grounding and extraction confidence scoring
 - Review status tracking and human override persistence
+- Daily and weekly digest generation for temporal roll-ups
+- Related-link generation and Maps of Content for navigation
+- Pairwise-first cross-asset synthesis workflows
+- Planned semantic search, org traversal query, and tag vocabulary surfaces
+- Optional auto-digest trigger beyond the manual v1 default
+
+Tier 4 items are part of the planned product surface, not the already-shipped
+baseline. Where implementation details remain unresolved, this PRD defines the
+user-visible requirements without prematurely locking internal architecture.
 
 ### 1.3 Definitions
 
@@ -820,6 +838,141 @@ claim-to-evidence lineage:
 - [ ] Every extraction is traceable to a specific model and pass
 - [ ] Provenance is recorded, not reconstructed
 - [ ] Re-conversion with a different model produces updated provenance
+
+---
+
+### 2.8 Synthesis & Discovery (FR-800) — P2
+
+These requirements define the planned Tier 4 product surface. They apply after
+the library has enough daily depth that synthesis and discovery become more
+valuable than additional ingestion plumbing.
+
+#### FR-801: Digest Command Family
+
+```bash
+folio digest [--date today] [--week]
+```
+
+- Generate a daily digest from the day's new or modified managed documents
+- Generate a weekly digest from daily digests when `--week` is supplied
+- Preserve manual invocation as the v1 default; automatic triggering is a
+  later optional extension
+- Present each roll-up at a different analytical altitude rather than treating
+  the command as simple compression
+
+**Acceptance Criteria:**
+- [ ] `folio digest` can produce a daily roll-up for a specific day
+- [ ] `folio digest --week` consumes daily digests rather than raw notes alone
+- [ ] The command remains manually triggered by default in v1
+
+#### FR-802: Digest Document Contract
+
+Digest outputs SHALL be Analysis documents with subtype `digest` and SHALL
+include digest metadata in frontmatter:
+
+```yaml
+type: analysis
+subtype: digest
+digest_period: 2026-02-14
+digest_type: daily  # daily | weekly | steerco
+```
+
+Daily, weekly, and steerco digests SHALL remain distinct analytical products:
+- Daily digest: what moved forward today
+- Weekly digest: where the engagement stands and what changed this week
+- SteerCo digest: what leadership needs to decide
+
+The system MAY evolve prompt structure over time, but it SHALL preserve this
+typed-document contract.
+
+#### FR-803: Related Links And Maps Of Content
+
+Folio SHALL support Tier 4 navigation surfaces that connect related assets:
+- Wiki links between related decks, analyses, and interactions
+- Auto-generated Maps of Content for client, engagement, or framework views
+- Graph-friendly linking that improves Obsidian navigation without requiring a
+  custom visualization layer in v1
+
+Implementation details for scoring or ranking relatedness remain flexible.
+The requirement is the visible navigation benefit, not a specific linking
+algorithm.
+
+#### FR-804: Cross-Asset Synthesis
+
+```bash
+folio synthesize [options]
+```
+
+Folio SHALL support cross-asset synthesis workflows for comparing and combining
+related documents. The initial v1 analytical shape SHALL start with pairwise
+synthesis (for example, two interviews or an interview plus a context note)
+rather than arbitrary N-way synthesis.
+
+The system MAY later expand to broader synthesis sets after the pairwise path
+proves useful on real engagement work.
+
+#### FR-805: Org Traversal Queries
+
+Folio SHALL support traversal-oriented org queries over the shipped entity
+baseline when hierarchy data is present in `entities.json`.
+
+Examples:
+- Show all interviews with anyone reporting to a given leader
+- Traverse a manager chain N levels deep
+
+This requirement locks the user-visible capability, not the internal query
+engine. Whether Dataview extensions, custom indexing, or another approach
+fulfills the traversal requirement remains intentionally unspecified.
+
+#### FR-806: Semantic Search
+
+```bash
+folio search <query>
+```
+
+Folio SHALL provide a discovery-oriented search surface for "find things
+related to this idea" queries that exceed literal text matching.
+
+The search architecture remains intentionally deferred. This PRD does not lock:
+- embedding model choice
+- index storage design
+- ranking algorithm
+- whether search is implemented entirely inside the vault or via sidecar data
+
+The requirement is a user-facing search command and discovery workflow, not a
+premature architectural commitment.
+
+#### FR-807: Tag Vocabulary
+
+```bash
+folio vocab
+```
+
+Folio SHALL support a tag-vocabulary inspection and management surface for the
+single unified `tags` field.
+
+This command family SHALL reinforce consistency for reusable tags without
+reintroducing a separate `concepts` field. The tool MAY warn on unfamiliar
+tags, surface common tags, or support curation workflows, but the metadata
+contract remains a single `tags` list.
+
+#### FR-808: Graph-Friendly Navigation
+
+Folio SHALL preserve an Obsidian-native graph experience as Tier 4 navigation
+surfaces are added.
+
+The system SHALL prefer lightweight graph improvements through stable links,
+entity stubs, Maps of Content, and digest relationships before introducing any
+custom graph subsystem.
+
+#### FR-809: Optional Auto-Digest Trigger
+
+Folio MAY later support automatic digest triggering from file-change events or
+scheduled watch behavior.
+
+This is explicitly not required for the first Tier 4 slice. Manual invocation
+of `folio digest` remains the default production path until real usage proves
+that automation is worth the added operational complexity.
 
 ---
 

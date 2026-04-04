@@ -75,7 +75,8 @@ folio digest --week [--date today]   # Generate weekly digest from daily digests
 - **Weekly digest:** "Where do we stand and what's changed"
 - **Steerco input:** "What does leadership need to decide"
 
-Should be automatable via file watcher or single end-of-day command.
+Should start as a single end-of-day command. File-watcher automation is a
+later quality-of-life extension, not the v1 default.
 
 ---
 
@@ -89,7 +90,9 @@ Should be automatable via file watcher or single end-of-day command.
 - `name`, `title`, `department`, `reports_to` (→ another person node)
 - Created automatically during interview summarization, resolved against a registry
 
-**Org chart import** — Import org structure (CSV or manual build) to establish `reports_to` hierarchy. Enables org-traversal queries.
+**Org chart import baseline** — Import org structure (CSV or manual build) to
+establish `reports_to` hierarchy. Tier 3 ships the import baseline; the
+remaining Tier 4 work is traversal-oriented querying over that hierarchy.
 
 **Entity extraction during ingest** — The LLM summarization step doesn't just summarize. It:
 - Identifies all people mentioned
@@ -190,7 +193,7 @@ folio search <query>              # Semantic search across library
 ### Graph & Vocabulary
 ```bash
 folio link <id> <id> [type]       # Manually create relationship
-folio vocab                       # View/manage concept vocabulary
+folio vocab                       # View/manage tag vocabulary
 folio entities                    # View/manage entity registry (people, depts, systems)
 folio entities import <csv>       # Import org chart
 ```
@@ -215,7 +218,8 @@ folio entities import <csv>       # Import org chart
 
 ## 10. Companion Document
 
-The full ontology specification with type definitions, frontmatter schemas, example YAML for every type, concept vocabulary, and query patterns is in:
+The full ontology specification with type definitions, frontmatter schemas,
+example YAML for every type, tag vocabulary, and query patterns is in:
 
 **`Folio_Ontology_Architecture.md`** (attached separately)
 
