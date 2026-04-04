@@ -37,7 +37,7 @@ python: 3.12.13
 | EC-6: Context Docs | **PASS** |
 | EC-7: Full Lifecycle | **PASS** |
 
-**Recommendation: GO TO TIER 4 with explicit carried-forward limitations.**
+**Recommendation: GO TO TIER 4.**
 
 All seven Tier 3 exit criteria are met. The hard-fail conditions from spec
 Section 9.6 are satisfied:
@@ -94,6 +94,9 @@ Test infrastructure uses mocked LLM boundaries to keep CI deterministic.
 - The generated interaction note included Summary, Key Findings, Entities
   Mentioned, Quotes / Evidence, Impact on Hypotheses, and Raw Transcript
   sections.
+- Those participant names were not included in the later org-chart bootstrap,
+  so they remain outside the confirmed production registry until a future
+  import or review flow adds them.
 
 This closes the carried-forward EC-1 production-validation follow-up that
 remained open at the time of the original closeout run.
@@ -139,13 +142,19 @@ generate-stubs`.
 - Production `entities.json` bootstrap completed from the engagement org
   chart CSV `ada-output/export-data/org_chart.csv` (1,531 rows), prepared for
   import as `org_chart_folio_import.csv`.
+- This evidence is operator-attested from a separate McKinsey-laptop checkout
+  and is not independently repo-verifiable from this repository snapshot.
 - The reported import created or updated 1,492 people and 9 departments in
   the production entity registry (1,501 total imported entities).
 - The operator-reported run summary recorded 55 alias-collision warnings and
-  39 slug-collision skips; no unconfirmed entities remained after the import.
+  39 slug-collision skips; the skips were not independently investigated in
+  this repo and may represent either harmless duplicates or real coverage
+  gaps. No unconfirmed entities remained after the import because the
+  supported CSV import path auto-confirms imported rows by design.
 - Post-import verification confirmed that `entities.json` exists, is readable,
   and is non-empty (~733 KB), and that the production library now has 2,635
-  entity stubs total (1,134 pre-existing + 1,501 new).
+  entity stubs total (1,134 pre-existing + 2,635 total reported after
+  refresh).
 - Recent interaction participants `Mark Piersak`, `Andrew Lee`, and
   `Bradley Pearce` were not present in the org-chart CSV, so the bootstrap
   did not force-create or confirm them in the entity registry.

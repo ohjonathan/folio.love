@@ -21,6 +21,9 @@ The raw terminal history was not exported into this repo. Exact shell output
 is preserved here only where it was reported explicitly. When a command or
 exit code is reconstructed from the accepted task flow rather than copied from
 the original terminal history, that is noted below.
+The cited commit `8e8c78b` exists only on the separate McKinsey-laptop
+checkout, so it is provenance context rather than repo-verifiable evidence in
+this clone.
 
 ---
 
@@ -38,7 +41,7 @@ the original terminal history, that is noted below.
 | +0:12 | Import skips captured | 39 slug-collision skips reported |
 | +0:14 | `folio entities generate-stubs --force` | Exit 0 (reported success); stubs regenerated to 2,635 total |
 | +0:16 | `folio entities` | Exit 0 (reported success); totals reflected 1,492 people + 9 departments |
-| +0:17 | `folio entities --unconfirmed` | Exit 0 (reported success); 0 unconfirmed entities |
+| +0:17 | `folio entities --unconfirmed` | Exit 0 (reported success); 0 unconfirmed entities because CSV imports auto-confirm rows by design |
 | +0:18 | `folio entities show "<sample imported person>"` | Exit 0 reported, but the sampled entity name was not preserved in the exported summary |
 | +0:20 | Checked recent interaction participants against imported org chart | `Mark Piersak`, `Andrew Lee`, and `Bradley Pearce` were not present in the CSV |
 | +0:22 | Verified `entities.json` readability and size | Readable, non-empty, ~733 KB |
@@ -51,8 +54,9 @@ the original terminal history, that is noted below.
 
 1. The bootstrap used the supported Folio CLI import path rather than a
    custom JSON writer.
-2. The import auto-confirmed org-chart entities; no unresolved tail remained
-   after the bootstrap.
+2. The import auto-confirmed org-chart entities; the reported zero-unconfirmed
+   result reflects CLI behavior rather than manual review of every imported
+   person.
 3. The source CSV improved person / department coverage materially, but it did
    not cover every real interaction participant already present in the
    production note set.

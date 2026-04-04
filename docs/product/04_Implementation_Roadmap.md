@@ -368,10 +368,10 @@ Current program status after the late-March validation cycle:
   validated `haiku45` merges, is the baseline for the next slice
 - PR C `folio enrich` is shipped and production-tested on the retained
   production library baseline
-- The entity stubs + org-chart merge follow-on is the current closing slice
-  for the enrich baseline
+- The entity stubs + org-chart merge follow-on completed on 2026-04-04 and is
+  now part of the retained production baseline
 - PR D retroactive provenance is shipped on `main`
-- PR E context docs + Tier 3 closeout is the current closing slice
+- PR E context docs + Tier 3 closeout are shipped on `main`
 
 ---
 
@@ -452,8 +452,8 @@ enriched, 0 failures, approximately 17 minutes runtime, 3 generated
 
 ### Week 21-22: Context Documents & Integration
 
-**Status:** PR E (`folio context init`, registry schema v2, Tier 3 lifecycle
-integration test) is shipping in PR #40.
+**Status:** Shipped on `main` in PR #40; Tier 3 closeout completed on the
+production baseline.
 
 - `folio context init` creates engagement context documents at canonical paths
 - Context docs are first-class registry citizens (`type: context`, `subtype: engagement`)
@@ -661,12 +661,12 @@ folio vocab
 - Entity resolution in v1: **Resolved.** Exact canonical-name match + alias match + bounded LLM soft match + human confirmation. No algorithmic fuzzy matcher.
 - Org chart import format: **Resolved for v1.** CSV via `folio entities import <csv>`.
 
-**Still open:**
+**Still open / future backlog:**
 
 | # | Question | Tier | Notes |
 |---|----------|------|-------|
 | 1 | Semantic search architecture (embedding model, index, query interface) | 4 | Don't decide until query patterns are clear. |
-| 2 | Entity resolution beyond v1 (production-scale exercise, enrichment-time backfill) | 3 | v1 shipped: exact + alias + bounded LLM soft match. Production exercise and enrichment-time entity backfill remain untested. |
+| 2 | Entity resolution beyond v1 (production-scale exercise, enrichment-time backfill) | Future backlog | v1 shipped: exact + alias + bounded LLM soft match. Production exercise and enrichment-time entity backfill remain untested. |
 | 3 | File watcher vs manual trigger for digest | 4 | Manual trigger for v1. |
 | 4 | Context as standalone type vs metadata | 3 | **Resolved in PR E.** Context is a standalone first-class managed document type with its own registry schema, CLI surface (`folio context init`), and frontmatter contract. |
 | 5 | OneNote → Markdown pathway | 3 | Copy-paste for v1. Research better paths as side task. |

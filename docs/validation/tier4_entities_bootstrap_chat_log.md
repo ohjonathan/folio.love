@@ -20,6 +20,9 @@ The preserved source material available locally is:
 - the operator-reported execution summary
 - the reported changed-file set and commit id `8e8c78b`
 
+The cited commit `8e8c78b` exists only on the separate McKinsey-laptop
+checkout and is not verifiable from this repo clone.
+
 ## Session Summary
 
 ### Initial Goal
@@ -40,8 +43,9 @@ production library using the supported CSV import path.
    `Mark Piersak`, `Andrew Lee`, and `Bradley Pearce` were absent from the
    org chart and therefore remained outside the imported entity set.
 4. **Accept org-chart auto-confirmation but preserve collision warnings.** The
-   bootstrap ended with 0 unconfirmed entities, while still recording the
-   alias-collision and slug-collision issues as residual risk.
+   bootstrap ended with 0 unconfirmed entities because CSV imports
+   auto-confirm rows by design, while still recording the alias-collision and
+   slug-collision issues as residual risk.
 
 ### Reported Outcome
 

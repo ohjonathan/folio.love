@@ -16,7 +16,9 @@ The McKinsey-laptop production run imported the US Bank / Technology
 Resilience 2026 org chart into the supported entity registry path, verified
 that the resulting `entities.json` is readable and non-empty, regenerated
 entity stubs, and closed the last operational prerequisite that was still
-called out in the original Tier 3 closeout report.
+called out in the original Tier 3 closeout report. The evidence in this file
+is operator-attested from a separate McKinsey-laptop checkout, not directly
+repo-verifiable from this repository snapshot.
 
 ## 2. Run Summary
 
@@ -30,10 +32,10 @@ called out in the original Tier 3 closeout report.
 | Total imported entities | 1,501 |
 | Alias-collision warnings | 55 |
 | Slug-collision skips | 39 |
-| Unconfirmed entities after import | 0 |
+| Unconfirmed entities after import | 0 (CSV imports auto-confirm by design) |
 | Entity stubs after refresh | 2,635 total |
 | Prior stubs | 1,134 |
-| New stubs implied by import | 1,501 |
+| Stub total after refresh | 2,635 (operator-reported) |
 | `entities.json` size | ~733 KB |
 | Matching recent interaction participants | None of `Mark Piersak`, `Andrew Lee`, `Bradley Pearce` were present in the org chart |
 
@@ -61,13 +63,17 @@ import command.
 - Entity totals after import were reported as:
   - 1,492 `person`
   - 9 `department`
-- Remaining unconfirmed entities: 0
+- Remaining unconfirmed entities: 0. This reflects the supported CSV import
+  path auto-confirming imported rows by design; it should not be read as
+  manual per-entity verification.
 
 ### Stub State
 
 - Pre-existing entity stubs: 1,134
 - Total stubs after refresh: 2,635
-- The import therefore expanded stub coverage by 1,501 entity notes.
+- The reported totals imply a net increase of 1,501 stubs, but this
+  reconstructed artifact does not independently prove a one-stub-per-import
+  relationship because 39 slug-collision skips were also reported.
 
 ### Known Non-Matches
 
@@ -84,7 +90,8 @@ confirming them.
 ## 5. Documentation / Provenance Notes
 
 - The McKinsey-laptop operator reported the work as committed locally under
-  `8e8c78b`.
+  `8e8c78b`, but that commit exists only on the separate McKinsey-laptop
+  checkout and is not verifiable from this repo.
 - The four expected validation artifacts for this run are now present under
   `docs/validation/`.
 - The Tier 3 closeout report and Tier 3 tracker were updated so the production
@@ -95,9 +102,12 @@ confirming them.
 
 1. The import summary reported 55 alias-collision warnings and 39
    slug-collision skips. These did not block the bootstrap, but they indicate
-   that the org chart is not a perfect one-to-one identity source.
+   that the org chart is not a perfect one-to-one identity source, and this
+   repo does not independently prove whether the skipped slugs were benign
+   duplicates or missed coverage.
 2. Title data in the source CSV was empty for all rows, so title-level
-   enrichment did not improve during the bootstrap.
+   enrichment did not improve during the bootstrap, which weakens one easy
+   disambiguation aid for same-name people.
 3. Some real engagement participants still exist only as wikilinks in
    interaction notes and were not covered by the org-chart CSV.
 
