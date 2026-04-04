@@ -623,10 +623,14 @@ digest_type: daily
 ```
 
 ```bash
-folio digest                    # Generate daily digest from today's new/modified files
-folio digest --date 2026-02-14  # Generate for a specific date
-folio digest --week             # Generate weekly digest from this week's daily digests
+folio digest ClientA/DD_Q1_2026                    # Generate daily digest for one engagement scope
+folio digest ClientA/DD_Q1_2026 --date 2026-02-14  # Generate for a specific date
+folio digest ClientA/DD_Q1_2026 --week             # Generate weekly digest from that scope's daily digests
 ```
+
+The first Tier 4 slice keeps digest generation engagement-scoped and manual.
+Weekly digests derive from daily digest notes in the same scope. The typed
+`steerco` digest remains a later extension, not part of the first CLI slice.
 
 ---
 
@@ -684,10 +688,13 @@ tags: [investment-thesis, due-diligence, hypothesis-testing]
 ### 10.2 Interview Synthesis (Cross-Interaction Analysis)
 
 ```bash
-folio synthesize --engagement "Due Diligence Q1 2026" --type expert_interview
+folio synthesize clienta_ddq126_interview_20260214_01 clienta_ddq126_interview_20260215_01
 ```
 
-Output: A synthesis document (type: analysis, subtype: synthesis) that surfaces patterns, contradictions, and gaps across all interactions of that type within an engagement. Starts with pairwise comparison, scales to N-way as the approach is validated.
+Output: A synthesis document (type: analysis, subtype: synthesis) that
+surfaces patterns, contradictions, and gaps across two explicitly selected
+documents. Starts with pairwise comparison and only scales beyond pairs after
+the approach is validated.
 
 ---
 
@@ -942,8 +949,8 @@ folio entities import <csv>       # Import org chart
 
 ### Synthesis & Discovery (Tier 4)
 ```bash
-folio digest [--date] [--week]    # Generate daily/weekly roll-up
-folio synthesize [options]        # Cross-asset synthesis
+folio digest <scope> [--date] [--week]    # Generate daily/weekly roll-up
+folio synthesize <doc_a> <doc_b> [options]        # Cross-asset synthesis
 folio search <query>              # Semantic search across library
 folio vocab                       # View/manage tag vocabulary
 ```

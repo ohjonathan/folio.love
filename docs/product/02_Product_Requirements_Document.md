@@ -661,6 +661,10 @@ Folio SHALL support route-based selection of LLM profiles by task:
 - `routing.ingest` controls the `folio ingest` analysis path in v1.0
 - `routing.enrich` controls the `folio enrich` analysis path in v1.0
 - `routing.provenance` controls the `folio provenance` analysis path
+- `routing.digest` controls the `folio digest` synthesis path when the first
+  Tier 4 slice lands
+- `routing.synthesize` controls the `folio synthesize` analysis path when the
+  pairwise Tier 4 synthesis surface lands
 - `--llm-profile` overrides route-based selection for a single command invocation
 
 #### FR-605: Optional Transient Fallback
@@ -847,22 +851,54 @@ These requirements define the planned Tier 4 product surface. They apply after
 the library has enough daily depth that synthesis and discovery become more
 valuable than additional ingestion plumbing.
 
+Tier 4 roadmap features map into this requirement family as follows:
+- F-401 / F-402 → FR-801 / FR-802
+- F-403 / F-404 → FR-803
+- F-405 → FR-804
+- F-406 → FR-805
+- F-407 → FR-806
+- F-408 → FR-808
+- F-409 → FR-809
+- F-410 → FR-807
+
+`folio digest` is temporal roll-up over a bounded time window and scope.
+`folio synthesize` is explicit cross-asset comparison over user-selected
+documents and is not the same surface as digest generation.
+
+FR-700 extraction-grounding requirements do not automatically apply to FR-800
+outputs because these documents are inferential synthesis across multiple
+managed notes rather than single-source extraction. Until a Tier 4-specific
+trust model lands, FR-800 outputs are human-review-required analysis artifacts,
+and the first-slice digest contract is further defined in
+`docs/specs/tier4_digest_design_spec.md`.
+
 #### FR-801: Digest Command Family
 
 ```bash
-folio digest [--date today] [--week]
+folio digest <scope> [--date YYYY-MM-DD] [--week] [--llm-profile <profile>]
 ```
 
-- Generate a daily digest from the day's new or modified managed documents
+- Require an explicit engagement-scoped path in v1 rather than silently
+  running library-wide
+- Generate a daily digest from the scoped day's new or modified managed documents
 - Generate a weekly digest from daily digests when `--week` is supplied
 - Preserve manual invocation as the v1 default; automatic triggering is a
   later optional extension
 - Present each roll-up at a different analytical altitude rather than treating
   the command as simple compression
+- Re-run the same target period idempotently by updating the existing digest
+  note rather than creating duplicates
+- Follow the first-slice implementation contract in
+  `docs/specs/tier4_digest_design_spec.md` for scope resolution, input
+  predicate, output path, registry integration, body template, and failure
+  behavior
 
 **Acceptance Criteria:**
 - [ ] `folio digest` can produce a daily roll-up for a specific day
 - [ ] `folio digest --week` consumes daily digests rather than raw notes alone
+- [ ] The command requires explicit scope in the first Tier 4 slice
+- [ ] Re-running the same scope + period updates the existing digest target
+      instead of creating a second note
 - [ ] The command remains manually triggered by default in v1
 
 #### FR-802: Digest Document Contract
@@ -877,10 +913,28 @@ digest_period: 2026-02-14
 digest_type: daily  # daily | weekly | steerco
 ```
 
+Digest docs are source-less managed documents. They SHALL omit `source`,
+`source_hash`, `source_type`, and `source_transcript`, and they SHALL be
+registered in `registry.json` as `type: analysis`, `subtype: digest` rows.
+`folio scan` SHALL ignore them, `folio refresh` SHALL skip all `analysis`
+entries with command-specific rerun guidance, and `folio enrich` SHALL continue
+to skip `analysis` rows in v1 until a separate Tier 4 enrichment pass is
+specified. Registry rebuild behavior MUST retain source-less analysis rows
+analogously to existing source-less context rows.
+
 Daily, weekly, and steerco digests SHALL remain distinct analytical products:
 - Daily digest: what moved forward today
 - Weekly digest: where the engagement stands and what changed this week
 - SteerCo digest: what leadership needs to decide
+
+`digest_period` SHALL remain a date-valued field:
+- daily digest: the represented calendar day
+- weekly digest: the Monday anchor date of the represented ISO week
+- steerco digest: the target SteerCo meeting date or prep deadline
+
+`steerco` remains part of the typed document contract, but it is not part of
+the first Tier 4 CLI slice. No `folio digest --steerco` flag is required for
+the first implementation PR.
 
 The system MAY evolve prompt structure over time, but it SHALL preserve this
 typed-document contract.
@@ -900,7 +954,7 @@ algorithm.
 #### FR-804: Cross-Asset Synthesis
 
 ```bash
-folio synthesize [options]
+folio synthesize <doc_a> <doc_b> [--title <title>] [--llm-profile <profile>]
 ```
 
 Folio SHALL support cross-asset synthesis workflows for comparing and combining
@@ -923,6 +977,9 @@ Examples:
 This requirement locks the user-visible capability, not the internal query
 engine. Whether Dataview extensions, custom indexing, or another approach
 fulfills the traversal requirement remains intentionally unspecified.
+The first Tier 4 traversal surface SHALL default to the active engagement scope
+instead of spanning the entire library unless an explicit cross-engagement
+override is added later.
 
 #### FR-806: Semantic Search
 
@@ -965,14 +1022,25 @@ The system SHALL prefer lightweight graph improvements through stable links,
 entity stubs, Maps of Content, and digest relationships before introducing any
 custom graph subsystem.
 
-#### FR-809: Optional Auto-Digest Trigger
+**Acceptance Criteria:**
+- [ ] Tier 4 navigation outputs create resolvable wikilinks without requiring a
+      custom graph backend
+- [ ] Added Tier 4 links remain visible and useful in the native Obsidian graph
+      view
+- [ ] The first Tier 4 navigation slice does not require a separate graph
+      service or database
 
-Folio MAY later support automatic digest triggering from file-change events or
-scheduled watch behavior.
+#### FR-809: Digest Triggering Mode
 
-This is explicitly not required for the first Tier 4 slice. Manual invocation
-of `folio digest` remains the default production path until real usage proves
-that automation is worth the added operational complexity.
+Folio SHALL support manual digest generation as the default Tier 4 operating
+mode. Automatic digest triggering from file-change events or scheduled watch
+behavior remains optional and MUST be disabled by default when it eventually
+lands.
+
+**Acceptance Criteria:**
+- [ ] Manual `folio digest` execution works without any watcher process
+- [ ] Automatic triggering, if implemented later, is opt-in rather than
+      silently enabled
 
 ---
 

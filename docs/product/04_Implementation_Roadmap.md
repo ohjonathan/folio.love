@@ -515,12 +515,13 @@ implementation slice is `folio digest`.
 
 ### Week 23-25: Temporal Roll-Ups
 
-- `folio digest` generates daily digest from all new/modified files
-- `folio digest --week` generates weekly digest from daily digests
+- `folio digest <scope>` generates daily digest from scoped new/modified files
+- `folio digest <scope> --week` generates weekly digest from daily digests
 - Each level is a different analytical altitude:
   - Note-level: "What was said"
   - Daily: "What moved forward today"
   - Weekly: "Where do we stand and what's changed"
+  - SteerCo: "What leadership needs to decide"
 - Manual trigger for v1 (file watcher deferred)
 
 ### Week 26-28: Cross-References & Navigation
@@ -539,10 +540,10 @@ implementation slice is `folio digest`.
 
 ### Tier 4 Exit Criteria
 
-- [ ] Weekly digest saves real time on SteerCo prep
-- [ ] Graph view shows meaningful structure across engagements
-- [ ] Cross-references help navigate related content
-- [ ] Would recommend the workflow to a colleague
+- [ ] Daily and weekly digests generate registered `analysis/digest` notes on the retained production library
+- [ ] Weekly digest is used in at least one real SteerCo-prep cycle
+- [ ] Related links or Maps of Content reduce navigation work on one active engagement
+- [ ] At least one Tier 4 discovery surface is useful enough to recommend the workflow to a colleague
 
 ---
 
@@ -594,8 +595,8 @@ folio link <id> <id> [type]
 
 ### Tier 4 (synthesis & discovery)
 ```bash
-folio digest [--date today] [--week]
-folio synthesize [options]
+folio digest <scope> [--date YYYY-MM-DD] [--week]
+folio synthesize <doc_a> <doc_b> [options]
 folio search <query>
 folio vocab
 ```
@@ -613,6 +614,7 @@ folio vocab
 | Entity name resolution too hard | Medium | Medium | 3 | Start with exact match + human confirmation. No fuzzy matching in v1. |
 | Semantic search architectural lock-in | Medium | High | 4 | Defer until query patterns are clear from real usage. Don't pick an embedding model prematurely. |
 | Org traversal exceeds Obsidian capability | High | Medium | 4 | Flat entity queries (Tier 3) cover 80% of cases. Only invest in traversal if real need demonstrated. |
+| Tier 4 LLM cost grows with library volume | Medium | Medium | 4 | Keep digest manual by default, scope runs to one engagement, and measure prompt/runtime cost before adding automation. |
 | Time constraints (active engagement) | **High** | **High** | All | Tier 1 is the minimum viable product. Everything after is incremental value. |
 
 ---

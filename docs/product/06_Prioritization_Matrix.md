@@ -98,6 +98,16 @@ This is where the February brainstorm features land. They require Tier 1+2 to be
 
 These features need volume to be useful. Building them before the library has depth is premature.
 
+PRD crosswalk:
+- F-401 / F-402 → FR-801 / FR-802
+- F-403 / F-404 → FR-803
+- F-405 → FR-804
+- F-406 → FR-805
+- F-407 → FR-806
+- F-408 → FR-808
+- F-409 → FR-809
+- F-410 → FR-807
+
 | ID | Feature | Value | Effort | Risk | Rationale |
 |----|---------|-------|--------|------|-----------|
 | F-401 | Daily digest (`folio digest`) | High | 1.5 weeks | Low | Aggregate day's new/modified content. Different analytical altitude than source notes. |
