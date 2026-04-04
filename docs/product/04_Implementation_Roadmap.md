@@ -595,7 +595,7 @@ folio link <id> <id> [type]
 
 ### Tier 4 (synthesis & discovery)
 ```bash
-folio digest <scope> [--date YYYY-MM-DD] [--week]
+folio digest <scope> [--date YYYY-MM-DD] [--week] [--llm-profile <profile>]
 folio synthesize <doc_a> <doc_b> [options]
 folio search <query>
 folio vocab
@@ -641,10 +641,11 @@ folio vocab
 - [ ] Enrichment adds useful connections to existing assets
 - [ ] Full engagement lifecycle captured end-to-end
 
-### Tier 4 Gate (Subjective)
-- [ ] Synthesis features save real prep time
-- [ ] Discovery reveals patterns not found manually
-- [ ] System used across multiple engagements
+### Tier 4 Gate
+- [ ] Daily and weekly digests generate registered `analysis/digest` notes on the retained production library
+- [ ] Weekly digest is used in at least one real SteerCo-prep cycle
+- [ ] Related links or Maps of Content reduce navigation work on one active engagement
+- [ ] At least one Tier 4 discovery surface is useful enough to recommend the workflow to a colleague
 
 ---
 

@@ -593,12 +593,14 @@ How daily activity becomes strategic synthesis:
 │              │     │  today"      │     │  what's      │     │  need to     │
 │              │     │              │     │  changed"    │     │  decide"     │
 │ Interactions │     │              │     │              │     │              │
-│ & evidence   │     │ folio digest │     │ folio digest │     │ Human +      │
-│              │     │              │     │ --week       │     │ folio assist │
+│ & evidence   │     │ folio digest │     │ folio digest │     │ Human-led    │
+│              │     │              │     │ --week       │     │ SteerCo prep │
 └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
 ```
 
-**Each level is a different analytical altitude, not compression.** A weekly digest doesn't summarize daily digests. It synthesizes what changed at the engagement level across a week.
+**Each level is a different analytical altitude, not compression.** A weekly
+digest is built from the scope's daily digests and synthesizes what changed at
+the engagement level across a week.
 
 Roll-ups are Analysis documents with subtype `digest`:
 
@@ -610,6 +612,8 @@ subtype: digest
 status: complete
 authority: analyzed
 curation_level: L1
+review_status: flagged
+review_flags: [synthesis_requires_review]
 client: ClientA
 engagement: Due Diligence Q1 2026
 draws_from:

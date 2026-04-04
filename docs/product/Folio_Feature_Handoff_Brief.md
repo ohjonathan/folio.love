@@ -65,8 +65,8 @@ folio ingest <audio_file> --type <interaction_subtype> [--client X]
 **Solution:** Automated roll-up hierarchy: Note → Day → Week → Steerco
 
 ```bash
-folio digest <scope> [--date today]          # Generate daily digest for one engagement scope
-folio digest <scope> --week [--date today]   # Generate weekly digest from that scope's daily digests
+folio digest <scope> [--date YYYY-MM-DD]          # Generate daily digest for one engagement scope
+folio digest <scope> --week [--date YYYY-MM-DD]   # Generate weekly digest from that scope's daily digests
 ```
 
 **Critical design principle:** Each level is a different analytical altitude, not just compression:

@@ -83,8 +83,7 @@ all of the following:
 
 1. under the requested `<scope>`
 2. `type` is `evidence` or `interaction`
-3. `type` is not `analysis`
-4. the effective activity date matches the requested digest day
+3. the effective activity date matches the requested digest day
 
 Effective activity date is defined as:
 
@@ -130,14 +129,14 @@ Digest outputs live under the scoped engagement root at:
 ID convention:
 
 ```text
-{client}_{engagement-short}_analysis_{digest_period}_{digest-label}
+{client}_{engagement-short}_analysis_{digest-period-compact}_{digest-label}
 ```
 
 Examples:
 
 ```text
-usbank_techresilience2026_analysis_2026-04-04_daily-digest
-usbank_techresilience2026_analysis_2026-03-30_weekly-digest
+usbank_techresilience2026_analysis_20260404_daily-digest
+usbank_techresilience2026_analysis_20260330_weekly-digest
 ```
 
 This keeps digest notes:
