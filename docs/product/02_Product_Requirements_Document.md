@@ -9,8 +9,16 @@ generated_by: ontos_scaffold
 
 # Folio: Product Requirements Document
 
-**Version 1.4 | March 2026**
+**Version 1.5 | April 2026**
 **folio.love**
+
+**v1.5 changes:** Expanded the planned Tier 4 product surface in the PRD with
+an explicit FR-800 Synthesis & Discovery family covering daily/weekly digests,
+related links, Maps of Content, pairwise-first synthesis, org traversal
+queries, semantic search, tag vocabulary, graph-friendly navigation, and the
+optional auto-digest trigger. Clarified that Tier 4 is planned product scope
+with selective contract locking and intentionally deferred internal
+architecture.
 
 **v1.4 changes:** Added context document support after PR E (PR #40).
 Updated FR-403 for registry schema v2 and source-less managed documents.
@@ -38,7 +46,8 @@ Folio's output must be trustworthy enough for direct use in active McKinsey enga
 
 ### 1.2 Scope
 
-Folio v1.0 encompasses:
+Folio v1.0 encompasses the shipped Tier 1-3 baseline plus the planned Tier 4
+synthesis-and-discovery surface:
 - Document conversion pipeline (PPTX/PDF to Markdown)
 - Interaction ingestion pipeline (txt/md transcripts and notes to interaction markdown)
 - Context document management (engagement scaffolding notes)
@@ -53,6 +62,15 @@ Folio v1.0 encompasses:
 - CLI for all operations
 - Source grounding and extraction confidence scoring
 - Review status tracking and human override persistence
+- Daily and weekly digest generation for temporal roll-ups
+- Related-link generation and Maps of Content for navigation
+- Pairwise-first cross-asset synthesis workflows
+- Planned semantic search, org traversal query, and tag vocabulary surfaces
+- Optional auto-digest trigger beyond the manual v1 default
+
+Tier 4 items are part of the planned product surface, not the already-shipped
+baseline. Where implementation details remain unresolved, this PRD defines the
+user-visible requirements without prematurely locking internal architecture.
 
 ### 1.3 Definitions
 
@@ -643,6 +661,10 @@ Folio SHALL support route-based selection of LLM profiles by task:
 - `routing.ingest` controls the `folio ingest` analysis path in v1.0
 - `routing.enrich` controls the `folio enrich` analysis path in v1.0
 - `routing.provenance` controls the `folio provenance` analysis path
+- `routing.digest` controls the `folio digest` synthesis path when the first
+  Tier 4 slice lands
+- `routing.synthesize` controls the `folio synthesize` analysis path when the
+  pairwise Tier 4 synthesis surface lands
 - `--llm-profile` overrides route-based selection for a single command invocation
 
 #### FR-605: Optional Transient Fallback
@@ -820,6 +842,205 @@ claim-to-evidence lineage:
 - [ ] Every extraction is traceable to a specific model and pass
 - [ ] Provenance is recorded, not reconstructed
 - [ ] Re-conversion with a different model produces updated provenance
+
+---
+
+### 2.8 Synthesis & Discovery (FR-800) — P2
+
+These requirements define the planned Tier 4 product surface. They apply after
+the library has enough daily depth that synthesis and discovery become more
+valuable than additional ingestion plumbing.
+
+Tier 4 roadmap features map into this requirement family as follows:
+- F-401 / F-402 → FR-801 / FR-802
+- F-403 / F-404 → FR-803
+- F-405 → FR-804
+- F-406 → FR-805
+- F-407 → FR-806
+- F-408 → FR-808
+- F-409 → FR-809
+- F-410 → FR-807
+
+`folio digest` is temporal roll-up over a bounded time window and scope.
+`folio synthesize` is explicit cross-asset comparison over user-selected
+documents and is not the same surface as digest generation.
+
+FR-700 extraction-grounding requirements do not automatically apply to FR-800
+outputs because these documents are inferential synthesis across multiple
+managed notes rather than single-source extraction. Until a Tier 4-specific
+trust model lands, FR-800 outputs are human-review-required analysis artifacts,
+and the first-slice digest contract is further defined in
+`docs/specs/tier4_digest_design_spec.md`.
+
+#### FR-801: Digest Command Family
+
+```bash
+folio digest <scope> [--date YYYY-MM-DD] [--week] [--llm-profile <profile>]
+```
+
+- Require an explicit engagement-scoped path in v1 rather than silently
+  running library-wide
+- Generate a daily digest from the scoped day's new or modified managed documents
+- Generate a weekly digest from daily digests when `--week` is supplied
+- Preserve manual invocation as the v1 default; automatic triggering is a
+  later optional extension
+- Present each roll-up at a different analytical altitude rather than treating
+  the command as simple compression
+- Re-run the same target period idempotently by updating the existing digest
+  note rather than creating duplicates
+- Follow the first-slice implementation contract in
+  `docs/specs/tier4_digest_design_spec.md` for scope resolution, input
+  predicate, output path, registry integration, body template, and failure
+  behavior
+
+**Acceptance Criteria:**
+- [ ] `folio digest` can produce a daily roll-up for a specific day
+- [ ] `folio digest --week` consumes daily digests rather than raw notes alone
+- [ ] The command requires explicit scope in the first Tier 4 slice
+- [ ] Re-running the same scope + period updates the existing digest target
+      instead of creating a second note
+- [ ] The command remains manually triggered by default in v1
+
+#### FR-802: Digest Document Contract
+
+Digest outputs SHALL be Analysis documents with subtype `digest` and SHALL
+include digest metadata in frontmatter:
+
+```yaml
+type: analysis
+subtype: digest
+digest_period: 2026-02-14
+digest_type: daily  # daily | weekly | steerco
+```
+
+Digest docs are source-less managed documents. They SHALL omit `source`,
+`source_hash`, `source_type`, and `source_transcript`, and they SHALL be
+registered in `registry.json` as `type: analysis`, `subtype: digest` rows.
+`folio scan` SHALL ignore them, `folio refresh` SHALL skip all `analysis`
+entries with command-specific rerun guidance, and `folio enrich` SHALL continue
+to skip `analysis` rows in v1 until a separate Tier 4 enrichment pass is
+specified. Registry rebuild behavior MUST retain source-less analysis rows
+analogously to existing source-less context rows.
+
+Daily, weekly, and steerco digests SHALL remain distinct analytical products:
+- Daily digest: what moved forward today
+- Weekly digest: where the engagement stands and what changed this week
+- SteerCo digest: what leadership needs to decide
+
+`digest_period` SHALL remain a date-valued field:
+- daily digest: the represented calendar day
+- weekly digest: the Monday anchor date of the represented ISO week
+- steerco digest: the target SteerCo meeting date or prep deadline
+
+`steerco` remains part of the typed document contract, but it is not part of
+the first Tier 4 CLI slice. No `folio digest --steerco` flag is required for
+the first implementation PR.
+
+The system MAY evolve prompt structure over time, but it SHALL preserve this
+typed-document contract.
+
+#### FR-803: Related Links And Maps Of Content
+
+Folio SHALL support Tier 4 navigation surfaces that connect related assets:
+- Wiki links between related decks, analyses, and interactions
+- Auto-generated Maps of Content for client, engagement, or framework views
+- Graph-friendly linking that improves Obsidian navigation without requiring a
+  custom visualization layer in v1
+
+Implementation details for scoring or ranking relatedness remain flexible.
+The requirement is the visible navigation benefit, not a specific linking
+algorithm.
+
+#### FR-804: Cross-Asset Synthesis
+
+```bash
+folio synthesize <doc_a> <doc_b> [--title <title>] [--llm-profile <profile>]
+```
+
+Folio SHALL support cross-asset synthesis workflows for comparing and combining
+related documents. The initial v1 analytical shape SHALL start with pairwise
+synthesis (for example, two interviews or an interview plus a context note)
+rather than arbitrary N-way synthesis.
+
+The system MAY later expand to broader synthesis sets after the pairwise path
+proves useful on real engagement work.
+
+#### FR-805: Org Traversal Queries
+
+Folio SHALL support traversal-oriented org queries over the shipped entity
+baseline when hierarchy data is present in `entities.json`.
+
+Examples:
+- Show all interviews with anyone reporting to a given leader
+- Traverse a manager chain N levels deep
+
+This requirement locks the user-visible capability, not the internal query
+engine. Whether Dataview extensions, custom indexing, or another approach
+fulfills the traversal requirement remains intentionally unspecified.
+The first Tier 4 traversal surface SHALL default to the active engagement scope
+instead of spanning the entire library unless an explicit cross-engagement
+override is added later.
+
+#### FR-806: Semantic Search
+
+```bash
+folio search <query>
+```
+
+Folio SHALL provide a discovery-oriented search surface for "find things
+related to this idea" queries that exceed literal text matching.
+
+The search architecture remains intentionally deferred. This PRD does not lock:
+- embedding model choice
+- index storage design
+- ranking algorithm
+- whether search is implemented entirely inside the vault or via sidecar data
+
+The requirement is a user-facing search command and discovery workflow, not a
+premature architectural commitment.
+
+#### FR-807: Tag Vocabulary
+
+```bash
+folio vocab
+```
+
+Folio SHALL support a tag-vocabulary inspection and management surface for the
+single unified `tags` field.
+
+This command family SHALL reinforce consistency for reusable tags without
+reintroducing a separate `concepts` field. The tool MAY warn on unfamiliar
+tags, surface common tags, or support curation workflows, but the metadata
+contract remains a single `tags` list.
+
+#### FR-808: Graph-Friendly Navigation
+
+Folio SHALL preserve an Obsidian-native graph experience as Tier 4 navigation
+surfaces are added.
+
+The system SHALL prefer lightweight graph improvements through stable links,
+entity stubs, Maps of Content, and digest relationships before introducing any
+custom graph subsystem.
+
+**Acceptance Criteria:**
+- [ ] Tier 4 navigation outputs create resolvable wikilinks without requiring a
+      custom graph backend
+- [ ] Added Tier 4 links remain visible and useful in the native Obsidian graph
+      view
+- [ ] The first Tier 4 navigation slice does not require a separate graph
+      service or database
+
+#### FR-809: Digest Triggering Mode
+
+Folio SHALL support manual digest generation as the default Tier 4 operating
+mode. Automatic digest triggering from file-change events or scheduled watch
+behavior remains optional and MUST be disabled by default when it eventually
+lands.
+
+**Acceptance Criteria:**
+- [ ] Manual `folio digest` execution works without any watcher process
+- [ ] Automatic triggering, if implemented later, is opt-in rather than
+      silently enabled
 
 ---
 
