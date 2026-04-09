@@ -7,9 +7,14 @@ Your consulting portfolio, searchable and AI-ready.
 
 ## What It Does
 
-Folio converts PPTX, PPT, and PDF presentations into structured Markdown with YAML frontmatter, slide images, and optional LLM-powered analysis. Every conversion preserves three layers: verbatim text, slide images at configurable DPI, and per-slide classification with evidence grounding.
+Folio turns consulting artifacts into a structured, searchable knowledge base.
 
-Folio tracks versions automatically -- re-converting an updated deck increments the version, detects per-slide changes, and preserves history. Open `library/` as an Obsidian vault for automatic frontmatter indexing.
+- **Deck conversion** — PPTX, PPT, and PDF presentations become structured Markdown with YAML frontmatter, slide images, and LLM-powered evidence extraction.
+- **Interaction ingestion** — meeting transcripts and interview notes become structured interaction notes with grounded findings, entity mentions, and reviewability metadata.
+- **Enrichment** — existing notes are enriched with auto-generated tags, entity wikilinks resolved against a shared registry, and relationship proposals between documents.
+- **Provenance** — claim-level provenance links connect evidence across documents, with human-in-the-loop confirmation.
+
+Folio tracks versions automatically -- re-converting an updated deck or re-ingesting a transcript increments the version, detects changes, and preserves history. Open `library/` as an Obsidian vault for automatic frontmatter indexing.
 
 ## Install
 
@@ -227,6 +232,121 @@ folio entities reject "Jnae Smith"   # typo cleanup
 
 The entity registry is stored as `entities.json` alongside `registry.json` in the library root. Imported entities are confirmed automatically; entities extracted during future ingest passes will be marked as needing confirmation.
 
+### `folio ingest`
+
+Ingest a transcript or notes file into a structured interaction note.
+
+```bash
+# Basic ingest
+folio ingest transcript.md --type expert_interview --date 2026-03-21
+
+# With full metadata
+folio ingest ./transcripts/cto_interview.md \
+  --type expert_interview \
+  --date 2026-03-21 \
+  --client ClientA \
+  --engagement "DD Q1 2026" \
+  --participants "Jane Smith,John Doe" \
+  --duration-minutes 45 \
+  --note "initial ingest from cleaned transcript"
+
+# Re-ingest an updated transcript (version increment)
+folio ingest ./transcripts/cto_interview.md \
+  --type expert_interview \
+  --date 2026-03-21 \
+  --target library/clienta/ddq126/interactions/2026-03-21_cto_interview/2026-03-21_cto_interview.md
+```
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--type` | **Required.** Interaction subtype: `client_meeting`, `expert_interview`, `internal_sync`, `partner_check_in`, `workshop` |
+| `--date` | **Required.** Event date (`YYYY-MM-DD`); must not be in the future |
+| `--client` | Client name |
+| `--engagement` | Engagement identifier |
+| `--participants` | Comma-separated participant names |
+| `--duration-minutes` | Meeting duration in minutes |
+| `--source-recording` | Path to source recording (stored as metadata) |
+| `--title` | Override note title (defaults to first H1 or source filename) |
+| `--target` | Override output path; point at an existing `.md` to re-ingest |
+| `--llm-profile` | Override the configured LLM profile for this run |
+| `--note`, `-n` | Version note |
+
+The output is a structured Markdown interaction note containing: a summary, key findings (claims, data points, decisions, open questions), extracted entities as Obsidian wikilinks, grounded quotes with confidence scores, and a collapsed raw transcript. If LLM analysis is unavailable, a degraded note is written with visible warning flags.
+
+Re-ingesting the same source file increments the version rather than creating a duplicate. Identity is resolved by source path, then by content hash.
+
+### `folio enrich`
+
+Enrich existing evidence and interaction notes with tags, entity wikilinks, and relationship proposals.
+
+```bash
+# Enrich all eligible notes
+folio enrich
+
+# Scope to a client or engagement
+folio enrich ClientA
+folio enrich ClientA/DD_Q1_2026
+
+# Preview without writing
+folio enrich --dry-run
+
+# Force re-enrichment even if fingerprint matches
+folio enrich --force
+```
+
+Enrichment runs three axes per note:
+
+1. **Tags** — additive merge of LLM-suggested tags with existing tags.
+2. **Entities** — mentions are resolved against the entity registry; new names are auto-created as unconfirmed entries with optional proposed matches to existing entities.
+3. **Relationships** — `supersedes` and `impacts` proposals between notes in the same engagement, surfaced for human confirmation.
+
+Notes above `L0` curation level or with `reviewed`/`overridden` review status are protected from body mutation. Enrichment is idempotent: a content fingerprint prevents redundant LLM calls unless the note body, entity registry, or relationship context has changed.
+
+### `folio provenance`
+
+Generate and manage claim-level provenance links between evidence documents.
+
+```bash
+# Evaluate all eligible pairs
+folio provenance
+folio provenance ClientA/DD_Q1_2026
+
+# Preview without writing
+folio provenance --dry-run
+
+# Review pending proposals
+folio provenance review
+folio provenance review --doc source_doc_id
+
+# Confirm or reject proposals
+folio provenance confirm <proposal_id>
+folio provenance reject <proposal_id>
+folio provenance confirm-doc <doc_id>
+
+# Check coverage
+folio provenance status
+
+# Manage stale links
+folio provenance stale refresh-hashes <link_id>
+folio provenance stale acknowledge <link_id>
+folio provenance stale remove <link_id>
+```
+
+Provenance links connect specific claims in a source document to supporting evidence in target documents. All links require human confirmation before becoming canonical. Stale links (where the underlying evidence has changed) are surfaced for review.
+
+### `folio context`
+
+Scaffold an engagement context document.
+
+```bash
+folio context init --client "Acme" --engagement "DD Q1 2026"
+folio context init --client "Acme" --engagement "Ops Sprint" --target ./custom/path/
+```
+
+Creates a structured `_context.md` with sections for client background, engagement snapshot, objectives, timeline, team, stakeholders, starting hypotheses, and risks. The document is registered at `L1` curation level and serves as the engagement anchor in the knowledge graph.
+
 **Global flags**: `--verbose` / `-v` (debug logging), `--config` / `-c` (path to `folio.yaml`)
 
 ## Output Structure
@@ -388,6 +508,8 @@ preserving the existing request shape for non-GPT-5 models.
 
 ## How It Works
 
+### Deck Conversion (`folio convert`)
+
 ```
 Input (.pptx/.ppt/.pdf)
   │
@@ -406,6 +528,58 @@ Input (.pptx/.ppt/.pdf)
 ```
 
 Each stage is independent and testable. LLM analysis results are cached per-slide -- re-conversion only re-analyzes changed slides. Blank slides are detected via image histogram analysis and excluded from deep analysis.
+
+### Interaction Ingestion (`folio ingest`)
+
+```
+Input (.txt/.md transcript)
+  │
+  ├─ Normalize ──→ Strip frontmatter, normalize whitespace
+  │
+  ├─ Analysis ───→ LLM extraction: summary, findings, entities, quotes
+  │                 Confidence scoring + source-text validation
+  │
+  ├─ Entities ───→ Resolve mentions against entity registry
+  │                 Auto-create unconfirmed entries for new names
+  │
+  ├─ Identity ───→ Re-ingest detection (path → hash → new)
+  │
+  └─ Assembly ───→ Interaction note with grounded findings + raw transcript
+```
+
+### Enrichment (`folio enrich`)
+
+```
+Existing evidence/interaction note
+  │
+  ├─ Plan ───────→ Fingerprint check, protection rules, disposition
+  │
+  ├─ Tags ───────→ LLM-suggested tags, additive merge
+  │
+  ├─ Entities ───→ Mention extraction → registry resolution
+  │                 Wikilink injection into managed sections
+  │
+  ├─ Relations ──→ Peer context → LLM relationship evaluation
+  │                 Proposals: supersedes, impacts
+  │
+  └─ Write ──────→ Frontmatter update + managed body sections (atomic)
+```
+
+### Provenance (`folio provenance`)
+
+```
+Source note × Target note
+  │
+  ├─ Extract ────→ Structured evidence items from both documents
+  │
+  ├─ Shard ──────→ Split into context-window-sized evaluation chunks
+  │
+  ├─ Evaluate ───→ LLM claim-to-evidence matching per shard
+  │
+  ├─ Proposals ──→ Pending human confirmation (confirm/reject)
+  │
+  └─ Links ──────→ Canonical provenance links with staleness tracking
+```
 
 ## Version Tracking
 
@@ -446,28 +620,43 @@ The test suite depends on dev-only packages such as `python-pptx` and `reportlab
 
 ```
 folio/
-├── cli.py              # Click CLI (convert, batch, status, scan, refresh, promote, entities)
+├── cli.py              # Click CLI (all commands)
 ├── config.py           # FolioConfig + folio.yaml loading
-├── converter.py        # Pipeline orchestrator
+├── converter.py        # Deck conversion orchestrator
+├── ingest.py           # Interaction ingestion orchestrator
+├── enrich.py           # Enrichment pipeline (tags, entities, relationships)
+├── provenance.py       # Retroactive provenance linking
+├── context.py          # Engagement context document creation
 ├── entity_import.py    # CSV org chart → entity registry
+├── naming.py           # Shared naming helpers (IDs, slugs, engagement-short)
+├── lock.py             # Library-level file locking
+├── llm/                # LLM provider abstraction + runtime
 ├── pipeline/
 │   ├── normalize.py    # PPTX/PPT → PDF
 │   ├── images.py       # PDF → slide images + blank detection
 │   ├── text.py         # Structured text extraction + reconciliation
-│   └── analysis.py     # LLM analysis + caching
+│   ├── analysis.py     # LLM analysis + caching (deck conversion)
+│   ├── interaction_analysis.py   # LLM analysis (interaction ingestion)
+│   ├── enrich_analysis.py        # LLM analysis (enrichment)
+│   ├── enrich_data.py            # Enrichment data structures + fingerprinting
+│   ├── entity_resolution.py      # Entity mention → registry resolution
+│   ├── provenance_analysis.py    # LLM provenance matching
+│   ├── provenance_data.py        # Provenance data structures + hashing
+│   └── section_parser.py         # Markdown section parser (managed sections)
 ├── output/
-│   ├── frontmatter.py  # YAML frontmatter (v2 schema)
-│   └── markdown.py     # Markdown assembly
+│   ├── frontmatter.py  # YAML frontmatter (v2 schema, evidence + interaction)
+│   ├── markdown.py     # Markdown assembly (evidence notes)
+│   └── interaction_markdown.py   # Markdown assembly (interaction notes)
 └── tracking/
     ├── entities.py     # Entity registry (people, departments, systems, processes)
-    ├── registry.py     # Deck registry + atomic JSON writes
+    ├── registry.py     # Document registry + atomic JSON writes
     ├── sources.py      # Source file tracking + staleness
     └── versions.py     # Version detection + change sets
 ```
 
 ## Roadmap
 
-- **Entity resolution at ingest time** -- automatically match names mentioned in slides to the entity registry (PR B, planned).
+- **Daily digest** (`folio digest`) -- summarize recent library activity across engagements (Tier 4, in progress).
 - **Search and retrieval** (`folio search`) -- not yet implemented. Today, converted decks are searchable via Obsidian, grep, or any tool that reads Markdown + YAML frontmatter.
 
 ## License
