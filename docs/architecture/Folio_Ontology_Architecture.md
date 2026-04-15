@@ -125,6 +125,31 @@ A document can be L0/T1/clean (raw conversion, no issues detected), L2/T3/flagge
 
 See PRD FR-700 for the full requirements specification.
 
+### 2.8 Latent Discovery vs. Canonical Graph State
+
+Folio separates probabilistic discovery from canonical graph truth.
+
+| Layer | Purpose | Canonical? | Examples |
+|-------|---------|------------|----------|
+| **Latent discovery layer** | Find patterns worth reviewing | No | topic clusters, similarity neighborhoods, candidate links, candidate merges, drift signals, diagram archetype groupings |
+| **Proposal layer** | Package discoveries into reviewable assertions | No | evidence bundle, reason bundle, trust bundle, schema-gate result, lifecycle state |
+| **Canonical graph state** | Persist governed ontology and relationships | Yes | frontmatter relations, entity registries, reviewed aliases, confirmed links |
+
+Design rules:
+- clusters, topics, similarities, and inferred relations are discovery aids,
+  not ontology terms by themselves
+- multimodal artifacts may produce non-canonical archetype groupings before
+  any typed graph relation exists
+- probabilistic discovery may influence ranking and review priority, but it
+  does not write canonical graph state directly
+- frontmatter plus registries remain the source of truth for canonical graph
+  state
+- any sidecar index or proposal store is acceptable only if it is derived and
+  rebuildable from managed content and canonical metadata
+
+In discussion this may look like a "shadow graph," but Folio's formal product
+terms are **latent discovery layer** and **proposal layer**.
+
 ---
 
 ## 3. The Dual Ontology: Space & Time

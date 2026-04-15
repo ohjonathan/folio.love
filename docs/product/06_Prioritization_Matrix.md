@@ -107,11 +107,21 @@ PRD crosswalk:
 - F-408 → FR-808
 - F-409 → FR-809
 - F-410 → FR-807
+- F-411 → FR-810
+- F-412 → FR-811
+- F-413 → FR-812
+- F-414 → FR-813
+- F-415 → FR-814
 
 | ID | Feature | Value | Effort | Risk | Rationale |
 |----|---------|-------|--------|------|-----------|
 | F-401 | Daily digest (`folio digest`) | High | 1.5 weeks | Low | Aggregate day's new/modified content. Different analytical altitude than source notes. |
 | F-402 | Weekly digest (`folio digest --week`) | High | 1 week | Low | Roll up daily digests. SteerCo prep input. |
+| F-411 | `folio enrich diagnose` | Medium | 0.5 weeks | Low | Makes body-coverage blockers visible before graph-density work stalls silently. |
+| F-412 | Trust-aware graph behavior | High | 1 week | Medium | Keeps digest, synthesize, traversal, and search from compounding flagged inputs by default. |
+| F-413 | Relation-schema validation | High | 1 week | Medium | Enforces ontology quality for canonical relationships instead of trusting ad hoc writes. |
+| F-414 | Discovery / proposal layer foundation | High | 1 week | Medium | Makes latent discovery explicit and reusable across links, synthesize, and search without changing canonical graph truth. |
+| F-415 | Proposal lifecycle governance | High | 1 week | Medium | Standardizes evidence/trust bundles, rejection memory, and stale invalidation before proposal volume scales up. |
 | F-403 | Wiki links between related decks | Medium | 1.5 weeks | Low | Same-project, same-framework auto-linking. |
 | F-404 | Maps of Content (framework/client index pages) | Medium | 1 week | Low | Auto-generated index pages. Updated on conversion. |
 | F-405 | `folio synthesize` (cross-asset synthesis) | High | 2 weeks | High | Interview synthesis across multiple interactions. Needs careful prompt design. |
@@ -121,8 +131,25 @@ PRD crosswalk:
 | F-409 | File watcher for auto-digest | Low | 1 week | Low | Quality of life. Manual trigger sufficient for v1. |
 | F-410 | `folio vocab` (tag vocabulary) | Low | 1 week | Low | Controlled vocabulary for the unified `tags` field. Nice for consistency, not blocking. |
 
-**Tier 4 total: ~17.5 weeks**  
+**Tier 4 total: ~22 weeks**
 **Exit criteria:** Library reveals patterns across engagements. Synthesis features save prep time.
+
+### Tier 4 validation workstream (not yet committed product features)
+
+This workstream is attached to F-414 / F-415 and exists to validate the
+proposal layer before broader automation:
+
+- document relationship proposals
+- entity merge proposals
+- diagram archetype clustering
+
+Promotion gates:
+- top-ranked proposal acceptance quality is strong enough to trust review
+  ordering
+- review burden stays manageable
+- rejection memory suppresses repeated bad suggestions
+- no canonical auto-promotion is introduced
+- diagram clustering proves useful before any full parsing commitment
 
 ---
 
@@ -138,6 +165,7 @@ Features identified but explicitly deferred. Not on any roadmap until a real nee
 | Multi-user collaboration | Personal tool. No collaboration requirement. |
 | Real-time sync | Obsidian + OneDrive handles this passively. |
 | Custom graph DB migration | Obsidian + Dataview covers 80% of queries. Revisit when queries demonstrably exceed its capability. |
+| Full diagram parsing | Keep out of the committed Tier 4 set until archetype clustering proves useful on real consulting artifacts. |
 
 ---
 
@@ -160,7 +188,7 @@ Features identified but explicitly deferred. Not on any roadmap until a real nee
 ```
 
 **Top-right (high value, high effort):** Core pipeline. No shortcut. Do it right.  
-**Top-left (high value, low effort):** Ingest, digest, schema fields. Best ROI after foundation ships.  
+**Top-left (high value, low effort):** Ingest, digest, schema fields, graph quality controls, and proposal governance. Best ROI after foundation ships.
 **Bottom-right (low value, high effort):** Org traversal, semantic search. Don't touch until real queries demand it.  
 **Bottom-left (low value, low effort):** Nice-to-haves. Build when bored.
 
@@ -175,8 +203,13 @@ F-101 through F-108 (core pipeline)
         │   ├── F-303/304 (entity extraction) ← requires ingest producing content
         │   └── F-401/402 (digest) ← requires daily content flow
         ├── F-305 (enrich) ← requires library with content to enrich
-        │   └── F-306 (provenance) ← requires enrich infrastructure
+        │   ├── F-306 (provenance) ← requires enrich infrastructure
+        │   └── F-411 (enrich diagnose) ← requires enrich protection rules
         └── F-403/404 (wiki links, MOCs) ← requires multi-deck library
+            ├── F-412 (trust-aware graph behavior) ← requires shipped review/trust metadata
+            ├── F-413 (relation-schema validation) ← requires shared graph surfaces
+            ├── F-414 (discovery / proposal layer foundation) ← requires shared graph surfaces and trust gating
+            ├── F-415 (proposal lifecycle governance) ← requires F-414 and review surfaces
             └── F-407 (semantic search) ← requires substantial content volume
 ```
 
@@ -190,3 +223,4 @@ F-101 through F-108 (core pipeline)
 | F-406 Org traversal | Dataview can't do recursive queries. This is a different product. | Build flat entity queries first (F-303). Only invest in traversal if Johnny actually needs it on a real engagement. |
 | F-407 Semantic search | Embedding model + vector store is a significant architectural commitment | Obsidian's built-in search + Dataview covers most cases. Defer until search is demonstrably insufficient. |
 | F-405 Cross-asset synthesis | LLM synthesis quality across many documents is unpredictable | Start with pairwise comparison (2 interviews), not N-way synthesis. Build up. |
+| F-414 / F-415 Proposal layer | Discovery can swamp reviewers with plausible but low-value suggestions | Keep proposal objects non-canonical, require evidence/trust bundles, and prove acceptance quality before expanding proposal volume. |
