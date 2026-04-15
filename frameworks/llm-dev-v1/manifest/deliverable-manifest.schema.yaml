@@ -1,0 +1,375 @@
+# Deliverable Manifest Schema — v1.1.0 (backward-compatible with v1.0.0)
+#
+# Structural + typed spec for a deliverable manifest. A manifest drives the
+# prompt-suite generator (see generator-spec.md) and is the source of truth
+# for scope lock, artifact output paths, and model assignments.
+#
+# This file is JSON Schema draft-07-shaped. A validator can consume it
+# directly (e.g., check-jsonschema). Additional invariants that JSON Schema
+# cannot express (strict ≥3 non-author family rule, command-expectation
+# grammar conformance, pre-A coherence) are enforced by scripts/verify-*.sh.
+#
+# v1.1 additions (all additive — any manifest that already carried
+# `manifest_version: "1.0.0"` validates unchanged against the v1.1
+# schema; manifests drafted before `manifest_version` was required
+# still need the field added — the `required` list itself is
+# unchanged from v1.0.0):
+#   - manifest_version accepts "1.0.0" or "1.1.0".
+#   - phase_id enum gains three pre-A variants (-A.proposal, -A.triage,
+#     -A.validation) for optional entry points before Phase A.
+#   - role_label enum gains `product` (user-facing review lens) plus
+#     `proposal-reviewer`, `triage-author`, `validation-run-author`
+#     (pre-A worker roles).
+#   - artifacts.product_verdict is an optional path pattern for the
+#     per-family Product-lens verdict on user-facing deliverables.
+#   - user_facing (top-level boolean, default false) flips the P3
+#     extension on — Phase B.1/B.2/D.2 require a Product reviewer.
+#     Enforcement lives in verify-p3.sh (JSON Schema alone cannot
+#     express the cross-field invariant).
+#   - pre_a (top-level optional block) declares the pre-A entry point
+#     and its artifact path. Generator-spec invariant 16 requires the
+#     artifact to exist before Phase A dispatches.
+
+$schema: "https://json-schema.org/draft-07/schema#"
+$id: "deliverable-manifest-v1"
+type: object
+required:
+  - manifest_version
+  - id
+  - slug
+  - summary
+  - scope
+  - artifacts
+  - model_assignments
+  - smoke_checks
+  - gate_prerequisites
+additionalProperties: false
+
+# ---------------------------------------------------------------------------
+# Reusable definitions
+# ---------------------------------------------------------------------------
+definitions:
+
+  # Expectation grammar for runnable check outcomes. One of:
+  #   exit-0              — process exits 0
+  #   exit-nonzero        — process exits non-zero (useful for "grep should
+  #                         not find forbidden symbol" patterns)
+  #   literal:<string>    — stdout (trimmed) equals <string> exactly
+  #   regex:<pattern>     — stdout matches <pattern>
+  #   gte:<integer>       — stdout is an integer >= N
+  #   lte:<integer>       — stdout is an integer <= N
+  #   eq:<integer>        — stdout is an integer == N
+  #   empty               — stdout is empty (no trailing whitespace)
+  expectation:
+    type: string
+    pattern: "^(exit-0|exit-nonzero|empty|literal:.+|regex:.+|gte:-?[0-9]+|lte:-?[0-9]+|eq:-?[0-9]+)$"
+
+  # The valid phase identifier set. B.1 / B.2 / B.3 and D.1 .. D.6 are
+  # explicit sub-phases. E is retrospective. 0 is scoping. v1.1 adds three
+  # optional pre-A variants (-A.proposal, -A.triage, -A.validation).
+  phase_id:
+    type: string
+    enum:
+      - "-A.proposal"
+      - "-A.triage"
+      - "-A.validation"
+      - "0"
+      - "A"
+      - "B.1"
+      - "B.2"
+      - "B.3"
+      - "C"
+      - "D.1"
+      - "D.2"
+      - "D.3"
+      - "D.4"
+      - "D.5"
+      - "D.6"
+      - "E"
+
+  role_label:
+    type: string
+    enum:
+      - spec-author
+      - implementation-author
+      - peer
+      - alignment
+      - adversarial
+      - product
+      - meta-consolidator
+      - fix-author
+      - verifier
+      - final-approval
+      - retro
+      - investigator
+      - infra-bootstrap
+      - proposal-reviewer
+      - triage-author
+      - validation-run-author
+
+# ---------------------------------------------------------------------------
+# Top-level properties
+# ---------------------------------------------------------------------------
+properties:
+
+  manifest_version:
+    description: Semver of this schema (tied to bundle version). v1.1 accepts v1.0.0 manifests unchanged.
+    type: string
+    enum: ["1.0.0", "1.1.0"]
+
+  user_facing:
+    description: When true, Phases B.1/B.2/D.2 require a Product reviewer (Template 19) in model_assignments. Enforcement lives in verify-p3.sh. Default false preserves v1.0.0 behavior.
+    type: boolean
+    default: false
+
+  pre_a:
+    description: |
+      Optional pre-A entry point. When set, the artifact at artifact_path
+      must be produced before Phase A dispatches (generator-spec
+      invariant 16). Pick one of three variants:
+        - proposal  — Template 16; new direction to validate
+        - triage    — Template 17; pile of findings to categorize
+        - validation — Template 18; observation run over deployed code
+    type: object
+    required: [entry, artifact_path]
+    additionalProperties: false
+    properties:
+      entry:
+        type: string
+        enum: [proposal, triage, validation]
+      artifact_path:
+        description: Resolved path for the pre-A artifact. Must be produced before Phase A. Non-empty string (minLength enforced; verify-pre-a.sh also rejects whitespace-only values).
+        type: string
+        minLength: 1
+
+  id:
+    description: Unique deliverable identifier (fills <DELIVERABLE_ID>).
+    type: string
+    pattern: "^[a-z][a-z0-9-]*$"
+
+  slug:
+    description: Filesystem-safe slug (fills <DELIVERABLE_SLUG>).
+    type: string
+    pattern: "^[a-z][a-z0-9-]*$"
+
+  summary:
+    description: One-sentence description of the deliverable.
+    type: string
+    minLength: 20
+
+  owners:
+    description: Roadmap / product owner names, for traceability.
+    type: array
+    items:
+      type: string
+
+  scope:
+    description: Paths, forbidden symbols, and runnable cardinality asserts.
+    type: object
+    required: [allowed_paths, forbidden_paths]
+    additionalProperties: false
+    properties:
+      allowed_paths:
+        description: Fills <SCOPE_LOCK_PATHS[]>.
+        type: array
+        items: { type: string }
+      forbidden_paths:
+        description: Fills <NO_TOUCH_PATHS[]>.
+        type: array
+        items: { type: string }
+      forbidden_symbols:
+        description: Fills <FORBIDDEN_SYMBOLS[]>. Strings that must not appear.
+        type: array
+        items: { type: string }
+      cardinality_assertions:
+        description: Runnable assertions (shell or language). Each must pass.
+        type: array
+        items:
+          type: object
+          required: [name, command, expect]
+          additionalProperties: false
+          properties:
+            name:    { type: string }
+            command: { type: string }
+            expect:  { "$ref": "#/definitions/expectation" }
+
+  artifacts:
+    description: Expected artifact output paths. Family verdicts and canonical verdicts are split into separate templates so the orchestrator can derive paths mechanically without ambiguity.
+    type: object
+    required: [spec, family_verdict, canonical_verdict, fix_summary, verification, final_approval, retro]
+    additionalProperties: false
+    properties:
+      spec:              { type: string }
+      family_verdict:
+        description: Pattern for per-family per-role review artifacts. Must contain <phase>, <family>, and <role> placeholders.
+        type: string
+      canonical_verdict:
+        description: Pattern for the meta-consolidated canonical verdict. Must contain <phase> and must NOT contain <family> or <role>.
+        type: string
+      product_verdict:
+        description: Pattern for per-family Product-lens verdicts on user-facing deliverables (Template 19). Must contain <phase> and <family>; must NOT contain <role> (the role is always "product"). Optional; required when user_facing is true (verify-artifact-paths.sh enforces).
+        type: string
+      fix_summary:       { type: string }
+      verification:
+        description: Pattern for D.5 verifier artifacts, one per verifying family. Must contain <family>.
+        type: string
+      final_approval:    { type: string }
+      retro:             { type: string }
+      proposal_verdict:
+        description: Path for the pre-A.proposal consolidated verdict (Template 16). Optional; required when pre_a.entry is "proposal".
+        type: string
+      triage_report:
+        description: Path for the pre-A.triage consolidated report (Template 17). Optional; required when pre_a.entry is "triage".
+        type: string
+      validation_run_report:
+        description: Path for the pre-A.validation observation report (Template 18). Optional; required when pre_a.entry is "validation".
+        type: string
+
+  model_assignments:
+    description: Family → role map per phase. Enforces P3 (strict ≥3 non-author families for B.1/B.2 and D.2) and P10 (one role per session).
+    type: array
+    items:
+      type: object
+      required: [phase, assignments]
+      additionalProperties: false
+      properties:
+        phase: { "$ref": "#/definitions/phase_id" }
+        assignments:
+          description: Map from family to role. The same family must not appear twice in a phase (P10).
+          type: object
+          additionalProperties:
+            "$ref": "#/definitions/role_label"
+
+  cli_capability_matrix:
+    description: What each family's CLI can do. Drives halt classification.
+    type: object
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      properties:
+        shell:       { type: boolean }
+        git:         { type: boolean }
+        test_runner: { type: boolean }
+        doc_index:   { type: boolean }
+
+  smoke_checks:
+    description: Per-phase fast checks. Fills <SMOKE_CHECKS[]>.
+    type: array
+    items:
+      type: object
+      required: [phase, checks]
+      additionalProperties: false
+      properties:
+        phase: { "$ref": "#/definitions/phase_id" }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, command, expect]
+            additionalProperties: false
+            properties:
+              name:    { type: string }
+              command: { type: string }
+              expect:  { "$ref": "#/definitions/expectation" }
+
+  regression_guards:
+    description: Tests from prior deliverables that must continue to pass. Explicit empty array `[]` is valid for a first deliverable.
+    type: array
+    items:
+      type: object
+      required: [name, command]
+      additionalProperties: false
+      properties:
+        name:                 { type: string }
+        command:              { type: string }
+        owns_deliverable_id:  { type: string }
+
+  gate_prerequisites:
+    description: |
+      Fills <GATE_PREREQUISITES[]> in 07-final-approval-gate.md. Instead of
+      a hard minimum count, the gate must cover six categories with at
+      least one prerequisite each. scripts/verify-gate-categories.sh
+      enforces this; JSON Schema alone cannot.
+      Categories: test, scope, cardinality, verdict-presence,
+      blocker-closure, branch.
+    type: array
+    minItems: 6
+    items:
+      type: object
+      required: [id, category, description, verification]
+      additionalProperties: false
+      properties:
+        id:          { type: string }
+        category:
+          type: string
+          enum: [test, scope, cardinality, verdict-presence, blocker-closure, branch]
+        description: { type: string }
+        verification:
+          type: object
+          required: [command, expect]
+          additionalProperties: false
+          properties:
+            command: { type: string }
+            expect:  { "$ref": "#/definitions/expectation" }
+
+  tracker:
+    description: Location and row schema for the deliverable tracker.
+    type: object
+    required: [path, columns]
+    additionalProperties: false
+    properties:
+      path:    { type: string }
+      columns: { type: array, items: { type: string } }
+
+  branch_map:
+    description: Branch naming per phase/role. Drives <BRANCH_CONVENTION>.
+    type: object
+    additionalProperties: false
+    properties:
+      default:     { type: string, description: "Pattern with <DELIVERABLE_ID>, <PHASE_ID>, <ROLE>, <FAMILY> placeholders." }
+      overrides:
+        type: array
+        items:
+          type: object
+          required: [phase, pattern]
+          additionalProperties: false
+          properties:
+            phase:   { "$ref": "#/definitions/phase_id" }
+            pattern: { type: string }
+
+  references:
+    description: Approved reference documents the review board must consult.
+    type: array
+    items:
+      type: object
+      required: [path, relevance]
+      additionalProperties: false
+      properties:
+        path:      { type: string }
+        version:   { type: string }
+        relevance: { type: string }
+
+# ---------------------------------------------------------------------------
+# Cross-field invariants (v1.1 additions)
+# ---------------------------------------------------------------------------
+#
+# Defense-in-depth for the user_facing / product_verdict cross-field
+# invariant. Schema enforcement runs alongside verify-p3.sh (which
+# additionally checks model_assignments for a `product` role; the
+# schema can only see the artifacts.product_verdict path).
+#
+# Without this block, a manifest with user_facing: true but
+# artifacts.product_verdict missing would pass schema-only validation
+# and only be caught by verify-p3.sh. Downstream consumers running
+# check-jsonschema without the full verify-all suite would see false
+# green. The if/then below closes that gap at the schema layer.
+allOf:
+  - if:
+      properties:
+        user_facing:
+          const: true
+      required: [user_facing]
+    then:
+      properties:
+        artifacts:
+          required: [product_verdict]
