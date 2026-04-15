@@ -1,14 +1,14 @@
 ---
-id: log_20260415_update-readme-with-folio-ingest-enrich-provenanc
+id: log_20260415_tier-4-latent-discovery-proposal-layer
 type: log
 status: active
 event_type: tier-4-latent-discovery-proposal-layer-proposal-revision
-source: cli
-branch: main
+source: codex
+branch: codex/tier4-latent-discovery-proposal-layer
 created: 2026-04-15
 ---
 
-# update README with folio ingest, enrich, provenanc
+# Tier 4 latent discovery proposal layer
 
 ## Summary
 

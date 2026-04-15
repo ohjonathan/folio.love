@@ -497,7 +497,7 @@ synthetic lifecycle test proves the complete Tier 3 pipeline end-to-end.
 
 ---
 
-## Tier 4: Synthesis & Discovery (Weeks 23-34+)
+## Tier 4: Synthesis & Discovery (Weeks 23-33+)
 
 **Goal:** The library reveals patterns, generates synthesis, and supports strategic prep. These features require volume (3+ months of daily content) to be useful.
 
@@ -521,14 +521,14 @@ review UX:
   entity subgraph
 - `folio analysis init` creates source-less managed analysis documents that can
   carry `draws_from` / `depends_on`
-- a non-canonical latent discovery layer may generate clusters, similarities,
-  candidate links, merge candidates, drift signals, and multimodal groupings
 - canonical graph state remains frontmatter plus existing registries
-- proposal objects are the shared contract between latent discovery and human
-  review
+- proposal objects are the shared contract between machine suggestions and
+  human review
 - higher-level Tier 4 features (`digest`, `synthesize`, traversal, semantic
   search) must build on these shared surfaces rather than invent parallel
   review flows or a separate graph backend
+- latent discovery remains useful architecture framing and a validation
+  workstream, but it is no longer a standalone committed Tier 4 requirement
 
 ### Tier 4 Implementation Order
 
@@ -536,12 +536,11 @@ review UX:
 2. Weekly digest (`folio digest --week`)
 3. Graph quality layer (`folio enrich diagnose`, trust-aware graph behavior,
    relation-schema validation)
-4. Discovery / proposal layer foundation
-5. Proposal lifecycle governance
-6. Related links + Maps of Content
-7. `folio synthesize`
-8. Heavier / deferred discovery work (`folio search`, org traversal queries,
-   `folio vocab`, optional watcher)
+4. Related links + Maps of Content
+5. `folio synthesize`
+6. Proposal review hardening for producers already in play
+7. Heavier / deferred discovery work (`folio search`, org traversal queries,
+   `folio vocab`, optional watcher, discovery experiments)
 
 ### Week 23-25: Temporal Roll-Ups
 
@@ -553,72 +552,78 @@ review UX:
   - Weekly: "Where do we stand and what's changed"
   - SteerCo: "What leadership needs to decide"
 - Manual trigger for v1 (file watcher deferred)
-- Flagged source-backed inputs stay excluded by default; later explicit
-  overrides may widen the digest input set
+- Flagged source-backed inputs stay excluded by default
+- `folio digest --include-flagged` is the explicit operator override
+- Empty digest results caused by excluded flagged inputs must say so explicitly
+  and point to the override path
 
 ### Week 26-27: Graph Quality Layer
 
 - `folio enrich diagnose [scope] [--json] [--limit N]` identifies notes whose
   managed sections cannot be safely updated
 - Graph-oriented Tier 4 surfaces exclude `review_status: flagged` inputs by
-  default and surface trust state in summaries / synthesis outputs
+  default, expose explicit operator overrides where committed, and surface
+  excluded flagged-input counts in summaries / synthesis outputs
 - Canonical relationship writes are validated for allowed source/target types,
   cardinality, and target existence
-- v1 relation governance covers `supersedes`, `impacts`, `draws_from`, and
-  `depends_on`
-- `relates_to` and `instantiates` remain explicitly deferred from this quality
-  layer
+- v1 relation governance covers `supersedes`, `impacts`, `draws_from`,
+  `depends_on`, and `relates_to`
+- `instantiates` remains deferred from this quality layer
 
-### Week 28-29: Discovery / Proposal Foundation
-
-- Formalize the latent discovery layer as a non-canonical, rebuildable source
-  of clusters, similarities, candidate links, merge candidates, drift signals,
-  and multimodal groupings
-- Standardize proposal objects across Tier 4 producers with shared evidence,
-  reason, trust, schema-gate, and staleness fields
-- Keep storage technology unspecified at the proposal level; any sidecar index
-  or proposal store must remain derived and rebuildable
-- Do not add new user-facing CLI commitments in this slice; existing / planned
-  surfaces consume shared proposal objects instead
-
-### Week 30-31: Proposal Lifecycle Governance
-
-- Add durable rejection memory so repeated machine suggestions are suppressed
-  until the staleness basis changes materially
-- Define stale invalidation for changed inputs, merged identities, and updated
-  relation rules
-- Apply trust-aware surfacing to proposal generation and review, not just
-  downstream graph outputs
-- Keep canonical graph truth as frontmatter plus registries only; no
-  auto-promotion and no probabilistic writes
-
-### Week 32-33: Cross-References & Navigation
+### Week 28: Cross-References & Navigation
 
 - Wiki links between related decks (same project, same framework)
 - Maps of Content: auto-generated client and framework index pages
 - Any machine-suggested links emitted by digest / synthesize flow through
   `folio links`, not direct canonical frontmatter writes
+- Reduce manual hunt time during engagement prep without introducing a separate
+  graph backend
+
+### Week 29-30: Cross-Asset Synthesis
+
 - `folio synthesize` for cross-asset synthesis (start with pairwise interview
   comparison, not N-way)
+- Keep `review_status: flagged` excluded by default and commit an explicit
+  operator override when the surface ships
 - Graph view tuning in Obsidian without introducing a separate graph backend
 
-### Week 34+: Advanced Discovery & Validation Workstream
+### Week 31: Proposal Review Hardening
+
+- Narrow proposal governance to what operators actually need in review:
+  stable fingerprints, durable rejection memory, compact review rendering,
+  merge-aware dampening, and bounded queue size
+- Define `input_fingerprint` around normalized claim identity, supporting
+  managed-doc IDs, input version/source identifiers, relation kind, and
+  producer identity
+- Exclude prompt text, model identifier, and tokenizer changes from proposal
+  fingerprints; treat relation-rule changes as schema-version invalidation
+- Cap default surfacing at 20 new proposals per engagement per run
+- Require producers to sustain a rolling top-20 acceptance rate of at least
+  50% to keep surfacing by default
+
+### Week 32-33+: Advanced Discovery & Validation Workstream
 
 - Semantic search architecture (embedding model, index, query interface)
 - Org traversal queries (evaluate whether Dataview suffices or custom engine needed)
 - Tag vocabulary management (`folio vocab`)
 - Optional file watcher for auto-digest after the manual workflow proves useful
-- Run a bounded validation workstream rather than a committed feature set:
+- Keep latent discovery in architecture framing and a bounded validation
+  workstream rather than as a committed standalone product slice
+- Run the validation workstream over:
   - document relationship proposals
   - entity merge proposals
   - diagram archetype clustering
 - Promote only the work that clears explicit gates:
-  - top-ranked proposal acceptance quality is strong enough to trust review
-    ordering
-  - review burden remains manageable
-  - rejection memory suppresses repeats
+  - top-10 document-relationship proposal acceptance rate is at least 60%
+  - entity-merge suggestion acceptance rate is at least 75%, with post-accept
+    undo or reopen rate at most 10%
+  - exact rejected-suggestion resurfacing without material input change stays
+    at or below 5%
+  - median review decision time for top-ranked proposals is at most
+    30 seconds
+  - at least 60% of reviewed top-10 diagram archetype clusters are judged
+    useful for navigation or triage before any parsing commitment
   - no canonical auto-promotion is introduced
-  - diagram clustering proves useful before any full parsing commitment
 
 ### Tier 4 Exit Criteria
 
@@ -626,16 +631,14 @@ review UX:
 - [ ] Weekly digest is used in at least one real SteerCo-prep cycle
 - [ ] Graph backlog and graph-health problems are inspectable without manual
       note-by-note inspection
-- [ ] Tier 4 graph-oriented outputs exclude flagged inputs by default and make
-      trust posture visible
+- [ ] Tier 4 graph-oriented outputs exclude flagged inputs by default, report
+      excluded flagged-input counts, and expose the committed override path
 - [ ] Canonical graph relationships are validated against allowed type pairings,
       target existence, and cardinality rules
 - [ ] Enrich body-protection / section-identification blockers are surfaced
       explicitly before graph-density work
-- [ ] Latent discovery views and proposal objects are documented as
-      non-canonical and rebuildable
-- [ ] Rejection memory and stale invalidation rules are defined for proposal
-      review
+- [ ] Proposal review hardening defines stable fingerprints, rejection memory,
+      merge-aware suppression, and bounded review queues
 - [ ] Related links or Maps of Content reduce navigation work on one active engagement
 - [ ] At least one Tier 4 discovery surface is useful enough to recommend the workflow to a colleague
 
@@ -648,8 +651,8 @@ review UX:
 | 1: Conversion Quality | 6 weeks | 1-6 | Bulletproof pipeline + v2 schema |
 | 2: Daily Driver | 6 weeks | 7-12 | CLI, organization, Obsidian |
 | 3: Engagement Intelligence | 10 weeks | 13-22 | Ingest, entities, enrichment |
-| 4: Synthesis & Discovery | 12+ weeks | 23-34+ | Graph ops, digests, proposal layer, search |
-| **Total** | **~34 weeks** | | |
+| 4: Synthesis & Discovery | 11+ weeks | 23-33+ | Graph quality, digests, review hardening, search |
+| **Total** | **~33 weeks** | | |
 
 **Reality check:** These are development weeks, not calendar weeks. At 10-15 hours/week alongside a McKinsey engagement, Tier 1 is ~1-1.5 calendar months, Tier 2 is similar, and Tiers 3-4 stretch across multiple engagements.
 
@@ -699,7 +702,7 @@ folio entities suggest-merges [--type person] [--page N]
 folio entities merge <winner> <loser>
 folio analysis init <subtype> --title <title> --client <name> --engagement <name> [--draws-from <id>] [--depends-on <id>]
 folio enrich diagnose [scope] [--json] [--limit N]
-folio digest <scope> [--date YYYY-MM-DD] [--week] [--llm-profile <profile>]
+folio digest <scope> [--date YYYY-MM-DD] [--week] [--include-flagged] [--llm-profile <profile>]
 folio synthesize <doc_a> <doc_b> [options]
 folio search <query>
 folio vocab
@@ -719,7 +722,7 @@ folio vocab
 | Semantic search architectural lock-in | Medium | High | 4 | Defer until query patterns are clear from real usage. Don't pick an embedding model prematurely. |
 | Org traversal exceeds Obsidian capability | High | Medium | 4 | Flat entity queries (Tier 3) cover 80% of cases. Only invest in traversal if real need demonstrated. |
 | Tier 4 LLM cost grows with library volume | Medium | Medium | 4 | Keep digest manual by default, scope runs to one engagement, and measure prompt/runtime cost before adding automation. |
-| Latent discovery floods review surfaces with low-value proposals | Medium | High | 4 | Keep proposal objects non-canonical, rank by evidence/trust, and require rejection memory before scaling proposal volume. |
+| Tier 4 review queues grow faster than operators can keep up | Medium | High | 4 | Keep proposal objects non-canonical, cap default surfacing volume, and require producer-level acceptance quality before expanding proposal volume. |
 | Time constraints (active engagement) | **High** | **High** | All | Tier 1 is the minimum viable product. Everything after is incremental value. |
 
 ---
@@ -747,15 +750,8 @@ folio vocab
 - [ ] Full engagement lifecycle captured end-to-end
 
 ### Tier 4 Gate
-- [ ] Daily and weekly digests generate registered `analysis/digest` notes on the retained production library
-- [ ] Weekly digest is used in at least one real SteerCo-prep cycle
-- [ ] Graph backlog and graph-health problems are inspectable without manual note-by-note inspection
-- [ ] Tier 4 graph-oriented outputs exclude flagged inputs by default and make trust posture visible
-- [ ] Canonical graph relationships are validated against allowed type pairings, target existence, and cardinality rules
-- [ ] Enrich body-protection / section-identification blockers are surfaced explicitly before graph-density work
-- [ ] Proposal review rules cover rejection memory and stale invalidation before proposal volume scales up
-- [ ] Related links or Maps of Content reduce navigation work on one active engagement
-- [ ] At least one Tier 4 discovery surface is useful enough to recommend the workflow to a colleague
+Tier 4 gates on the Tier 4 Exit Criteria above. They are not restated here to
+avoid drift between the roadmap's exit list and the quality-gate section.
 
 ---
 
@@ -774,11 +770,13 @@ folio vocab
   relationships route through shared `folio links` surfaces rather than
   producer-specific confirm / reject commands.
 - Tier 4 graph trust default: **Resolved.** `review_status: flagged` is the
-  default exclusion gate for graph-oriented Tier 4 surfaces; `extraction_confidence`
+  default exclusion gate for graph-oriented Tier 4 surfaces, with explicit
+  operator overrides and excluded-count disclosure; `extraction_confidence`
   remains surfaced trust metadata rather than a second hard gate in v1.
-- Tier 4 canonical boundary: **Resolved.** Latent discovery views and proposal
-  objects are non-canonical; frontmatter plus registries remain the only
-  canonical graph state.
+- Tier 4 canonical boundary: **Resolved.** Proposal objects remain
+  non-canonical, frontmatter plus registries remain the only canonical graph
+  state, and latent discovery stays architecture framing / future validation
+  work rather than a standalone committed slice.
 
 **Still open / future backlog:**
 

@@ -4,8 +4,10 @@ type: spec
 status: draft
 ontos_schema: 2.2
 created: 2026-03-28
-revision: 4
+revision: 5
 revision_note: |
+  Rev 5: Add the read-only `folio enrich diagnose` contract for enrichability
+  and body-coverage findings.
   Rev 4: Clarify `basis_fingerprint` composition for relationship proposals.
 depends_on:
   - doc_02_product_requirements_document
@@ -90,6 +92,8 @@ without collapsing into the much harder PR D provenance problem.
 7. Keep runtime behavior practical for the current production-scale library:
    115 registry decks, 160 evidence notes, 1,524 diagram notes, and 1,684
    total markdown files.
+8. Provide a read-only `folio enrich diagnose` surface that explains why body
+   mutation is unsafe or skipped before graph-density work stalls silently.
 
 ---
 
@@ -585,6 +589,61 @@ Dry run: 18 would_analyze, 20 would_skip, 2 would_protect, 1 would_conflict
 - exit non-zero when any per-file failures occur
 - exit non-zero immediately for fatal setup failures (invalid config, unreadable
   registry, invalid LLM profile, etc.)
+
+### 7.7 `folio enrich diagnose`
+
+`folio enrich diagnose` is the read-only diagnostic companion to
+`folio enrich`.
+
+```bash
+folio enrich diagnose [scope] [--json] [--limit N]
+```
+
+Purpose:
+
+1. inspect registry-managed notes that would otherwise be candidates for enrich
+   body mutation
+2. explain why managed sections cannot be updated safely
+3. make enrichability blockers visible before downstream graph-density work is
+   attempted
+
+Eligibility predicate:
+
+1. use the same scope semantics as `folio enrich`
+2. inspect registry-managed `type: evidence` and `type: interaction` notes
+3. omit unsupported note types rather than treating them as findings
+4. evaluate the same managed-section detection and protected-state rules used
+   by `folio enrich`
+
+Minimum finding classes:
+
+| Code | Meaning |
+|------|---------|
+| `managed_sections_unidentified` | Heading-aware parsing could not identify the expected managed sections safely |
+| `protected_by_curation_level` | The note's curation level blocks enrich body mutation |
+| `protected_by_review_status` | The note's review status blocks enrich body mutation |
+
+Output contract:
+
+1. human-readable mode prints actionable rows grouped by finding class
+2. `--json` emits findings with the fixed schema:
+   - `code`
+   - `severity`
+   - `subject_id`
+   - `detail`
+   - `recommended_action`
+3. `--limit N` caps emitted findings, not scope discovery
+
+Failure behavior:
+
+1. the command is read-only and never writes note bodies, frontmatter,
+   `registry.json`, or `entities.json`
+2. invalid scope, unreadable registry, or invalid config is fatal and exits
+   non-zero
+3. per-note parsing issues should become findings where possible rather than
+   aborting the entire run
+4. if no findings are present, the command exits `0` with a clear empty result
+   message
 
 ---
 
@@ -1284,6 +1343,8 @@ must materially approximate multi-client / multi-note batch behavior.
 
 - `folio enrich [scope] [--dry-run] [--llm-profile <profile>] [--force]` exists with the
   scope semantics defined above.
+- `folio enrich diagnose [scope] [--json] [--limit N]` exists as a read-only
+  diagnostic surface with the finding classes and JSON schema defined above.
 - `routing.enrich` is supported.
 - Enrich processes only registry-managed evidence and interaction notes.
 - Diagram notes are skipped explicitly.

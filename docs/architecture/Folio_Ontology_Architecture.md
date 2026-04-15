@@ -147,8 +147,8 @@ Design rules:
 - any sidecar index or proposal store is acceptable only if it is derived and
   rebuildable from managed content and canonical metadata
 
-In discussion this may look like a "shadow graph," but Folio's formal product
-terms are **latent discovery layer** and **proposal layer**.
+Folio's formal product terms are **latent discovery layer** and
+**proposal layer**.
 
 ---
 
@@ -487,7 +487,9 @@ If a user manually adds a wikilink in the body, `folio enrich` detects it and of
 
 ### 6.4 v1 Recommendation
 
-Start with `depends_on`, `draws_from`, and `impacts`. Add `relates_to`, `supersedes`, and `instantiates` when real usage creates the need.
+Actual rollout is corpus-driven. Current governance work centers on
+`depends_on`, `draws_from`, `impacts`, `relates_to`, and `supersedes`;
+`instantiates` remains deferred until real usage justifies it.
 
 Actual v1 sequencing is corpus-driven. PR C shipped `supersedes` first because
 the registry-managed corpus currently contains evidence and interaction notes,
