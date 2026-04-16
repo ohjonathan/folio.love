@@ -4,12 +4,35 @@ type: spec
 status: draft
 ontos_schema: 2.2
 created: 2026-04-15
-revision: 2
+revision: 4
 revision_note: |
-  Rev 2: Reframe the doc around operator review pain and narrow the committed
-  scope to proposal review hardening. Keep latent discovery as background
-  architecture and validation framing rather than a standalone committed Tier 4
-  feature.
+  Rev 4 (2026-04-15, post Pre-A Round 2): Close the one preserved blocker B-4
+  (canonical verdict: docs/validation/v0.6.0_pre_a_proposal_canonical_verdict_round2.md)
+  raised by gemini against Rev 3's §9.2 "rolling window" framing — that framing
+  required a `rejected_at` timestamp that folio/links.py's `reject_proposal`
+  does not write. Rev 4 replaces the rolling-window semantics with a cumulative
+  acceptance rate plus a 10-reviewed-proposal warm-up, both computable at query
+  time from existing frontmatter without any new persistence, timestamps, or
+  producer-state files. Rev 3's B-1, B-2 cap, and B-3 fixes are preserved
+  unchanged.
+  Rev 3 (2026-04-15, post Pre-A Round 1): Close three blocker findings raised
+  by the llm-dev-v1.1 Pre-A.proposal Template 16 review (canonical verdict:
+  docs/validation/v0.6.0_pre_a_proposal_canonical_verdict.md):
+  - B-1: resolve the §10.1 vs §13.1 gate 4 contradiction on rejected-
+    suggestion resurfacing — §10.1 remains a zero-defect product invariant;
+    §13.1 gate 4 is now framed as a validation-convergence threshold, not
+    a stable-state target.
+  - B-2: operationalize the §9 queue cap — reframe as a queued-state cap
+    (pending-proposal count) enforceable against current folio/links.py
+    structure, with explicit suppression-count diagnostics; acceptance-rate
+    gate reframed as rolling-window-based.
+  - B-3: define "normalized claim identity" in §7 per proposal_type with
+    explicit normalization rules that cross-reference folio/links.py's
+    existing basis_fingerprint convention.
+  Rev 2 (2026-04-15): Reframe the doc around operator review pain and narrow
+  the committed scope to proposal review hardening. Keep latent discovery as
+  background architecture and validation framing rather than a standalone
+  committed Tier 4 feature.
 depends_on:
   - doc_02_product_requirements_document
   - doc_04_implementation_roadmap
@@ -142,7 +165,12 @@ State meanings:
 
 `input_fingerprint` must include:
 
-1. normalized claim identity
+1. **normalized claim identity** (defined per `proposal_type`):
+   - *relationship proposals*: the lexicographically-sorted pair of `source_id` and `target_id` — so `A→B` and `B→A` fingerprint identically for symmetric relation kinds; asymmetric relations carry directionality via the relation-kind qualifier in item 4.
+   - *entity-merge proposals*: the lexicographically-sorted set of candidate entity IDs together with `subject_type`.
+   - *diagram-archetype proposals*: the lexicographically-sorted member-set identity of the cluster being proposed (stable cluster identity regardless of input ordering).
+   - *in all cases*: case-preserving; trailing whitespace normalized; provenance-indicating ID prefixes stripped; identity-indicating ID content retained.
+   - *implementation invariant*: the normalization for relationship proposals must match the `basis_fingerprint` convention already in `folio/links.py`. Producers shipping new `proposal_type` values must add a normalization clause to this section in a follow-up spec revision before ingest is enabled for the new type.
 2. supporting managed-document IDs
 3. each supporting input's current version or source identifiers
 4. relation kind
@@ -179,21 +207,64 @@ reasoning trace into the first screen.
 
 To keep review burden bounded:
 
-1. no producer may surface more than 20 new proposals per engagement per run by
-   default
-2. any producer must sustain a rolling top-20 acceptance rate of at least 50%
-   to keep surfacing by default
+1. **Pending-queue cap.** No producer may hold more than 20 proposals in
+   lifecycle state `queued` (i.e., awaiting operator review) for a single
+   engagement at any time. When a producer attempts to emit a new proposal
+   while its pending-queue is already at the cap, the enrichment pipeline
+   **must** refuse to enqueue the additional proposal, increment a
+   suppression counter, and surface the counter in producer diagnostics
+   (`folio enrich diagnose` and equivalent surfaces for later producers).
+   This rule is enforceable against the current `folio/links.py` state
+   model without new persistence: pending count = length of
+   `_llm_metadata.<producer>.axes.relationships.proposals` filtered to
+   `lifecycle_state == "queued"`.
+2. **Cumulative acceptance-rate gate.** Any producer must sustain a cumulative
+   acceptance rate of at least 50% across all its *reviewed* proposals
+   (reviewed = lifecycle state moved out of `queued` to `accepted` / `rejected`;
+   `suppressed` and `stale` transitions are excluded from the denominator).
+   The rate is computed at query time by aggregating `lifecycle_state` values
+   from all entries of `_llm_metadata.<producer>.axes.relationships.proposals`
+   across all managed documents — **no `rejected_at` timestamp, no global
+   chronological ordering, and no new per-producer persistence is required**.
+   A 10-reviewed-proposal warm-up applies: the gate does not restrict default
+   surfacing until the producer has accumulated at least 10 reviewed proposals
+   cumulatively, so newly-introduced producers are not gated on small-sample
+   noise. Producers below the gate after warm-up continue to emit proposals,
+   but those proposals land in a non-default-surfaced state visible only via
+   explicit operator inspection.
+
+   The cumulative framing is a deliberate tradeoff against the rolling-window
+   framing of prior revisions: cumulative is less responsive to recent trend
+   improvement (a producer that fixed a prior bad patch still carries the tail
+   of old rejections in its rate) but is operationally simpler and requires no
+   infrastructure the current code does not already provide. If field evidence
+   shows the tail drag produces unfair gating for recovered producers, a
+   follow-up spec can reintroduce a time-windowed variant once timestamping is
+   available.
 
 These are operational guardrails for default surfacing, not a statement that
-all proposals above the cap are deleted or forgotten.
+all proposals above the cap are deleted or forgotten. Suppressed emissions
+and non-default-surfaced proposals remain retrievable via explicit operator
+queries; they simply do not appear in the default review queue.
+
+**Units (explicit):** "engagement" = one folio library (one client workspace
+/ one `folio` root). "Per engagement" means per folio library, not per
+client-report or per SteerCo session. The cap is a state cap (pending-queue
+size), not a rate cap (per-run or per-time-window), because `folio/links.py`
+today does not persist a run counter and this spec explicitly does not
+commit to adding one.
 
 ## 10. Rejection Memory, Merge Dampener, And Staleness
 
 ### 10.1 Rejection memory
 
 Rejected proposals must stay suppressed until the material input basis changes.
-Exact rejected-suggestion resurfacing without material input change is a
-product defect, not harmless repetition.
+Any exact rejected-suggestion resurfacing without material input change is a
+**product defect to be fixed, not harmless repetition** — this is the
+stable-state invariant. See §13.1 gate 4 for the *validation-phase*
+observation threshold (≤5%), which is a convergence tolerance for the
+implementation as it hardens, not a relaxation of the stable-state zero-
+defect invariant declared here.
 
 ### 10.2 Merge dampener
 
@@ -273,8 +344,14 @@ The workstream clears only if:
 1. top-10 document-relationship proposal acceptance rate is at least 60%
 2. entity-merge suggestion acceptance rate is at least 75%
 3. entity-merge post-accept undo or reopen rate is at most 10%
-4. exact rejected-suggestion resurfacing without material input change stays at
-   or below 5%
+4. during the validation workstream's observation window, observed rate of
+   exact rejected-suggestion resurfacing without material input change is at
+   or below 5%. This is a *convergence* threshold — a tolerance for the
+   implementation to iterate toward the stable-state invariant in §10.1
+   (zero-defect resurfacing). The workstream does not clear at >5% observed
+   resurfacing; at ≤5% the workstream clears and the implementation must
+   continue driving toward the §10.1 invariant as product work, not
+   validation work.
 5. median review decision time for top-ranked proposals is at most 30 seconds
 6. at least 60% of reviewed top-10 diagram archetype clusters are judged
    useful for navigation or triage

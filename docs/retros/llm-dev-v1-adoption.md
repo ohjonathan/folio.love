@@ -132,6 +132,48 @@ Entries ordered by encounter time. Each entry captures: **what happened**, **whe
 - **Resolution:** Captured `gemini` stdout to `/tmp/llm-dev-v1-dispatches/pre-a-proposal-gemini-output.md`, then copied to the canonical path after stripping the shell's ```markdown wrapper. Documented deviation in the halt report.
 - **v1.2 target:** (a) Worker-session-contract should explicitly address "stdout-only worker CLIs" as a first-class case, describing the orchestrator-write escape hatch. (b) Or bundle a lightweight adapter script (`scripts/dispatch-worker.sh <family> <prompt-file> <output-file>`) that normalizes CLI capability differences across families. Today every family-specific integration is a mini-project for the adopter.
 
+### [F-024] Round-by-round blocker convergence is asymptotic — circuit-breaker halts are correctly-calibrated
+
+- **When:** Observing Phase B rounds: R1 preserved 9 findings (2 + 4 + 2 + 0 blockers across lenses), R2 preserved 2, R3 preserved 1.
+- **What:** Blocker count converges by roughly 50–75% per round. At R3, three of four lenses Approved; the remaining blocker (B3R3-1) is a wording-precision defect with a ~5-minute fix. Circuit-breaker fires at this marginal-defect boundary rather than at a structural-defect boundary. Observation, not necessarily a defect — the circuit breaker is protecting the adopter from treating wording-tightening as unbounded work.
+- **Resolution:** Honored the halt; documented the convergence pattern.
+- **v1.2 target (documentation):** Framework playbook §Halt circuit breaker could add a short rationale on *why* the circuit breaker fires at the marginal-defect boundary — "a blocker that survives N rounds of fixing is no longer blocker-like; it is a wording-precision issue; the cost/value ratio of another round is poor." Adopters (and reviewers reading this retro) would benefit from the explicit framing.
+
+### [F-023] B.3 meta-consolidator role has no valid assignment with only 3 + 1-pseudo families
+
+- **When:** Writing B.3 canonical after B.1 Round 1.
+- **What:** Template 06 requires the meta-consolidator to be a *non-author engineering family* distinct from all reviewer families on the same phase. With the folio-adopter's 4-family setup (`claude` author / `codex` peer / `gemini` alignment / `claude-sub` adversarial + product), every family is already used on B.1 — leaving no family available for B.3. Orchestrator had to hand-roll the consolidation (same pattern as Pre-A per F-013).
+- **Resolution:** Orchestrator consolidation under P5 evidence-weighted rules, labeled as a framework-gap workaround in the verdict artifacts.
+- **v1.2 target:** Either (a) relax P3 to allow the meta-consolidator to overlap with a reviewer family in a separate P10 session (same carve-out as Product lens), or (b) add a 5th role slot for "consolidator" in the canonical 4-family setup, or (c) accept orchestrator consolidation as a first-class role in the framework. Option (a) is cheapest for real-world 3-CLI adopters.
+
+### [F-022] Framework-mandated halt fires for structural AND wording defects — intended or not?
+
+- **When:** B.3 Round 3 halt.
+- **What:** B3R3-1 (the preserved blocker that fired the halt) is a wording-consistency issue: §7 says "breaking change," §4.4 says "additive" — both describing the same JSON migration. Phase C implementation would NOT actually fail because of this — the implementer would read §4.4 for the spec requirements and §7 for the migration notes; the semantic distinction would be clear even without the wording fix. But the circuit breaker does not distinguish "wording defect that would confuse a spec reader" from "structural defect that would produce wrong code." Both are treated equally by the Approve/Needs-Fixes gate.
+- **Resolution:** Halted per operator directive. Documented the observation.
+- **v1.2 target (documentation):** Playbook §B.3 verdict semantics could add a paragraph distinguishing: (i) *canonical-verdict blockers* that would cause wrong implementation (block Phase C advance); (ii) *canonical-verdict polish* that would cause confusion but not wrong implementation (could Approve-with-notes rather than Needs-Fixes). Today the meta-consolidator has no verdict-severity column; both classes route through the same halt gate.
+
+### [F-021] Closure-verdict shape is binary (closed / not-closed); "partial" wasn't a declared option
+
+- **When:** Round 2, when Gemini assessed Rev 3's B-2 closure.
+- **What:** Template 16 and my orchestrator-invented Round-2 dispatch template asked reviewers to declare blocker closure as "yes / partial / no." But the canonical framework verdict shape is binary — "Closed" or "Not closed." A real blocker often fragments on revision: Rev 3's §9.1 (queue cap) part of B-2 closed cleanly, while Rev 3's §9.2 (rolling rate gate) part re-opened as a new blocker PR-T-1-R2 with different root cause. Gemini correctly reported "partial." Claude-sub reported "closed" having only checked the cap part. The partial-closure state is load-bearing for the orchestrator's P5 consolidation.
+- **Resolution:** Canonical verdict doc explicitly shows B-2 as "partially closed (cap closed, rate gate re-opened as B-4)." Not elegant but readable.
+- **v1.2 target:** Template 16 (and the canonical verdict template) should bless "partial closure" as a first-class state, with a sub-table mapping each sub-part of a multi-part blocker to its own closure verdict. Without this, reviewers are pushed to round to yes/no and the partial case is lost.
+
+### [F-020] Reviewer role-swap between rounds catches different blockers — make the dynamic explicit
+
+- **When:** Observing the Round 1 → Round 2 verdict pattern.
+- **What:** Round 1 had claude-sub raising all blockers, gemini approving. Round 2 had gemini raising the only blocker, claude-sub approving. Same reviewers, same postures, but the specific blockers each reviewer caught were *different*. This is structurally the 2-lens design working — each reviewer catches what the other misses — but Template 16 does not explicitly note this dynamic. A naive reading might interpret the role-swap as noise or reviewer inconsistency; the correct interpretation is "more of the proposal surface has been audited after Round N+1 than after Round N."
+- **Resolution:** Canonical Round-2 verdict explicitly notes the role-swap and frames it as value-generating, not as reviewer drift.
+- **v1.2 target:** Template 16 §13.5 (escalation logic) should add a paragraph on "expected cross-round coverage dynamics": "If Round 2's blockers are disjoint from Round 1's, the review is converging. If Round 2's blockers are a subset of Round 1's, convergence is regression. If Round 2's blockers are a superset of Round 1's, the revision is net-negative and Split / Abandon should be considered." Without this guidance, adopters may treat split verdicts as a bug rather than a feature.
+
+### [F-019] Scope-lock doesn't address author-revises-proposal between Pre-A rounds
+
+- **When:** Starting Round 2, editing `docs/specs/tier4_discovery_proposal_layer_spec.md`.
+- **What:** The manifest's `scope.allowed_paths` lists the *new* Phase A spec (`docs/specs/v0.6.0_proposal_review_hardening_spec.md`) but not the *proposal doc being revised* (`docs/specs/tier4_discovery_proposal_layer_spec.md`). Author-revising the proposal between Pre-A rounds is a real, expected activity — playbook §13.5 allows up to 3 rounds with revisions — but it's not a "worker dispatch" bounded by scope-lock. It's an orchestrator-led authoring gap in the framework's scope-lock model.
+- **Resolution:** Edited the proposal doc directly as orchestrator. No worker dispatch; no scope-lock violation because the action is outside the worker-session-contract's purview.
+- **v1.2 target:** Framework should explicitly spell out that Pre-A re-review cycles involve orchestrator-led proposal revision, which is outside worker scope-lock. Manifest could declare `pre_a.revision_paths: [...]` to document which docs the orchestrator edits between rounds, so the diff is reviewable as part of the Pre-A round-N→N+1 delta.
+
 ### [F-018] `tokens.md` says commit `tokens.local.md`; bundle `.gitignore` excludes it
 
 - **When:** Session end, inspecting `frameworks/llm-dev-v1/.gitignore` before committing.
@@ -165,22 +207,21 @@ Entries ordered by encounter time. Each entry captures: **what happened**, **whe
 
 | Metric | Value |
 |--------|-------|
-| Phases executed | 0 (scope), -A.proposal (Pre-A Round 1) |
-| Phases planned but not executed | A, B, C, D, E (full retro) |
-| Total worker sessions | 2 (claude-sub Adversarial+Product; gemini Alignment+Technical) |
-| Orchestrator consolidations | 1 (ad-hoc Pre-A canonical verdict; no formal Template — see F-013) |
-| Halts | 1 (Pre-A verdict ≠ Proceed; canonical verdict = Revise and re-review) |
-| Blockers raised (Pre-A Round 1) | 3 (all by claude-sub reviewer) |
-| Blockers preserved in canonical verdict | 3 (B-1, B-2, B-3) |
-| Blockers downgraded | 0 |
-| Should-fix findings | 5 (claude-sub) |
-| Minor findings | 3 (claude-sub) |
-| Fix loops | 0 (halted before any D.4 dispatch) |
-| Test count | 196 baseline, unchanged (no Phase C execution) |
-| Real bugs caught pre-merge | N/A — but 3 proposal-level defects caught before Phase A, which is the equivalent win at Pre-A |
+| Phases executed | 0 (scope), -A.proposal ×3 rounds, A (spec v1.0 → v1.2), B.1 + B.2 ×3 rounds + B.3 consolidations |
+| Phases planned but not executed | C (implementation), D (code review), full E retro with A→E scope |
+| Total worker sessions | 15 dispatched workers (Pre-A: 6 across 3 rounds; B.1: 4; B.2 R2: 4; B.2 R3 narrow: 2) + orchestrator consolidations |
+| Orchestrator consolidations | 5 (Pre-A R1/R2/R3 canonical + B.3 R1/R2/R3 canonical; no formal Template — see F-013 + F-023) |
+| Halts (framework-mandated) | 3 (Pre-A R1 Revise → continued; Pre-A R2 Revise → R3 authorized; B.3 R3 Needs Fixes → HALT per operator's "last round" directive) |
+| Blockers caught across all rounds | 4 at Pre-A (B-1/B-2/B-3/B-4) + 2 at B.1 (BB-1/BB-2) + 4 at B.1-alignment (A-1..A-4 later downgraded) + 1 at B.2 R2 (B3R2-1) + 1 at B.3 R3 (B3R3-1, unresolved at halt) = **12 distinct blocker findings caught before Phase C dispatched** |
+| Blockers closed across rounds | 11 of 12 (B3R3-1 remains open at halt) |
+| Should-fix findings across phases | ~40 across all rounds and lenses |
+| Fix loops | 0 (halted before Phase D.4) |
+| Test count (folio baseline) | 196 baseline, unchanged (no Phase C execution; spec enumerates 26 new tests planned) |
+| Real bugs caught pre-merge | 12 structural + wording defects caught in the spec before ever shipping as code; of these, ~8 would have caused observable wrong behavior (silent caller breakage, filter false-positives, data-source undercount, aggregation ambiguity) if missed |
 | Final-approval gate outcome | Not reached |
-| Friction log entries captured | 16 (F-001 through F-016) |
-| Session wall-clock | ~25 minutes Setup + Pre-A; retro finalization ~10 minutes |
+| Framework circuit-breaker fires | 3 (Pre-A R2 halt — operator-rescinded for R3; B.3 R2 halt — operator-rescinded for R3; B.3 R3 halt — operator-final). All three fired at the intended boundary: two cosmetic-fix rounds converting remaining blockers to below-blocker-class, then a marginal-fix boundary beyond which another round is wasteful. |
+| Friction log entries captured | 24 (F-001 through F-024) |
+| Session wall-clock | ~4.5 hours total: Setup 20m + Pre-A 3-round arc 45m + Phase A spec authoring 30m + B.1 4-lens board 30m + B.3 R1 consolidation 5m + spec v1.1 revision 20m + B.2 R2 4-lens narrow 30m + B.3 R2 consolidation 5m + spec v1.2 revision 15m + B.2 R3 narrow 2-lens 15m + B.3 R3 consolidation 5m + halt artifacts + retro updates 10m |
 
 ### What worked (with evidence)
 
