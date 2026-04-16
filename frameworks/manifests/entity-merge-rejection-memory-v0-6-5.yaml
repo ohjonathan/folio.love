@@ -1,0 +1,262 @@
+# Deliverable manifest: entity-merge-rejection-memory-v0-6-5
+#
+# Shipping Plan §15.6 (first half) — apply the rejection-memory filter pattern
+# shipped in slice 1 for relationship proposals to entity-merge suggestions on
+# folio/tracking/entities.py.
+#
+# Pre-A is INHERITED from the parent proposal (§15.6 pre-ratified in slice 1).
+#
+# Adopter-only contract in effect: no local bundle edits. Bundle at
+# frameworks/llm-dev-v1/ is byte-identical to johnny-os@4dfa01f (v1.1.1).
+#
+# Codex assigned to adversarial role per v1.1.1/v1.2 A-1 policy direction.
+
+manifest_version: "1.1.0"
+id: entity-merge-rejection-memory-v0-6-5
+slug: entity-merge-rejection-memory
+summary: "Surface-time rejection memory for entity-merge candidates on folio/tracking/entities.py. basis_fingerprint per parent §7 entity-merge clause. Parallels slice 1 for RelationshipProposal but layered on heuristic PersonMergeSuggestion (no new proposal dataclass)."
+
+user_facing: true
+
+pre_a:
+  entry: inherited
+  artifact_path: docs/specs/tier4_discovery_proposal_layer_spec.md
+  justification: "Shipping Plan §15.6 pre-ratified; parent proposal Pre-A approved in slice 1 lifecycle."
+
+owners:
+  - "Jonathan Oh (ohjonathan)"
+
+scope:
+  allowed_paths:
+    - folio/tracking/entities.py
+    - folio/cli.py
+    - folio/graph.py
+    - tests/test_cli_entities.py
+    - tests/test_entities.py
+    - CHANGELOG.md
+    - docs/specs/v0.6.5_entity_merge_rejection_memory_spec.md
+    - docs/validation/v0.6.5_spec_peer_claude-sub.md
+    - docs/validation/v0.6.5_spec_alignment_gemini.md
+    - docs/validation/v0.6.5_spec_adversarial_codex.md
+    - docs/validation/v0.6.5_spec_product_claude-sub.md
+    - docs/validation/v0.6.5_spec_canonical_verdict.md
+    - docs/validation/v0.6.5_code_peer_claude-sub.md
+    - docs/validation/v0.6.5_code_alignment_gemini.md
+    - docs/validation/v0.6.5_code_adversarial_codex.md
+    - docs/validation/v0.6.5_code_product_claude-sub.md
+    - docs/validation/v0.6.5_code_canonical_verdict.md
+    - docs/validation/v0.6.5_d4_fix_summary.md
+    - docs/validation/v0.6.5_d5_verification.md
+    - docs/validation/v0.6.5_d6_final_approval.md
+    - docs/retros/llm-dev-v1-adoption.md
+    - frameworks/manifests/framework-learnings-v1.1-adoption.md
+  forbidden_paths:
+    - folio/pipeline/
+    - folio/enrich.py
+    - folio/links.py
+    - folio/provenance.py
+    - docs/product/
+    - docs/architecture/
+    - frameworks/llm-dev-v1/
+    - ontos/
+    - .github/
+    - Ontos_Context_Map.md
+    - AGENTS.md
+  forbidden_symbols:
+    - "pickle.loads"
+    - "eval("
+  cardinality_assertions:
+    - name: "Rejected-merges namespace present in entities.json empty template"
+      command: "python3 -c 'from folio.tracking.entities import _empty_entity_registry; d = _empty_entity_registry(); print(\"rejected_merges\" in d)'"
+      expect: "eq:True"
+    - name: "folio entities reject-merge subcommand registered"
+      command: "python3 -c 'from folio.cli import entities; assert \"reject-merge\" in entities.commands; print(1)'"
+      expect: "eq:1"
+
+artifacts:
+  spec:              "docs/specs/v0.6.5_entity_merge_rejection_memory_spec.md"
+  family_verdict:    "docs/validation/v0.6.5_<phase>_<role>_<family>.md"
+  canonical_verdict: "docs/validation/v0.6.5_<phase>_canonical_verdict.md"
+  product_verdict:   "docs/validation/v0.6.5_<phase>_product_<family>.md"
+  fix_summary:       "docs/validation/v0.6.5_d4_fix_summary.md"
+  verification:      "docs/validation/v0.6.5_d5_verification.md"
+  final_approval:    "docs/validation/v0.6.5_d6_final_approval.md"
+  retro:             "docs/retros/llm-dev-v1-adoption.md"
+
+# Model assignments per phase. Codex = adversarial (A-1 policy).
+# Peer + product overlap as claude-sub (P10 separate-session). Gemini = alignment.
+# Same pattern as slices 2-4 post-A-1 adoption.
+model_assignments:
+  - phase: "A"
+    assignments:
+      claude: spec-author
+  - phase: "B.1"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.1"
+    assignments:
+      claude-sub: product
+  - phase: "B.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.2"
+    assignments:
+      claude-sub: product
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude: implementation-author
+  - phase: "D.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "D.2"
+    assignments:
+      claude-sub: product
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude: fix-author
+  - phase: "D.5"
+    assignments:
+      gemini: verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      claude: retro
+
+cli_capability_matrix:
+  claude:      { shell: true, git: true, test_runner: true,  doc_index: true  }
+  claude-sub:  { shell: true, git: true, test_runner: true,  doc_index: true  }
+  codex:       { shell: true, git: true, test_runner: true,  doc_index: false }
+  gemini:      { shell: true, git: false, test_runner: false, doc_index: false }
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "folio imports"
+        command: "python3 -c 'import folio'"
+        expect: "exit-0"
+      - name: "entity + CLI test suite"
+        command: "python3 -m pytest tests/test_entities.py tests/test_cli_entities.py -q"
+        expect: "exit-0"
+      - name: "lint clean on scope-lock paths"
+        command: "python3 -m ruff check folio/tracking/entities.py folio/cli.py folio/graph.py"
+        expect: "exit-0"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main by at least 1"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards:
+  - name: "Slice 1 links tests"
+    command: "python3 -m pytest tests/test_links_cli.py -q"
+    owns_deliverable_id: "proposal-review-hardening-v0-6-0"
+  - name: "Slice 2 lifecycle-rename tests"
+    command: "python3 -m pytest tests/test_enrich_data.py -q"
+    owns_deliverable_id: "proposal-lifecycle-rename-v0-6-1"
+  - name: "PROV-1 provenance tests"
+    command: "python3 -m pytest tests/test_provenance_cli.py tests/test_provenance.py -q"
+    owns_deliverable_id: "provenance-lifecycle-rename-v0-6-2"
+
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full folio test suite passes (scope-relevant subset)."
+    verification:
+      command: "python3 -m pytest tests/test_entities.py tests/test_cli_entities.py tests/test_links_cli.py tests/test_graph_cli.py tests/test_provenance_cli.py tests/test_enrich_data.py -q"
+      expect: "exit-0"
+  - id: G-test-2
+    category: test
+    description: "Entity-specific test modules pass."
+    verification:
+      command: "python3 -m pytest tests/test_entities.py tests/test_cli_entities.py -q"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "No changes to forbidden paths."
+    verification:
+      command: "git diff --name-only main..HEAD | grep -E '^(folio/pipeline/|folio/enrich\\.py|folio/links\\.py|folio/provenance\\.py|docs/product/|docs/architecture/|frameworks/llm-dev-v1/|AGENTS\\.md|Ontos_Context_Map\\.md)'"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "Forbidden symbols absent from scope-lock paths."
+    verification:
+      command: "grep -rE 'pickle\\.loads|eval\\(' folio/tracking/entities.py folio/cli.py folio/graph.py"
+      expect: "exit-nonzero"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "entities.json empty template has rejected_merges key."
+    verification:
+      command: "python3 -c 'from folio.tracking.entities import _empty_entity_registry; d = _empty_entity_registry(); print(\"rejected_merges\" in d)'"
+      expect: "eq:True"
+  - id: G-cardinality-2
+    category: cardinality
+    description: "folio entities reject-merge subcommand registered."
+    verification:
+      command: "python3 -c 'from folio.cli import entities; assert \"reject-merge\" in entities.commands; print(1)'"
+      expect: "eq:1"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "B.3 canonical spec verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.6.5_spec_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "D.3 canonical code verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.6.5_code_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "Product verdicts (B.1 + D.2) exist."
+    verification:
+      command: "ls docs/validation/v0.6.5_{spec,code}_product_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:2"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "D.5 verification exists (documents D.3 blocker closure)."
+    verification:
+      command: "test -f docs/validation/v0.6.5_d5_verification.md"
+      expect: "exit-0"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean (no uncommitted changes)."
+    verification:
+      command: "git status --porcelain | grep -v '^??'"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Feature branch ahead of main."
+    verification:
+      command: "git rev-list --count main..HEAD"
+      expect: "gte:1"
+
+branch_map:
+  default: "feat/entity-merge-rejection-memory-v0-6-5-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/specs/tier4_discovery_proposal_layer_spec.md"
+    version: "2026-04-15 rev 5"
+    relevance: "§15.6 slice scope; §7 entity-merge basis_fingerprint convention."
+  - path: "docs/specs/v0.6.0_proposal_review_hardening_spec.md"
+    version: "v1.3"
+    relevance: "Slice 1 — pattern source for rejection-memory + suppression-count + revival-annotation."
+  - path: "folio/links.py"
+    version: "post-slice-2"
+    relevance: "Reference implementation of rejection-memory filter. Not modified by this slice."
+  - path: "docs/retros/llm-dev-v1-adoption.md"
+    relevance: "Friction log F-001..F-046 across slices 1-4. Slice 6a appends."

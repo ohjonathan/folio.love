@@ -1,5 +1,6 @@
 """Entity registry: canonical entity store backed by entities.json."""
 
+import hashlib
 import json
 import logging
 import re
@@ -422,7 +423,32 @@ def _empty_entity_registry() -> dict:
         "_schema_version": _ENTITY_SCHEMA_VERSION,
         "updated_at": _now_iso(),
         "entities": {t: {} for t in VALID_ENTITY_TYPES},
+        "rejected_merges": [],
     }
+
+
+def _compute_entity_merge_basis_fingerprint(
+    subject_type: str,
+    left_key: str,
+    right_key: str,
+    reasons: list[str],
+) -> str:
+    """Compute the basis_fingerprint for an entity-merge suggestion.
+
+    Uses canonical JSON serialization (sort_keys, fixed separators,
+    ensure_ascii=False) so the hash is injective even if reason labels
+    later contain delimiter-like characters. Per parent proposal §7
+    entity-merge fingerprint clause.
+    """
+    payload = {
+        "subject_type": subject_type,
+        "entity_keys": sorted([left_key, right_key]),
+        "reasons": sorted(reasons),
+    }
+    serialized = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return "sha256:" + hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +510,8 @@ class PersonMergeSuggestion:
     left_name: str
     right_name: str
     reasons: list[str]
+    basis_fingerprint: str = ""
+    revived: bool = False
 
 
 @dataclass
@@ -594,6 +622,10 @@ class EntityRegistry:
                     invalid_keys.append(key)
             for k in invalid_keys:
                 del type_dict[k]
+
+        # Default rejected_merges to [] for legacy files missing the key.
+        # v0.6.5 PROV-equivalent: no schema-version bump; additive top-level key.
+        data.setdefault("rejected_merges", [])
 
         self._data = data
         self._loaded = True
@@ -902,8 +934,16 @@ class EntityRegistry:
                 return type_dict[key].get("canonical_name", key)
         return key
 
-    def suggest_person_merges(self) -> list[PersonMergeSuggestion]:
-        """Return deterministic duplicate-person candidates."""
+    def suggest_person_merges(
+        self, apply_rejection_memory: bool = True
+    ) -> list[PersonMergeSuggestion]:
+        """Return deterministic duplicate-person candidates.
+
+        When ``apply_rejection_memory`` is True (default), candidates whose
+        ``basis_fingerprint`` matches a stored rejection record are dropped.
+        Candidates where the same pair has prior rejections but the current
+        fingerprint differs are marked ``revived=True``.
+        """
         people: list[tuple[str, EntityEntry]] = [
             (key, entry)
             for _etype, key, entry in self.iter_entities(entity_type="person")
@@ -963,19 +1003,54 @@ class EntityRegistry:
         bucket_signatures("id_suffix_stripping", stripped_map)
         bucket_signatures("alias_overlap", alias_map)
 
+        # Build rejected-key index: {(subject_type, sorted_lk, sorted_rk): set(fingerprints)}.
+        rejected_index: dict[tuple[str, str, str], set[str]] = {}
+        for record in self._data.get("rejected_merges", []) or []:
+            if not isinstance(record, dict):
+                continue
+            rec_subject = record.get("subject_type")
+            rec_keys = record.get("entity_keys")
+            rec_fp = record.get("basis_fingerprint")
+            if (
+                not isinstance(rec_subject, str)
+                or not isinstance(rec_keys, list)
+                or len(rec_keys) != 2
+                or not isinstance(rec_fp, str)
+            ):
+                continue
+            sorted_rec_keys = tuple(sorted(rec_keys))
+            idx_key = (rec_subject, sorted_rec_keys[0], sorted_rec_keys[1])
+            rejected_index.setdefault(idx_key, set()).add(rec_fp)
+
         suggestions: list[PersonMergeSuggestion] = []
         for left_key, right_key in sorted(pair_reasons):
             left = self.get_entity("person", left_key)
             right = self.get_entity("person", right_key)
             if left is None or right is None:
                 continue
+            reasons = sorted(pair_reasons[(left_key, right_key)])
+            basis_fp = _compute_entity_merge_basis_fingerprint(
+                "person", left_key, right_key, reasons
+            )
+            sorted_pair = tuple(sorted((left_key, right_key)))
+            idx_key = ("person", sorted_pair[0], sorted_pair[1])
+            rejected_fps = rejected_index.get(idx_key, set())
+
+            if apply_rejection_memory and basis_fp in rejected_fps:
+                # Exact-fingerprint match: suppressed.
+                continue
+
+            revived = apply_rejection_memory and bool(rejected_fps) and basis_fp not in rejected_fps
+
             suggestions.append(
                 PersonMergeSuggestion(
                     left_key=left_key,
                     right_key=right_key,
                     left_name=left.canonical_name,
                     right_name=right.canonical_name,
-                    reasons=sorted(pair_reasons[(left_key, right_key)]),
+                    reasons=reasons,
+                    basis_fingerprint=basis_fp,
+                    revived=revived,
                 )
             )
         suggestions.sort(
@@ -987,6 +1062,86 @@ class EntityRegistry:
             )
         )
         return suggestions
+
+    def count_entity_merge_suppressions(self) -> int:
+        """Return the total count of stored entity-merge rejection records."""
+        rejected = self._data.get("rejected_merges", [])
+        if not isinstance(rejected, list):
+            return 0
+        return sum(1 for r in rejected if isinstance(r, dict))
+
+    def reject_person_merge(
+        self, left_key: str, right_key: str
+    ) -> Tuple[bool, str]:
+        """Reject a person-merge suggestion, persisting to ``rejected_merges``.
+
+        Returns ``(True, "rejected")`` when a new record is appended, or
+        ``(False, "already rejected")`` when the same pair + fingerprint
+        is already recorded (idempotent no-op).
+
+        Raises ``EntityRegistryError`` if either key doesn't resolve to a
+        current person entity (covers merged-away loser keys per spec §4.1).
+        """
+        left = self.get_entity("person", left_key)
+        right = self.get_entity("person", right_key)
+        if left is None:
+            raise EntityRegistryError(
+                f"'{left_key}' no longer exists (possibly already merged)"
+            )
+        if right is None:
+            raise EntityRegistryError(
+                f"'{right_key}' no longer exists (possibly already merged)"
+            )
+        if left_key == right_key:
+            raise EntityRegistryError(
+                "cannot reject merge of an entity with itself"
+            )
+
+        # Recompute reasons for this pair by running the same heuristic
+        # bucketing used in suggest_person_merges. Cheap — O(people) — and
+        # keeps reject_person_merge authoritative even when suggest isn't
+        # called first.
+        current_suggestions = self.suggest_person_merges(apply_rejection_memory=False)
+        sorted_pair = tuple(sorted((left_key, right_key)))
+        matching = [
+            s for s in current_suggestions
+            if tuple(sorted((s.left_key, s.right_key))) == sorted_pair
+        ]
+        if matching:
+            reasons = matching[0].reasons
+            basis_fp = matching[0].basis_fingerprint
+        else:
+            # Pair isn't currently a suggestion (e.g., operator rejecting
+            # preemptively). Use empty reasons — fingerprint still well-defined.
+            reasons = []
+            basis_fp = _compute_entity_merge_basis_fingerprint(
+                "person", left_key, right_key, reasons
+            )
+
+        rejected_list = self._data.setdefault("rejected_merges", [])
+        # Idempotency check on exact (subject_type, sorted_keys, basis_fp).
+        for record in rejected_list:
+            if not isinstance(record, dict):
+                continue
+            if record.get("subject_type") != "person":
+                continue
+            rec_keys = record.get("entity_keys")
+            if not isinstance(rec_keys, list) or len(rec_keys) != 2:
+                continue
+            if tuple(sorted(rec_keys)) != sorted_pair:
+                continue
+            if record.get("basis_fingerprint") == basis_fp:
+                return (False, "already rejected")
+
+        rejected_list.append({
+            "subject_type": "person",
+            "entity_keys": [sorted_pair[0], sorted_pair[1]],
+            "basis_fingerprint": basis_fp,
+            "reasons_at_rejection": reasons,
+            "rejected_at": _now_iso(),
+        })
+        self._data["updated_at"] = _now_iso()
+        return (True, "rejected")
 
     def merge_person_entities(self, winner_key: str, loser_key: str) -> EntityMergeResult:
         """Merge one person entity into another."""

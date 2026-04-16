@@ -935,3 +935,225 @@ class TestStatusEntityCount:
         result = runner.invoke(cli, ["--config", str(config_path), "status"])
         assert result.exit_code == 0
         assert "Entities" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# v0.6.5 Slice 6a: entity-merge rejection memory — CLI tests
+# ---------------------------------------------------------------------------
+
+
+class TestEntityMergeRejectionMemoryCLI:
+    """Slice 6a spec §7: CLI-side tests T-9, T-9b, T-9c, T-10, T-10b, T-10c, T-10d, T-11b, T-15."""
+
+    def _setup_alice_pair_library(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = {
+            "_schema_version": 1,
+            "updated_at": "2026-04-01T00:00:00Z",
+            "entities": {
+                "person": {
+                    "alice_chen": _sample_entity_data(canonical_name="Alice Chen"),
+                    "chen_alice": _sample_entity_data(canonical_name="Chen, Alice"),
+                },
+                "department": {}, "system": {}, "process": {},
+            },
+            "rejected_merges": [],
+        }
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+        return library, config_path
+
+    # T-9 — happy path
+    def test_cli_reject_merge_happy_path(self, tmp_path):
+        _, config_path = self._setup_alice_pair_library(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "reject-merge",
+                  "alice_chen", "chen_alice"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "✓ Rejected merge candidate" in result.output
+        assert "Alice Chen" in result.output
+        assert "Chen, Alice" in result.output
+        assert "[alice_chen]" in result.output
+        assert "[chen_alice]" in result.output
+        assert "reasons:" in result.output
+        assert "last_first_transpose" in result.output
+
+    # T-9b — idempotent
+    def test_cli_reject_merge_idempotent_message(self, tmp_path):
+        _, config_path = self._setup_alice_pair_library(tmp_path)
+        runner = CliRunner()
+        runner.invoke(
+            cli, ["--config", str(config_path), "entities", "reject-merge",
+                  "alice_chen", "chen_alice"]
+        )
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "reject-merge",
+                  "alice_chen", "chen_alice"]
+        )
+        assert result.exit_code == 0
+        assert "= Already rejected" in result.output
+        assert "(no change)" in result.output
+
+    # T-9c — stale key
+    def test_cli_reject_merge_stale_key_error(self, tmp_path):
+        _, config_path = self._setup_alice_pair_library(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "reject-merge",
+                  "alice_chen", "ghost_that_does_not_exist"]
+        )
+        assert result.exit_code != 0
+        assert "✗ Merge candidate is stale" in result.output
+        assert "no longer exists" in result.output
+
+    # T-10 — pluralization (three branches)
+    def test_cli_suggest_merges_renders_suppression_count_pluralization_zero(self, tmp_path):
+        _, config_path = self._setup_alice_pair_library(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "suggest-merges"]
+        )
+        assert "No merge candidates suppressed by rejection memory." in result.output
+
+    def test_cli_suggest_merges_renders_suppression_count_pluralization_one(self, tmp_path):
+        _, config_path = self._setup_alice_pair_library(tmp_path)
+        runner = CliRunner()
+        runner.invoke(
+            cli, ["--config", str(config_path), "entities", "reject-merge",
+                  "alice_chen", "chen_alice"]
+        )
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "suggest-merges"]
+        )
+        assert "1 merge candidate suppressed by rejection memory." in result.output
+
+    # T-10b — (M total rejections recorded.)
+    def test_cli_suggest_merges_renders_total_rejections_line(self, tmp_path):
+        _, config_path = self._setup_alice_pair_library(tmp_path)
+        runner = CliRunner()
+        # Pristine: 0 total rejections line still rendered.
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "suggest-merges"]
+        )
+        assert "(0 total rejections recorded.)" in result.output
+        # After reject.
+        runner.invoke(
+            cli, ["--config", str(config_path), "entities", "reject-merge",
+                  "alice_chen", "chen_alice"]
+        )
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "suggest-merges"]
+        )
+        assert "(1 total rejections recorded.)" in result.output
+
+    # T-10c — disclosure on empty / filtered paths
+    def test_cli_suggest_merges_disclosure_on_no_candidates(self, tmp_path):
+        """Registry with no candidate pair: disclosure still renders."""
+        library = tmp_path / "library"
+        library.mkdir()
+        data = {
+            "_schema_version": 1,
+            "updated_at": "2026-04-01T00:00:00Z",
+            "entities": {
+                "person": {
+                    "alice_chen": _sample_entity_data(canonical_name="Alice Chen"),
+                },
+                "department": {}, "system": {}, "process": {},
+            },
+            "rejected_merges": [],
+        }
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "suggest-merges"]
+        )
+        assert result.exit_code == 0
+        assert "No merge candidates found." in result.output
+        # Disclosure MUST still render on the empty path.
+        assert "No merge candidates suppressed by rejection memory." in result.output
+        assert "(0 total rejections recorded.)" in result.output
+
+    # T-10d — revival annotation
+    def test_cli_suggest_merges_revival_annotation(self, tmp_path):
+        library, config_path = self._setup_alice_pair_library(tmp_path)
+        # Seed a stale-fingerprint rejection to trigger revival.
+        reg_path = library / "entities.json"
+        data = json.loads(reg_path.read_text())
+        data["rejected_merges"].append({
+            "subject_type": "person",
+            "entity_keys": ["alice_chen", "chen_alice"],
+            "basis_fingerprint": "sha256:stale-fingerprint-not-matching-current",
+            "reasons_at_rejection": ["some_old_reason"],
+            "rejected_at": "2026-01-01T00:00:00+00:00",
+        })
+        reg_path.write_text(json.dumps(data, indent=2))
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "suggest-merges"]
+        )
+        assert result.exit_code == 0
+        assert "(revived — basis changed)" in result.output
+
+    # T-11b — graph status filtered count + renamed label
+    def test_cli_graph_status_reviewable_label_and_filtered_count(self, tmp_path):
+        library, config_path = self._setup_alice_pair_library(tmp_path)
+        # Need a registry.json for graph_status to run.
+        (library / "registry.json").write_text(json.dumps({"decks": {}}))
+
+        runner = CliRunner()
+        # Before rejection: 1 reviewable duplicate candidate.
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "graph", "status"]
+        )
+        assert result.exit_code == 0
+        assert "Reviewable duplicate person candidates:" in result.output
+        assert "Reviewable duplicate person candidates: 1" in result.output
+
+        # After rejection: 0.
+        runner.invoke(
+            cli, ["--config", str(config_path), "entities", "reject-merge",
+                  "alice_chen", "chen_alice"]
+        )
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "graph", "status"]
+        )
+        assert "Reviewable duplicate person candidates: 0" in result.output
+
+    # T-15 — lock contract (raises LibraryLockError on held lock, does not block)
+    def test_cli_reject_merge_honors_library_lock(self, tmp_path):
+        library, config_path = self._setup_alice_pair_library(tmp_path)
+        # Acquire .folio.lock manually so it's held when reject-merge tries.
+        import os
+        from datetime import datetime, timezone
+        lock_path = library / ".folio.lock"
+        payload = {
+            "pid": os.getpid(),
+            "command": "test-held",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        try:
+            os.write(fd, json.dumps(payload).encode())
+        finally:
+            os.close(fd)
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(
+                cli, ["--config", str(config_path), "entities", "reject-merge",
+                      "alice_chen", "chen_alice"]
+            )
+            # Raises LibraryLockError → non-zero exit, error text on stderr or output.
+            assert result.exit_code != 0
+            combined = (result.output or "") + (str(result.exception) or "")
+            assert "library lock already held" in combined
+        finally:
+            lock_path.unlink()
