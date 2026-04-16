@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from folio.tracking.entities import (
+    _compute_entity_merge_basis_fingerprint,
+    _empty_entity_registry,
     _strip_person_id_suffix,
     _transpose_person_name,
     EntityAliasCollisionError,
@@ -457,3 +459,207 @@ class TestUpdateEntityAliasCollision:
         john = reg.get_entity("person", "john_doe")
         assert "JD" in john.aliases
         assert "Johnny" in john.aliases
+
+
+# ---------------------------------------------------------------------------
+# v0.6.5 Slice 6a: entity-merge rejection memory
+# ---------------------------------------------------------------------------
+
+
+def _seed_alice_pair(reg: EntityRegistry) -> None:
+    """Seed two person entities that will match via last_first_transpose."""
+    reg.add_entity(_sample_entity(canonical_name="Alice Chen"))
+    reg.add_entity(_sample_entity(canonical_name="Chen, Alice"))
+
+
+class TestEntityMergeRejectionMemory:
+    """Slice 6a spec §7 tests T-1 .. T-15."""
+
+    # T-1
+    def test_empty_registry_has_rejected_merges_key(self):
+        d = _empty_entity_registry()
+        assert d["rejected_merges"] == []
+
+    # T-2
+    def test_load_legacy_registry_defaults_rejected_merges_empty(self, tmp_path):
+        path = tmp_path / "entities.json"
+        # Legacy file shape WITHOUT rejected_merges.
+        path.write_text(json.dumps({
+            "_schema_version": 1,
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "entities": {t: {} for t in ("person", "department", "system", "process")},
+        }))
+        reg = EntityRegistry(path)
+        reg.load()
+        assert reg._data["rejected_merges"] == []
+
+    # T-3
+    def test_basis_fingerprint_deterministic_and_sorted(self):
+        fp1 = _compute_entity_merge_basis_fingerprint(
+            "person", "alice_chen", "chen_alice", ["last_first_transpose"]
+        )
+        fp2 = _compute_entity_merge_basis_fingerprint(
+            "person", "chen_alice", "alice_chen", ["last_first_transpose"]
+        )
+        assert fp1 == fp2
+        assert fp1.startswith("sha256:")
+
+    # T-4 (injective encoding — delimiter collision guard)
+    def test_basis_fingerprint_changes_when_reasons_change(self):
+        fp_ab = _compute_entity_merge_basis_fingerprint(
+            "person", "a", "b", ["reason_a", "reason_b"]
+        )
+        fp_pipe = _compute_entity_merge_basis_fingerprint(
+            "person", "a", "b", ["reason_a|reason_b"]
+        )
+        assert fp_ab != fp_pipe, "canonical JSON encoding must be injective"
+        fp_extra = _compute_entity_merge_basis_fingerprint(
+            "person", "a", "b", ["reason_a", "reason_b", "alias_overlap"]
+        )
+        assert fp_ab != fp_extra
+
+    # T-5
+    def test_suggest_person_merges_filters_rejected_pair_same_fingerprint(self, tmp_path):
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        _seed_alice_pair(reg)
+        before = reg.suggest_person_merges()
+        assert len(before) == 1
+        reg.reject_person_merge(before[0].left_key, before[0].right_key)
+        after = reg.suggest_person_merges()
+        assert after == []
+
+    # T-5b
+    def test_suggest_person_merges_apply_rejection_memory_false_bypass(self, tmp_path):
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        _seed_alice_pair(reg)
+        before = reg.suggest_person_merges()
+        reg.reject_person_merge(before[0].left_key, before[0].right_key)
+        unfiltered = reg.suggest_person_merges(apply_rejection_memory=False)
+        assert len(unfiltered) == 1
+
+    # T-6
+    def test_suggest_person_merges_revives_when_basis_changes(self, tmp_path):
+        """Seed a rejection with a DIFFERENT fingerprint than the current pair
+        would compute, so the revival path fires without mutating aliases
+        (alias collision guard prevents overlap between distinct entities)."""
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        _seed_alice_pair(reg)
+        current = reg.suggest_person_merges()[0]
+        # Seed a rejection record with fabricated basis_fingerprint.
+        reg._data["rejected_merges"].append({
+            "subject_type": "person",
+            "entity_keys": sorted([current.left_key, current.right_key]),
+            "basis_fingerprint": "sha256:stale-fingerprint-from-old-basis",
+            "reasons_at_rejection": ["some_old_reason"],
+            "rejected_at": "2026-01-01T00:00:00+00:00",
+        })
+        after = reg.suggest_person_merges()
+        assert len(after) == 1
+        assert after[0].revived is True
+
+    # T-7
+    def test_reject_person_merge_idempotent(self, tmp_path):
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        _seed_alice_pair(reg)
+        sugg = reg.suggest_person_merges()[0]
+        changed1, status1 = reg.reject_person_merge(sugg.left_key, sugg.right_key)
+        changed2, status2 = reg.reject_person_merge(sugg.left_key, sugg.right_key)
+        assert (changed1, status1) == (True, "rejected")
+        assert (changed2, status2) == (False, "already rejected")
+        assert len(reg._data["rejected_merges"]) == 1
+
+    # T-8
+    def test_reject_person_merge_validates_keys(self, tmp_path):
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        _seed_alice_pair(reg)
+        with pytest.raises(EntityRegistryError, match="no longer exists"):
+            reg.reject_person_merge("nonexistent_ghost", "alice_chen")
+        with pytest.raises(EntityRegistryError, match="no longer exists"):
+            reg.reject_person_merge("alice_chen", "nonexistent_ghost")
+
+    # T-12
+    def test_count_entity_merge_suppressions_direct(self, tmp_path):
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        _seed_alice_pair(reg)
+        assert reg.count_entity_merge_suppressions() == 0
+        sugg = reg.suggest_person_merges()[0]
+        reg.reject_person_merge(sugg.left_key, sugg.right_key)
+        assert reg.count_entity_merge_suppressions() == 1
+
+    # T-13
+    def test_rejected_merges_save_load_roundtrip(self, tmp_path):
+        path = tmp_path / "entities.json"
+        reg = EntityRegistry(path)
+        reg.load()
+        _seed_alice_pair(reg)
+        sugg = reg.suggest_person_merges()[0]
+        reg.reject_person_merge(sugg.left_key, sugg.right_key)
+        reg.save()
+
+        # Reload from disk.
+        reg2 = EntityRegistry(path)
+        reg2.load()
+        assert len(reg2._data["rejected_merges"]) == 1
+        assert reg2.suggest_person_merges() == []
+
+    # T-14 — old-writer / new-reader downgrade compat
+    def test_old_writer_preserves_rejected_merges(self, tmp_path):
+        """Pre-v0.6.5 code path (setdefault _schema_version=1, save self._data)
+        preserves the rejected_merges key we added via the new API."""
+        path = tmp_path / "entities.json"
+        reg = EntityRegistry(path)
+        reg.load()
+        _seed_alice_pair(reg)
+        sugg = reg.suggest_person_merges()[0]
+        reg.reject_person_merge(sugg.left_key, sugg.right_key)
+        reg.save()
+
+        # Simulate a "pre-v0.6.5" code path: load, touch unrelated data, save.
+        # Current save() preserves all top-level keys via self._data write-through.
+        reg2 = EntityRegistry(path)
+        reg2.load()
+        reg2._data["updated_at"] = "2099-01-01T00:00:00+00:00"  # unrelated mutation
+        reg2.save()
+
+        # Third load: rejected_merges should survive intact.
+        reg3 = EntityRegistry(path)
+        reg3.load()
+        assert len(reg3._data["rejected_merges"]) == 1
+
+    # T-6b — revert to prior basis stays suppressed
+    def test_suggest_person_merges_revert_to_prior_basis_stays_suppressed(self, tmp_path):
+        """Two rejection records with different fingerprints for the same pair:
+        current basis matches one of them → suppressed (not revived)."""
+        reg = EntityRegistry(tmp_path / "entities.json")
+        reg.load()
+        _seed_alice_pair(reg)
+        current = reg.suggest_person_merges()[0]
+        sorted_keys = sorted([current.left_key, current.right_key])
+        current_fp = current.basis_fingerprint
+
+        # Record two rejections: one fabricated "B" fingerprint, one matching current "A".
+        reg._data["rejected_merges"].extend([
+            {
+                "subject_type": "person",
+                "entity_keys": sorted_keys,
+                "basis_fingerprint": "sha256:fabricated-B-fingerprint",
+                "reasons_at_rejection": ["old_reason_b"],
+                "rejected_at": "2026-01-02T00:00:00+00:00",
+            },
+            {
+                "subject_type": "person",
+                "entity_keys": sorted_keys,
+                "basis_fingerprint": current_fp,
+                "reasons_at_rejection": current.reasons,
+                "rejected_at": "2026-01-03T00:00:00+00:00",
+            },
+        ])
+        # Current basis matches record A → suppressed (not revived), despite
+        # there being a stale non-matching record B.
+        assert reg.suggest_person_merges() == []

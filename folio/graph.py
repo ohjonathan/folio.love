@@ -131,7 +131,7 @@ def graph_status(config: FolioConfig, *, scope: Optional[str] = None) -> GraphSt
         reg = EntityRegistry(entities_path)
         reg.load()
         unconfirmed_entities = reg.unconfirmed_count()
-        duplicate_candidates = len(reg.suggest_person_merges())
+        duplicate_candidates = len(reg.suggest_person_merges(apply_rejection_memory=True))
         for entity_type, _key, entity in reg.iter_entities():
             if entity.needs_confirmation:
                 continue
@@ -246,7 +246,7 @@ def graph_doctor(
                         "recommended_action": "Run `folio entities generate-stubs --force`.",
                     }
                 )
-        for suggestion in reg.suggest_person_merges():
+        for suggestion in reg.suggest_person_merges(apply_rejection_memory=True):
             findings.append(
                 {
                     "code": "duplicate_person_candidate",

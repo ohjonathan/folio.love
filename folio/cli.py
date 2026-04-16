@@ -1973,7 +1973,7 @@ def graph_status_cmd(ctx, scope: Optional[str]):
     click.echo(f"Enrich-protected notes: {status.enrich_protected_notes}")
     click.echo(f"Unconfirmed entities: {status.unconfirmed_entities}")
     click.echo(f"Confirmed entities missing stubs: {status.confirmed_entities_missing_stubs}")
-    click.echo(f"Duplicate person candidates: {status.duplicate_person_candidates}")
+    click.echo(f"Reviewable duplicate person candidates: {status.duplicate_person_candidates}")
     click.echo(f"Stale analysis artifacts: {status.stale_analysis_artifacts}")
 
 
@@ -2582,44 +2582,142 @@ def reject(ctx, name):
               help="1-based page number.")
 @click.pass_context
 def suggest_merges_cmd(ctx, entity_type: str, page: int):
-    """Suggest deterministic entity merge candidates."""
+    """Suggest deterministic entity merge candidates.
+
+    Candidates rejected by prior ``folio entities reject-merge`` calls are
+    suppressed by rejection memory. Output always discloses suppression
+    count and total rejections recorded.
+    """
     config = ctx.obj["config"]
     library_root = config.library_root.resolve()
     entities_path = library_root / "entities.json"
 
+    from .lock import library_lock
     from .tracking.entities import EntityRegistry, EntityRegistryError
 
     reg = EntityRegistry(entities_path)
-    try:
-        reg.load()
-    except EntityRegistryError as e:
-        click.echo(f"✗ {e}", err=True)
-        sys.exit(1)
+    with library_lock(library_root, "entities suggest-merges"):
+        try:
+            reg.load()
+        except EntityRegistryError as e:
+            click.echo(f"✗ {e}", err=True)
+            sys.exit(1)
 
-    if entity_type != "person":
-        click.echo("No merge heuristics available for this entity type.")
-        return
+        if entity_type != "person":
+            click.echo("No merge heuristics available for this entity type.")
+            _render_merge_disclosure(reg, suppressed_count=0)
+            return
 
-    suggestions = reg.suggest_person_merges()
-    if not suggestions:
-        click.echo("No merge candidates found.")
-        return
+        unfiltered = reg.suggest_person_merges(apply_rejection_memory=False)
+        suggestions = reg.suggest_person_merges(apply_rejection_memory=True)
+        suppressed_count = len(unfiltered) - len(suggestions)
 
-    page_size = 20
-    total_pages = max(1, (len(suggestions) + page_size - 1) // page_size)
-    page = min(max(1, page), total_pages)
-    start = (page - 1) * page_size
-    window = suggestions[start:start + page_size]
+        if not suggestions:
+            click.echo("No merge candidates found.")
+            _render_merge_disclosure(reg, suppressed_count=suppressed_count)
+            return
 
-    click.echo(f"Merge Candidates ({len(suggestions)} total)")
-    click.echo(f"Page {page}/{total_pages} ({len(window)} candidates, page size {page_size})")
-    for suggestion in window:
-        reasons = ", ".join(suggestion.reasons)
+        page_size = 20
+        total_pages = max(1, (len(suggestions) + page_size - 1) // page_size)
+        page = min(max(1, page), total_pages)
+        start = (page - 1) * page_size
+        window = suggestions[start:start + page_size]
+
+        click.echo(f"Merge Candidates ({len(suggestions)} total)")
         click.echo(
-            f"- {suggestion.left_name} [{suggestion.left_key}] <> "
-            f"{suggestion.right_name} [{suggestion.right_key}]"
+            f"Page {page}/{total_pages} ({len(window)} candidates, page size {page_size})"
         )
-        click.echo(f"  Reasons: {reasons}")
+        for suggestion in window:
+            reasons = ", ".join(suggestion.reasons)
+            revived_suffix = " (revived — basis changed)" if suggestion.revived else ""
+            click.echo(
+                f"- {suggestion.left_name} [{suggestion.left_key}] <> "
+                f"{suggestion.right_name} [{suggestion.right_key}]{revived_suffix}"
+            )
+            click.echo(f"  Reasons: {reasons}")
+
+        _render_merge_disclosure(reg, suppressed_count=suppressed_count)
+
+
+def _render_merge_disclosure(reg, suppressed_count: int) -> None:
+    """Always-render disclosure block: suppression count + total rejections.
+
+    Three-branch pluralization matches slice 1's ``folio links review`` pattern.
+    """
+    if suppressed_count == 0:
+        click.echo("No merge candidates suppressed by rejection memory.")
+    elif suppressed_count == 1:
+        click.echo("1 merge candidate suppressed by rejection memory.")
+    else:
+        click.echo(f"{suppressed_count} merge candidates suppressed by rejection memory.")
+    total = reg.count_entity_merge_suppressions()
+    click.echo(f"({total} total rejections recorded.)")
+
+
+@entities.command("reject-merge")
+@click.argument("left")
+@click.argument("right")
+@click.pass_context
+def reject_merge_cmd(ctx, left: str, right: str):
+    """Reject a merge candidate so it stops surfacing in suggest-merges.
+
+    Example: folio entities reject-merge alice_chen chen_alice
+
+    The rejection is keyed on the sorted pair plus the current
+    basis_fingerprint. If entity aliases later change enough to shift the
+    fingerprint, the candidate revives with a ``(revived — basis changed)``
+    annotation in ``folio entities suggest-merges`` output.
+    """
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+
+    from .lock import library_lock
+    from .tracking.entities import EntityRegistry, EntityRegistryError
+
+    reg = EntityRegistry(entities_path)
+    with library_lock(library_root, "entities reject-merge"):
+        try:
+            reg.load()
+        except EntityRegistryError as e:
+            click.echo(f"✗ {e}", err=True)
+            sys.exit(1)
+
+        try:
+            changed, status = reg.reject_person_merge(left, right)
+        except EntityRegistryError as e:
+            click.echo(f"✗ Merge candidate is stale: {e}", err=True)
+            sys.exit(1)
+
+        if not changed:
+            left_entry = reg.get_entity("person", left)
+            right_entry = reg.get_entity("person", right)
+            left_name = left_entry.canonical_name if left_entry else left
+            right_name = right_entry.canonical_name if right_entry else right
+            click.echo(
+                f"= Already rejected: {left_name} <> {right_name} (no change)"
+            )
+            return
+
+        reg.save()
+
+        # Echo full context including reasons for the new record.
+        left_entry = reg.get_entity("person", left)
+        right_entry = reg.get_entity("person", right)
+        left_name = left_entry.canonical_name if left_entry else left
+        right_name = right_entry.canonical_name if right_entry else right
+        # Look up reasons by re-checking the just-written record (last entry).
+        rejected_records = reg._data.get("rejected_merges", [])
+        reasons: list[str] = []
+        if rejected_records and isinstance(rejected_records[-1], dict):
+            maybe_reasons = rejected_records[-1].get("reasons_at_rejection", [])
+            if isinstance(maybe_reasons, list):
+                reasons = [r for r in maybe_reasons if isinstance(r, str)]
+        reasons_str = ", ".join(reasons) if reasons else "none"
+        click.echo(
+            f"✓ Rejected merge candidate: {left_name} [{left}] <> "
+            f"{right_name} [{right}] (reasons: {reasons_str})"
+        )
 
 
 @entities.command("merge")

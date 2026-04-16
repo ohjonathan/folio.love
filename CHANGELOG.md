@@ -45,7 +45,31 @@ changes at minor versions are permitted but flagged explicitly.
 - Deferred from this slice: `--steerco`, watcher/automatic trigger, cross-engagement
   scope, digest-generated relationship suggestions, manual-edit preservation across
   rerun (see §14 carry-forwards).
+## [v0.6.5] — 2026-04-16
 
+### Added
+- **Entity-merge rejection memory.** `folio entities suggest-merges` now
+  filters rejected merge candidates via a per-pair `basis_fingerprint`
+  stored in `entities.json`'s new `rejected_merges` key. `folio graph doctor`
+  and `folio graph status` both honor the same filter. Suggestions revive
+  when entity aliases change enough to shift the fingerprint (e.g., new
+  alias adds a new heuristic signal). Output always discloses suppression
+  count and a total-rejections-recorded line.
+- **New `folio entities reject-merge <left> <right>` command.** Persists a
+  rejection record keyed on the sorted pair + current basis_fingerprint.
+  Locked via `library_lock` against concurrent registry mutations.
+
+### Changed
+- **`folio graph status` label change.** `Duplicate person candidates:`
+  renamed to `Reviewable duplicate person candidates:` to disclose that
+  the count now reflects only candidates not yet dismissed by rejection
+  memory. Scripts scraping the prior label need to update.
+- `entities.json` schema gains top-level `rejected_merges: []` key.
+  Backward-compatible in both directions: pre-v0.6.5 readers preserve the
+  key via `save()` write-through; pre-v0.6.5 writers emit files that
+  v0.6.5 readers load cleanly (key defaulted to `[]`). `_schema_version`
+  is NOT bumped (stays at `1`).
+  Spec: `docs/specs/v0.6.5_entity_merge_rejection_memory_spec.md`.
 ## [v0.6.4] — 2026-04-15
 
 ### Added
