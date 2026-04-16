@@ -718,3 +718,21 @@ See `frameworks/manifests/framework-learnings-v1.1-adoption.md` Slice 7 suppleme
 
 After three sessions (slice 6a, v0.7.0 setup, v0.7.0 codex/Ontos invocations), F-048 is now **confirmed at scale** as a recurring class of friction. v1.3 T-2 (adopter-doc pre-D.6 revert step) is the right answer; the alternative (Ontos respects forbidden_paths) is tool-side work outside framework-core.
 
+
+---
+
+## v1.2.0 resynced from johnny-os@e40b5c3 on 2026-04-16
+
+Bundle delta absorbed (54 files changed):
+- Adversarial-family must-differ-provider invariant (formalizes F-006 lesson; affects B.1/D.2 manifests)
+- `verify-d6-gate.sh` — mechanical D.6 gate (closes v1.2 B-3 / F-030)
+- `verify-adopter.sh <manifest>` — unified adopter manifest validation entrypoint (closes v1.2 A-2 / F-007 / F-010)
+- Circuit-breaker preserved-blocker-ID carry-forward (addresses F-022 / F-024 class)
+- Template 16 P5-style divergent-reviewer consolidation (closes v1.2 A-3 / F-013)
+- Orchestrator fast-path on unanimous verdicts (formalizes B-2 policy for `manifest_version ≥ 1.2.0`)
+- `day-one.sh` bootstrap script for new adopters (closes v1.2 A-4 / F-001..F-003)
+- 10 conformance checks (up from 8) — adds `verify-circuit-breaker.sh` and `verify-d6-gate.sh`
+
+All existing folio manifests (v1.1.0 / v1.1.1) remain valid unchanged. Next slice manifest should declare `manifest_version: "1.2.0"` to unlock fast-path + new schema fields.
+
+Resync PR: opened after this retro append.
