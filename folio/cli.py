@@ -1051,9 +1051,14 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
                 click.echo(f"Skipped context entries: {len(skipped_context)}")
 
             for entry in skipped_analysis:
-                click.echo(
-                    f"↷ {entry.id}: skipping analysis document (source-less); rerun the originating analysis workflow instead"
-                )
+                if entry.subtype == "digest":
+                    click.echo(
+                        f"↷ {entry.id}: skipping digest (source-less); rerun `folio digest` instead"
+                    )
+                else:
+                    click.echo(
+                        f"↷ {entry.id}: skipping analysis document (source-less); rerun the originating analysis workflow instead"
+                    )
 
             if skipped_analysis:
                 click.echo(f"Skipped analysis entries: {len(skipped_analysis)}")
@@ -1169,6 +1174,112 @@ def enrich(ctx, scope, dry_run, llm_profile, force):
 
     if result.failed > 0:
         sys.exit(1)
+
+
+@cli.group(cls=ScopeOrCommandGroup, invoke_without_command=True)
+@click.option("--scope", default=None, hidden=True)
+@click.option("--date", "date_str", default=None,
+              help="Digest date (YYYY-MM-DD); default local today.")
+@click.option("--week", "week_mode", is_flag=True, default=False,
+              help="Generate weekly digest for the ISO week containing --date.")
+@click.option("--include-flagged", is_flag=True, default=False,
+              help="Include source-backed inputs whose review_status is flagged "
+                   "(daily mode only; no-op in --week).")
+@click.option("--llm-profile", default=None,
+              help="Override routing.digest for this invocation.")
+@click.pass_context
+def digest(ctx, scope: Optional[str], date_str: Optional[str], week_mode: bool,
+           include_flagged: bool, llm_profile: Optional[str]):
+    """Generate a daily or weekly digest for a single engagement scope.
+
+    Examples:
+
+        folio digest ClientA/DD_Q1_2026
+
+        folio digest ClientA/DD_Q1_2026 --date 2026-04-04
+
+        folio digest ClientA/DD_Q1_2026 --week --date 2026-04-04
+
+        folio digest ClientA/DD_Q1_2026 --include-flagged
+
+    Re-run after upstream notes change to refresh the digest.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    if scope is None:
+        raise click.UsageError(
+            "scope is required (e.g. `folio digest ClientA/DD_Q1_2026`)"
+        )
+
+    config = ctx.obj["config"]
+    from . import digest as digest_module
+    from .lock import library_lock, LibraryLockError
+
+    fn = digest_module.generate_weekly_digest if week_mode else digest_module.generate_daily_digest
+
+    try:
+        with library_lock(config.library_root, "digest"):
+            result = fn(
+                config,
+                scope=scope,
+                date=date_str,
+                include_flagged=include_flagged,
+                llm_profile=llm_profile,
+            )
+    except LibraryLockError as e:
+        click.echo(f"✗ {e}")
+        ctx.exit(1)
+
+    _emit_digest_result(result, week_mode=week_mode, include_flagged=include_flagged)
+    ctx.exit(result.exit_code)
+
+
+def _emit_digest_result(result, *, week_mode: bool, include_flagged: bool) -> None:
+    """Render DigestResult to stdout per spec §4 + §13.
+
+    Owns three-branch pluralization (SF-12), `✓`/`✗` prefixes (SF-13),
+    `--week --include-flagged` advisory (SF-14), `--include-flagged` echo
+    on empty results (SF-15), success+override echo (MN-9 / SF-107).
+    """
+    if result.status == "error":
+        click.echo(f"✗ {result.message}")
+        return
+
+    if result.status == "empty":
+        click.echo(result.message)
+        if week_mode and include_flagged:
+            click.echo(
+                "Note: --include-flagged has no effect in --week mode; "
+                "weekly inputs are existing daily digests, which are "
+                "already filtered at write time."
+            )
+        return
+
+    # status == "written" or "rerun"
+    click.echo(f"✓ {result.message}")
+    if result.path is not None:
+        click.echo(f"  Path: {result.path}")
+
+    n = result.draws_from_count
+    if week_mode:
+        noun = "daily digest" if n == 1 else "daily digests"
+    else:
+        noun = "input" if n == 1 else "inputs"
+
+    suffix = ""
+    if not week_mode and include_flagged and result.flagged_counts.included > 0:
+        m = result.flagged_counts.included
+        flagged_noun = "flagged input" if m == 1 else "flagged inputs"
+        suffix = f" (--include-flagged honored; {m} {flagged_noun} included)"
+
+    click.echo(f"  Drawn from {n} {noun}{suffix}.")
+
+    if week_mode and include_flagged:
+        click.echo(
+            "Note: --include-flagged has no effect in --week mode; "
+            "weekly inputs are existing daily digests, which are "
+            "already filtered at write time."
+        )
 
 
 @cli.group(cls=ScopeOrCommandGroup, invoke_without_command=True)
