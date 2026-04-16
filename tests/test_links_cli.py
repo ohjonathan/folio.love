@@ -690,10 +690,13 @@ def test_filter_handles_missing_source_id_target_id(tmp_path):
 
     config = FolioConfig.load(config_path)
     views, counts = collect_pending_relationship_proposals(config)
-    # No crash. The entry with missing target_id gets target_id="" and
-    # a computed proposal_id; it is harmless to surface (unsupported relation
-    # would have filtered it, but "impacts" is supported). Both surface.
-    assert len(views) == 2
+    # No crash (DB-1 fix). The malformed entry with missing target_id is
+    # skipped at _iter_producer_proposals (B-001 fix: empty target_id cannot
+    # surface as confirmable — confirming it would write canonical
+    # `impacts: ['']` and corrupt frontmatter). Only the well-formed
+    # proposal surfaces.
+    assert len(views) == 1
+    assert views[0].proposal.target_id == target_id
     assert counts == {}
 
 
@@ -751,3 +754,105 @@ def test_find_pending_view_post_migration(tmp_path):
     pid = views[0].proposal.proposal_id
     view = _find_pending_view(config, pid)
     assert view.proposal.proposal_id == pid
+
+
+def test_filter_skips_malformed_target_id_proposals(tmp_path):
+    """Codex adversarial B-001: proposals with empty / non-string target_id must not surface."""
+    source_id = "clienta_evidence_malformed_tgt"
+    target_id = "clienta_evidence_ok_tgt"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_note(target_id, target_id))
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [
+                                # target_id missing entirely
+                                {"relation": "impacts", "status": "pending_human_confirmation",
+                                 "confidence": "medium", "basis_fingerprint": "sha256:a"},
+                                # target_id empty string
+                                {"relation": "impacts", "target_id": "", "status": "pending_human_confirmation",
+                                 "confidence": "medium", "basis_fingerprint": "sha256:b"},
+                                # target_id non-string (integer)
+                                {"relation": "impacts", "target_id": 123, "status": "pending_human_confirmation",
+                                 "confidence": "medium", "basis_fingerprint": "sha256:c"},
+                                _proposal(source_id, "impacts", target_id, "sha256:ok"),
+                            ]
+                        }
+                    }
+                }
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, _ = collect_pending_relationship_proposals(config)
+    # Only the well-formed proposal surfaces; the three malformed ones are skipped.
+    assert len(views) == 1
+    assert views[0].proposal.target_id == target_id
+
+
+def test_filter_rejection_key_ignores_empty_basis_fingerprint(tmp_path):
+    """Codex adversarial SF-001: empty basis_fingerprint must not create a valid rejection key."""
+    source_id = "clienta_evidence_emptyfp"
+    target_id = "clienta_evidence_emptyfp_tgt"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_note(target_id, target_id))
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [
+                                # Rejected entry with empty basis_fingerprint (producer defect state)
+                                {"proposal_id": "rej-1", "relation": "impacts", "target_id": target_id,
+                                 "basis_fingerprint": "", "confidence": "medium", "signals": [],
+                                 "rationale": "", "status": "rejected", "producer": "enrich"},
+                                # Pending entry with a proper basis_fingerprint — must NOT be
+                                # suppressed by the empty-fingerprint rejected entry
+                                _proposal(source_id, "impacts", target_id, "sha256:legitimate"),
+                            ]
+                        }
+                    }
+                }
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, counts = collect_pending_relationship_proposals(config)
+    # The pending proposal with a real fingerprint must surface; empty-fp
+    # rejection must not act as a suppression key.
+    assert len(views) == 1
+    assert counts == {}

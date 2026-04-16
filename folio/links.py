@@ -126,6 +126,13 @@ def _iter_producer_proposals(source_id: str, fm: dict):
             proposal = _proposal_from_raw(source_id, producer, raw)
             if proposal.relation not in SUPPORTED_RELATIONS:
                 continue
+            # Reject proposals with invalid target_id (empty string or non-string).
+            # The D.4 scalar-default fix prevents KeyError on legacy frontmatter
+            # missing target_id, but a proposal with target_id="" must not surface
+            # as confirmable — confirming it would write canonical `impacts: ['']`
+            # and corrupt frontmatter.
+            if not isinstance(proposal.target_id, str) or not proposal.target_id:
+                continue
             yield producer, raw, proposal
 
 
@@ -160,6 +167,11 @@ def collect_pending_relationship_proposals(
         rejected_fps_by_prefix: dict[str, dict[tuple[str, str, str], set[str]]] = {}
         for producer, _raw, proposal in _iter_producer_proposals(entry.id, fm):
             if proposal.status != "rejected":
+                continue
+            # Skip rejected entries with empty basis_fingerprint — treating
+            # them as valid rejection keys would false-suppress pending
+            # proposals that share the producer defect of empty fingerprints.
+            if not proposal.basis_fingerprint:
                 continue
             key = _build_rejection_key(entry.id, proposal)
             rejected_keys_by_producer.setdefault(producer, set()).add(key)
