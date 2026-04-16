@@ -132,6 +132,16 @@ Entries ordered by encounter time. Each entry captures: **what happened**, **whe
 - **Resolution:** Captured `gemini` stdout to `/tmp/llm-dev-v1-dispatches/pre-a-proposal-gemini-output.md`, then copied to the canonical path after stripping the shell's ```markdown wrapper. Documented deviation in the halt report.
 - **v1.2 target:** (a) Worker-session-contract should explicitly address "stdout-only worker CLIs" as a first-class case, describing the orchestrator-write escape hatch. (b) Or bundle a lightweight adapter script (`scripts/dispatch-worker.sh <family> <prompt-file> <output-file>`) that normalizes CLI capability differences across families. Today every family-specific integration is a mini-project for the adopter.
 
+### [F-006-confirmed] Codex retroactive adversarial review EMPIRICALLY VALIDATED the concern
+
+- **When:** After D.6 Approved, operator directed a retroactive codex adversarial review on the shipped Phase C + D.4 code.
+- **What:** The concern at F-006 was that same-provider (`claude-sub`) adversarial review is weaker than cross-family. The retroactive codex pass found **1 new blocker (B-001)** and **1 upgraded should-fix (SF-001)** that claude-sub missed during Phase D.1:
+  - **B-001:** D.4's scalar-default fix (`setdefault("target_id", "")`) stopped the KeyError but surfaced malformed proposals as confirmable — confirming them wrote corrupt canonical state (`impacts: ['']`) or crashed with TypeError on non-string `target_id`. Real regression.
+  - **SF-001:** Empty `basis_fingerprint` was treated as a valid rejection-memory key, false-suppressing legitimate pending proposals.
+- **Evidence weight:** Both findings had `direct-run` evidence (codex demonstrated them with temp-library reproductions). Claude-sub's Phase D.1 adversarial missed them despite the same scope and same spec.
+- **Resolution:** Dispatched codex adversarial as a retroactive audit, applied D.4b fix (2 file changes in `folio/links.py` + 2 regression tests); 223 scope-relevant tests pass post-fix.
+- **v1.2 target (ELEVATED to CRITICAL A-severity):** The framework MUST NOT treat same-provider sub-agent adversarial review as equivalent to cross-family. Options, in descending preference: (a) require a true different-provider family for the adversarial role on user-facing deliverables; (b) allow `claude-sub` as adversarial only with a mandatory second-pass by a different-provider family before D.6 gate; (c) document same-provider adversarial as "advisory only" in P3 extensions and require cross-provider adversarial for the canonical verdict. This retro session is **the strongest datapoint yet** that "family diversity = training diversity" is a load-bearing claim of the framework.
+
 ### [F-028] D.5 verifier dispatched single-family rather than manifest's 3-family prescription
 
 - **When:** Phase D.5 verifier dispatch.
@@ -256,7 +266,8 @@ Entries ordered by encounter time. Each entry captures: **what happened**, **whe
 - **Phase C code commit:** `3cc99be feat(links, graph): proposal-review-hardening v0.6.0`.
 - **Phase D.4 fix commit:** `fix(D.4): close D.3 canonical blockers (DB-1..DB-4)`.
 - **Phase D.5/D.6 commit:** `chore(D.5/D.6): gemini verifier Approve + final-approval gate approved`.
-- **Test suite:** 221/221 scope-relevant tests pass (pre-existing `test_inspect.py` + `test_normalize.py` failures are host-environment baseline, unrelated — see F-027).
+- **Phase D.4b fix commit (retroactive codex adversarial closure):** `fix(D.4b): close codex-adversarial B-001 + SF-001 (F-006 gap-close)`.
+- **Test suite:** 223/223 scope-relevant tests pass (pre-existing `test_inspect.py` + `test_normalize.py` failures are host-environment baseline, unrelated — see F-027).
 - **Breaking change:** `folio graph doctor --json` output shape migrated from top-level array to top-level object; CHANGELOG entry declares this.
 - **Ready for:** merge to `main` after operator review of this retro. Or Phase E-post merge via `gh pr create`.
 
