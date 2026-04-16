@@ -690,6 +690,172 @@ class TestEntitiesGenerateStubs:
         assert stub_result.exit_code == 0
         assert (library / "_entities" / "person" / "Alice Chen.md").exists()
 
+    def test_generate_stubs_force_removes_stale_auto_generated_stub_after_merge(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = {
+            "_schema_version": 1,
+            "updated_at": "2026-04-01T00:00:00Z",
+            "entities": {
+                "person": {
+                    "alice_chen": _sample_entity_data(canonical_name="Alice Chen"),
+                    "chen_alice": _sample_entity_data(canonical_name="Chen, Alice"),
+                },
+                "department": {},
+                "system": {},
+                "process": {},
+            },
+        }
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        runner.invoke(cli, ["--config", str(config_path), "entities", "generate-stubs"])
+
+        merge_result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "merge", "Alice Chen", "Chen, Alice"]
+        )
+        refresh_result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs", "--force"]
+        )
+
+        assert merge_result.exit_code == 0
+        assert refresh_result.exit_code == 0
+        assert "Removed stale auto-generated stubs: 1" in refresh_result.output
+        assert not (library / "_entities" / "person" / "Chen, Alice.md").exists()
+
+    def test_generate_stubs_force_preserves_manual_stale_stub_after_merge(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = {
+            "_schema_version": 1,
+            "updated_at": "2026-04-01T00:00:00Z",
+            "entities": {
+                "person": {
+                    "alice_chen": _sample_entity_data(canonical_name="Alice Chen"),
+                    "chen_alice": _sample_entity_data(canonical_name="Chen, Alice"),
+                },
+                "department": {},
+                "system": {},
+                "process": {},
+            },
+        }
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        runner.invoke(cli, ["--config", str(config_path), "entities", "generate-stubs"])
+
+        loser_stub = library / "_entities" / "person" / "Chen, Alice.md"
+        loser_stub.write_text("---\ntitle: Chen, Alice\n---\n\n# Chen, Alice\n\nManual note.\n")
+
+        runner.invoke(
+            cli, ["--config", str(config_path), "entities", "merge", "Alice Chen", "Chen, Alice"]
+        )
+        refresh_result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "generate-stubs", "--force"]
+        )
+
+        assert refresh_result.exit_code == 0
+        assert "Manual stubs preserved: 1" in refresh_result.output
+        assert loser_stub.exists()
+        assert "Manual note." in loser_stub.read_text()
+
+
+class TestEntitiesMerge:
+    def test_entities_suggest_merges_lists_person_candidates(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = {
+            "_schema_version": 1,
+            "updated_at": "2026-04-01T00:00:00Z",
+            "entities": {
+                "person": {
+                    "alice_chen": _sample_entity_data(canonical_name="Alice Chen"),
+                    "chen_alice": _sample_entity_data(canonical_name="Chen, Alice"),
+                },
+                "department": {},
+                "system": {},
+                "process": {},
+            },
+        }
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "suggest-merges"]
+        )
+
+        assert result.exit_code == 0
+        assert "Alice Chen" in result.output
+        assert "Chen, Alice" in result.output
+        assert "last_first_transpose" in result.output
+
+    def test_entities_merge_rewrites_internal_references_and_aliases(self, tmp_path):
+        library = tmp_path / "library"
+        library.mkdir()
+        data = {
+            "_schema_version": 1,
+            "updated_at": "2026-04-01T00:00:00Z",
+            "entities": {
+                "person": {
+                    "alice_chen": _sample_entity_data(
+                        canonical_name="Alice Chen",
+                        reports_to="chen_alice",
+                        aliases=["A. Chen"],
+                    ),
+                    "chen_alice": _sample_entity_data(
+                        canonical_name="Chen, Alice",
+                        aliases=["Alice C."],
+                    ),
+                    "bob_martinez": _sample_entity_data(
+                        canonical_name="Bob Martinez",
+                        reports_to="chen_alice",
+                    ),
+                    "mystery_exec": _sample_entity_data(
+                        canonical_name="Mystery Exec",
+                        needs_confirmation=True,
+                        proposed_match="chen_alice",
+                    ),
+                },
+                "department": {
+                    "executive": _sample_entity_data(
+                        canonical_name="Executive",
+                        type="department",
+                        head="chen_alice",
+                    ),
+                },
+                "system": {},
+                "process": {},
+            },
+        }
+        _make_entity_registry(library, data)
+        config_path = tmp_path / "folio.yaml"
+        _make_config(config_path, {"library_root": str(library)})
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--config", str(config_path), "entities", "merge", "Alice Chen", "Chen, Alice"]
+        )
+
+        assert result.exit_code == 0
+        assert "Rewritten references: 4" in result.output
+        assert "generate-stubs --force" in result.output
+
+        saved = json.loads((library / "entities.json").read_text())
+        assert "chen_alice" not in saved["entities"]["person"]
+        winner = saved["entities"]["person"]["alice_chen"]
+        assert winner["reports_to"] is None
+        assert "Chen, Alice" in winner["aliases"]
+        assert "Alice C." in winner["aliases"]
+        assert saved["entities"]["person"]["bob_martinez"]["reports_to"] == "alice_chen"
+        assert saved["entities"]["person"]["mystery_exec"]["proposed_match"] == "alice_chen"
+        assert saved["entities"]["department"]["executive"]["head"] == "alice_chen"
+
 
 # ---------------------------------------------------------------------------
 # B3: CLI displays canonical names (not slugs) for cross-references

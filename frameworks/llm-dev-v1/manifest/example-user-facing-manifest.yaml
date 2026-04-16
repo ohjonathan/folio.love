@@ -1,0 +1,262 @@
+# Example user-facing deliverable manifest (v1.1).
+#
+# Toy deliverable: a notification-preferences settings UI where a user
+# toggles account / product-updates / marketing notifications on/off and
+# saves. Chosen to be obviously portable (no project-specific framework
+# choice), user-facing (UI + copy + accessibility), and compatible with
+# the v1.1 Product-lens + pre-A extensions.
+#
+# This manifest conforms to deliverable-manifest.schema.yaml (v1.1).
+# Running `bash scripts/verify-schema.sh` validates both this and the
+# v1.0.0 example-manifest.yaml, proving backward-compat.
+#
+# Four model families are configured; codex plays Adversarial AND
+# Product in separate P10 sessions on B.1/B.2/D.2. Adopters who prefer
+# a strict 5-family split (distinct Product family) may configure that
+# way; v1.1 does not mandate it.
+
+manifest_version: "1.1.0"
+id: notification-preferences
+slug: notification-preferences
+summary: "User-facing settings UI to toggle notification types (account, product-updates, marketing) with save persistence and accessible failure-visibility."
+
+user_facing: true
+
+pre_a:
+  entry: proposal
+  artifact_path: docs/reviews/notification-preferences-proposal-verdict.md
+
+owners:
+  - "Example Owner"
+
+scope:
+  allowed_paths:
+    - src/settings/notifications/
+    - tests/test_notifications.py
+  forbidden_paths:
+    - src/auth/
+    - migrations/
+    - .github/
+  forbidden_symbols:
+    - "document.cookie"
+    - "localStorage."
+  cardinality_assertions:
+    - name: "Exactly three notification types"
+      command: "grep -cE '\\b(account|product-updates|marketing)\\b' src/settings/notifications/types.ts"
+      expect: "gte:3"
+    - name: "Public API exports exactly NotificationPreferences and save_preferences"
+      command: "node -e \"const m=require('./src/settings/notifications'); console.log(Object.keys(m).sort().join(','))\""
+      expect: "literal:NotificationPreferences,save_preferences"
+
+artifacts:
+  spec:              "docs/specs/notification-preferences-spec.md"
+  family_verdict:    "docs/reviews/notification-preferences-<phase>-<family>-<role>.md"
+  canonical_verdict: "docs/reviews/notification-preferences-<phase>-verdict.md"
+  product_verdict:   "docs/reviews/notification-preferences-<phase>-<family>-product.md"
+  fix_summary:       "docs/reviews/notification-preferences-D.4-fix-summary.md"
+  verification:      "docs/reviews/notification-preferences-D.5-<family>-verifier.md"
+  final_approval:    "docs/reviews/notification-preferences-final-approval.md"
+  retro:             "docs/retros/notification-preferences-retro.md"
+  proposal_verdict:  "docs/reviews/notification-preferences-proposal-verdict.md"
+
+# Model assignments per phase. claude-opus is the author family. The
+# user_facing extension requires a Product role on B.1 / B.2 / D.2;
+# codex plays Product as a second session distinct from Adversarial
+# (P10 same-family-separate-session pattern).
+model_assignments:
+  - phase: "-A.proposal"
+    assignments:
+      codex: proposal-reviewer
+  - phase: "A"
+    assignments:
+      claude-opus: spec-author
+  - phase: "B.1"
+    assignments:
+      claude-sonnet: peer
+      gemini:        alignment
+      codex:         adversarial
+  - phase: "B.2"
+    assignments:
+      claude-sonnet: peer
+      gemini:        alignment
+      codex:         adversarial
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude-opus: implementation-author
+  - phase: "D.1"
+    assignments:
+      codex: peer
+  - phase: "D.2"
+    assignments:
+      gemini:        peer
+      claude-sonnet: alignment
+      codex:         adversarial
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude-opus: fix-author
+  - phase: "D.5"
+    assignments:
+      codex:         verifier
+      gemini:        verifier
+      claude-sonnet: verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      gemini: retro
+
+  # Product role dispatches as separate sessions on B.1 / B.2 / D.2
+  # (v1.1 user-facing extension; P10 same-family-separate-session).
+  # codex plays both Adversarial (above) and Product (below) on B.1/B.2,
+  # in distinct worker sessions. claude-sonnet plays Alignment (above)
+  # and Product (below) on D.2, again distinct sessions.
+  - phase: "B.1"
+    assignments:
+      codex: product
+  - phase: "B.2"
+    assignments:
+      codex: product
+  - phase: "D.2"
+    assignments:
+      claude-sonnet: product
+
+cli_capability_matrix:
+  claude-opus:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sonnet:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  gemini:
+    shell: false
+    git: false
+    test_runner: false
+    doc_index: true
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "component imports"
+        command: "node -e 'require(\"./src/settings/notifications\")'"
+        expect: "exit-0"
+      - name: "full test suite"
+        command: "npm test -- tests/test_notifications"
+        expect: "exit-0"
+  - phase: "D.2"
+    checks:
+      - name: "no forbidden symbols"
+        command: "grep -rE 'document\\.cookie|localStorage\\.' src/settings/notifications/ tests/test_notifications.py"
+        expect: "exit-nonzero"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main by at least 1"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards: []
+
+# Gate prerequisites organized by category. Every category has ≥1
+# entry. User-facing concerns (accessibility regression, failure-
+# visibility live-region test, copy-approval) are covered under the
+# existing categories — no new category required in v1.1.
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full test suite passes including accessibility-regression tests."
+    verification:
+      command: "npm test"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "Scope lock intact: forbidden symbols absent from allowed paths."
+    verification:
+      command: "grep -rE 'document\\.cookie|localStorage\\.' src/settings/notifications/"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "No changes outside scope-lock allowed paths."
+    verification:
+      command: "git diff --name-only main..HEAD | grep -vE '^(src/settings/notifications/|tests/test_notifications\\.(py|js|ts)$)'"
+      expect: "exit-nonzero"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "Exactly three notification types defined."
+    verification:
+      command: "grep -cE '\\b(account|product-updates|marketing)\\b' src/settings/notifications/types.ts"
+      expect: "gte:3"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "Canonical B.3 verdict exists (includes 4-row Product intake)."
+    verification:
+      command: "test -f docs/reviews/notification-preferences-B.3-verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "Canonical D.3 verdict exists."
+    verification:
+      command: "test -f docs/reviews/notification-preferences-D.3-verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "D.5 verifier artifacts from all three non-author families exist."
+    verification:
+      command: "ls docs/reviews/notification-preferences-D.5-*-verifier.md 2>/dev/null | wc -l"
+      expect: "eq:3"
+  - id: G-verdict-4
+    category: verdict-presence
+    description: "Product verdicts from B.1 / B.2 / D.2 exist (v1.1 user-facing extension)."
+    verification:
+      command: "ls docs/reviews/notification-preferences-{B.1,B.2,D.2}-*-product.md 2>/dev/null | wc -l"
+      expect: "eq:3"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "No unresolved blocker lines in any canonical verdict."
+    verification:
+      command: "awk '/^## Preserved blockers/,/^## /' docs/reviews/notification-preferences-*-verdict.md | grep -E '^- \\*\\*ID:\\*\\*'"
+      expect: "exit-nonzero"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean (no uncommitted changes)."
+    verification:
+      command: "git status --porcelain"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Branch is behind main by zero commits."
+    verification:
+      command: "git rev-list --count HEAD..main"
+      expect: "eq:0"
+
+tracker:
+  path: "docs/trackers/notification-preferences.md"
+  columns: [phase, owner, status, artifact, evidence, timestamp]
+
+branch_map:
+  default: "feat/notification-preferences-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/architecture.md"
+    version: "2026-04"
+    relevance: "Settings layer rules — notifications settings lives in src/settings/."
+  - path: "docs/design/accessibility-guidelines.md"
+    version: "2026-Q2"
+    relevance: "Live-region semantics for transient UI, aria-label requirements."
+  - path: "docs/design/copy-voice.md"
+    version: "2026-Q2"
+    relevance: "Tone guide for user-facing copy (toggle labels, confirmation toasts)."

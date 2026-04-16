@@ -19,6 +19,7 @@ _INVALID_FILENAME_CHARS = '<>:"/\\|?*'
 @dataclass
 class StubGenerationResult:
     generated: int = 0
+    removed: int = 0
     skipped_existing: int = 0
     skipped_manual: int = 0
     generated_by_type: dict[str, int] = field(
@@ -36,9 +37,11 @@ def generate_entity_stubs(
     """Create entity stubs under the requested output directory."""
     result = StubGenerationResult()
     output_dir.mkdir(parents=True, exist_ok=True)
+    desired_paths: set[Path] = set()
 
     for entity_type, entity_key, entry in registry.iter_entities():
         stub_path = output_dir / entity_type / f"{_stub_filename(entry.canonical_name)}.md"
+        desired_paths.add(stub_path.resolve())
         stub_path.parent.mkdir(parents=True, exist_ok=True)
 
         if stub_path.exists():
@@ -68,6 +71,35 @@ def generate_entity_stubs(
         )
         result.generated += 1
         result.generated_by_type[entity_type] += 1
+
+    if force:
+        for existing_path in output_dir.rglob("*.md"):
+            resolved = existing_path.resolve()
+            if resolved in desired_paths:
+                continue
+            try:
+                existing_content = existing_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                warning = f"Could not read existing stub {existing_path.name}: {exc}"
+                logger.warning(warning)
+                result.warnings.append(warning)
+                continue
+            if AUTO_GENERATED_STUB_MARKER not in existing_content:
+                result.skipped_manual += 1
+                warning = (
+                    f"Preserving manual stale stub {existing_path.name}: "
+                    "file does not contain the auto-generated marker."
+                )
+                logger.warning(warning)
+                result.warnings.append(warning)
+                continue
+            try:
+                existing_path.unlink()
+                result.removed += 1
+            except OSError as exc:
+                warning = f"Could not remove stale stub {existing_path.name}: {exc}"
+                logger.warning(warning)
+                result.warnings.append(warning)
 
     return result
 

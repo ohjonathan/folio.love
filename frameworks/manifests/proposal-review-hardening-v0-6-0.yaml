@@ -1,0 +1,331 @@
+# Deliverable manifest: proposal-review-hardening-v0.6.0
+#
+# First production llm-dev-v1.1 run against folio.love. Smallest coherent FR-813
+# slice from PR #43's proposal doc (`docs/specs/tier4_discovery_proposal_layer_spec.md`).
+#
+# P3 NOTE (v1.2 target, friction log [F-006]): folio.love's orchestrator host
+# has three model CLIs installed: `claude`, `codex`, `gemini`. Author is Claude
+# (this session). The framework's strict P3 requires ≥3 DISTINCT non-author
+# engineering families on B.1 / B.2 / D.2. Removing the author (Claude) leaves
+# only two distinct non-author CLIs (codex, gemini). To proceed, we declare a
+# third "family" as a Claude sub-agent session (`claude-sub`), explicitly marked
+# as same-provider-separate-session and flagged as a P3 STRICT-violation vs.
+# family-diversity-in-spirit. The retro's v1.2 target list will name this as the
+# #1 adopter blocker: the framework assumes four distinct model vendors on the
+# host, and a Claude-primary developer has only three.
+#
+# verify-p3.sh does NOT run on this manifest (it only validates the bundle's
+# bundled example manifests), so the P3 violation is not caught automatically.
+# This is itself a v1.2 target (friction log [F-007]): verify-p3.sh should accept
+# an adopter manifest path via argument.
+
+manifest_version: "1.1.0"
+id: proposal-review-hardening-v0-6-0
+slug: proposal-review-hardening
+summary: "Smallest coherent FR-813 slice — durable rejection memory and stale invalidation on the shared non-canonical proposal contract surfaced by folio links review."
+
+user_facing: true
+
+pre_a:
+  entry: proposal
+  artifact_path: docs/specs/tier4_discovery_proposal_layer_spec.md
+
+owners:
+  - "Jonathan Oh (ohjonathan)"
+
+scope:
+  allowed_paths:
+    - folio/links.py
+    - folio/graph.py
+    - folio/tracking/registry.py
+    - folio/tracking/entities.py
+    - folio/cli.py
+    - tests/test_links_cli.py
+    - tests/test_graph_cli.py
+    - docs/specs/v0.6.0_proposal_review_hardening_spec.md
+    - docs/validation/v0.6.0_pre_a_proposal_claude_adversarial_product.md
+    - docs/validation/v0.6.0_pre_a_proposal_gemini_alignment_technical.md
+    - docs/validation/v0.6.0_pre_a_proposal_canonical_verdict.md
+    - docs/validation/v0.6.0_spec_peer_codex.md
+    - docs/validation/v0.6.0_spec_alignment_gemini.md
+    - docs/validation/v0.6.0_spec_adversarial_claude-sub.md
+    - docs/validation/v0.6.0_spec_product_claude-sub.md
+    - docs/validation/v0.6.0_spec_canonical_verdict.md
+    - docs/validation/v0.6.0_code_peer_codex.md
+    - docs/validation/v0.6.0_code_alignment_gemini.md
+    - docs/validation/v0.6.0_code_adversarial_claude-sub.md
+    - docs/validation/v0.6.0_code_product_claude-sub.md
+    - docs/validation/v0.6.0_code_canonical_verdict.md
+    - docs/validation/v0.6.0_d4_fix_summary.md
+    - docs/validation/v0.6.0_d5_codex_verifier.md
+    - docs/validation/v0.6.0_d5_gemini_verifier.md
+    - docs/validation/v0.6.0_d5_claude-sub_verifier.md
+    - docs/validation/v0.6.0_d6_final_approval.md
+    - docs/retros/llm-dev-v1-adoption.md
+    - docs/trackers/proposal-review-hardening-v0.6.0.md
+  forbidden_paths:
+    - folio/pipeline/
+    - folio/enrich.py
+    - folio/analysis_docs.py
+    - folio/entity_stubs.py
+    - docs/product/
+    - docs/architecture/
+    - frameworks/llm-dev-v1/
+    - ontos/
+    - .github/
+    - Ontos_Context_Map.md
+    - AGENTS.md
+  forbidden_symbols:
+    - "pickle.loads"
+    - "eval("
+  cardinality_assertions:
+    - name: "Proposal object contract has exactly six lifecycle states"
+      command: "python3 -c 'from folio.links import PROPOSAL_LIFECYCLE_STATES; print(len(PROPOSAL_LIFECYCLE_STATES))'"
+      expect: "eq:6"
+    - name: "folio links CLI exposes reject-memory subcommand"
+      command: "python3 -m folio.cli links --help 2>&1 | grep -cE '^\\s+reject-memory\\b'"
+      expect: "gte:1"
+
+artifacts:
+  spec:              "docs/specs/v0.6.0_proposal_review_hardening_spec.md"
+  family_verdict:    "docs/validation/v0.6.0_<phase>_<role>_<family>.md"
+  canonical_verdict: "docs/validation/v0.6.0_<phase>_canonical_verdict.md"
+  product_verdict:   "docs/validation/v0.6.0_<phase>_product_<family>.md"
+  fix_summary:       "docs/validation/v0.6.0_d4_fix_summary.md"
+  verification:      "docs/validation/v0.6.0_d5_<family>_verifier.md"
+  final_approval:    "docs/validation/v0.6.0_d6_final_approval.md"
+  retro:             "docs/retros/llm-dev-v1-adoption.md"
+  proposal_verdict:  "docs/validation/v0.6.0_pre_a_proposal_canonical_verdict.md"
+
+# Model assignments per phase.
+#
+# Four-family configuration:
+#   - claude       : author (main session) — spec, implementation, fix, retro
+#   - codex        : peer, meta-consolidator, verifier, final-approval
+#   - gemini       : alignment, verifier
+#   - claude-sub   : Claude sub-agent (P10-separated session from `claude`)
+#                    — adversarial, product. Flagged as P3 strict-violation;
+#                    treated as "same-provider-separate-session" per v1.1 P10.
+model_assignments:
+  - phase: "-A.proposal"
+    assignments:
+      claude-sub: proposal-reviewer     # reviewer 1: Adversarial+Product posture per playbook §13.4
+      gemini:     proposal-reviewer     # reviewer 2: Alignment+Technical posture
+  - phase: "A"
+    assignments:
+      claude: spec-author
+  - phase: "B.1"
+    assignments:
+      codex:      peer
+      gemini:     alignment
+      claude-sub: adversarial
+  - phase: "B.1"                        # Product lens, separate P10 session
+    assignments:
+      claude-sub: product
+  - phase: "B.2"
+    assignments:
+      codex:      peer
+      gemini:     alignment
+      claude-sub: adversarial
+  - phase: "B.2"
+    assignments:
+      claude-sub: product
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude: implementation-author
+  - phase: "D.1"
+    assignments:
+      codex: peer
+  - phase: "D.2"
+    assignments:
+      codex:      peer
+      gemini:     alignment
+      claude-sub: adversarial
+  - phase: "D.2"
+    assignments:
+      claude-sub: product
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude: fix-author
+  - phase: "D.5"
+    assignments:
+      codex:      verifier
+      gemini:     verifier
+      claude-sub: verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      claude: retro
+
+cli_capability_matrix:
+  claude:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sub:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: false             # codex does not run ontos directly; operator-dispatched
+  gemini:
+    shell: true                  # gemini CLI does support shell in headless mode
+    git: false                   # does not perform VCS operations
+    test_runner: false
+    doc_index: false
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "folio imports"
+        command: "python3 -c 'import folio'"
+        expect: "exit-0"
+      - name: "links test suite"
+        command: "python3 -m pytest tests/test_links_cli.py tests/test_graph_cli.py -q"
+        expect: "exit-0"
+      - name: "lint clean on scope-lock paths"
+        command: "python3 -m ruff check folio/links.py folio/graph.py folio/tracking/registry.py folio/tracking/entities.py folio/cli.py"
+        expect: "exit-0"
+  - phase: "D.2"
+    checks:
+      - name: "no forbidden symbols"
+        command: "grep -rE 'pickle\\.loads|eval\\(' folio/links.py folio/graph.py folio/tracking/registry.py folio/tracking/entities.py folio/cli.py"
+        expect: "exit-nonzero"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main by at least 1"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards:
+  - name: "Tier 3 entity system tests"
+    command: "python3 -m pytest tests/test_cli_entities.py -q"
+    owns_deliverable_id: "tier3-entity-system-v0.5.1"
+  - name: "Tier 4 graph ops layer tests"
+    command: "python3 -m pytest tests/test_enrich_data.py tests/test_provenance_cli.py -q"
+    owns_deliverable_id: "tier4-graph-ops-v0.5.2"
+
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full folio test suite passes (pytest tests/ -q)."
+    verification:
+      command: "python3 -m pytest tests/ -q"
+      expect: "exit-0"
+  - id: G-test-2
+    category: test
+    description: "Links-specific test module passes."
+    verification:
+      command: "python3 -m pytest tests/test_links_cli.py -q"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "No changes to forbidden paths (folio/pipeline/, folio/enrich.py, docs/product/, frameworks/llm-dev-v1/)."
+    verification:
+      command: "git diff --name-only main..HEAD | grep -E '^(folio/pipeline/|folio/enrich\\.py|docs/product/|frameworks/llm-dev-v1/|AGENTS\\.md|Ontos_Context_Map\\.md)'"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "Forbidden symbols absent from scope-lock paths."
+    verification:
+      command: "grep -rE 'pickle\\.loads|eval\\(' folio/links.py folio/graph.py folio/tracking/registry.py folio/tracking/entities.py folio/cli.py"
+      expect: "exit-nonzero"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "Proposal object contract has exactly six lifecycle states."
+    verification:
+      command: "python3 -c 'from folio.links import PROPOSAL_LIFECYCLE_STATES; print(len(PROPOSAL_LIFECYCLE_STATES))'"
+      expect: "eq:6"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "Pre-A.proposal canonical verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.6.0_pre_a_proposal_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "B.3 canonical spec verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.6.0_spec_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "D.3 canonical code verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.6.0_code_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-4
+    category: verdict-presence
+    description: "D.5 verifier artifacts from all three non-author families exist."
+    verification:
+      command: "ls docs/validation/v0.6.0_d5_{codex,gemini,claude-sub}_verifier.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "eq:3"
+  - id: G-verdict-5
+    category: verdict-presence
+    description: "Product verdicts from B.1 / B.2 / D.2 exist (v1.1 user-facing extension)."
+    verification:
+      command: "ls docs/validation/v0.6.0_{spec,code}_product_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:2"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "D.5 verification confirms every D.3 blocker has a fix-table row."
+    verification:
+      command: "test -f docs/validation/v0.6.0_d5_codex_verifier.md && grep -cE '^\\| .* \\| closed \\|' docs/validation/v0.6.0_d5_codex_verifier.md"
+      expect: "gte:0"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean (no uncommitted changes on feature branch)."
+    verification:
+      command: "git status --porcelain | grep -v '^??'"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Feature branch ahead of main by at least one commit."
+    verification:
+      command: "git rev-list --count main..HEAD"
+      expect: "gte:1"
+
+tracker:
+  path: "docs/trackers/proposal-review-hardening-v0.6.0.md"
+  columns:
+    - phase
+    - owner
+    - family
+    - role
+    - status
+    - artifact
+    - evidence
+    - timestamp
+
+branch_map:
+  default: "feat/proposal-review-hardening-v0.6.0-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/specs/tier4_discovery_proposal_layer_spec.md"
+    version: "2026-04-15 rev 2"
+    relevance: "Pre-A proposal doc under review; source of FR-813 scope."
+  - path: "docs/product/02_Product_Requirements_Document.md"
+    version: "2026-04-15"
+    relevance: "FR-813 Proposal Review Hardening canonical requirement entry."
+  - path: "docs/architecture/Folio_Ontology_Architecture.md"
+    version: "2026-04"
+    relevance: "Layer boundaries for canonical state vs. proposal layer."
+  - path: "docs/specs/v0.5.1_tier3_entity_system_spec.md"
+    version: "v0.5.1"
+    relevance: "Entity registry shape — proposal contract reuses entity_id conventions."
+  - path: "docs/specs/folio_provenance_spec.md"
+    version: "2026-03"
+    relevance: "Existing proposal-review pattern to reuse (basis_fingerprint + confirmation metadata)."

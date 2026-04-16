@@ -1,0 +1,219 @@
+# Example deliverable manifest (v1.0.0 shape).
+#
+# Toy deliverable: add a pure-Python currency-converter module with a
+# 1-function public API and a small ISO-4217 table. Chosen to be obviously
+# portable and have no host-project specifics.
+#
+# This example conforms to deliverable-manifest.schema.yaml and validates
+# unchanged under v1.1 (backward-compat guard). See
+# `example-user-facing-manifest.yaml` for a v1.1 manifest that exercises
+# user_facing: true, pre_a, and the Product role.
+#
+# Four model families are configured (claude-opus, claude-sonnet, codex,
+# gemini) so the strict ≥3 non-author rule (P3) can be satisfied for
+# every review phase.
+
+manifest_version: "1.0.0"
+id: currency-converter
+slug: currency-converter
+summary: "Pure-Python currency conversion helper with a fixed ISO-4217 lookup table and a single public convert() function."
+
+owners:
+  - "Example Owner"
+
+scope:
+  allowed_paths:
+    - src/currency/
+    - tests/test_currency.py
+  forbidden_paths:
+    - src/auth/
+    - migrations/
+    - .github/
+  forbidden_symbols:
+    - "requests."
+    - "httpx."
+    - "import asyncio"
+  cardinality_assertions:
+    - name: "ISO table has exactly 20 entries"
+      command: "python -c 'from src.currency import CURRENCIES; print(len(CURRENCIES))'"
+      expect: "eq:20"
+    - name: "Public API exports exactly CURRENCIES and convert"
+      command: "python -c 'import src.currency as m; print(sorted([n for n in dir(m) if not n.startswith(\"_\")]))'"
+      expect: "literal:['CURRENCIES', 'convert']"
+
+artifacts:
+  spec:              "docs/specs/currency-converter-spec.md"
+  family_verdict:    "docs/reviews/currency-converter-<phase>-<family>-<role>.md"
+  canonical_verdict: "docs/reviews/currency-converter-<phase>-verdict.md"
+  fix_summary:       "docs/reviews/currency-converter-D.4-fix-summary.md"
+  verification:      "docs/reviews/currency-converter-D.5-<family>-verifier.md"
+  final_approval:    "docs/reviews/currency-converter-final-approval.md"
+  retro:             "docs/retros/currency-converter-retro.md"
+
+# Model assignments per phase. claude-opus is the author family; the three
+# other families rotate through Peer / Alignment / Adversarial. Assignments
+# for B.1 and D.2 satisfy strict P3: ≥3 distinct non-author families, none
+# of them the author.
+model_assignments:
+  - phase: "A"
+    assignments:
+      claude-opus: spec-author
+  - phase: "B.1"
+    assignments:
+      codex:          peer
+      gemini:         alignment
+      claude-sonnet:  adversarial
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude-opus: implementation-author
+  - phase: "D.1"
+    assignments:
+      codex: peer
+  - phase: "D.2"
+    assignments:
+      gemini:         peer
+      claude-sonnet:  alignment
+      codex:          adversarial
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude-opus: fix-author
+  - phase: "D.5"
+    assignments:
+      codex:          verifier
+      gemini:         verifier
+      claude-sonnet:  verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      gemini: retro
+
+cli_capability_matrix:
+  claude-opus:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sonnet:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  gemini:
+    shell: false
+    git: false
+    test_runner: false
+    doc_index: true
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "module imports"
+        command: "python -c 'import src.currency'"
+        expect: "exit-0"
+      - name: "full test suite"
+        command: "pytest -xvs tests/test_currency.py"
+        expect: "exit-0"
+  - phase: "D.2"
+    checks:
+      - name: "no forbidden symbols"
+        command: "grep -rE 'requests\\.|httpx\\.|import asyncio' src/currency/ tests/test_currency.py"
+        expect: "exit-nonzero"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main by at least 1"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards: []
+
+# Gate prerequisites organized by category. Every category has ≥1 entry.
+# Self-contained commands only — no project-local scripts required.
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full test suite passes."
+    verification:
+      command: "pytest -xvs"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "Scope lock intact: forbidden symbols absent from allowed paths."
+    verification:
+      command: "grep -rE 'requests\\.|httpx\\.|import asyncio' src/currency/"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "No changes outside scope-lock allowed paths."
+    verification:
+      command: "git diff --name-only main..HEAD | grep -vE '^(src/currency/|tests/test_currency\\.py$)'"
+      expect: "exit-nonzero"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "ISO table has exactly 20 entries."
+    verification:
+      command: "python -c 'from src.currency import CURRENCIES; assert len(CURRENCIES) == 20'"
+      expect: "exit-0"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "Canonical B.3 verdict exists."
+    verification:
+      command: "test -f docs/reviews/currency-converter-B.3-verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "Canonical D.3 verdict exists."
+    verification:
+      command: "test -f docs/reviews/currency-converter-D.3-verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "D.5 verifier artifacts from all three non-author families exist."
+    verification:
+      command: "ls docs/reviews/currency-converter-D.5-*-verifier.md 2>/dev/null | wc -l"
+      expect: "eq:3"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "No unresolved blocker lines in any canonical verdict (grep pattern '^- \\*\\*ID:\\*\\*' under a 'Preserved blockers' header returns nothing)."
+    verification:
+      command: "awk '/^## Preserved blockers/,/^## /' docs/reviews/currency-converter-*-verdict.md | grep -E '^- \\*\\*ID:\\*\\*'"
+      expect: "exit-nonzero"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean (no uncommitted changes)."
+    verification:
+      command: "git status --porcelain"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Branch is behind main by zero commits (fully up to date with target)."
+    verification:
+      command: "git rev-list --count HEAD..main"
+      expect: "eq:0"
+
+tracker:
+  path: "docs/trackers/currency-converter.md"
+  columns: [phase, owner, status, artifact, evidence, timestamp]
+
+branch_map:
+  default: "feat/currency-converter-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/architecture.md"
+    version: "2026-04"
+    relevance: "Layer rules — currency module lives in src/, no network calls."
+  - path: "docs/roadmap.md"
+    version: "2026-Q2"
+    relevance: "Currency conversion planned for Q2; no dependencies on other Q2 items."

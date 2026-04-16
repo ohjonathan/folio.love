@@ -190,6 +190,9 @@ def test_passthrough_helpers_preserve_provenance_and_mark_pairs_stale():
                 "input_fingerprint": "sha256:abc",
                 "axes": {"relationships": {"proposals": [{"target_id": "older_note"}]}},
             },
+            "links": {
+                "confirmed_relationships": [{"proposal_id": "rprop-1234", "target_id": "older_note"}]
+            },
             "provenance": {
                 "pairs": {
                     "older_note": {
@@ -221,6 +224,7 @@ def test_passthrough_helpers_preserve_provenance_and_mark_pairs_stale():
     assert "repair_error" not in pair
     assert "repair_error_detail" not in pair
     assert "re_evaluate_requested" not in pair
+    assert preserved["_llm_metadata"]["links"]["confirmed_relationships"][0]["proposal_id"] == "rprop-1234"
     statuses = [proposal["status"] for proposal in pair["proposals"]]
     assert statuses == ["stale_pending", "rejected"]
 

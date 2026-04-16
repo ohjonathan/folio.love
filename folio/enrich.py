@@ -28,6 +28,7 @@ from .pipeline.enrich_data import (
     EnrichAxisResult,
     EnrichResult,
     RelationshipProposal,
+    compute_relationship_proposal_id,
     compute_input_fingerprint,
     compute_entity_resolution_fingerprint,
     compute_relationship_context_fingerprint,
@@ -698,8 +699,15 @@ def enrich_note(
                 validated_signals = [s for s in raw_signals if s in allowed] if allowed else raw_signals
 
                 proposal = RelationshipProposal(
+                    proposal_id=compute_relationship_proposal_id(
+                        source_id=plan_entry.entry.id,
+                        relation=raw_relation,
+                        target_id=target_id,
+                        basis_fingerprint=basis_fp,
+                    ),
                     relation=raw_relation,
                     target_id=target_id,
+                    producer="enrich",
                     basis_fingerprint=basis_fp,
                     confidence=raw_confidence,
                     signals=validated_signals,

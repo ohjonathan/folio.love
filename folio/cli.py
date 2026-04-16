@@ -74,7 +74,7 @@ def _extract_enrich_passthrough(fm: dict) -> dict | None:
     if "provenance_links" in fm:
         result["provenance_links"] = fm["provenance_links"]
 
-    # Preserve _llm_metadata.enrich / provenance
+    # Preserve _llm_metadata.enrich / provenance / links
     llm_meta = fm.get("_llm_metadata")
     if isinstance(llm_meta, dict):
         metadata: dict = {}
@@ -82,6 +82,8 @@ def _extract_enrich_passthrough(fm: dict) -> dict | None:
             metadata["enrich"] = dict(llm_meta["enrich"])
         if isinstance(llm_meta.get("provenance"), dict):
             metadata["provenance"] = dict(llm_meta["provenance"])
+        if isinstance(llm_meta.get("links"), dict):
+            metadata["links"] = dict(llm_meta["links"])
         if metadata:
             result["_llm_metadata"] = metadata
 
@@ -1009,6 +1011,7 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
             entries_to_refresh = []
             skipped_interactions = []
             skipped_context = []
+            skipped_analysis = []
             for deck_id, entry_data in data.get("decks", {}).items():
                 entry = registry.entry_from_dict(entry_data)
 
@@ -1026,6 +1029,10 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
                     skipped_context.append(entry)
                     continue
 
+                if entry.type == "analysis":
+                    skipped_analysis.append(entry)
+                    continue
+
                 # Refresh staleness
                 entry = registry.refresh_entry_status(library_root, entry)
 
@@ -1039,6 +1046,14 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
 
             if skipped_context:
                 click.echo(f"Skipped context entries: {len(skipped_context)}")
+
+            for entry in skipped_analysis:
+                click.echo(
+                    f"↷ {entry.id}: skipping analysis document (source-less); rerun the originating analysis workflow instead"
+                )
+
+            if skipped_analysis:
+                click.echo(f"Skipped analysis entries: {len(skipped_analysis)}")
 
             for entry in skipped_interactions:
                 click.echo(
@@ -1559,6 +1574,261 @@ def provenance_stale_ack_doc_cmd(ctx, doc_id: str, scope: Optional[str]):
     click.echo(f"✓ Acknowledged {count} stale link(s)")
 
 
+@cli.group(cls=ScopeOrCommandGroup, invoke_without_command=False)
+@click.option("--scope", default=None, hidden=True)
+@click.pass_context
+def links(ctx, scope: Optional[str]):
+    """Review document-level relationship proposals."""
+    ctx.ensure_object(dict)
+    ctx.obj["links_scope"] = scope
+
+
+@links.command("review")
+@click.argument("scope", required=False, default=None)
+@click.option("--doc", "doc_id", default=None, help="Filter to one source document ID.")
+@click.option("--target", "target_id", default=None, help="Filter to one target document ID.")
+@click.option("--page", type=int, default=1, show_default=True, help="1-based review page number.")
+@click.pass_context
+def links_review_cmd(ctx, scope: Optional[str], doc_id: Optional[str], target_id: Optional[str], page: int):
+    """Read-only review surface for pending relationship proposals."""
+    from .links import PAGE_SIZE, collect_pending_relationship_proposals, paginate
+
+    config = ctx.obj["config"]
+    proposals, suppression_counts = collect_pending_relationship_proposals(
+        config,
+        scope=scope,
+        doc_id=doc_id,
+        target_id=target_id,
+    )
+    window, total_pages = paginate(proposals, page)
+    click.echo(f"Pending ({len(proposals)} item(s))")
+    click.echo(
+        f"Page {min(max(1, page), total_pages)}/{total_pages} "
+        f"({len(window)} items, page size {PAGE_SIZE}, ordered: source doc → confidence desc → proposal_id)"
+    )
+    for view in window:
+        proposal = view.proposal
+        revived_tag = " (revived — basis changed)" if view.revived else ""
+        click.echo(
+            f"[{proposal.proposal_id}] {view.source_id} -> {proposal.target_id} "
+            f"({proposal.relation}, {proposal.confidence}, {proposal.producer}){revived_tag}"
+        )
+        click.echo(f"  Rationale: {proposal.rationale or '-'}")
+        if proposal.signals:
+            click.echo(f"  Signals: {', '.join(proposal.signals)}")
+    total_suppressed = sum(suppression_counts.values())
+    if total_suppressed == 0:
+        click.echo("No proposals suppressed by rejection memory.")
+    elif total_suppressed == 1:
+        click.echo("1 proposal suppressed by rejection memory.")
+    else:
+        click.echo(f"{total_suppressed} proposals suppressed by rejection memory.")
+
+
+@links.command("status")
+@click.argument("scope", required=False, default=None)
+@click.pass_context
+def links_status_cmd(ctx, scope: Optional[str]):
+    """Summarize canonical and pending document-level relationships."""
+    from .links import relationship_status_summary
+
+    config = ctx.obj["config"]
+    rows = relationship_status_summary(config, scope=scope)
+    if not rows:
+        click.echo("No document-level relationship data found.")
+        return
+
+    total_pending = 0
+    total_confirmed = 0
+    click.echo("| Source Document | Pending | Confirmed |")
+    click.echo("|---|---:|---:|")
+    for row in rows:
+        total_pending += row.pending
+        total_confirmed += row.confirmed
+        click.echo(f"| {row.source_id} | {row.pending} | {row.confirmed} |")
+    click.echo("")
+    click.echo(f"Total: {total_pending} pending, {total_confirmed} confirmed")
+
+
+@links.command("confirm")
+@click.argument("proposal_id")
+@click.pass_context
+def links_confirm_cmd(ctx, proposal_id: str):
+    """Confirm one pending document-level relationship proposal."""
+    from .links import confirm_proposal
+    from .lock import LibraryLockError, library_lock
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "links"):
+            proposal = confirm_proposal(config, proposal_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(
+        f"✓ Confirmed {proposal.proposal_id}: {proposal.relation} -> {proposal.target_id}"
+    )
+
+
+@links.command("reject")
+@click.argument("proposal_id")
+@click.pass_context
+def links_reject_cmd(ctx, proposal_id: str):
+    """Reject one pending document-level relationship proposal."""
+    from .links import reject_proposal
+    from .lock import LibraryLockError, library_lock
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "links"):
+            proposal = reject_proposal(config, proposal_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(
+        f"✓ Rejected {proposal.proposal_id}: {proposal.relation} -> {proposal.target_id}"
+    )
+
+
+@links.command("confirm-doc")
+@click.argument("doc_id")
+@click.pass_context
+def links_confirm_doc_cmd(ctx, doc_id: str):
+    """Confirm all pending relationship proposals for one source document."""
+    from .links import confirm_doc
+    from .lock import LibraryLockError, library_lock
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "links"):
+            count = confirm_doc(config, doc_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Confirmed {count} proposal(s)")
+
+
+@links.command("reject-doc")
+@click.argument("doc_id")
+@click.pass_context
+def links_reject_doc_cmd(ctx, doc_id: str):
+    """Reject all pending relationship proposals for one source document."""
+    from .links import reject_doc
+    from .lock import LibraryLockError, library_lock
+
+    config = ctx.obj["config"]
+    try:
+        with library_lock(config.library_root.resolve(), "links"):
+            count = reject_doc(config, doc_id)
+    except (LibraryLockError, ValueError) as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    click.echo(f"✓ Rejected {count} proposal(s)")
+
+
+@cli.group()
+@click.pass_context
+def graph(ctx):
+    """Graph health reporting."""
+    pass
+
+
+@graph.command("status")
+@click.argument("scope", required=False, default=None)
+@click.pass_context
+def graph_status_cmd(ctx, scope: Optional[str]):
+    """Show aggregate graph-health metrics."""
+    from .graph import graph_status
+
+    config = ctx.obj["config"]
+    status = graph_status(config, scope=scope)
+    click.echo(f"Pending relationship proposals: {status.pending_relationship_proposals}")
+    click.echo(f"Docs without canonical graph links: {status.docs_without_canonical_graph_links}")
+    click.echo(f"Orphaned canonical relation targets: {status.orphaned_canonical_relation_targets}")
+    click.echo(f"Enrich-protected notes: {status.enrich_protected_notes}")
+    click.echo(f"Unconfirmed entities: {status.unconfirmed_entities}")
+    click.echo(f"Confirmed entities missing stubs: {status.confirmed_entities_missing_stubs}")
+    click.echo(f"Duplicate person candidates: {status.duplicate_person_candidates}")
+    click.echo(f"Stale analysis artifacts: {status.stale_analysis_artifacts}")
+
+
+@graph.command("doctor")
+@click.argument("scope", required=False, default=None)
+@click.option("--json", "json_output", is_flag=True, default=False, help="Output as JSON.")
+@click.option("--limit", type=int, default=None, help="Maximum number of findings to emit.")
+@click.pass_context
+def graph_doctor_cmd(ctx, scope: Optional[str], json_output: bool, limit: Optional[int]):
+    """Emit actionable graph-health findings."""
+    from .graph import _aggregate_producer_acceptance_rates, graph_doctor
+
+    config = ctx.obj["config"]
+    findings = graph_doctor(config, scope=scope, limit=limit)
+    rates, missing_producer_count = _aggregate_producer_acceptance_rates(config, scope=scope)
+
+    if json_output:
+        rate_dicts = [
+            {
+                "producer": r.producer,
+                "accepted": r.accepted,
+                "rejected": r.rejected,
+                "total_reviewed": r.total_reviewed,
+                "rate": r.rate,
+                "status": r.status,
+                "warmup": r.warmup,
+            }
+            for r in rates
+        ]
+        payload = {
+            "findings": findings,
+            "producer_acceptance_rates": rate_dicts,
+            "producer_acceptance_rates_data_integrity": {
+                "missing_producer_count": missing_producer_count,
+            },
+        }
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    if findings:
+        for finding in findings:
+            click.echo(
+                f"[{finding['severity']}] {finding['code']} {finding['subject_id']}: {finding['detail']}"
+            )
+            click.echo(f"  Action: {finding['recommended_action']}")
+    else:
+        click.echo("No graph-health findings.")
+
+    click.echo("")
+    click.echo("### Producer acceptance rates")
+    if not rates:
+        click.echo("No producer acceptance-rate data yet.")
+    else:
+        click.echo("| Producer | Accepted | Rejected | Reviewed | Rate | Status |")
+        click.echo("|---|---:|---:|---:|---:|---|")
+        for r in rates:
+            if r.warmup:
+                rate_cell = "—"
+                status_cell = "warmup (< 10 reviewed)"
+            elif r.status == "low-acceptance":
+                rate_cell = f"{r.rate:.2f}" if r.rate is not None else "—"
+                status_cell = "low-acceptance (< 50%)"
+            else:
+                rate_cell = f"{r.rate:.2f}" if r.rate is not None else "—"
+                status_cell = "ok"
+            click.echo(
+                f"| {r.producer} | {r.accepted} | {r.rejected} | {r.total_reviewed} | {rate_cell} | {status_cell} |"
+            )
+        click.echo("")
+        click.echo(
+            "Status column is informational only in v0.6.0; `low-acceptance` "
+            "producers continue to surface proposals at normal priority in this slice."
+        )
+    if missing_producer_count > 0:
+        click.echo(
+            f"Data-integrity: {missing_producer_count} accepted "
+            f"{'entry' if missing_producer_count == 1 else 'entries'} excluded (missing `producer` field)."
+        )
+
+
 @cli.command()
 @click.argument("deck_id")
 @click.argument("level", type=click.Choice(["L1", "L2", "L3"]))
@@ -1982,6 +2252,8 @@ def generate_stubs_cmd(ctx, output_dir: Optional[Path], force: bool):
         f"Generated {result.generated} entity stubs ({generated_breakdown}). "
         f"{skipped_total} skipped."
     )
+    if result.removed:
+        click.echo(f"  Removed stale auto-generated stubs: {result.removed}")
     if result.skipped_manual:
         click.echo(f"  Manual stubs preserved: {result.skipped_manual}")
 
@@ -2075,6 +2347,112 @@ def reject(ctx, name):
     click.echo(f"Rejected and removed: {entry.canonical_name} ({etype})")
 
 
+@entities.command("suggest-merges")
+@click.option("--type", "entity_type",
+              type=click.Choice(["person"]),
+              default="person",
+              show_default=True,
+              help="Entity type to inspect for merge candidates.")
+@click.option("--page", type=int, default=1, show_default=True,
+              help="1-based page number.")
+@click.pass_context
+def suggest_merges_cmd(ctx, entity_type: str, page: int):
+    """Suggest deterministic entity merge candidates."""
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+
+    from .tracking.entities import EntityRegistry, EntityRegistryError
+
+    reg = EntityRegistry(entities_path)
+    try:
+        reg.load()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    if entity_type != "person":
+        click.echo("No merge heuristics available for this entity type.")
+        return
+
+    suggestions = reg.suggest_person_merges()
+    if not suggestions:
+        click.echo("No merge candidates found.")
+        return
+
+    page_size = 20
+    total_pages = max(1, (len(suggestions) + page_size - 1) // page_size)
+    page = min(max(1, page), total_pages)
+    start = (page - 1) * page_size
+    window = suggestions[start:start + page_size]
+
+    click.echo(f"Merge Candidates ({len(suggestions)} total)")
+    click.echo(f"Page {page}/{total_pages} ({len(window)} candidates, page size {page_size})")
+    for suggestion in window:
+        reasons = ", ".join(suggestion.reasons)
+        click.echo(
+            f"- {suggestion.left_name} [{suggestion.left_key}] <> "
+            f"{suggestion.right_name} [{suggestion.right_key}]"
+        )
+        click.echo(f"  Reasons: {reasons}")
+
+
+@entities.command("merge")
+@click.argument("winner")
+@click.argument("loser")
+@click.pass_context
+def merge_entities_cmd(ctx, winner: str, loser: str):
+    """Merge one person entity into another."""
+    config = ctx.obj["config"]
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+
+    from .tracking.entities import EntityRegistry, EntityRegistryError, EntityAmbiguousError
+
+    reg = EntityRegistry(entities_path)
+    try:
+        reg.load()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    try:
+        winner_match = reg.lookup_unique(winner, entity_type="person")
+        loser_match = reg.lookup_unique(loser, entity_type="person")
+    except EntityAmbiguousError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    if winner_match is None:
+        click.echo(f"✗ No person found matching '{winner}'.", err=True)
+        sys.exit(1)
+    if loser_match is None:
+        click.echo(f"✗ No person found matching '{loser}'.", err=True)
+        sys.exit(1)
+
+    _etype, winner_key, winner_entry = winner_match
+    _etype, loser_key, loser_entry = loser_match
+
+    try:
+        result = reg.merge_person_entities(winner_key, loser_key)
+        reg.save()
+    except EntityRegistryError as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    click.echo(
+        f"Merged {loser_entry.canonical_name} ({loser_key}) into "
+        f"{winner_entry.canonical_name} ({winner_key})."
+    )
+    click.echo(f"  Rewritten references: {result.rewritten_references}")
+    if result.dropped_aliases:
+        click.echo(f"  Dropped aliases: {', '.join(result.dropped_aliases)}")
+    if result.warnings:
+        for warning in result.warnings:
+            click.echo(f"  ⚠ {warning}")
+    click.echo("  Next: run `folio entities generate-stubs --force` to refresh entity notes.")
+
+
 # ---------------------------------------------------------------------------
 # Context document management
 # ---------------------------------------------------------------------------
@@ -2123,7 +2501,58 @@ def context_init(ctx, client: str, engagement: str, target: Optional[Path]):
     click.echo(f"  ID: {context_id}")
 
 
+@cli.group()
+@click.pass_context
+def analysis(ctx):
+    """Managed analysis document commands."""
+    pass
+
+
+@analysis.command("init")
+@click.argument("subtype", type=click.Choice([
+    "hypothesis", "issue_tree", "synthesis", "framework_application", "digest",
+]))
+@click.option("--title", required=True, help="Analysis title.")
+@click.option("--client", required=True, help="Client name.")
+@click.option("--engagement", required=True, help="Engagement name.")
+@click.option("--draws-from", "draws_from", multiple=True, help="Registry document ID to add to draws_from.")
+@click.option("--depends-on", "depends_on", multiple=True, help="Registry document ID to add to depends_on.")
+@click.option("--target", type=click.Path(path_type=Path), default=None,
+              help="Override target path or directory.")
+@click.pass_context
+def analysis_init_cmd(
+    ctx,
+    subtype: str,
+    title: str,
+    client: str,
+    engagement: str,
+    draws_from: tuple[str, ...],
+    depends_on: tuple[str, ...],
+    target: Optional[Path],
+):
+    """Create a source-less managed analysis note."""
+    from .analysis_docs import create_analysis_document
+
+    config = ctx.obj["config"]
+    try:
+        analysis_id, output_path = create_analysis_document(
+            config,
+            subtype=subtype,
+            title=title,
+            client=client,
+            engagement=engagement,
+            draws_from=list(draws_from),
+            depends_on=list(depends_on),
+            target=target,
+        )
+    except (FileExistsError, ValueError) as e:
+        click.echo(f"✗ {e}", err=True)
+        sys.exit(1)
+
+    click.echo(f"✓ Created analysis document: {output_path}")
+    click.echo(f"  ID: {analysis_id}")
+
+
 def main():
     """Entry point."""
     cli()
-

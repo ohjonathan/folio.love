@@ -137,7 +137,7 @@ def rebuild_registry(library_root: Path) -> dict:
     entry for each note carrying either:
     - ``source`` + ``source_hash`` (evidence-style docs)
     - ``source_transcript`` + ``source_hash`` (interaction docs)
-    - ``type: context`` (source-less managed docs)
+    - ``type: context`` / ``type: analysis`` for source-less managed docs
     """
     library_root = Path(library_root).resolve()
     data = _empty_registry()
@@ -147,8 +147,8 @@ def rebuild_registry(library_root: Path) -> dict:
         if fm is None:
             continue
 
-        # Context docs: source-less managed documents
-        if fm.get("type") == "context":
+        # Source-less managed documents (context + analysis)
+        if fm.get("type") in {"context", "analysis"} and "source" not in fm and "source_transcript" not in fm:
             deck_id = fm.get("id", md_file.stem)
             md_rel = str(md_file.relative_to(library_root)).replace("\\", "/")
             deck_dir_rel = str(md_file.parent.relative_to(library_root)).replace("\\", "/")
@@ -159,7 +159,7 @@ def rebuild_registry(library_root: Path) -> dict:
                 title=str(fm.get("title", md_file.stem)),
                 markdown_path=md_rel,
                 deck_dir=deck_dir_rel,
-                type="context",
+                type=_str_or_none(fm.get("type")) or "context",
                 subtype=_str_or_none(fm.get("subtype")),
                 modified=_str_or_none(fm.get("modified")),
                 client=_str_or_none(fm.get("client")),

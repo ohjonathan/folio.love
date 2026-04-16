@@ -4,15 +4,22 @@ type: spec
 status: draft
 ontos_schema: 2.2
 created: 2026-04-04
-revision: 1
+revision: 4
 revision_note: |
-  First-slice Tier 4 digest design spec added in response to PR #41 review.
+  Rev 4: Add the explicit `--include-flagged` override, excluded-count
+  disclosure, and empty-result behavior required by the narrowed Tier 4 trust
+  contract.
+  Rev 3: Align the first-slice digest contract to the shared Tier 4 graph-ops
+  foundation and shared proposal review surface.
+  Rev 2: Clarify digest rerun, registry, and source-less analysis behavior.
+  Rev 1: Initial draft.
 depends_on:
   - doc_02_product_requirements_document
   - doc_04_implementation_roadmap
   - doc_06_prioritization_matrix
   - folio_ontology_architecture
   - folio_feature_handoff_brief
+  - tier4_discovery_proposal_layer_spec
 ---
 
 # Tier 4 Digest Design Spec
@@ -29,6 +36,11 @@ This spec defines the first implementation slice for `folio digest`:
 This spec exists because the Tier 4 roadmap and PRD define the feature
 direction, but the first implementation PR still needs a concrete contract for
 scope, inputs, output path, rerun semantics, and failure behavior.
+It also aligns the digest slice to the shared Tier 4 graph-ops foundation so
+later relationship suggestions flow through `folio links` instead of a
+digest-specific review workflow, using the shared proposal review hardening
+contract defined in
+`docs/specs/tier4_discovery_proposal_layer_spec.md`.
 
 ## 2. Goals
 
@@ -39,6 +51,7 @@ The first `folio digest` implementation must:
 3. register digest notes as source-less managed `analysis` docs
 4. avoid breaking current Tier 2/Tier 3 command behavior
 5. fail safely without creating ambiguous partial outputs
+6. respect the default Tier 4 trust gate for source-backed inputs
 
 ## 3. Non-Goals
 
@@ -52,11 +65,12 @@ The following are out of scope for the first digest slice:
 | Digest-specific enrich pass | Current `folio enrich` continues to skip `analysis` docs. |
 | Digest grounding parity with FR-700 extraction outputs | Digest claims are inferential synthesis, not single-source extraction. |
 | N-way synthesis | Covered by later `folio synthesize` evolution, not `folio digest`. |
+| Digest-specific proposal lifecycle or relationship confirmation UX | Later relationship suggestions must use the shared proposal layer and `folio links`, not a digest-only flow. |
 
 ## 4. CLI Contract
 
 ```bash
-folio digest <scope> [--date YYYY-MM-DD] [--week] [--llm-profile <profile>]
+folio digest <scope> [--date YYYY-MM-DD] [--week] [--include-flagged] [--llm-profile <profile>]
 ```
 
 Rules:
@@ -67,7 +81,9 @@ Rules:
 3. Without `--week`, the command generates a daily digest.
 4. With `--week`, the command generates a weekly digest for the ISO week that
    contains `--date`.
-5. `--llm-profile` overrides `routing.digest` for one invocation.
+5. `--include-flagged` widens the daily source-backed input set to include
+   notes whose `review_status` is `flagged`.
+6. `--llm-profile` overrides `routing.digest` for one invocation.
 
 Examples:
 
@@ -84,6 +100,7 @@ all of the following:
 1. under the requested `<scope>`
 2. `type` is `evidence` or `interaction`
 3. the effective activity date matches the requested digest day
+4. `review_status` is not `flagged`, unless `--include-flagged` is supplied
 
 Effective activity date is defined as:
 
@@ -96,8 +113,13 @@ Context docs and existing analysis docs are excluded from the daily input set
 to keep the first slice deterministic and to avoid recursive digest-of-digest
 behavior.
 
-If no eligible inputs exist, the command exits successfully with a clear
-"nothing to digest" message and writes no note.
+If no eligible inputs exist, the command exits successfully and writes no note.
+If flagged source-backed inputs were excluded and that exclusion is the reason
+the candidate set is empty, the output must say so explicitly, report the
+excluded count, and point the operator to `--include-flagged`.
+
+`extraction_confidence` remains surfaced trust metadata, not a second hard
+exclusion rule in the first digest slice.
 
 ## 6. Weekly Discovery Predicate
 
@@ -191,6 +213,7 @@ Daily digest body sections:
 3. `## Emerging Risks / Open Questions`
 4. `## Documents Drawn From`
 5. `## Suggested Follow-Ups`
+6. `## Trust Notes`
 
 Weekly digest body sections:
 
@@ -200,9 +223,17 @@ Weekly digest body sections:
 4. `## Decisions / Risks To Track`
 5. `## Daily Digests Drawn From`
 6. `## Next Week Lookahead`
+7. `## Trust Notes`
 
 `## Documents Drawn From` and `## Daily Digests Drawn From` must list the exact
 input note wikilinks so the reader can audit the synthesis scope.
+`## Trust Notes` must:
+
+1. state whether flagged source-backed inputs were excluded or included via
+   override
+2. report the excluded flagged-input count when any were omitted
+3. remind the reader that digest notes remain review-required synthesis
+   artifacts in the first slice
 
 ## 10. Rerun, Atomicity, And Correction Path
 
@@ -251,16 +282,20 @@ The first digest slice uses a conservative interim trust posture:
 2. digest notes carry `review_flags: [synthesis_requires_review]`
 3. digest notes are intended as analyst-facing prep aids until a dedicated
    Tier 4 synthesis review model is defined
+4. daily digest input selection excludes flagged source-backed notes by default
+   unless `--include-flagged` is supplied
+5. weekly digest generation continues to consume existing daily digests as the
+   designated first-slice synthesis intermediate
 
 This keeps the output visible while making the review requirement explicit.
 
 ## 13. Deferred Follow-Ons
 
 The following remain later Tier 4 work:
-
-1. `--steerco` output mode
-2. automatic trigger / watcher behavior
-3. digest inclusion of context or prior analysis docs
-4. digest-specific enrichment and link refinement
-5. trust/reviewability beyond the conservative `synthesis_requires_review`
-   placeholder
+1. digest-generated relationship suggestions routed through `folio links`
+2. `--steerco` output mode
+3. automatic trigger / watcher behavior
+4. digest inclusion of context or prior analysis docs
+5. digest-specific enrichment and link refinement
+6. broader Tier 4 synthesis trust modeling beyond the conservative
+   `synthesis_requires_review` placeholder

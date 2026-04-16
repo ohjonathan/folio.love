@@ -475,6 +475,42 @@ def entity_from_dict(d: dict) -> EntityEntry:
     return EntityEntry(**filtered)
 
 
+@dataclass
+class PersonMergeSuggestion:
+    """A deterministic duplicate-person candidate."""
+
+    left_key: str
+    right_key: str
+    left_name: str
+    right_name: str
+    reasons: list[str]
+
+
+@dataclass
+class EntityMergeResult:
+    """Result of merging one entity into another."""
+
+    winner_key: str
+    loser_key: str
+    rewritten_references: int = 0
+    dropped_aliases: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+def _collapse_middle_initials(name: str) -> str:
+    tokens = [token for token in normalize_entity_name(name).split() if token]
+    filtered: list[str] = []
+    for idx, token in enumerate(tokens):
+        if 0 < idx < len(tokens) - 1 and len(token.rstrip(".")) == 1:
+            continue
+        filtered.append(token.rstrip("."))
+    return " ".join(filtered)
+
+
+def _person_comparison_key(name: str) -> str:
+    return re.sub(r"[^a-z]", "", normalize_entity_name(name).lower())
+
+
 # ---------------------------------------------------------------------------
 # EntityRegistry
 # ---------------------------------------------------------------------------
@@ -650,6 +686,7 @@ class EntityRegistry:
     def _check_alias_collisions(
         self, entity_type: str, exclude_key: str,
         new_aliases: list[str],
+        extra_exclude_keys: Optional[set[str]] = None,
     ) -> list[str]:
         """Return list of colliding aliases (lowercased).
 
@@ -657,10 +694,11 @@ class EntityRegistry:
         in the type namespace except the entity with ``exclude_key``.
         """
         type_dict = self._data["entities"].get(entity_type, {})
+        excluded = {exclude_key, *(extra_exclude_keys or set())}
         existing_names = set()
         existing_aliases = set()
         for k, ed in type_dict.items():
-            if k == exclude_key:
+            if k in excluded:
                 continue
             existing_names.add(ed.get("canonical_name", "").lower())
             for a in ed.get("aliases", []):
@@ -863,6 +901,157 @@ class EntityRegistry:
             if key in type_dict:
                 return type_dict[key].get("canonical_name", key)
         return key
+
+    def suggest_person_merges(self) -> list[PersonMergeSuggestion]:
+        """Return deterministic duplicate-person candidates."""
+        people: list[tuple[str, EntityEntry]] = [
+            (key, entry)
+            for _etype, key, entry in self.iter_entities(entity_type="person")
+        ]
+
+        pair_reasons: dict[tuple[str, str], set[str]] = {}
+
+        def add_reason(left_key: str, right_key: str, reason: str) -> None:
+            if left_key == right_key:
+                return
+            pair_key = tuple(sorted((left_key, right_key)))
+            pair_reasons.setdefault(pair_key, set()).add(reason)
+
+        def bucket_signatures(reason: str, values_by_key: dict[str, set[str]]) -> None:
+            buckets: dict[str, list[str]] = {}
+            for key, values in values_by_key.items():
+                for value in values:
+                    if not value:
+                        continue
+                    buckets.setdefault(value, []).append(key)
+            for keys in buckets.values():
+                if len(keys) < 2:
+                    continue
+                ordered = sorted(set(keys))
+                for idx, left in enumerate(ordered):
+                    for right in ordered[idx + 1:]:
+                        add_reason(left, right, reason)
+
+        normalized_map: dict[str, set[str]] = {}
+        transposed_map: dict[str, set[str]] = {}
+        collapsed_map: dict[str, set[str]] = {}
+        stripped_map: dict[str, set[str]] = {}
+        alias_map: dict[str, set[str]] = {}
+
+        for key, entry in people:
+            names = [entry.canonical_name, *(entry.aliases or [])]
+            for raw_name in names:
+                normalized = normalize_entity_name(raw_name)
+                if not normalized:
+                    continue
+                normalized_map.setdefault(key, set()).add(_person_comparison_key(normalized))
+
+                transposed = _transpose_person_name(normalized) or normalized
+                transposed_map.setdefault(key, set()).add(_person_comparison_key(transposed))
+
+                collapsed = _collapse_middle_initials(transposed)
+                collapsed_map.setdefault(key, set()).add(_person_comparison_key(collapsed))
+
+                stripped = _strip_person_id_suffix(transposed) or transposed
+                stripped_map.setdefault(key, set()).add(_person_comparison_key(stripped))
+
+                alias_map.setdefault(key, set()).add(normalized.lower())
+
+        bucket_signatures("punctuation_whitespace_normalization", normalized_map)
+        bucket_signatures("last_first_transpose", transposed_map)
+        bucket_signatures("middle_initial_collapse", collapsed_map)
+        bucket_signatures("id_suffix_stripping", stripped_map)
+        bucket_signatures("alias_overlap", alias_map)
+
+        suggestions: list[PersonMergeSuggestion] = []
+        for left_key, right_key in sorted(pair_reasons):
+            left = self.get_entity("person", left_key)
+            right = self.get_entity("person", right_key)
+            if left is None or right is None:
+                continue
+            suggestions.append(
+                PersonMergeSuggestion(
+                    left_key=left_key,
+                    right_key=right_key,
+                    left_name=left.canonical_name,
+                    right_name=right.canonical_name,
+                    reasons=sorted(pair_reasons[(left_key, right_key)]),
+                )
+            )
+        suggestions.sort(
+            key=lambda item: (
+                item.left_name.lower(),
+                item.right_name.lower(),
+                item.left_key,
+                item.right_key,
+            )
+        )
+        return suggestions
+
+    def merge_person_entities(self, winner_key: str, loser_key: str) -> EntityMergeResult:
+        """Merge one person entity into another."""
+        if winner_key == loser_key:
+            raise EntityRegistryError("winner and loser must be different people")
+
+        winner = self.get_entity("person", winner_key)
+        loser = self.get_entity("person", loser_key)
+        if winner is None:
+            raise EntityRegistryError(f"Unknown winner person '{winner_key}'")
+        if loser is None:
+            raise EntityRegistryError(f"Unknown loser person '{loser_key}'")
+
+        result = EntityMergeResult(winner_key=winner_key, loser_key=loser_key)
+
+        winner_entry = self._data["entities"]["person"][winner_key]
+        loser_entry = self._data["entities"]["person"][loser_key]
+
+        merged_aliases = [
+            alias
+            for alias in [*(winner.aliases or []), loser.canonical_name, *(loser.aliases or [])]
+            if alias and alias.lower() != winner.canonical_name.lower()
+        ]
+        deduped_aliases: list[str] = []
+        seen_aliases: set[str] = set()
+        for alias in merged_aliases:
+            lowered = alias.lower()
+            if lowered in seen_aliases:
+                continue
+            seen_aliases.add(lowered)
+            deduped_aliases.append(alias)
+
+        collisions = self._check_alias_collisions(
+            "person",
+            winner_key,
+            deduped_aliases,
+            extra_exclude_keys={loser_key},
+        )
+        if collisions:
+            result.dropped_aliases.extend(sorted(collisions))
+            deduped_aliases = [alias for alias in deduped_aliases if alias not in collisions]
+            result.warnings.append(
+                f"Dropped colliding aliases: {', '.join(sorted(collisions))}"
+            )
+        winner_entry["aliases"] = deduped_aliases
+        winner_entry["updated_at"] = _now_iso()
+
+        for etype, type_dict in self._data["entities"].items():
+            for key, entry_data in type_dict.items():
+                if not isinstance(entry_data, dict):
+                    continue
+                for field_name in ("reports_to", "head", "proposed_match"):
+                    if entry_data.get(field_name) != loser_key:
+                        continue
+                    if etype == "person" and key == winner_key and field_name in {"reports_to", "head"}:
+                        entry_data[field_name] = None
+                    else:
+                        entry_data[field_name] = winner_key
+                    entry_data["updated_at"] = _now_iso()
+                    result.rewritten_references += 1
+
+        del self._data["entities"]["person"][loser_key]
+        winner_entry["updated_at"] = _now_iso()
+        loser_entry["updated_at"] = _now_iso()
+        return result
 
     def to_json(self) -> str:
         """Serialize the full registry as a JSON string."""

@@ -9,8 +9,18 @@ generated_by: ontos_scaffold
 
 # Folio: Product Requirements Document
 
-**Version 1.5 | April 2026**
+**Version 1.6 | April 2026**
 **folio.love**
+
+**v1.6 changes:** Reframed Tier 4 around a concrete review problem: machine-
+suggested relationships must be faster to assess, repeated bad suggestions must
+stay suppressed across reruns, and trust filtering must stay explicit rather
+than silently hiding inputs. Kept the shipped graph-ops foundation (`folio links`,
+`folio graph`, entity identity hygiene, and managed analysis notes), added the
+Tier 4 quality-layer follow-ons for `folio enrich diagnose`, trust-aware graph
+behavior, and relation-schema validation, and narrowed the new governance work
+to proposal review hardening rather than a standalone committed latent-
+discovery feature.
 
 **v1.5 changes:** Expanded the planned Tier 4 product surface in the PRD with
 an explicit FR-800 Synthesis & Discovery family covering daily/weekly digests,
@@ -51,6 +61,8 @@ synthesis-and-discovery surface:
 - Document conversion pipeline (PPTX/PDF to Markdown)
 - Interaction ingestion pipeline (txt/md transcripts and notes to interaction markdown)
 - Context document management (engagement scaffolding notes)
+- Graph-ops layer for document relationship review, graph health, managed
+  analysis notes, and entity identity hygiene
 - Entity registry and CSV import for known people, departments, systems, and processes
 - Ingest-time entity resolution against confirmed registry entries
 - Source file tracking with relative paths
@@ -860,6 +872,10 @@ Tier 4 roadmap features map into this requirement family as follows:
 - F-408 → FR-808
 - F-409 → FR-809
 - F-410 → FR-807
+- F-411 → FR-810
+- F-412 → FR-811
+- F-413 → FR-812
+- F-415 → FR-813
 
 `folio digest` is temporal roll-up over a bounded time window and scope.
 `folio synthesize` is explicit cross-asset comparison over user-selected
@@ -869,19 +885,50 @@ FR-700 extraction-grounding requirements do not automatically apply to FR-800
 outputs because these documents are inferential synthesis across multiple
 managed notes rather than single-source extraction. Until a Tier 4-specific
 trust model lands, FR-800 outputs are human-review-required analysis artifacts,
-and the first-slice digest contract is further defined in
-`docs/specs/tier4_digest_design_spec.md`.
+the first-slice digest contract is further defined in
+`docs/specs/tier4_digest_design_spec.md`, and the shared proposal review
+hardening contract is defined in
+`docs/specs/tier4_discovery_proposal_layer_spec.md`.
+
+The immediate user problem for this Tier 4 slice is concrete: Johnny is
+reviewing machine-suggested relationships during SteerCo prep, the same
+rejected suggestion can recur across reruns, and flagged notes can disappear
+from synthesis or search without an obvious operator escape hatch. Tier 4
+exists here to lower review noise, speed operator decisions, and make trust
+filtering explicit.
+
+Tier 4 builds on a shared graph-ops foundation:
+- `folio links` is the single review / confirm / reject surface for
+  machine-suggested document relationships
+- `folio graph` is the default graph health and backlog surface
+- entity identity hygiene and managed analysis notes are part of the baseline,
+  not optional later additions
+- proposal objects are the shared contract between machine suggestions and
+  canonical graph review
+- latent discovery remains valid architecture framing and backlog context for
+  future discovery work, but it is not a standalone committed product
+  requirement in this PRD revision
+
+Higher-level Tier 4 features SHALL build on those shared graph surfaces rather
+than inventing producer-specific relationship-confirmation UX or a separate
+graph database when frontmatter plus existing registries already suffice.
+Tier 4 MAY use rebuildable sidecar indexes or proposal stores to support
+discovery and review, but canonical graph truth remains frontmatter plus
+existing registries only.
 
 #### FR-801: Digest Command Family
 
 ```bash
-folio digest <scope> [--date YYYY-MM-DD] [--week] [--llm-profile <profile>]
+folio digest <scope> [--date YYYY-MM-DD] [--week] [--include-flagged] [--llm-profile <profile>]
 ```
 
 - Require an explicit engagement-scoped path in v1 rather than silently
   running library-wide
 - Generate a daily digest from the scoped day's new or modified managed documents
 - Generate a weekly digest from daily digests when `--week` is supplied
+- Exclude `review_status: flagged` source-backed inputs by default
+- Support `--include-flagged` as the explicit operator override for widening
+  the daily source-backed input set
 - Preserve manual invocation as the v1 default; automatic triggering is a
   later optional extension
 - Present each roll-up at a different analytical altitude rather than treating
@@ -947,6 +994,11 @@ Folio SHALL support Tier 4 navigation surfaces that connect related assets:
 - Graph-friendly linking that improves Obsidian navigation without requiring a
   custom visualization layer in v1
 
+When these surfaces generate machine-suggested document relationships, they
+SHALL create non-canonical proposal objects governed by the shared proposal
+review hardening contract and SHALL route those suggestions into
+`folio links` rather than writing canonical frontmatter directly.
+
 Implementation details for scoring or ranking relatedness remain flexible.
 The requirement is the visible navigation benefit, not a specific linking
 algorithm.
@@ -965,6 +1017,14 @@ rather than arbitrary N-way synthesis.
 The system MAY later expand to broader synthesis sets after the pairwise path
 proves useful on real engagement work.
 
+When `folio synthesize` identifies candidate document relationships, it SHALL
+emit those as non-canonical proposal objects through the shared proposal layer
+and surface them through `folio links` rather than creating a separate
+synthesize-specific confirmation workflow.
+When `folio synthesize` ships, it SHALL also expose an explicit operator
+override for including flagged inputs and SHALL disclose excluded flagged-input
+counts in its output when the default trust gate changes the result set.
+
 #### FR-805: Org Traversal Queries
 
 Folio SHALL support traversal-oriented org queries over the shipped entity
@@ -980,6 +1040,10 @@ fulfills the traversal requirement remains intentionally unspecified.
 The first Tier 4 traversal surface SHALL default to the active engagement scope
 instead of spanning the entire library unless an explicit cross-engagement
 override is added later.
+The default traversal result set SHALL exclude inputs with
+`review_status: flagged` unless the operator explicitly requests inclusion,
+and the surfaced result summary SHALL report how many flagged inputs were
+excluded.
 
 #### FR-806: Semantic Search
 
@@ -990,6 +1054,11 @@ folio search <query>
 Folio SHALL provide a discovery-oriented search surface for "find things
 related to this idea" queries that exceed literal text matching.
 
+The default search result set SHALL exclude inputs with
+`review_status: flagged` unless the operator explicitly requests inclusion,
+and the surfaced result summary SHALL report how many flagged inputs were
+excluded.
+
 The search architecture remains intentionally deferred. This PRD does not lock:
 - embedding model choice
 - index storage design
@@ -997,7 +1066,10 @@ The search architecture remains intentionally deferred. This PRD does not lock:
 - whether search is implemented entirely inside the vault or via sidecar data
 
 The requirement is a user-facing search command and discovery workflow, not a
-premature architectural commitment.
+premature architectural commitment. Search MAY use latent discovery views and
+rebuildable sidecar indexes, but it SHALL NOT treat probabilistic similarities,
+clusters, or inferred relations as canonical ontology without proposal review
+and promotion.
 
 #### FR-807: Tag Vocabulary
 
@@ -1021,6 +1093,10 @@ surfaces are added.
 The system SHALL prefer lightweight graph improvements through stable links,
 entity stubs, Maps of Content, and digest relationships before introducing any
 custom graph subsystem.
+These navigation surfaces SHALL build on frontmatter + registry canonical state
+and the shared `folio links` / `folio graph` workflows rather than a separate
+graph service in v1. Non-canonical discovery views MAY improve ranking and
+navigation, but they SHALL NOT write canonical graph state directly.
 
 **Acceptance Criteria:**
 - [ ] Tier 4 navigation outputs create resolvable wikilinks without requiring a
@@ -1041,6 +1117,169 @@ lands.
 - [ ] Manual `folio digest` execution works without any watcher process
 - [ ] Automatic triggering, if implemented later, is opt-in rather than
       silently enabled
+
+#### FR-810: Enrich Diagnose
+
+```bash
+folio enrich diagnose [scope] [--json] [--limit N]
+```
+
+Folio SHALL provide a read-only diagnostic surface for enrichability and
+body-coverage blockers. This command SHALL identify notes whose managed
+sections cannot be safely updated and SHALL emit actionable findings in both
+human-readable output and optional JSON form.
+
+Minimum finding classes:
+- managed sections unidentified
+- protected by curation level
+- protected by review status
+
+**Acceptance Criteria:**
+- [ ] On the Tier 4 fixture set, `folio enrich diagnose` classifies 100% of
+      skipped or protected enrich candidates into a defined finding class
+- [ ] JSON output uses a fixed finding schema suitable for downstream tooling
+- [ ] Body-protection blockers are visible before graph-density work is
+      attempted
+
+#### FR-811: Trust-Aware Graph Behavior
+
+Tier 4 graph-oriented surfaces SHALL treat `review_status: flagged` as the
+default trust gate. This requirement applies to:
+- `folio graph`
+- `folio digest`
+- `folio synthesize`
+- org traversal
+- semantic search
+
+Tier 4 surfaces SHALL exclude flagged inputs by default and SHALL expose an
+explicit operator override for inclusion where that surface is committed in
+this PRD revision. `folio digest` SHALL use `--include-flagged`; equivalent
+explicit overrides are part of the committed requirement for
+`folio synthesize`, org traversal, and semantic search when those surfaces
+ship. `extraction_confidence` SHALL be surfaced as trust metadata but SHALL
+not become a second hard exclusion rule in v1. This trust gate applies both to
+downstream graph outputs and to proposal surfacing.
+
+If a graph-oriented Tier 4 result is empty because flagged inputs were
+excluded, the output SHALL say so explicitly and SHALL point the operator to
+the relevant override path. No Tier 4 surface may silently report "nothing to
+digest", "nothing to synthesize", or "no results" when the real cause was the
+default flagged-input trust gate.
+
+**Acceptance Criteria:**
+- [ ] Committed Tier 4 graph-oriented surfaces report excluded flagged-input
+      counts in summaries or result metadata
+- [ ] `folio digest` supports `--include-flagged`, and equivalent explicit
+      overrides are part of the committed contract for `folio synthesize`,
+      semantic search, and traversal when they ship
+- [ ] Empty outputs caused by flagged-input exclusion say so explicitly and
+      point to the override path
+
+#### FR-812: Relation-Schema Validation
+
+Folio SHALL enforce a shared relation-rule layer for canonical graph writes and
+graph-health inspection. This validation SHALL check:
+- allowed source / target document types
+- cardinality
+- target existence
+
+v1 governed relations:
+- `supersedes`
+- `impacts`
+- `draws_from`
+- `depends_on`
+- `relates_to`
+
+Deferred from this slice:
+- `instantiates`
+
+This requirement is ontology governance, not just CLI validation. The same
+rule layer SHALL also surface schema-gate results on proposal objects before
+those proposals enter human review.
+
+**Acceptance Criteria:**
+- [ ] The governed-relation fixture set blocks or surfaces 100% of invalid
+      canonical writes
+- [ ] Shared validation covers `supersedes`, `impacts`, `draws_from`,
+      `depends_on`, and `relates_to` consistently
+- [ ] Singular / multi-valued relation rules remain enforced alongside type and
+      existence checks
+
+#### FR-813: Proposal Review Hardening
+
+Tier 4 SHALL treat proposal objects as the shared contract for reviewable,
+non-canonical machine suggestions. This is the load-bearing governance change
+for the current Tier 4 proposal revision. Proposal objects SHALL support, at
+minimum:
+- `proposal_type`
+- `subject_id` / `source_id` / `target_id` as applicable
+- `evidence_bundle`
+- `reason_summary`
+- `trust_status`
+- `schema_gate_result`
+- `producer`
+- `input_fingerprint`
+- `lifecycle_state`
+
+Minimum lifecycle states:
+- `queued`
+- `accepted`
+- `rejected`
+- `suppressed`
+- `stale`
+- `superseded`
+
+Proposal handling SHALL include durable rejection memory and stale
+invalidation when upstream inputs or identities change. Relation-rule changes
+SHALL invalidate proposals through schema-version handling rather than by
+treating prompt drift or model changes as fingerprint drift.
+
+`input_fingerprint` SHALL include:
+- normalized claim identity
+- supporting managed-document IDs
+- each input's current version / source identifiers
+- relation kind
+- producer identity
+
+`input_fingerprint` SHALL exclude:
+- prompt text
+- model identifier
+- tokenizer changes
+
+Proposal review surfaces SHALL render, by default:
+- a compact summary
+- a trust label
+- any schema warning
+- one to three concrete evidence locators
+
+Raw evidence or reason bundles remain for expanded detail views and JSON, not
+the default operator-facing review surface.
+
+Entity merges that deterministically rewrite a proposal to the same canonical
+claim SHALL mark the old proposal `superseded` without re-queueing human
+review. Only conflicting or semantically changed rewrites become `stale`.
+
+To keep review burden bounded:
+- no producer may surface more than 20 new proposals per engagement per run by
+  default
+- any producer must sustain a rolling top-20 acceptance rate of at least 50%
+  to keep surfacing by default
+
+Existing and planned Tier 4 surfaces (`folio links`, `folio entities`,
+`folio graph`, `folio digest`, `folio synthesize`, `folio search`) SHALL
+consume this shared proposal model rather than inventing parallel proposal
+lifecycles. Latent discovery remains relevant architecture framing for future
+Tier 4 work, but it is not a standalone committed requirement in this PRD
+revision.
+
+**Acceptance Criteria:**
+- [ ] Top-10 document-relationship proposal acceptance rate is at least 60%
+- [ ] Entity-merge suggestion acceptance rate is at least 75%, with a
+      post-accept undo or reopen rate of at most 10%
+- [ ] Exact rejected-suggestion resurfacing without material input change stays
+      at or below 5%
+- [ ] Median review decision time for top-ranked proposals is at most
+      30 seconds
 
 ---
 

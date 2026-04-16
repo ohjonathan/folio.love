@@ -12,6 +12,7 @@ from folio.pipeline.enrich_data import (
     compute_input_fingerprint,
     compute_entity_resolution_fingerprint,
     compute_relationship_context_fingerprint,
+    compute_relationship_proposal_id,
     compute_managed_body_fingerprint,
 )
 
@@ -185,8 +186,10 @@ class TestRelationshipProposal:
             status="pending_human_confirmation",
         )
         d = proposal.to_dict()
+        assert d["proposal_id"] == ""
         assert d["relation"] == "supersedes"
         assert d["target_id"] == "client_evidence_20260301_market-sizing"
+        assert d["producer"] == "enrich"
         assert d["basis_fingerprint"] == "sha256:abc123"
         assert d["confidence"] == "high"
         assert d["signals"] == ["same_source_stem", "version_order"]
@@ -221,10 +224,31 @@ class TestRelationshipProposal:
         )
         d = proposal.to_dict()
         expected_keys = {
-            "relation", "target_id", "basis_fingerprint",
-            "confidence", "signals", "rationale", "status",
+            "proposal_id", "relation", "target_id", "producer",
+            "basis_fingerprint", "confidence", "signals",
+            "rationale", "status",
         }
         assert set(d.keys()) == expected_keys
+
+    def test_from_dict_backfills_deterministic_proposal_id(self):
+        restored = RelationshipProposal.from_dict(
+            {
+                "source_id": "client_note_01",
+                "relation": "supersedes",
+                "target_id": "client_note_00",
+                "basis_fingerprint": "sha256:abc123",
+                "confidence": "high",
+                "signals": [],
+                "rationale": "",
+                "status": "pending_human_confirmation",
+            }
+        )
+        assert restored.proposal_id == compute_relationship_proposal_id(
+            source_id="client_note_01",
+            relation="supersedes",
+            target_id="client_note_00",
+            basis_fingerprint="sha256:abc123",
+        )
 
 
 # ---------------------------------------------------------------------------
