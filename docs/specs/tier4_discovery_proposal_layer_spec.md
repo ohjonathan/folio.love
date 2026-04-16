@@ -49,7 +49,6 @@ depends_on:
   - folio_feature_handoff_brief
   - folio_enrich_spec
   - folio_provenance_spec
-  - tier4_digest_design_spec
 ---
 
 # Tier 4 Proposal Review Hardening Spec

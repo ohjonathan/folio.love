@@ -1,5 +1,5 @@
 ---
-id: log_20260415_proposal-review-hardening-v0-6-0-pre-a-halt
+id: log_20260415_proposal-review-hardening-v0-6-0-pre-a-proposal-halt
 type: log
 status: complete
 event_type: halt
