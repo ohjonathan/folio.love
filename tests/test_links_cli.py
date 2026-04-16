@@ -635,3 +635,119 @@ def test_filter_skips_links_namespace(tmp_path):
     views, suppression_counts = collect_pending_relationship_proposals(config)
     assert len(views) == 1  # links namespace is NOT treated as a producer
     assert suppression_counts == {}
+
+
+# ---------------------------------------------------------------------------
+# Phase D.4 (v0.6.0): fix regression tests per D.3 canonical verdict.
+# ---------------------------------------------------------------------------
+
+
+def test_filter_handles_missing_source_id_target_id(tmp_path):
+    """DB-1 regression: proposal dicts missing target_id / source_id don't raise KeyError."""
+    from folio.links import _proposal_from_raw
+
+    # Bare minimum raw dict — all identity fields missing — must not raise.
+    _proposal_from_raw("src-id", "enrich", {})
+    _proposal_from_raw("src-id", "enrich", {"relation": "impacts"})
+    _proposal_from_raw("src-id", "enrich", {"target_id": "tgt-id"})
+    # And the filter path: a full collect_pending over frontmatter with such entries.
+    source_id = "clienta_evidence_missing_fields"
+    target_id = "clienta_evidence_target_mf"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_note(target_id, target_id))
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [
+                                # Legacy entry missing target_id — must not crash
+                                {"relation": "impacts", "status": "pending_human_confirmation",
+                                 "confidence": "medium", "basis_fingerprint": "sha256:legacy"},
+                                _proposal(source_id, "impacts", target_id, "sha256:ok"),
+                            ]
+                        }
+                    }
+                }
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, counts = collect_pending_relationship_proposals(config)
+    # No crash. The entry with missing target_id gets target_id="" and
+    # a computed proposal_id; it is harmless to surface (unsupported relation
+    # would have filtered it, but "impacts" is supported). Both surface.
+    assert len(views) == 2
+    assert counts == {}
+
+
+def test_return_type_is_tuple_views_and_counts(tmp_path):
+    """DB-4 explicit: collect_pending returns a 2-tuple (views, counts)."""
+    source_id = "clienta_evidence_tuple"
+    target_id = "clienta_evidence_tgt_t"
+    config_path = _setup_library_with_producer_proposals(
+        tmp_path,
+        source_id,
+        target_id,
+        [_proposal(source_id, "impacts", target_id, "sha256:ok")],
+    )
+    from folio.config import FolioConfig
+
+    result = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    assert isinstance(result, tuple) and len(result) == 2
+    views, counts = result
+    assert isinstance(views, list) and isinstance(counts, dict)
+
+
+def test_relationship_status_summary_post_migration(tmp_path):
+    """DB-4 explicit regression: relationship_status_summary survives tuple-return migration."""
+    from folio.config import FolioConfig
+    from folio.links import relationship_status_summary
+
+    source_id = "clienta_evidence_summary"
+    target_id = "clienta_evidence_summary_tgt"
+    config_path = _setup_library_with_producer_proposals(
+        tmp_path,
+        source_id,
+        target_id,
+        [_proposal(source_id, "impacts", target_id, "sha256:ok")],
+    )
+    rows = relationship_status_summary(FolioConfig.load(config_path))
+    # row emitted for the source doc with one pending proposal; no crash.
+    assert any(row.source_id == source_id and row.pending == 1 for row in rows)
+
+
+def test_find_pending_view_post_migration(tmp_path):
+    """DB-4 explicit regression: _find_pending_view survives tuple-return migration."""
+    from folio.config import FolioConfig
+    from folio.links import _find_pending_view
+
+    source_id = "clienta_evidence_find"
+    target_id = "clienta_evidence_find_tgt"
+    config_path = _setup_library_with_producer_proposals(
+        tmp_path,
+        source_id,
+        target_id,
+        [_proposal(source_id, "impacts", target_id, "sha256:ok")],
+    )
+    config = FolioConfig.load(config_path)
+    views, _ = collect_pending_relationship_proposals(config)
+    pid = views[0].proposal.proposal_id
+    view = _find_pending_view(config, pid)
+    assert view.proposal.proposal_id == pid

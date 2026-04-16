@@ -65,10 +65,20 @@ def _build_rejection_key(
     )
 
 
+def _is_rejection_suppressed(
+    candidate_key: tuple[str, str, str, str],
+    rejected_keys: set[tuple[str, str, str, str]],
+) -> bool:
+    return candidate_key in rejected_keys
+
+
 def _proposal_from_raw(source_id: str, producer: str, raw: dict) -> RelationshipProposal:
     raw_copy = dict(raw)
     raw_copy.setdefault("producer", producer)
     raw_copy.setdefault("source_id", source_id)
+    raw_copy.setdefault("relation", "")
+    raw_copy.setdefault("target_id", "")
+    raw_copy.setdefault("basis_fingerprint", "")
     if not raw_copy.get("proposal_id"):
         raw_copy["proposal_id"] = compute_relationship_proposal_id(
             source_id=source_id,
@@ -97,6 +107,8 @@ def _iter_producer_proposals(source_id: str, fm: dict):
     if not isinstance(llm_meta, dict):
         return
     for producer, producer_meta in llm_meta.items():
+        if producer == "links":
+            continue  # reserved namespace for confirmed_relationships; not a producer axis
         if not isinstance(producer_meta, dict):
             continue
         axes = producer_meta.get("axes")
@@ -164,7 +176,7 @@ def collect_pending_relationship_proposals(
 
             key = _build_rejection_key(entry.id, proposal)
             rejected_keys = rejected_keys_by_producer.get(producer, set())
-            if key in rejected_keys:
+            if _is_rejection_suppressed(key, rejected_keys):
                 suppression_counts[producer] = suppression_counts.get(producer, 0) + 1
                 continue
 
