@@ -16,6 +16,27 @@ Folio turns consulting artifacts into a structured, searchable knowledge base.
 
 Folio tracks versions automatically -- re-converting an updated deck or re-ingesting a transcript increments the version, detects changes, and preserves history. Open `library/` as an Obsidian vault for automatic frontmatter indexing.
 
+## Discovery Pipeline
+
+folio organizes work in four tiers. Each tier builds on the ones below it:
+
+- **Tier 1 — Source capture.** `folio convert` turns PPTX/PDF decks into searchable Markdown with extracted text, image analysis, and frontmatter.
+- **Tier 2 — Interaction capture.** `folio ingest` takes meeting transcripts and expert-interview notes, tagging participants and extracting entity candidates.
+- **Tier 3 — Entity system.** `folio entities` manages a canonical registry of people, departments, systems, and processes, with CSV import for org charts and LLM-proposed soft matches for human review.
+- **Tier 4 — Discovery proposal layer.** `folio enrich` analyzes your library and proposes document-level relationships (`supersedes`, `impacts`, `draws_from`, `depends_on`). `folio links` surfaces those proposals for review; confirmed relationships become canonical frontmatter and feed a knowledge graph.
+
+### Tier 4 in depth
+
+Tier 4 turns ad-hoc notes into a structured knowledge graph without requiring you to hand-wire relationships. The flow:
+
+1. **Enrichment produces proposals.** `folio enrich` reads each note and proposes relationships to other notes in the library. Each proposal carries a confidence grade, a basis fingerprint, a producer tag, and a lifecycle state (`queued`, `rejected`, `suppressed`, `accepted`).
+2. **Review surfaces proposals.** `folio links review` shows the queue of pending proposals. Confirm promotes a proposal to canonical frontmatter; reject records the rejection so future enrichments remember not to re-propose the same relationship.
+3. **Trust-gating keeps the queue clean.** Proposals involving documents with `review_status: flagged` are excluded by default. Use `--include-flagged` to inspect or act on them; the surface tags each proposal with which side (source, target, or both) is flagged.
+4. **Rejection memory prevents churn.** Once you reject a proposal, subsequent `folio enrich` runs re-derive the same relationship but mark it `suppressed` instead of `queued` — it stays in frontmatter for audit but never re-enters your review queue until the underlying evidence changes.
+5. **Queue-cap enforcement prevents flood.** No single producer may hold more than 20 queued proposals per library at a time. Excess is marked `suppressed`; you work through the top 20 and the next batch promotes automatically.
+
+What's shipped as of v0.6.4: Slices 1–4 (rejection memory, lifecycle schema, emission-time filtering, trust-gating). What's next: acceptance-rate gate enforcement (Slice 5, awaiting field data) and entity-merge rejection memory + shared-consumer expansion (Slice 6+). See `docs/specs/tier4_discovery_proposal_layer_spec.md` for the full contract.
+
 ## Install
 
 ```bash
@@ -303,6 +324,39 @@ Enrichment runs three axes per note:
 3. **Relationships** — `supersedes` and `impacts` proposals between notes in the same engagement, surfaced for human confirmation.
 
 Notes above `L0` curation level or with `reviewed`/`overridden` review status are protected from body mutation. Enrichment is idempotent: a content fingerprint prevents redundant LLM calls unless the note body, entity registry, or relationship context has changed.
+
+### `folio links`
+
+Review and manage document-level relationship proposals.
+
+```bash
+# Review pending proposals
+folio links review                          # all scopes
+folio links review ClientA                  # scoped to a client
+folio links review --doc source_doc_id      # one source document
+folio links review --target target_doc_id   # proposals pointing at one target
+folio links review --page 2                 # paginate (20 per page)
+folio links review --include-flagged        # include flagged-input proposals
+
+# Per-document summary
+folio links status                          # pending + confirmed counts per source
+folio links status --include-flagged        # count flagged-input proposals as pending
+
+# Act on individual proposals
+folio links confirm <proposal_id>           # promote to canonical frontmatter
+folio links reject <proposal_id>            # record rejection (rejection memory)
+folio links confirm <proposal_id> --include-flagged   # consent to act on flagged-input
+folio links reject <proposal_id> --include-flagged
+
+# Bulk actions for one source document
+folio links confirm-doc <doc_id>
+folio links reject-doc <doc_id>
+folio links confirm-doc <doc_id> --include-flagged
+```
+
+`folio enrich` produces relationship proposals; `folio links` surfaces them for review. Each proposal includes source and target document IDs, a relation (`supersedes`, `impacts`, `draws_from`, `depends_on`), a confidence grade, the producer, and a rationale. Confirming a proposal writes the relationship into canonical frontmatter (`impacts: [...]`, `supersedes: ...`) and records a confirmation receipt under `_llm_metadata.links`; rejecting records a fingerprint so the same relationship never re-enters the review queue.
+
+Proposals involving documents with `review_status: flagged` are excluded from all default surfaces (`review`, `status`, and bulk actions). Pass `--include-flagged` to inspect or act on them; the output annotates each with `(flagged: source)`, `(flagged: target)`, or `(flagged: source, target)` so operators see exactly which side is untrusted. When all pending proposals are filtered by trust-gating, surfaces disclose the excluded count rather than silently reporting empty.
 
 ### `folio provenance`
 
@@ -656,7 +710,8 @@ folio/
 
 ## Roadmap
 
-- **Daily digest** (`folio digest`) -- summarize recent library activity across engagements (Tier 4, in progress).
+- **Tier 4 discovery proposal layer** — shipped through Slice 4 (v0.6.4). Remaining: acceptance-rate gate enforcement (Slice 5, awaiting field data) and entity-merge rejection memory + shared-consumer expansion (Slice 6+).
+- **Daily digest** (`folio digest`) -- summarize recent library activity across engagements (planned; depends on Slice 6+ shared-consumer expansion).
 - **Search and retrieval** (`folio search`) -- not yet implemented. Today, converted decks are searchable via Obsidian, grep, or any tool that reads Markdown + YAML frontmatter.
 
 ## License
