@@ -4,7 +4,20 @@ All notable changes to folio.love are documented here. The format loosely follow
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
 changes at minor versions are permitted but flagged explicitly.
 
-## [Unreleased]
+## [v0.6.1] — 2026-04-15
+
+### Changed
+- **Proposal schema rename:** relationship proposal `status` field renamed to
+  `lifecycle_state`. Values: `pending_human_confirmation` → `queued`;
+  `rejected` unchanged; new enum members `accepted`, `suppressed`, `stale`,
+  `superseded` (reserved, no writers this release). `from_dict` reads legacy
+  `status` transparently; `to_dict` emits only `lifecycle_state`. Raw-dict
+  readers also handle both formats via fallback.
+  **No operator action required** — backward-compatible reads handle old data
+  automatically. Provenance proposals (`ProvenanceProposal`) are unaffected.
+  Spec: `docs/specs/v0.6.1_proposal_lifecycle_rename_spec.md`.
+
+## [v0.6.0] — 2026-04-15
 
 ### Added
 - **Rejection memory for relationship proposals.** `folio links review` now filters out

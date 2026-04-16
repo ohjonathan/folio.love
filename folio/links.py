@@ -166,7 +166,7 @@ def collect_pending_relationship_proposals(
         rejected_keys_by_producer: dict[str, set[tuple[str, str, str, str]]] = {}
         rejected_fps_by_prefix: dict[str, dict[tuple[str, str, str], set[str]]] = {}
         for producer, _raw, proposal in _iter_producer_proposals(entry.id, fm):
-            if proposal.status != "rejected":
+            if proposal.lifecycle_state != "rejected":
                 continue
             # Skip rejected entries with empty basis_fingerprint — treating
             # them as valid rejection keys would false-suppress pending
@@ -181,7 +181,7 @@ def collect_pending_relationship_proposals(
             )
 
         for producer, _raw, proposal in _iter_producer_proposals(entry.id, fm):
-            if proposal.status != "pending_human_confirmation":
+            if proposal.lifecycle_state != "queued":
                 continue
             if target_id and proposal.target_id != target_id:
                 continue
@@ -368,7 +368,7 @@ def _remove_or_update_proposal(
             raw_copy = dict(raw)
             raw_copy["proposal_id"] = proposal.proposal_id
             raw_copy["producer"] = proposal.producer
-            raw_copy["status"] = new_status
+            raw_copy["lifecycle_state"] = new_status
             kept.append(raw_copy)
 
     if matched is None:

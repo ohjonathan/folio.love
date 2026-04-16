@@ -146,7 +146,7 @@ def test_graph_status_reports_expected_aggregate_counts(tmp_path):
                                     "confidence": "medium",
                                     "signals": ["shared_topic"],
                                     "rationale": "pending rationale",
-                                    "status": "pending_human_confirmation",
+                                    "lifecycle_state": "queued",
                                     "producer": "enrich",
                                 }
                             ]
@@ -298,7 +298,7 @@ def test_graph_doctor_json_uses_fixed_finding_schema(tmp_path):
                                     "confidence": "medium",
                                     "signals": [],
                                     "rationale": "pending rationale",
-                                    "status": "pending_human_confirmation",
+                                    "lifecycle_state": "queued",
                                     "producer": "enrich",
                                 }
                             ]
@@ -417,7 +417,7 @@ def _rejected(target_id: str, basis_fp: str, *, producer: str = "enrich") -> dic
         "confidence": "medium",
         "signals": [],
         "rationale": "",
-        "status": "rejected",
+        "lifecycle_state": "rejected",
         "producer": producer,
     }
 
@@ -713,10 +713,10 @@ def test_doctor_aggregator_excludes_suppressed_and_stale(tmp_path):
         # suppressed and stale entries must not count toward total_reviewed
         {"proposal_id": "s1", "relation": "impacts", "target_id": target_id,
          "basis_fingerprint": "sha256:s1", "confidence": "medium", "signals": [],
-         "rationale": "", "status": "suppressed", "producer": "enrich"},
+         "rationale": "", "lifecycle_state": "suppressed", "producer": "enrich"},
         {"proposal_id": "s2", "relation": "impacts", "target_id": target_id,
          "basis_fingerprint": "sha256:s2", "confidence": "medium", "signals": [],
-         "rationale": "", "status": "stale", "producer": "enrich"},
+         "rationale": "", "lifecycle_state": "stale", "producer": "enrich"},
     ]
     confirmed = [_confirmed_record(target_id, producer="enrich") for _ in range(2)]
     metadata = {

@@ -317,8 +317,10 @@ def _aggregate_producer_acceptance_rates(
             for raw in proposals:
                 if not isinstance(raw, dict):
                     continue
-                status = raw.get("status")
-                if status == "rejected":
+                state = raw.get("lifecycle_state")
+                if state is None:
+                    state = raw.get("status")
+                if state == "rejected":
                     rejected_counts[key] = rejected_counts.get(key, 0) + 1
 
         links_meta = llm_meta.get("links")

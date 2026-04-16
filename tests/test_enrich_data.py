@@ -183,7 +183,7 @@ class TestRelationshipProposal:
             confidence="high",
             signals=["same_source_stem", "version_order"],
             rationale="Same deck lineage and newer converted note.",
-            status="pending_human_confirmation",
+            lifecycle_state="queued",
         )
         d = proposal.to_dict()
         assert d["proposal_id"] == ""
@@ -194,7 +194,7 @@ class TestRelationshipProposal:
         assert d["confidence"] == "high"
         assert d["signals"] == ["same_source_stem", "version_order"]
         assert d["rationale"] == "Same deck lineage and newer converted note."
-        assert d["status"] == "pending_human_confirmation"
+        assert d["lifecycle_state"] == "queued"
 
     def test_from_dict_roundtrip(self):
         original = RelationshipProposal(
@@ -204,13 +204,13 @@ class TestRelationshipProposal:
             confidence="medium",
             signals=["explicit_document_reference"],
             rationale="Direct reference to target.",
-            status="rejected",
+            lifecycle_state="rejected",
         )
         restored = RelationshipProposal.from_dict(original.to_dict())
         assert restored.relation == original.relation
         assert restored.target_id == original.target_id
         assert restored.confidence == original.confidence
-        assert restored.status == original.status
+        assert restored.lifecycle_state == original.lifecycle_state
 
     def test_to_dict_no_extra_fields(self):
         proposal = RelationshipProposal(
@@ -220,13 +220,13 @@ class TestRelationshipProposal:
             confidence="high",
             signals=[],
             rationale="",
-            status="pending_human_confirmation",
+            lifecycle_state="queued",
         )
         d = proposal.to_dict()
         expected_keys = {
             "proposal_id", "relation", "target_id", "producer",
             "basis_fingerprint", "confidence", "signals",
-            "rationale", "status",
+            "rationale", "lifecycle_state",
         }
         assert set(d.keys()) == expected_keys
 
@@ -240,7 +240,7 @@ class TestRelationshipProposal:
                 "confidence": "high",
                 "signals": [],
                 "rationale": "",
-                "status": "pending_human_confirmation",
+                "lifecycle_state": "queued",
             }
         )
         assert restored.proposal_id == compute_relationship_proposal_id(
@@ -249,6 +249,75 @@ class TestRelationshipProposal:
             target_id="client_note_00",
             basis_fingerprint="sha256:abc123",
         )
+
+    def test_from_dict_reads_legacy_status_pending(self):
+        p = RelationshipProposal.from_dict(
+            {"relation": "impacts", "target_id": "x", "status": "pending_human_confirmation"}
+        )
+        assert p.lifecycle_state == "queued"
+
+    def test_from_dict_reads_legacy_status_rejected(self):
+        p = RelationshipProposal.from_dict(
+            {"relation": "impacts", "target_id": "x", "status": "rejected"}
+        )
+        assert p.lifecycle_state == "rejected"
+
+    def test_from_dict_prefers_lifecycle_state_over_status(self):
+        p = RelationshipProposal.from_dict(
+            {"relation": "impacts", "target_id": "x", "lifecycle_state": "suppressed", "status": "rejected"}
+        )
+        assert p.lifecycle_state == "suppressed"
+
+    def test_from_dict_lifecycle_state_null_falls_to_status(self):
+        p = RelationshipProposal.from_dict(
+            {"relation": "impacts", "target_id": "x", "lifecycle_state": None, "status": "rejected"}
+        )
+        assert p.lifecycle_state == "rejected"
+
+    def test_to_dict_emits_lifecycle_state_not_status(self):
+        p = RelationshipProposal(
+            relation="impacts", target_id="x", basis_fingerprint="",
+            confidence="medium", signals=[], rationale="",
+        )
+        d = p.to_dict()
+        assert "lifecycle_state" in d
+        assert "status" not in d
+
+    def test_proposal_lifecycle_states_constant(self):
+        from folio.pipeline.enrich_data import PROPOSAL_LIFECYCLE_STATES
+        assert len(PROPOSAL_LIFECYCLE_STATES) == 6
+        assert PROPOSAL_LIFECYCLE_STATES == frozenset({
+            "queued", "accepted", "rejected", "suppressed", "stale", "superseded",
+        })
+
+    def test_from_dict_neither_key_defaults_to_queued(self):
+        p = RelationshipProposal.from_dict({"relation": "impacts", "target_id": "x"})
+        assert p.lifecycle_state == "queued"
+
+    def test_enrich_emission_time_rejection_filter_reads_legacy_status(self):
+        """T-6: rejection filter at enrich.py emission time handles legacy status."""
+        from folio.enrich import _suppress_rejected_proposals
+        legacy_rejected = {
+            "relation": "impacts",
+            "target_id": "t1",
+            "basis_fingerprint": "sha256:abc",
+            "status": "rejected",
+        }
+        existing_meta = {"axes": {"relationships": {"proposals": [legacy_rejected]}}}
+        new = RelationshipProposal(
+            relation="impacts", target_id="t1", basis_fingerprint="sha256:abc",
+            confidence="medium", signals=[], rationale="",
+        )
+        result = _suppress_rejected_proposals([new], existing_meta, force=False)
+        assert len(result) == 0
+
+    def test_graph_acceptance_rate_reads_legacy_rejected_status(self):
+        """T-8: graph acceptance-rate aggregation counts legacy status: rejected."""
+        raw = {"status": "rejected"}
+        state = raw.get("lifecycle_state")
+        if state is None:
+            state = raw.get("status")
+        assert state == "rejected"
 
 
 # ---------------------------------------------------------------------------
