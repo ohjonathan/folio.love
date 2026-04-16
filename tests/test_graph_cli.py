@@ -377,7 +377,14 @@ def test_graph_doctor_json_uses_fixed_finding_schema(tmp_path):
     result = runner.invoke(cli, ["--config", str(config_path), "graph", "doctor", "--json"])
     assert result.exit_code == 0
 
-    findings = json.loads(result.output)
+    payload = json.loads(result.output)
+    assert isinstance(payload, dict)
+    assert set(payload.keys()) == {
+        "findings",
+        "producer_acceptance_rates",
+        "producer_acceptance_rates_data_integrity",
+    }
+    findings = payload["findings"]
     assert findings
     assert all(
         set(finding.keys()) == {"code", "severity", "subject_id", "detail", "recommended_action"}
@@ -392,3 +399,268 @@ def test_graph_doctor_json_uses_fixed_finding_schema(tmp_path):
         "missing_entity_stub",
         "duplicate_person_candidate",
     }.issubset({finding["code"] for finding in findings})
+    assert isinstance(payload["producer_acceptance_rates"], list)
+    assert payload["producer_acceptance_rates_data_integrity"] == {"missing_producer_count": 0}
+
+
+# ---------------------------------------------------------------------------
+# Phase C (v0.6.0): cumulative acceptance-rate aggregator tests.
+# ---------------------------------------------------------------------------
+
+
+def _rejected(target_id: str, basis_fp: str, *, producer: str = "enrich") -> dict:
+    return {
+        "proposal_id": f"rej-{basis_fp}",
+        "relation": "impacts",
+        "target_id": target_id,
+        "basis_fingerprint": basis_fp,
+        "confidence": "medium",
+        "signals": [],
+        "rationale": "",
+        "status": "rejected",
+        "producer": producer,
+    }
+
+
+def _confirmed_record(target_id: str, *, producer: str = "enrich", include_producer: bool = True) -> dict:
+    record = {
+        "relation": "impacts",
+        "target_id": target_id,
+        "basis_fingerprint": f"sha256:{target_id}",
+        "confirmed_at": "2026-04-15T00:00:00+00:00",
+    }
+    if include_producer:
+        record["producer"] = producer
+    return record
+
+
+def _setup_aggregator_library(
+    tmp_path: Path,
+    source_id: str,
+    *,
+    rejected_by_producer: dict[str, int] | None = None,
+    confirmed_by_producer: dict[str, int] | None = None,
+    confirmed_missing_producer: int = 0,
+) -> Path:
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    target_id = f"{source_id}_target"
+    _write_registry(
+        library,
+        {
+            source_id: _entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_fm(target_id, target_id))
+
+    metadata: dict = {}
+    rejected_by_producer = rejected_by_producer or {}
+    for producer, count in rejected_by_producer.items():
+        metadata[producer] = {"axes": {"relationships": {"proposals": [_rejected(target_id, f"sha256:{producer}-r{i}", producer=producer) for i in range(count)]}}}
+
+    confirmed_list: list[dict] = []
+    confirmed_by_producer = confirmed_by_producer or {}
+    for producer, count in confirmed_by_producer.items():
+        for i in range(count):
+            confirmed_list.append(_confirmed_record(target_id, producer=producer))
+    for i in range(confirmed_missing_producer):
+        confirmed_list.append(_confirmed_record(target_id, include_producer=False))
+    if confirmed_list:
+        metadata.setdefault("links", {})["confirmed_relationships"] = confirmed_list
+
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_fm(source_id, "Source", _llm_metadata=metadata),
+    )
+    return config_path
+
+
+def _aggregate(config_path: Path):
+    from folio.config import FolioConfig
+    from folio.graph import _aggregate_producer_acceptance_rates
+
+    return _aggregate_producer_acceptance_rates(FolioConfig.load(config_path))
+
+
+def test_doctor_acceptance_rate_above_gate(tmp_path):
+    config_path = _setup_aggregator_library(
+        tmp_path,
+        "clienta_evidence_s1",
+        confirmed_by_producer={"enrich": 12},
+        rejected_by_producer={"enrich": 4},
+    )
+    rates, missing = _aggregate(config_path)
+    assert missing == 0
+    assert len(rates) == 1
+    assert rates[0].producer == "enrich"
+    assert rates[0].accepted == 12 and rates[0].rejected == 4
+    assert rates[0].total_reviewed == 16
+    assert rates[0].rate == 0.75
+    assert rates[0].status == "ok"
+    assert rates[0].warmup is False
+
+
+def test_doctor_acceptance_rate_low_acceptance(tmp_path):
+    config_path = _setup_aggregator_library(
+        tmp_path,
+        "clienta_evidence_s2",
+        confirmed_by_producer={"enrich": 2},
+        rejected_by_producer={"enrich": 8},
+    )
+    rates, _ = _aggregate(config_path)
+    assert len(rates) == 1
+    assert rates[0].rate == 0.20
+    assert rates[0].status == "low-acceptance"
+    assert rates[0].warmup is False
+
+
+def test_doctor_acceptance_rate_in_warmup(tmp_path):
+    config_path = _setup_aggregator_library(
+        tmp_path,
+        "clienta_evidence_s3",
+        confirmed_by_producer={"enrich": 2},
+        rejected_by_producer={"enrich": 3},
+    )
+    rates, _ = _aggregate(config_path)
+    assert len(rates) == 1
+    assert rates[0].total_reviewed == 5
+    assert rates[0].rate is None
+    assert rates[0].status == "warmup"
+    assert rates[0].warmup is True
+
+
+def test_doctor_acceptance_rate_boundary_at_exactly_0_5(tmp_path):
+    config_path = _setup_aggregator_library(
+        tmp_path,
+        "clienta_evidence_s4",
+        confirmed_by_producer={"enrich": 10},
+        rejected_by_producer={"enrich": 10},
+    )
+    rates, _ = _aggregate(config_path)
+    assert len(rates) == 1
+    assert rates[0].rate == 0.50
+    assert rates[0].status == "ok"  # strict-less-than threshold
+
+
+def test_doctor_aggregator_handles_missing_producer_field(tmp_path):
+    config_path = _setup_aggregator_library(
+        tmp_path,
+        "clienta_evidence_s5",
+        confirmed_by_producer={"enrich": 2},
+        rejected_by_producer={"enrich": 1},
+        confirmed_missing_producer=1,
+    )
+    rates, missing = _aggregate(config_path)
+    assert missing == 1
+    # 2 accepted + 1 rejected = 3 reviewed → warmup
+    assert len(rates) == 1
+    assert rates[0].total_reviewed == 3
+    assert rates[0].warmup is True
+
+
+def test_doctor_text_rendering_order_and_scope_note(tmp_path):
+    source_id = "clienta_evidence_render"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    target_id = f"{source_id}_target"
+    _write_registry(
+        library,
+        {
+            source_id: _entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_fm(target_id, target_id))
+
+    # Producer "a" is low-acceptance; "b" is ok; "c" is warmup.
+    metadata = {
+        "a": {"axes": {"relationships": {"proposals": [_rejected(target_id, f"sha256:a-r{i}", producer="a") for i in range(8)]}}},
+        "b": {"axes": {"relationships": {"proposals": [_rejected(target_id, f"sha256:b-r{i}", producer="b") for i in range(3)]}}},
+        "c": {"axes": {"relationships": {"proposals": [_rejected(target_id, f"sha256:c-r{i}", producer="c") for i in range(1)]}}},
+        "links": {
+            "confirmed_relationships": (
+                [_confirmed_record(target_id, producer="a") for _ in range(2)]
+                + [_confirmed_record(target_id, producer="b") for _ in range(17)]
+                + [_confirmed_record(target_id, producer="c") for _ in range(1)]
+            )
+        },
+    }
+    _write_note(library / "ClientA" / f"{source_id}.md", _base_fm(source_id, "S", _llm_metadata=metadata))
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_path), "graph", "doctor"])
+    assert result.exit_code == 0
+    out = result.output
+    assert "### Producer acceptance rates" in out
+    # Row ordering: low-acceptance first, then ok, then warmup.
+    idx_a = out.index("| a |")
+    idx_b = out.index("| b |")
+    idx_c = out.index("| c |")
+    assert idx_a < idx_b < idx_c
+    assert "low-acceptance (< 50%)" in out
+    assert "warmup (< 10 reviewed)" in out
+    assert (
+        "Status column is informational only in v0.6.0; `low-acceptance` "
+        "producers continue to surface proposals at normal priority in this slice."
+    ) in out
+
+
+def test_doctor_empty_state_rendering(tmp_path):
+    source_id = "clienta_evidence_empty"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(library, {source_id: _entry(source_id, f"ClientA/{source_id}.md")})
+    _write_note(library / "ClientA" / f"{source_id}.md", _base_fm(source_id, "S"))
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_path), "graph", "doctor"])
+    assert result.exit_code == 0
+    assert "### Producer acceptance rates" in result.output
+    assert "No producer acceptance-rate data yet." in result.output
+
+
+def test_doctor_json_schema_producer_acceptance_rates(tmp_path):
+    config_path = _setup_aggregator_library(
+        tmp_path,
+        "clienta_evidence_json",
+        confirmed_by_producer={"enrich": 8},
+        rejected_by_producer={"enrich": 2},
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_path), "graph", "doctor", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert set(payload.keys()) == {"findings", "producer_acceptance_rates", "producer_acceptance_rates_data_integrity"}
+    rates = payload["producer_acceptance_rates"]
+    assert len(rates) == 1
+    r = rates[0]
+    assert set(r.keys()) == {"producer", "accepted", "rejected", "total_reviewed", "rate", "status", "warmup"}
+    assert r["producer"] == "enrich"
+    assert r["rate"] == 0.80
+    assert r["status"] == "ok"
+    assert r["warmup"] is False
+
+
+def test_doctor_json_warmup_rate_is_null(tmp_path):
+    config_path = _setup_aggregator_library(
+        tmp_path,
+        "clienta_evidence_jsonwu",
+        confirmed_by_producer={"enrich": 1},
+        rejected_by_producer={"enrich": 1},
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_path), "graph", "doctor", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    rates = payload["producer_acceptance_rates"]
+    assert len(rates) == 1
+    assert rates[0]["rate"] is None
+    assert rates[0]["status"] == "warmup"
+    assert rates[0]["warmup"] is True

@@ -29,6 +29,7 @@ class RelationshipProposalView:
     source_markdown_path: str
     producer: str
     proposal: RelationshipProposal
+    revived: bool = False
 
 
 @dataclass
@@ -50,6 +51,18 @@ def _now_iso() -> str:
 def _read_markdown(path: Path) -> tuple[str, dict | None]:
     content = path.read_text(encoding="utf-8")
     return content, registry_mod._read_frontmatter(path)
+
+
+def _build_rejection_key(
+    source_id: str,
+    proposal: RelationshipProposal,
+) -> tuple[str, str, str, str]:
+    return (
+        source_id,
+        proposal.target_id,
+        proposal.relation,
+        proposal.basis_fingerprint,
+    )
 
 
 def _proposal_from_raw(source_id: str, producer: str, raw: dict) -> RelationshipProposal:
@@ -110,10 +123,11 @@ def collect_pending_relationship_proposals(
     scope: Optional[str] = None,
     doc_id: Optional[str] = None,
     target_id: Optional[str] = None,
-) -> list[RelationshipProposalView]:
+) -> tuple[list[RelationshipProposalView], dict[str, int]]:
     library_root = config.library_root.resolve()
     registry_data = registry_mod.load_registry(library_root / "registry.json")
-    proposals: list[RelationshipProposalView] = []
+    views: list[RelationshipProposalView] = []
+    suppression_counts: dict[str, int] = {}
 
     for entry_id, entry_data in registry_data.get("decks", {}).items():
         entry = registry_mod.entry_from_dict(entry_data)
@@ -130,29 +144,53 @@ def collect_pending_relationship_proposals(
         if not isinstance(fm, dict):
             continue
 
+        rejected_keys_by_producer: dict[str, set[tuple[str, str, str, str]]] = {}
+        rejected_fps_by_prefix: dict[str, dict[tuple[str, str, str], set[str]]] = {}
+        for producer, _raw, proposal in _iter_producer_proposals(entry.id, fm):
+            if proposal.status != "rejected":
+                continue
+            key = _build_rejection_key(entry.id, proposal)
+            rejected_keys_by_producer.setdefault(producer, set()).add(key)
+            prefix = (entry.id, proposal.target_id, proposal.relation)
+            rejected_fps_by_prefix.setdefault(producer, {}).setdefault(prefix, set()).add(
+                proposal.basis_fingerprint
+            )
+
         for producer, _raw, proposal in _iter_producer_proposals(entry.id, fm):
             if proposal.status != "pending_human_confirmation":
                 continue
             if target_id and proposal.target_id != target_id:
                 continue
-            proposals.append(
+
+            key = _build_rejection_key(entry.id, proposal)
+            rejected_keys = rejected_keys_by_producer.get(producer, set())
+            if key in rejected_keys:
+                suppression_counts[producer] = suppression_counts.get(producer, 0) + 1
+                continue
+
+            prefix = (entry.id, proposal.target_id, proposal.relation)
+            rejected_fps = rejected_fps_by_prefix.get(producer, {}).get(prefix, set())
+            revived = bool(rejected_fps) and proposal.basis_fingerprint not in rejected_fps
+
+            views.append(
                 RelationshipProposalView(
                     source_id=entry.id,
                     source_path=md_path,
                     source_markdown_path=entry.markdown_path,
                     producer=producer,
                     proposal=proposal,
+                    revived=revived,
                 )
             )
 
-    proposals.sort(
+    views.sort(
         key=lambda view: (
             view.source_id,
             _CONFIDENCE_RANK.get(view.proposal.confidence, 9),
             view.proposal.proposal_id,
         )
     )
-    return proposals
+    return views, suppression_counts
 
 
 def paginate(rows: list, page: int) -> tuple[list, int]:
@@ -171,7 +209,8 @@ def relationship_status_summary(
     library_root = config.library_root.resolve()
     registry_data = registry_mod.load_registry(library_root / "registry.json")
     pending_counts: dict[str, int] = {}
-    for view in collect_pending_relationship_proposals(config, scope=scope):
+    pending_views, _ = collect_pending_relationship_proposals(config, scope=scope)
+    for view in pending_views:
         pending_counts[view.source_id] = pending_counts.get(view.source_id, 0) + 1
     rows: list[RelationshipStatusRow] = []
 
@@ -264,11 +303,8 @@ def _write_markdown(path: Path, content: str, fm: dict) -> None:
 
 
 def _find_pending_view(config: FolioConfig, proposal_id: str) -> RelationshipProposalView:
-    matches = [
-        view
-        for view in collect_pending_relationship_proposals(config)
-        if view.proposal.proposal_id == proposal_id
-    ]
+    views, _ = collect_pending_relationship_proposals(config)
+    matches = [view for view in views if view.proposal.proposal_id == proposal_id]
     if not matches:
         raise ValueError(f"Unknown proposal_id '{proposal_id}'")
     return matches[0]
@@ -364,10 +400,8 @@ def reject_proposal(config: FolioConfig, proposal_id: str) -> RelationshipPropos
 
 
 def confirm_doc(config: FolioConfig, doc_id: str) -> int:
-    proposals = [
-        view.proposal.proposal_id
-        for view in collect_pending_relationship_proposals(config, doc_id=doc_id)
-    ]
+    views, _ = collect_pending_relationship_proposals(config, doc_id=doc_id)
+    proposals = [view.proposal.proposal_id for view in views]
     count = 0
     for proposal_id in proposals:
         confirm_proposal(config, proposal_id, confirmation_source="folio links confirm-doc")
@@ -376,10 +410,8 @@ def confirm_doc(config: FolioConfig, doc_id: str) -> int:
 
 
 def reject_doc(config: FolioConfig, doc_id: str) -> int:
-    proposals = [
-        view.proposal.proposal_id
-        for view in collect_pending_relationship_proposals(config, doc_id=doc_id)
-    ]
+    views, _ = collect_pending_relationship_proposals(config, doc_id=doc_id)
+    proposals = [view.proposal.proposal_id for view in views]
     count = 0
     for proposal_id in proposals:
         reject_proposal(config, proposal_id)

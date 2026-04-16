@@ -15,6 +15,9 @@ from .tracking.entities import EntityRegistry
 _GRAPH_RELATION_FIELDS = ("depends_on", "draws_from", "impacts", "relates_to", "supersedes", "instantiates")
 _GRAPH_DOC_TYPES = frozenset({"analysis", "deliverable", "evidence", "interaction"})
 _SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
+_ACCEPTANCE_WARMUP_COUNT = 10
+_ACCEPTANCE_GATE_RATE = 0.50
+_STATUS_SORT_RANK = {"low-acceptance": 0, "ok": 1, "warmup": 2}
 
 
 @dataclass
@@ -27,6 +30,17 @@ class GraphStatus:
     confirmed_entities_missing_stubs: int
     duplicate_person_candidates: int
     stale_analysis_artifacts: int
+
+
+@dataclass(frozen=True)
+class ProducerAcceptanceRate:
+    producer: str
+    accepted: int
+    rejected: int
+    total_reviewed: int
+    rate: Optional[float]
+    status: str  # "ok" | "low-acceptance" | "warmup"
+    warmup: bool
 
 
 def _matches_scope(path: str, scope: str) -> bool:
@@ -81,7 +95,7 @@ def _analysis_inputs_stale(entry, fm: dict, registry_data: dict) -> bool:
 def graph_status(config: FolioConfig, *, scope: Optional[str] = None) -> GraphStatus:
     library_root = config.library_root.resolve()
     registry_data = registry_mod.load_registry(library_root / "registry.json")
-    pending = collect_pending_relationship_proposals(config, scope=scope)
+    pending, _ = collect_pending_relationship_proposals(config, scope=scope)
 
     docs_without_links = 0
     orphaned_targets = 0
@@ -147,7 +161,8 @@ def graph_doctor(
     findings: list[dict] = []
     all_ids = set(registry_data.get("decks", {}).keys())
 
-    for view in collect_pending_relationship_proposals(config, scope=scope):
+    pending_views, _ = collect_pending_relationship_proposals(config, scope=scope)
+    for view in pending_views:
         findings.append(
             {
                 "code": "pending_relationship_proposal",
@@ -255,3 +270,102 @@ def graph_doctor(
     if limit is not None:
         return findings[: max(0, limit)]
     return findings
+
+
+def _aggregate_producer_acceptance_rates(
+    config: FolioConfig,
+    *,
+    scope: Optional[str] = None,
+) -> tuple[list[ProducerAcceptanceRate], int]:
+    """Aggregate per-producer accepted / rejected counts across managed-doc frontmatter.
+
+    Returns ``(rates, missing_producer_count)``. ``rates`` is sorted for rendering:
+    ``low-acceptance`` first, then ``ok``, then ``warmup``; alphabetical by producer
+    within each bucket. ``missing_producer_count`` tallies ``confirmed_relationships``
+    entries that lack a ``producer`` field (data-integrity diagnostic).
+    """
+
+    library_root = config.library_root.resolve()
+    registry_data = registry_mod.load_registry(library_root / "registry.json")
+
+    accepted_counts: dict[str, int] = {}
+    rejected_counts: dict[str, int] = {}
+    missing_producer_count = 0
+
+    for entry in _iter_scoped_entries(registry_data, scope):
+        fm = registry_mod._read_frontmatter(library_root / entry.markdown_path)
+        if not isinstance(fm, dict):
+            continue
+        llm_meta = fm.get("_llm_metadata")
+        if not isinstance(llm_meta, dict):
+            continue
+
+        for key, producer_meta in llm_meta.items():
+            if key == "links":
+                continue  # SF-1: reserved namespace, not a producer axis
+            if not isinstance(producer_meta, dict):
+                continue
+            axes = producer_meta.get("axes")
+            if not isinstance(axes, dict):
+                continue
+            relationships = axes.get("relationships")
+            if not isinstance(relationships, dict):
+                continue
+            proposals = relationships.get("proposals")
+            if not isinstance(proposals, list):
+                continue
+            for raw in proposals:
+                if not isinstance(raw, dict):
+                    continue
+                status = raw.get("status")
+                if status == "rejected":
+                    rejected_counts[key] = rejected_counts.get(key, 0) + 1
+
+        links_meta = llm_meta.get("links")
+        if isinstance(links_meta, dict):
+            confirmed = links_meta.get("confirmed_relationships")
+            if isinstance(confirmed, list):
+                for record in confirmed:
+                    if not isinstance(record, dict):
+                        continue
+                    producer = record.get("producer")
+                    if not isinstance(producer, str) or not producer:
+                        missing_producer_count += 1
+                        continue
+                    accepted_counts[producer] = accepted_counts.get(producer, 0) + 1
+
+    producers = sorted(set(accepted_counts) | set(rejected_counts))
+    rates: list[ProducerAcceptanceRate] = []
+    for producer in producers:
+        accepted = accepted_counts.get(producer, 0)
+        rejected = rejected_counts.get(producer, 0)
+        total = accepted + rejected
+        if total < _ACCEPTANCE_WARMUP_COUNT:
+            rates.append(
+                ProducerAcceptanceRate(
+                    producer=producer,
+                    accepted=accepted,
+                    rejected=rejected,
+                    total_reviewed=total,
+                    rate=None,
+                    status="warmup",
+                    warmup=True,
+                )
+            )
+            continue
+        rate = accepted / total if total else 0.0
+        status = "low-acceptance" if rate < _ACCEPTANCE_GATE_RATE else "ok"
+        rates.append(
+            ProducerAcceptanceRate(
+                producer=producer,
+                accepted=accepted,
+                rejected=rejected,
+                total_reviewed=total,
+                rate=rate,
+                status=status,
+                warmup=False,
+            )
+        )
+
+    rates.sort(key=lambda r: (_STATUS_SORT_RANK.get(r.status, 9), r.producer))
+    return rates, missing_producer_count

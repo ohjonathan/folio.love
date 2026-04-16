@@ -1594,7 +1594,7 @@ def links_review_cmd(ctx, scope: Optional[str], doc_id: Optional[str], target_id
     from .links import PAGE_SIZE, collect_pending_relationship_proposals, paginate
 
     config = ctx.obj["config"]
-    proposals = collect_pending_relationship_proposals(
+    proposals, suppression_counts = collect_pending_relationship_proposals(
         config,
         scope=scope,
         doc_id=doc_id,
@@ -1608,13 +1608,21 @@ def links_review_cmd(ctx, scope: Optional[str], doc_id: Optional[str], target_id
     )
     for view in window:
         proposal = view.proposal
+        revived_tag = " (revived — basis changed)" if view.revived else ""
         click.echo(
             f"[{proposal.proposal_id}] {view.source_id} -> {proposal.target_id} "
-            f"({proposal.relation}, {proposal.confidence}, {proposal.producer})"
+            f"({proposal.relation}, {proposal.confidence}, {proposal.producer}){revived_tag}"
         )
         click.echo(f"  Rationale: {proposal.rationale or '-'}")
         if proposal.signals:
             click.echo(f"  Signals: {', '.join(proposal.signals)}")
+    total_suppressed = sum(suppression_counts.values())
+    if total_suppressed == 0:
+        click.echo("No proposals suppressed by rejection memory.")
+    elif total_suppressed == 1:
+        click.echo("1 proposal suppressed by rejection memory.")
+    else:
+        click.echo(f"{total_suppressed} proposals suppressed by rejection memory.")
 
 
 @links.command("status")
@@ -1751,21 +1759,74 @@ def graph_status_cmd(ctx, scope: Optional[str]):
 @click.pass_context
 def graph_doctor_cmd(ctx, scope: Optional[str], json_output: bool, limit: Optional[int]):
     """Emit actionable graph-health findings."""
-    from .graph import graph_doctor
+    from .graph import _aggregate_producer_acceptance_rates, graph_doctor
 
     config = ctx.obj["config"]
     findings = graph_doctor(config, scope=scope, limit=limit)
+    rates, missing_producer_count = _aggregate_producer_acceptance_rates(config, scope=scope)
+
     if json_output:
-        click.echo(json.dumps(findings, indent=2))
+        rate_dicts = [
+            {
+                "producer": r.producer,
+                "accepted": r.accepted,
+                "rejected": r.rejected,
+                "total_reviewed": r.total_reviewed,
+                "rate": r.rate,
+                "status": r.status,
+                "warmup": r.warmup,
+            }
+            for r in rates
+        ]
+        payload = {
+            "findings": findings,
+            "producer_acceptance_rates": rate_dicts,
+            "producer_acceptance_rates_data_integrity": {
+                "missing_producer_count": missing_producer_count,
+            },
+        }
+        click.echo(json.dumps(payload, indent=2))
         return
-    if not findings:
+
+    if findings:
+        for finding in findings:
+            click.echo(
+                f"[{finding['severity']}] {finding['code']} {finding['subject_id']}: {finding['detail']}"
+            )
+            click.echo(f"  Action: {finding['recommended_action']}")
+    else:
         click.echo("No graph-health findings.")
-        return
-    for finding in findings:
+
+    click.echo("")
+    click.echo("### Producer acceptance rates")
+    if not rates:
+        click.echo("No producer acceptance-rate data yet.")
+    else:
+        click.echo("| Producer | Accepted | Rejected | Reviewed | Rate | Status |")
+        click.echo("|---|---:|---:|---:|---:|---|")
+        for r in rates:
+            if r.warmup:
+                rate_cell = "—"
+                status_cell = "warmup (< 10 reviewed)"
+            elif r.status == "low-acceptance":
+                rate_cell = f"{r.rate:.2f}" if r.rate is not None else "—"
+                status_cell = "low-acceptance (< 50%)"
+            else:
+                rate_cell = f"{r.rate:.2f}" if r.rate is not None else "—"
+                status_cell = "ok"
+            click.echo(
+                f"| {r.producer} | {r.accepted} | {r.rejected} | {r.total_reviewed} | {rate_cell} | {status_cell} |"
+            )
+        click.echo("")
         click.echo(
-            f"[{finding['severity']}] {finding['code']} {finding['subject_id']}: {finding['detail']}"
+            "Status column is informational only in v0.6.0; `low-acceptance` "
+            "producers continue to surface proposals at normal priority in this slice."
         )
-        click.echo(f"  Action: {finding['recommended_action']}")
+    if missing_producer_count > 0:
+        click.echo(
+            f"Data-integrity: {missing_producer_count} accepted "
+            f"{'entry' if missing_producer_count == 1 else 'entries'} excluded (missing `producer` field)."
+        )
 
 
 @cli.command()

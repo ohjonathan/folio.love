@@ -153,7 +153,8 @@ def test_collect_pending_relationship_proposals_orders_by_source_then_confidence
     from folio.config import FolioConfig
 
     config = FolioConfig.load(config_path)
-    proposals = collect_pending_relationship_proposals(config)
+    proposals, suppression_counts = collect_pending_relationship_proposals(config)
+    assert suppression_counts == {}
     assert [(view.source_id, view.proposal.confidence, view.proposal.proposal_id) for view in proposals] == [
         (
             source_a,
@@ -337,3 +338,300 @@ def test_links_reject_doc_marks_future_relation_proposals_rejected(tmp_path):
         ("depends_on", "rejected", "sha256:depends"),
         ("draws_from", "rejected", "sha256:draws"),
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase C (v0.6.0): rejection-memory filter, revival, suppression counter,
+# call-site return-type migration, safety/defensive tests.
+# ---------------------------------------------------------------------------
+
+
+def _rejected_proposal(source_id: str, relation: str, target_id: str, basis_fingerprint: str, *, confidence: str = "medium", producer: str = "enrich") -> dict:
+    p = _proposal(source_id, relation, target_id, basis_fingerprint, confidence=confidence)
+    p["status"] = "rejected"
+    p["producer"] = producer
+    return p
+
+
+def _setup_library_with_producer_proposals(
+    tmp_path: Path,
+    source_id: str,
+    target_id: str,
+    proposals: list[dict],
+    *,
+    producer: str = "enrich",
+) -> Path:
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_note(target_id, "Target"))
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={producer: {"axes": {"relationships": {"proposals": proposals}}}},
+        ),
+    )
+    return config_path
+
+
+def test_pending_filter_excludes_rejected_with_matching_fingerprint(tmp_path):
+    source_id = "clienta_evidence_s"
+    target_id = "clienta_evidence_t"
+    fp = "sha256:same-fp"
+    config_path = _setup_library_with_producer_proposals(
+        tmp_path,
+        source_id,
+        target_id,
+        [
+            _rejected_proposal(source_id, "impacts", target_id, fp),
+            _proposal(source_id, "impacts", target_id, fp),
+        ],
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, suppression_counts = collect_pending_relationship_proposals(config)
+    assert views == []
+    assert suppression_counts == {"enrich": 1}
+
+
+def test_pending_filter_keeps_non_matching_fingerprint(tmp_path):
+    source_id = "clienta_evidence_s"
+    target_id = "clienta_evidence_t"
+    config_path = _setup_library_with_producer_proposals(
+        tmp_path,
+        source_id,
+        target_id,
+        [
+            _rejected_proposal(source_id, "impacts", target_id, "sha256:old"),
+            _proposal(source_id, "impacts", target_id, "sha256:new"),
+        ],
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, suppression_counts = collect_pending_relationship_proposals(config)
+    assert len(views) == 1
+    assert views[0].revived is True
+    assert suppression_counts == {}
+
+
+def test_pending_filter_keeps_unrelated_pending(tmp_path):
+    source_id = "clienta_evidence_s"
+    target_id = "clienta_evidence_t"
+    other_target = "clienta_evidence_u"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+            other_target: _registry_entry(other_target, f"ClientA/{other_target}.md"),
+        },
+    )
+    for t in (target_id, other_target):
+        _write_note(library / "ClientA" / f"{t}.md", _base_note(t, t))
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [
+                                _rejected_proposal(source_id, "impacts", target_id, "sha256:a"),
+                                _proposal(source_id, "impacts", other_target, "sha256:b"),
+                            ]
+                        }
+                    }
+                }
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, suppression_counts = collect_pending_relationship_proposals(config)
+    assert len(views) == 1
+    assert views[0].proposal.target_id == other_target
+    assert views[0].revived is False
+    assert suppression_counts == {}
+
+
+def test_pending_filter_scoped_per_doc(tmp_path):
+    source_a = "clienta_evidence_sa"
+    source_b = "clienta_evidence_sb"
+    target_id = "clienta_evidence_t"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(
+        library,
+        {
+            source_a: _registry_entry(source_a, f"ClientA/{source_a}.md"),
+            source_b: _registry_entry(source_b, f"ClientA/{source_b}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_note(target_id, target_id))
+    _write_note(
+        library / "ClientA" / f"{source_a}.md",
+        _base_note(
+            source_a,
+            "Source A",
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [_rejected_proposal(source_a, "impacts", target_id, "sha256:x")]
+                        }
+                    }
+                }
+            },
+        ),
+    )
+    _write_note(
+        library / "ClientA" / f"{source_b}.md",
+        _base_note(
+            source_b,
+            "Source B",
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [_proposal(source_b, "impacts", target_id, "sha256:x")]
+                        }
+                    }
+                }
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, suppression_counts = collect_pending_relationship_proposals(config)
+    assert len(views) == 1
+    assert views[0].source_id == source_b
+    assert suppression_counts == {}
+
+
+def test_pending_filter_scoped_per_producer(tmp_path):
+    source_id = "clienta_evidence_s"
+    target_id = "clienta_evidence_t"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_note(target_id, target_id))
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [_rejected_proposal(source_id, "impacts", target_id, "sha256:z", producer="enrich")]
+                        }
+                    }
+                },
+                "digest": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [_proposal(source_id, "impacts", target_id, "sha256:z")]
+                        }
+                    }
+                },
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, suppression_counts = collect_pending_relationship_proposals(config)
+    assert len(views) == 1
+    assert views[0].producer == "digest"
+    assert suppression_counts == {}
+
+
+def test_filter_tolerates_malformed_proposal_entries(tmp_path):
+    source_id = "clienta_evidence_s"
+    target_id = "clienta_evidence_t"
+    config_path = _setup_library_with_producer_proposals(
+        tmp_path,
+        source_id,
+        target_id,
+        [
+            None,  # malformed
+            "not-a-dict",  # malformed
+            _proposal(source_id, "impacts", target_id, "sha256:ok"),
+        ],
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, suppression_counts = collect_pending_relationship_proposals(config)
+    assert len(views) == 1
+    assert suppression_counts == {}
+
+
+def test_filter_skips_links_namespace(tmp_path):
+    source_id = "clienta_evidence_s"
+    target_id = "clienta_evidence_t"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    _write_note(library / "ClientA" / f"{target_id}.md", _base_note(target_id, target_id))
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "links": {
+                    "confirmed_relationships": [
+                        {"relation": "impacts", "target_id": target_id, "producer": "enrich", "basis_fingerprint": "sha256:old", "confirmed_at": "2026-04-15T00:00:00+00:00"}
+                    ]
+                },
+                "enrich": {"axes": {"relationships": {"proposals": [_proposal(source_id, "impacts", target_id, "sha256:new")]}}},
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+
+    config = FolioConfig.load(config_path)
+    views, suppression_counts = collect_pending_relationship_proposals(config)
+    assert len(views) == 1  # links namespace is NOT treated as a producer
+    assert suppression_counts == {}
