@@ -168,6 +168,23 @@ One paragraph explaining the overall status and why.
 - A blocker without evidence is raised by ≥2 families — downgrade to
   should-fix with a note; do not halt.
 
+**Cardinality re-baseline at B.3 Approve (v1.1.1).** Before emitting an
+`Approve` verdict on B.3, confirm that each entry in the manifest's
+`cardinality_assertions` list still reflects the finalized spec scope.
+Phase A commonly narrows scope (drops assertions, changes expected
+values); a manifest assertion drafted before Phase A can be stale at
+B.3. For each entry:
+
+1. Locate the asserted symbol / file / commit in the current Phase A
+   spec (v1.1 revision, not v1.0).
+2. Confirm the expected value matches the spec's final cardinality.
+3. If stale, record in the "Required actions for author" section a
+   manifest-update action alongside any spec actions.
+
+Skipping this step is a documented cause of false D.6 failures (F-026,
+F-027 in the v1.1 adoption friction log). The re-baseline is normative
+for v1.1.1 B.3 consolidation regardless of deliverable type.
+
 ## END META-CONSOLIDATION
 
 ## `<FINAL_REPORT_SCHEMA>`

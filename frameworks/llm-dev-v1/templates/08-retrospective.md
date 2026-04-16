@@ -9,6 +9,8 @@ required_tokens:
   - FAMILY
   - ARTIFACT_OUTPUT_PATHS
   - TRACKER_PATH
+optional_tokens:
+  - DOC_INDEX_ARCHIVE
 depends_on: [framework.md, 01-worker-session-contract.md, 07-final-approval-gate.md]
 ---
 
@@ -110,6 +112,15 @@ deliverable, not to this one.
 
 - The tracker, merge commit, or canonical verdicts are missing. Without
   them the retrospective cannot be factually grounded.
+
+**Archive ordering (v1.1.1).** If `<DOC_INDEX_ARCHIVE?>` is defined in
+`tokens.md`, run it as the **final step after this retrospective is
+committed**, not before. The archive command (for example one that indexes
+the session by deliverable slug) records the session's artifacts; running
+it before the retro is committed means the archive entry will miss the
+retrospective itself. This ordering is normative: the Phase E session
+completes with (1) retrospective authored and committed, then (2) archive
+command executed.
 
 ## END RETROSPECTIVE
 

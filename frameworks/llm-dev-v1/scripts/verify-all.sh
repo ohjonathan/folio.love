@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # verify-all.sh — run the full conformance suite. Exits non-zero if any
-# check fails. Skips schema validation if check-jsonschema is not
-# installed (prints a warning and continues; CI should install it).
+# check fails. As of v1.1.1, schema validation hard-fails when
+# check-jsonschema is absent (it used to soft-skip; silent-skip on a
+# missing validator looked identical to a passing check). Any other
+# check that signals exit-2 is still treated as "skipped (not failed)"
+# so CI can surface missing optional dependencies without tripping the
+# overall gate.
 
 set -u
 
