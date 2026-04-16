@@ -538,3 +538,5 @@ Previously logged as "codex adversarial consumed output budget on file reads wit
 Folio authored v1.1.1 locally (PR #51, merge `ab4bc27`) before johnny-os did. The framework maintainer (johnny-os) absorbed folio's v1.1.1 commits into its canonical v1.1.1 via cherry-pick and redefined folio's role as adopter-only going forward. Documented in `README.md § Framework bundle source`.
 
 Lesson: adopters surface signal, maintainer builds. Local bundle edits create divergence that must be reconciled.
+
+Resolved 2026-04-16. Bundle resynced from johnny-os@4dfa01f via PR #53.
