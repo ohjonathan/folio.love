@@ -1,0 +1,280 @@
+# Deliverable manifest: proposal-lifecycle-rename-v0-6-1
+#
+# Second production llm-dev-v1.1 run against folio.love. Slice 2 of the Tier 4
+# Proposal Layer Shipping Plan (tier4_discovery_proposal_layer_spec.md §15.2).
+# Migration-only: rename status → lifecycle_state; no behavior change in isolation.
+#
+# Pre-A is INHERITED from the parent proposal doc (§15.2 pre-ratified).
+# P3 NOTE: same three-CLI constraint as slice 1 (friction log F-006); claude-sub
+# used for adversarial and product lenses.
+#
+# Scope expansion from §15.2 declared scope: this manifest adds folio/graph.py
+# (line 320 reads raw `status` in acceptance-rate aggregation). Without this
+# expansion the rename silently breaks acceptance-rate diagnostics.
+#
+# v1.1 correction: folio/cli.py REMOVED from scope. Line 133 is inside
+# _mark_enrich_stale(), which operates on provenance proposals (ProvenanceProposal),
+# not relationship proposals. See spec §3.6 for namespace separation justification.
+
+manifest_version: "1.1.0"
+id: proposal-lifecycle-rename-v0-6-1
+slug: proposal-lifecycle-rename
+summary: "Rename proposal storage schema from status: pending_human_confirmation|rejected to lifecycle_state: queued|accepted|rejected|suppressed|stale|superseded (§6 + §15.2). Migration-only; no behavior change."
+
+user_facing: true
+
+pre_a:
+  entry: inherited
+  artifact_path: docs/specs/tier4_discovery_proposal_layer_spec.md
+  justification: "Shipping Plan §15.2 pre-ratified; proposal already passed Pre-A in slice 1 lifecycle."
+
+owners:
+  - "Jonathan Oh (ohjonathan)"
+
+scope:
+  allowed_paths:
+    - folio/pipeline/enrich_data.py
+    - folio/enrich.py
+    - folio/links.py
+    - folio/graph.py
+    - tests/test_enrich_data.py
+    - tests/test_enrich.py
+    - tests/test_links_cli.py
+    - tests/test_graph_cli.py
+    - tests/test_provenance_cli.py
+    - CHANGELOG.md
+    - docs/specs/v0.6.1_proposal_lifecycle_rename_spec.md
+    - docs/validation/v0.6.1_spec_peer_codex.md
+    - docs/validation/v0.6.1_spec_alignment_gemini.md
+    - docs/validation/v0.6.1_spec_adversarial_claude-sub.md
+    - docs/validation/v0.6.1_spec_product_claude-sub.md
+    - docs/validation/v0.6.1_spec_canonical_verdict.md
+    - docs/validation/v0.6.1_code_peer_codex.md
+    - docs/validation/v0.6.1_code_alignment_gemini.md
+    - docs/validation/v0.6.1_code_adversarial_claude-sub.md
+    - docs/validation/v0.6.1_code_product_claude-sub.md
+    - docs/validation/v0.6.1_code_canonical_verdict.md
+    - docs/validation/v0.6.1_d4_fix_summary.md
+    - docs/validation/v0.6.1_d5_verification.md
+    - docs/validation/v0.6.1_d6_final_approval.md
+    - docs/retros/llm-dev-v1-adoption.md
+  forbidden_paths:
+    - folio/tracking/
+    - folio/analysis_docs.py
+    - folio/entity_stubs.py
+    - docs/product/
+    - docs/architecture/
+    - frameworks/llm-dev-v1/
+    - ontos/
+    - .github/
+    - Ontos_Context_Map.md
+    - AGENTS.md
+  forbidden_symbols:
+    - "pickle.loads"
+    - "eval("
+  cardinality_assertions:
+    - name: "PROPOSAL_LIFECYCLE_STATES has exactly six members"
+      command: "python3 -c 'from folio.pipeline.enrich_data import PROPOSAL_LIFECYCLE_STATES; print(len(PROPOSAL_LIFECYCLE_STATES))'"
+      expect: "eq:6"
+    - name: "No residual status field in RelationshipProposal.to_dict output"
+      command: "python3 -c 'from folio.pipeline.enrich_data import RelationshipProposal; d = RelationshipProposal.to_dict(RelationshipProposal()); print(\"status\" not in d)'"
+      expect: "eq:True"
+
+artifacts:
+  spec:              "docs/specs/v0.6.1_proposal_lifecycle_rename_spec.md"
+  family_verdict:    "docs/validation/v0.6.1_<phase>_<role>_<family>.md"
+  canonical_verdict: "docs/validation/v0.6.1_<phase>_canonical_verdict.md"
+  product_verdict:   "docs/validation/v0.6.1_<phase>_product_<family>.md"
+  fix_summary:       "docs/validation/v0.6.1_d4_fix_summary.md"
+  verification:      "docs/validation/v0.6.1_d5_verification.md"
+  final_approval:    "docs/validation/v0.6.1_d6_final_approval.md"
+  retro:             "docs/retros/llm-dev-v1-adoption.md"
+
+model_assignments:
+  - phase: "A"
+    assignments:
+      claude: spec-author
+  - phase: "B.1"
+    assignments:
+      codex:      peer
+      gemini:     alignment
+      claude-sub: adversarial
+  - phase: "B.1"
+    assignments:
+      claude-sub: product
+  - phase: "B.2"
+    assignments:
+      codex:      peer
+      gemini:     alignment
+      claude-sub: adversarial
+  - phase: "B.2"
+    assignments:
+      claude-sub: product
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude: implementation-author
+  - phase: "D.2"
+    assignments:
+      codex:      peer
+      gemini:     alignment
+      claude-sub: adversarial
+  - phase: "D.2"
+    assignments:
+      claude-sub: product
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude: fix-author
+  - phase: "D.5"
+    assignments:
+      gemini: verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      claude: retro
+
+cli_capability_matrix:
+  claude:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sub:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: false
+  gemini:
+    shell: true
+    git: false
+    test_runner: false
+    doc_index: false
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "folio imports"
+        command: "python3 -c 'import folio'"
+        expect: "exit-0"
+      - name: "full test suite"
+        command: "python3 -m pytest tests/ -q"
+        expect: "exit-0"
+      - name: "lint clean on scope-lock paths"
+        command: "python3 -m ruff check folio/pipeline/enrich_data.py folio/enrich.py folio/links.py folio/graph.py"
+        expect: "exit-0"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main by at least 1"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards:
+  - name: "Tier 3 entity system tests"
+    command: "python3 -m pytest tests/test_cli_entities.py -q"
+    owns_deliverable_id: "tier3-entity-system-v0.5.1"
+  - name: "Tier 4 graph ops layer tests"
+    command: "python3 -m pytest tests/test_enrich_data.py tests/test_provenance_cli.py -q"
+    owns_deliverable_id: "tier4-graph-ops-v0.5.2"
+  - name: "Slice 1 links + graph tests"
+    command: "python3 -m pytest tests/test_links_cli.py tests/test_graph_cli.py -q"
+    owns_deliverable_id: "proposal-review-hardening-v0-6-0"
+
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full folio test suite passes."
+    verification:
+      command: "python3 -m pytest tests/ -q"
+      expect: "exit-0"
+  - id: G-test-2
+    category: test
+    description: "Scope-specific test files pass."
+    verification:
+      command: "python3 -m pytest tests/test_enrich_data.py tests/test_enrich.py tests/test_links_cli.py tests/test_graph_cli.py tests/test_provenance_cli.py -q"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "No changes to forbidden paths."
+    verification:
+      command: "git diff --name-only main..HEAD | grep -E '^(folio/tracking/|folio/analysis_docs\\.py|folio/entity_stubs\\.py|docs/product/|docs/architecture/|frameworks/llm-dev-v1/|AGENTS\\.md|Ontos_Context_Map\\.md)'"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "Forbidden symbols absent from scope-lock paths."
+    verification:
+      command: "grep -rE 'pickle\\.loads|eval\\(' folio/pipeline/enrich_data.py folio/enrich.py folio/links.py folio/graph.py folio/cli.py"
+      expect: "exit-nonzero"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "PROPOSAL_LIFECYCLE_STATES has exactly six members."
+    verification:
+      command: "python3 -c 'from folio.pipeline.enrich_data import PROPOSAL_LIFECYCLE_STATES; print(len(PROPOSAL_LIFECYCLE_STATES))'"
+      expect: "eq:6"
+  - id: G-cardinality-2
+    category: cardinality
+    description: "RelationshipProposal.to_dict emits lifecycle_state, not status."
+    verification:
+      command: "python3 -c 'from folio.pipeline.enrich_data import RelationshipProposal; d = RelationshipProposal().to_dict(); print(\"lifecycle_state\" in d and \"status\" not in d)'"
+      expect: "eq:True"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "B.3 canonical spec verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.6.1_spec_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "D.3 canonical code verdict exists (if D phase executed)."
+    verification:
+      command: "test -f docs/validation/v0.6.1_code_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "Product verdicts from B.1 / D.2 exist (user-facing extension)."
+    verification:
+      command: "ls docs/validation/v0.6.1_{spec,code}_product_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:2"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "D.5 verification confirms every D.3 blocker has a fix-table row."
+    verification:
+      command: "test -f docs/validation/v0.6.1_d5_verification.md"
+      expect: "exit-0"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean."
+    verification:
+      command: "git status --porcelain | grep -v '^??'"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Feature branch ahead of main."
+    verification:
+      command: "git rev-list --count main..HEAD"
+      expect: "gte:1"
+
+branch_map:
+  default: "feat/proposal-lifecycle-rename-v0-6-1-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/specs/tier4_discovery_proposal_layer_spec.md"
+    version: "2026-04-15 rev 5"
+    relevance: "Parent proposal doc §6 (lifecycle states) + §15.2 (slice 2 scope)."
+  - path: "docs/specs/v0.6.0_proposal_review_hardening_spec.md"
+    version: "v1.3"
+    relevance: "Slice 1 spec — carry-forward table pattern; backward-compat boundary."
+  - path: "docs/retros/llm-dev-v1-adoption.md"
+    version: "2026-04-15"
+    relevance: "Slice 1 retro with friction entries F-001..F-028; slice 2 appends."

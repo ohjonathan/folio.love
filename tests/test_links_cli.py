@@ -88,7 +88,7 @@ def _proposal(source_id: str, relation: str, target_id: str, basis_fingerprint: 
         "confidence": confidence,
         "signals": ["shared_topic"],
         "rationale": f"{relation} rationale",
-        "status": "pending_human_confirmation",
+        "lifecycle_state": "queued",
         "producer": "enrich",
     }
 
@@ -334,7 +334,7 @@ def test_links_reject_doc_marks_future_relation_proposals_rejected(tmp_path):
 
     fm = _read_fm(library / "ClientA" / "analysis.md")
     proposals = fm["_llm_metadata"]["digest"]["axes"]["relationships"]["proposals"]
-    assert {(item["relation"], item["status"], item["basis_fingerprint"]) for item in proposals} == {
+    assert {(item["relation"], item["lifecycle_state"], item["basis_fingerprint"]) for item in proposals} == {
         ("depends_on", "rejected", "sha256:depends"),
         ("draws_from", "rejected", "sha256:draws"),
     }
@@ -348,7 +348,7 @@ def test_links_reject_doc_marks_future_relation_proposals_rejected(tmp_path):
 
 def _rejected_proposal(source_id: str, relation: str, target_id: str, basis_fingerprint: str, *, confidence: str = "medium", producer: str = "enrich") -> dict:
     p = _proposal(source_id, relation, target_id, basis_fingerprint, confidence=confidence)
-    p["status"] = "rejected"
+    p["lifecycle_state"] = "rejected"
     p["producer"] = producer
     return p
 
@@ -676,7 +676,7 @@ def test_filter_handles_missing_source_id_target_id(tmp_path):
                         "relationships": {
                             "proposals": [
                                 # Legacy entry missing target_id — must not crash
-                                {"relation": "impacts", "status": "pending_human_confirmation",
+                                {"relation": "impacts", "lifecycle_state": "queued",
                                  "confidence": "medium", "basis_fingerprint": "sha256:legacy"},
                                 _proposal(source_id, "impacts", target_id, "sha256:ok"),
                             ]
@@ -783,13 +783,13 @@ def test_filter_skips_malformed_target_id_proposals(tmp_path):
                         "relationships": {
                             "proposals": [
                                 # target_id missing entirely
-                                {"relation": "impacts", "status": "pending_human_confirmation",
+                                {"relation": "impacts", "lifecycle_state": "queued",
                                  "confidence": "medium", "basis_fingerprint": "sha256:a"},
                                 # target_id empty string
-                                {"relation": "impacts", "target_id": "", "status": "pending_human_confirmation",
+                                {"relation": "impacts", "target_id": "", "lifecycle_state": "queued",
                                  "confidence": "medium", "basis_fingerprint": "sha256:b"},
                                 # target_id non-string (integer)
-                                {"relation": "impacts", "target_id": 123, "status": "pending_human_confirmation",
+                                {"relation": "impacts", "target_id": 123, "lifecycle_state": "queued",
                                  "confidence": "medium", "basis_fingerprint": "sha256:c"},
                                 _proposal(source_id, "impacts", target_id, "sha256:ok"),
                             ]
@@ -837,7 +837,7 @@ def test_filter_rejection_key_ignores_empty_basis_fingerprint(tmp_path):
                                 # Rejected entry with empty basis_fingerprint (producer defect state)
                                 {"proposal_id": "rej-1", "relation": "impacts", "target_id": target_id,
                                  "basis_fingerprint": "", "confidence": "medium", "signals": [],
-                                 "rationale": "", "status": "rejected", "producer": "enrich"},
+                                 "rationale": "", "lifecycle_state": "rejected", "producer": "enrich"},
                                 # Pending entry with a proper basis_fingerprint — must NOT be
                                 # suppressed by the empty-fingerprint rejected entry
                                 _proposal(source_id, "impacts", target_id, "sha256:legitimate"),

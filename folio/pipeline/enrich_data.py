@@ -50,6 +50,21 @@ class EnrichOutcome(str, Enum):
 # Dataclasses
 # ---------------------------------------------------------------------------
 
+PROPOSAL_LIFECYCLE_STATES: frozenset[str] = frozenset({
+    "queued",
+    "accepted",
+    "rejected",
+    "suppressed",
+    "stale",
+    "superseded",
+})
+
+_STATUS_TO_LIFECYCLE: dict[str, str] = {
+    "pending_human_confirmation": "queued",
+    "rejected": "rejected",
+}
+
+
 @dataclass
 class RelationshipProposal:
     """A machine-generated relationship proposal.
@@ -63,12 +78,11 @@ class RelationshipProposal:
     confidence: str  # "high" or "medium"
     signals: list[str]
     rationale: str
-    status: str  # "pending_human_confirmation" or "rejected"
+    lifecycle_state: str = "queued"
     proposal_id: str = ""
     producer: str = "enrich"
 
     def to_dict(self) -> dict:
-        """Serialize to dict matching spec section 9.3."""
         return {
             "proposal_id": self.proposal_id,
             "relation": self.relation,
@@ -78,16 +92,20 @@ class RelationshipProposal:
             "confidence": self.confidence,
             "signals": list(self.signals),
             "rationale": self.rationale,
-            "status": self.status,
+            "lifecycle_state": self.lifecycle_state,
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> RelationshipProposal:
-        """Deserialize from dict."""
+        """Deserialize from dict with backward-compat for legacy ``status`` key."""
         relation = d["relation"]
         target_id = d["target_id"]
         basis_fingerprint = d.get("basis_fingerprint", "")
         producer = d.get("producer", "enrich")
+        lifecycle_state = d.get("lifecycle_state")
+        if lifecycle_state is None:
+            old_status = d.get("status", "pending_human_confirmation")
+            lifecycle_state = _STATUS_TO_LIFECYCLE.get(old_status, old_status)
         proposal = cls(
             relation=relation,
             target_id=target_id,
@@ -95,7 +113,7 @@ class RelationshipProposal:
             confidence=d.get("confidence", "medium"),
             signals=list(d.get("signals", [])),
             rationale=d.get("rationale", ""),
-            status=d.get("status", "pending_human_confirmation"),
+            lifecycle_state=lifecycle_state,
             proposal_id=d.get("proposal_id", ""),
             producer=producer,
         )

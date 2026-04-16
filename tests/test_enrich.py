@@ -505,7 +505,7 @@ class TestRejectedProposalSuppression:
                             "relation": "supersedes",
                             "target_id": "old_note",
                             "basis_fingerprint": "sha256:same",
-                            "status": "rejected",
+                            "lifecycle_state": "rejected",
                         }
                     ]
                 }
@@ -519,7 +519,7 @@ class TestRejectedProposalSuppression:
                 confidence="high",
                 signals=["same_source_stem"],
                 rationale="Same lineage.",
-                status="pending_human_confirmation",
+                lifecycle_state="queued",
             )
         ]
         result = _suppress_rejected_proposals(new_proposals, existing_meta, force=False)
@@ -534,7 +534,7 @@ class TestRejectedProposalSuppression:
                             "relation": "supersedes",
                             "target_id": "old_note",
                             "basis_fingerprint": "sha256:old",
-                            "status": "rejected",
+                            "lifecycle_state": "rejected",
                         }
                     ]
                 }
@@ -548,7 +548,7 @@ class TestRejectedProposalSuppression:
                 confidence="high",
                 signals=["same_source_stem"],
                 rationale="Changed basis.",
-                status="pending_human_confirmation",
+                lifecycle_state="queued",
             )
         ]
         result = _suppress_rejected_proposals(new_proposals, existing_meta, force=False)
@@ -563,7 +563,7 @@ class TestRejectedProposalSuppression:
                             "relation": "supersedes",
                             "target_id": "old_note",
                             "basis_fingerprint": "sha256:same",
-                            "status": "rejected",
+                            "lifecycle_state": "rejected",
                         }
                     ]
                 }
@@ -577,7 +577,7 @@ class TestRejectedProposalSuppression:
                 confidence="high",
                 signals=[],
                 rationale="",
-                status="pending_human_confirmation",
+                lifecycle_state="queued",
             )
         ]
         result = _suppress_rejected_proposals(new_proposals, existing_meta, force=True)
@@ -649,17 +649,17 @@ class TestRelationshipProposalSerialization:
             RelationshipProposal(
                 relation="supersedes", target_id="a",
                 basis_fingerprint="sha256:x", confidence="high",
-                signals=[], rationale="", status="pending_human_confirmation",
+                signals=[], rationale="", lifecycle_state="queued",
             ),
             RelationshipProposal(
                 relation="supersedes", target_id="b",
                 basis_fingerprint="sha256:y", confidence="high",
-                signals=[], rationale="", status="pending_human_confirmation",
+                signals=[], rationale="", lifecycle_state="queued",
             ),
             RelationshipProposal(
                 relation="impacts", target_id="c",
                 basis_fingerprint="sha256:z", confidence="medium",
-                signals=[], rationale="", status="pending_human_confirmation",
+                signals=[], rationale="", lifecycle_state="queued",
             ),
         ]
         filtered = _enforce_singular_supersedes(proposals)
@@ -677,13 +677,13 @@ class TestRelationshipProposalSerialization:
             confidence="high",
             signals=["same_source_stem"],
             rationale="Same deck.",
-            status="pending_human_confirmation",
+            lifecycle_state="queued",
         )
         d = proposal.to_dict()
         restored = RelationshipProposal.from_dict(d)
         assert restored.relation == proposal.relation
         assert restored.target_id == proposal.target_id
-        assert restored.status == proposal.status
+        assert restored.lifecycle_state == proposal.lifecycle_state
 
 
 # ---------------------------------------------------------------------------
@@ -1105,7 +1105,7 @@ class TestPromotedProposalCleanup:
                 confidence="high",
                 signals=["same_source_stem"],
                 rationale="Same lineage.",
-                status="pending_human_confirmation",
+                lifecycle_state="queued",
             ),
         ]
         fm = {"supersedes": "target_a"}
@@ -1121,7 +1121,7 @@ class TestPromotedProposalCleanup:
                 confidence="medium",
                 signals=["explicit_document_reference"],
                 rationale="Referenced directly.",
-                status="pending_human_confirmation",
+                lifecycle_state="queued",
             ),
         ]
         fm = {"impacts": ["target_b", "target_c"]}
@@ -1137,7 +1137,7 @@ class TestPromotedProposalCleanup:
                 confidence="high",
                 signals=["version_order"],
                 rationale="Newer version.",
-                status="pending_human_confirmation",
+                lifecycle_state="queued",
             ),
         ]
         fm = {"supersedes": "different_target"}
@@ -1157,12 +1157,12 @@ class TestSingularSupersedesConfidence:
             RelationshipProposal(
                 relation="supersedes", target_id="t1",
                 basis_fingerprint="fp1", confidence="medium",
-                signals=[], rationale="", status="pending_human_confirmation",
+                signals=[], rationale="", lifecycle_state="queued",
             ),
             RelationshipProposal(
                 relation="supersedes", target_id="t2",
                 basis_fingerprint="fp2", confidence="high",
-                signals=[], rationale="", status="pending_human_confirmation",
+                signals=[], rationale="", lifecycle_state="queued",
             ),
         ]
         result = _enforce_singular_supersedes(proposals)

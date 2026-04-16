@@ -712,7 +712,7 @@ def enrich_note(
                     confidence=raw_confidence,
                     signals=validated_signals,
                     rationale=raw_p.get("rationale", ""),
-                    status="pending_human_confirmation",
+                    lifecycle_state="queued",
                 )
                 proposals.append(proposal)
 
@@ -982,7 +982,12 @@ def _suppress_rejected_proposals(
     old_proposals = rel_meta.get("proposals", [])
     if isinstance(old_proposals, list):
         for p in old_proposals:
-            if isinstance(p, dict) and p.get("status") == "rejected":
+            if isinstance(p, dict):
+                state = p.get("lifecycle_state")
+                if state is None:
+                    state = p.get("status")
+                if state != "rejected":
+                    continue
                 key = (p.get("relation", ""), p.get("target_id", ""))
                 rejected[key] = p.get("basis_fingerprint", "")
 
