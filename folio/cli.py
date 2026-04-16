@@ -1591,20 +1591,40 @@ def links(ctx, scope: Optional[str]):
 @click.option("--doc", "doc_id", default=None, help="Filter to one source document ID.")
 @click.option("--target", "target_id", default=None, help="Filter to one target document ID.")
 @click.option("--page", type=int, default=1, show_default=True, help="1-based review page number.")
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Include proposals involving flagged-input documents (review_status: flagged).",
+)
 @click.pass_context
-def links_review_cmd(ctx, scope: Optional[str], doc_id: Optional[str], target_id: Optional[str], page: int):
+def links_review_cmd(
+    ctx,
+    scope: Optional[str],
+    doc_id: Optional[str],
+    target_id: Optional[str],
+    page: int,
+    include_flagged: bool,
+):
     """Read-only review surface for pending relationship proposals."""
     from .links import PAGE_SIZE, collect_pending_relationship_proposals, paginate
 
     config = ctx.obj["config"]
-    proposals, suppression_counts = collect_pending_relationship_proposals(
+    proposals, counts = collect_pending_relationship_proposals(
         config,
         scope=scope,
         doc_id=doc_id,
         target_id=target_id,
+        include_flagged=include_flagged,
     )
     window, total_pages = paginate(proposals, page)
-    click.echo(f"Pending ({len(proposals)} item(s))")
+    if len(proposals) == 0 and counts.flagged_input > 0:
+        click.echo(
+            f"Pending (0 items — {counts.flagged_input} excluded because source or "
+            "target has review_status: flagged; use --include-flagged to review)"
+        )
+    else:
+        click.echo(f"Pending ({len(proposals)} item(s))")
     click.echo(
         f"Page {min(max(1, page), total_pages)}/{total_pages} "
         f"({len(window)} items, page size {PAGE_SIZE}, ordered: source doc → confidence desc → proposal_id)"
@@ -1612,51 +1632,98 @@ def links_review_cmd(ctx, scope: Optional[str], doc_id: Optional[str], target_id
     for view in window:
         proposal = view.proposal
         revived_tag = " (revived — basis changed)" if view.revived else ""
+        flagged_tag = (
+            f" (flagged: {', '.join(view.flagged_inputs)})" if view.flagged_inputs else ""
+        )
         click.echo(
             f"[{proposal.proposal_id}] {view.source_id} -> {proposal.target_id} "
-            f"({proposal.relation}, {proposal.confidence}, {proposal.producer}){revived_tag}"
+            f"({proposal.relation}, {proposal.confidence}, {proposal.producer})"
+            f"{revived_tag}{flagged_tag}"
         )
         click.echo(f"  Rationale: {proposal.rationale or '-'}")
         if proposal.signals:
             click.echo(f"  Signals: {', '.join(proposal.signals)}")
-    total_suppressed = sum(suppression_counts.values())
-    if total_suppressed == 0:
+    total_rejection_memory = sum(counts.rejection_memory.values())
+    if total_rejection_memory == 0:
         click.echo("No proposals suppressed by rejection memory.")
-    elif total_suppressed == 1:
+    elif total_rejection_memory == 1:
         click.echo("1 proposal suppressed by rejection memory.")
     else:
-        click.echo(f"{total_suppressed} proposals suppressed by rejection memory.")
+        click.echo(f"{total_rejection_memory} proposals suppressed by rejection memory.")
+    if counts.flagged_input and not include_flagged:
+        plural = "proposal" if counts.flagged_input == 1 else "proposals"
+        click.echo(
+            f"{counts.flagged_input} {plural} excluded (flagged inputs). "
+            "Use --include-flagged to review."
+        )
 
 
 @links.command("status")
 @click.argument("scope", required=False, default=None)
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Count proposals involving flagged-input documents toward Pending.",
+)
 @click.pass_context
-def links_status_cmd(ctx, scope: Optional[str]):
+def links_status_cmd(ctx, scope: Optional[str], include_flagged: bool):
     """Summarize canonical and pending document-level relationships."""
     from .links import relationship_status_summary
 
     config = ctx.obj["config"]
-    rows = relationship_status_summary(config, scope=scope)
+    rows, total_flagged_excluded = relationship_status_summary(
+        config, scope=scope, include_flagged=include_flagged
+    )
     if not rows:
+        # When rows is empty, flagged_excluded is necessarily zero because a
+        # source with flagged_excluded > 0 would have been emitted as a row.
+        # (Dead-code guard removed per D.3 DS-G.)
         click.echo("No document-level relationship data found.")
         return
 
     total_pending = 0
     total_confirmed = 0
-    click.echo("| Source Document | Pending | Confirmed |")
-    click.echo("|---|---:|---:|")
+    show_flagged_col = total_flagged_excluded > 0
+    if show_flagged_col:
+        click.echo("| Source Document | Pending | Confirmed | Flagged Excluded |")
+        click.echo("|---|---:|---:|---:|")
+    else:
+        click.echo("| Source Document | Pending | Confirmed |")
+        click.echo("|---|---:|---:|")
     for row in rows:
         total_pending += row.pending
         total_confirmed += row.confirmed
-        click.echo(f"| {row.source_id} | {row.pending} | {row.confirmed} |")
+        if show_flagged_col:
+            click.echo(
+                f"| {row.source_id} | {row.pending} | {row.confirmed} | {row.flagged_excluded} |"
+            )
+        else:
+            click.echo(f"| {row.source_id} | {row.pending} | {row.confirmed} |")
     click.echo("")
-    click.echo(f"Total: {total_pending} pending, {total_confirmed} confirmed")
+    if show_flagged_col:
+        click.echo(
+            f"Total: {total_pending} pending, {total_confirmed} confirmed, "
+            f"{total_flagged_excluded} flagged-excluded"
+        )
+        click.echo(
+            "Use folio links status --include-flagged to count excluded proposals as pending, "
+            "or folio links review --include-flagged to inspect them."
+        )
+    else:
+        click.echo(f"Total: {total_pending} pending, {total_confirmed} confirmed")
 
 
 @links.command("confirm")
 @click.argument("proposal_id")
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Allow confirmation of a flagged-input proposal.",
+)
 @click.pass_context
-def links_confirm_cmd(ctx, proposal_id: str):
+def links_confirm_cmd(ctx, proposal_id: str, include_flagged: bool):
     """Confirm one pending document-level relationship proposal."""
     from .links import confirm_proposal
     from .lock import LibraryLockError, library_lock
@@ -1664,19 +1731,31 @@ def links_confirm_cmd(ctx, proposal_id: str):
     config = ctx.obj["config"]
     try:
         with library_lock(config.library_root.resolve(), "links"):
-            proposal = confirm_proposal(config, proposal_id)
+            proposal, flagged_inputs = confirm_proposal(
+                config, proposal_id, include_flagged=include_flagged
+            )
     except (LibraryLockError, ValueError) as e:
         click.echo(f"✗ {e}")
         sys.exit(1)
+    flagged_suffix = (
+        f" (flagged: {', '.join(flagged_inputs)})" if flagged_inputs else ""
+    )
     click.echo(
-        f"✓ Confirmed {proposal.proposal_id}: {proposal.relation} -> {proposal.target_id}"
+        f"✓ Confirmed {proposal.proposal_id}: {proposal.relation} -> "
+        f"{proposal.target_id}{flagged_suffix}"
     )
 
 
 @links.command("reject")
 @click.argument("proposal_id")
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Allow rejection of a flagged-input proposal.",
+)
 @click.pass_context
-def links_reject_cmd(ctx, proposal_id: str):
+def links_reject_cmd(ctx, proposal_id: str, include_flagged: bool):
     """Reject one pending document-level relationship proposal."""
     from .links import reject_proposal
     from .lock import LibraryLockError, library_lock
@@ -1684,19 +1763,31 @@ def links_reject_cmd(ctx, proposal_id: str):
     config = ctx.obj["config"]
     try:
         with library_lock(config.library_root.resolve(), "links"):
-            proposal = reject_proposal(config, proposal_id)
+            proposal, flagged_inputs = reject_proposal(
+                config, proposal_id, include_flagged=include_flagged
+            )
     except (LibraryLockError, ValueError) as e:
         click.echo(f"✗ {e}")
         sys.exit(1)
+    flagged_suffix = (
+        f" (flagged: {', '.join(flagged_inputs)})" if flagged_inputs else ""
+    )
     click.echo(
-        f"✓ Rejected {proposal.proposal_id}: {proposal.relation} -> {proposal.target_id}"
+        f"✓ Rejected {proposal.proposal_id}: {proposal.relation} -> "
+        f"{proposal.target_id}{flagged_suffix}"
     )
 
 
 @links.command("confirm-doc")
 @click.argument("doc_id")
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Act on proposals involving flagged-input documents.",
+)
 @click.pass_context
-def links_confirm_doc_cmd(ctx, doc_id: str):
+def links_confirm_doc_cmd(ctx, doc_id: str, include_flagged: bool):
     """Confirm all pending relationship proposals for one source document."""
     from .links import confirm_doc
     from .lock import LibraryLockError, library_lock
@@ -1704,17 +1795,30 @@ def links_confirm_doc_cmd(ctx, doc_id: str):
     config = ctx.obj["config"]
     try:
         with library_lock(config.library_root.resolve(), "links"):
-            count = confirm_doc(config, doc_id)
+            acted, flagged_excluded = confirm_doc(
+                config, doc_id, include_flagged=include_flagged
+            )
     except (LibraryLockError, ValueError) as e:
         click.echo(f"✗ {e}")
         sys.exit(1)
-    click.echo(f"✓ Confirmed {count} proposal(s)")
+    click.echo(f"✓ Confirmed {acted} proposal(s)")
+    if flagged_excluded > 0 and not include_flagged:
+        click.echo(
+            f"{flagged_excluded} proposal(s) excluded from {doc_id} (flagged inputs); "
+            "use --include-flagged to act on them."
+        )
 
 
 @links.command("reject-doc")
 @click.argument("doc_id")
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Act on proposals involving flagged-input documents.",
+)
 @click.pass_context
-def links_reject_doc_cmd(ctx, doc_id: str):
+def links_reject_doc_cmd(ctx, doc_id: str, include_flagged: bool):
     """Reject all pending relationship proposals for one source document."""
     from .links import reject_doc
     from .lock import LibraryLockError, library_lock
@@ -1722,11 +1826,18 @@ def links_reject_doc_cmd(ctx, doc_id: str):
     config = ctx.obj["config"]
     try:
         with library_lock(config.library_root.resolve(), "links"):
-            count = reject_doc(config, doc_id)
+            acted, flagged_excluded = reject_doc(
+                config, doc_id, include_flagged=include_flagged
+            )
     except (LibraryLockError, ValueError) as e:
         click.echo(f"✗ {e}")
         sys.exit(1)
-    click.echo(f"✓ Rejected {count} proposal(s)")
+    click.echo(f"✓ Rejected {acted} proposal(s)")
+    if flagged_excluded > 0 and not include_flagged:
+        click.echo(
+            f"{flagged_excluded} proposal(s) excluded from {doc_id} (flagged inputs); "
+            "use --include-flagged to act on them."
+        )
 
 
 @cli.group()

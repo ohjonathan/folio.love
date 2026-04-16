@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -30,6 +30,23 @@ class RelationshipProposalView:
     producer: str
     proposal: RelationshipProposal
     revived: bool = False
+    flagged_inputs: list[str] = field(default_factory=list)  # ["source"], ["target"], or both
+
+
+@dataclass
+class SuppressionCounts:
+    """Structured suppression counts returned alongside proposal views.
+
+    Split into per-producer rejection-memory counts and a scalar flagged-input
+    count. Prevents producer-name collision with a sentinel string and keeps
+    renderers from conflating the two reasons (v0.6.4 CB-3 resolution).
+    """
+
+    rejection_memory: dict[str, int] = field(default_factory=dict)
+    flagged_input: int = 0
+
+    def total(self) -> int:
+        return sum(self.rejection_memory.values()) + self.flagged_input
 
 
 @dataclass
@@ -37,6 +54,7 @@ class RelationshipStatusRow:
     source_id: str
     pending: int
     confirmed: int
+    flagged_excluded: int = 0
 
 
 def _matches_scope(path: str, scope: str) -> bool:
@@ -51,6 +69,52 @@ def _now_iso() -> str:
 def _read_markdown(path: Path) -> tuple[str, dict | None]:
     content = path.read_text(encoding="utf-8")
     return content, registry_mod._read_frontmatter(path)
+
+
+def _is_flagged(value) -> bool:
+    """Normalize review_status to a flagged boolean.
+
+    Conservative policy (v0.6.4 SF-E):
+      - None or missing -> False
+      - String exactly "flagged" (after strip + lower) -> True
+      - Other string values -> False (unknown status)
+      - Non-string values (list, dict, bool, int) -> False (malformed; fail-open)
+    """
+    if value is None:
+        return False
+    if not isinstance(value, str):
+        return False
+    return value.strip().lower() == "flagged"
+
+
+def _resolve_target_flagged(
+    target_id: str,
+    registry_data: dict,
+    library_root: Path,
+    cache: dict[str, bool],
+) -> bool:
+    """Read target frontmatter review_status; cache result per-call.
+
+    v0.6.4 CB-1 resolution: target trust state is read from frontmatter,
+    not the registry dict. The registry can be stale between syncs and
+    `review_status` is frontmatter-authoritative. Cache keyed by target_id
+    bounds file I/O at O(unique_targets) per collect_pending call.
+    """
+    if target_id in cache:
+        return cache[target_id]
+    target_entry = registry_data.get("decks", {}).get(target_id)
+    if not target_entry:
+        cache[target_id] = False
+        return False
+    markdown_path = target_entry.get("markdown_path", "")
+    if not markdown_path:
+        cache[target_id] = False
+        return False
+    target_path = library_root / markdown_path
+    target_fm = registry_mod._read_frontmatter(target_path)
+    flagged = isinstance(target_fm, dict) and _is_flagged(target_fm.get("review_status"))
+    cache[target_id] = flagged
+    return flagged
 
 
 def _build_rejection_key(
@@ -142,11 +206,13 @@ def collect_pending_relationship_proposals(
     scope: Optional[str] = None,
     doc_id: Optional[str] = None,
     target_id: Optional[str] = None,
-) -> tuple[list[RelationshipProposalView], dict[str, int]]:
+    include_flagged: bool = False,
+) -> tuple[list[RelationshipProposalView], SuppressionCounts]:
     library_root = config.library_root.resolve()
     registry_data = registry_mod.load_registry(library_root / "registry.json")
     views: list[RelationshipProposalView] = []
-    suppression_counts: dict[str, int] = {}
+    counts = SuppressionCounts()
+    target_flagged_cache: dict[str, bool] = {}
 
     for entry_id, entry_data in registry_data.get("decks", {}).items():
         entry = registry_mod.entry_from_dict(entry_data)
@@ -162,6 +228,8 @@ def collect_pending_relationship_proposals(
         fm = registry_mod._read_frontmatter(md_path)
         if not isinstance(fm, dict):
             continue
+
+        source_flagged = _is_flagged(fm.get("review_status"))
 
         rejected_keys_by_producer: dict[str, set[tuple[str, str, str, str]]] = {}
         rejected_fps_by_prefix: dict[str, dict[tuple[str, str, str], set[str]]] = {}
@@ -189,7 +257,24 @@ def collect_pending_relationship_proposals(
             key = _build_rejection_key(entry.id, proposal)
             rejected_keys = rejected_keys_by_producer.get(producer, set())
             if _is_rejection_suppressed(key, rejected_keys):
-                suppression_counts[producer] = suppression_counts.get(producer, 0) + 1
+                counts.rejection_memory[producer] = (
+                    counts.rejection_memory.get(producer, 0) + 1
+                )
+                continue
+
+            # Flagged-input check (§11 rule 1). Ordered AFTER rejection-memory
+            # so an explicit operator rejection takes precedence as a
+            # suppression reason (CB-3 / ADV-I-001).
+            target_flagged = _resolve_target_flagged(
+                proposal.target_id, registry_data, library_root, target_flagged_cache
+            )
+            flagged_list: list[str] = []
+            if source_flagged:
+                flagged_list.append("source")
+            if target_flagged:
+                flagged_list.append("target")
+            if flagged_list and not include_flagged:
+                counts.flagged_input += 1
                 continue
 
             prefix = (entry.id, proposal.target_id, proposal.relation)
@@ -204,6 +289,7 @@ def collect_pending_relationship_proposals(
                     producer=producer,
                     proposal=proposal,
                     revived=revived,
+                    flagged_inputs=flagged_list,
                 )
             )
 
@@ -214,7 +300,7 @@ def collect_pending_relationship_proposals(
             view.proposal.proposal_id,
         )
     )
-    return views, suppression_counts
+    return views, counts
 
 
 def paginate(rows: list, page: int) -> tuple[list, int]:
@@ -229,13 +315,35 @@ def relationship_status_summary(
     config: FolioConfig,
     *,
     scope: Optional[str] = None,
-) -> list[RelationshipStatusRow]:
+    include_flagged: bool = False,
+) -> tuple[list[RelationshipStatusRow], int]:
+    """Summarize pending + confirmed relationships per source document.
+
+    v0.6.4 CB-2 resolution: returns `(rows, total_flagged_excluded)`. Each row
+    carries a `flagged_excluded` count for §11 rule 5 (no silent empty when
+    flagged inputs are the real cause). A row is emitted whenever pending,
+    confirmed, OR flagged_excluded is nonzero.
+
+    When `include_flagged=True`, flagged-input proposals count toward
+    `pending` and `flagged_excluded` is zero (operator has opted in).
+    """
     library_root = config.library_root.resolve()
     registry_data = registry_mod.load_registry(library_root / "registry.json")
+
+    # Single pass with include_flagged=True on collect so we can partition.
+    # When the caller sets include_flagged=True, we roll flagged proposals
+    # into `pending` and leave `flagged_excluded` at zero.
+    all_views, _ = collect_pending_relationship_proposals(
+        config, scope=scope, include_flagged=True
+    )
     pending_counts: dict[str, int] = {}
-    pending_views, _ = collect_pending_relationship_proposals(config, scope=scope)
-    for view in pending_views:
-        pending_counts[view.source_id] = pending_counts.get(view.source_id, 0) + 1
+    flagged_counts: dict[str, int] = {}
+    for view in all_views:
+        if view.flagged_inputs and not include_flagged:
+            flagged_counts[view.source_id] = flagged_counts.get(view.source_id, 0) + 1
+        else:
+            pending_counts[view.source_id] = pending_counts.get(view.source_id, 0) + 1
+
     rows: list[RelationshipStatusRow] = []
 
     for entry_data in registry_data.get("decks", {}).values():
@@ -249,12 +357,21 @@ def relationship_status_summary(
         if not isinstance(fm, dict):
             continue
         pending = pending_counts.get(entry.id, 0)
+        flagged_excluded = flagged_counts.get(entry.id, 0)
         confirmed = len(canonical_relationship_targets(fm))
-        if pending or confirmed:
-            rows.append(RelationshipStatusRow(source_id=entry.id, pending=pending, confirmed=confirmed))
+        if pending or confirmed or flagged_excluded:
+            rows.append(
+                RelationshipStatusRow(
+                    source_id=entry.id,
+                    pending=pending,
+                    confirmed=confirmed,
+                    flagged_excluded=flagged_excluded,
+                )
+            )
 
     rows.sort(key=lambda row: row.source_id)
-    return rows
+    total_flagged_excluded = sum(flagged_counts.values())
+    return rows, total_flagged_excluded
 
 
 def _ensure_confirmation_meta(fm: dict) -> list[dict]:
@@ -326,8 +443,15 @@ def _write_markdown(path: Path, content: str, fm: dict) -> None:
     _atomic_write_text(path, _replace_frontmatter(content, fm))
 
 
-def _find_pending_view(config: FolioConfig, proposal_id: str) -> RelationshipProposalView:
-    views, _ = collect_pending_relationship_proposals(config)
+def _find_pending_view(
+    config: FolioConfig,
+    proposal_id: str,
+    *,
+    include_flagged: bool = False,
+) -> RelationshipProposalView:
+    views, _ = collect_pending_relationship_proposals(
+        config, include_flagged=include_flagged
+    )
     matches = [view for view in views if view.proposal.proposal_id == proposal_id]
     if not matches:
         raise ValueError(f"Unknown proposal_id '{proposal_id}'")
@@ -383,8 +507,14 @@ def confirm_proposal(
     proposal_id: str,
     *,
     confirmation_source: str = "folio links confirm",
-) -> RelationshipProposal:
-    view = _find_pending_view(config, proposal_id)
+    include_flagged: bool = False,
+) -> tuple[RelationshipProposal, list[str]]:
+    """Confirm a pending proposal; return `(proposal, flagged_inputs)`.
+
+    v0.6.4 DS-C: trust-posture annotation flows back to the CLI success line
+    when the operator used `--include-flagged`.
+    """
+    view = _find_pending_view(config, proposal_id, include_flagged=include_flagged)
     content, fm = _read_markdown(view.source_path)
     if fm is None:
         raise ValueError(f"Cannot read frontmatter from {view.source_path}")
@@ -403,11 +533,20 @@ def confirm_proposal(
         confirmation_source=confirmation_source,
     )
     _write_markdown(view.source_path, content, fm)
-    return proposal
+    return proposal, list(view.flagged_inputs)
 
 
-def reject_proposal(config: FolioConfig, proposal_id: str) -> RelationshipProposal:
-    view = _find_pending_view(config, proposal_id)
+def reject_proposal(
+    config: FolioConfig,
+    proposal_id: str,
+    *,
+    include_flagged: bool = False,
+) -> tuple[RelationshipProposal, list[str]]:
+    """Reject a pending proposal; return `(proposal, flagged_inputs)`.
+
+    v0.6.4 DS-C: trust-posture annotation flows back to the CLI success line.
+    """
+    view = _find_pending_view(config, proposal_id, include_flagged=include_flagged)
     content, fm = _read_markdown(view.source_path)
     if fm is None:
         raise ValueError(f"Cannot read frontmatter from {view.source_path}")
@@ -420,24 +559,56 @@ def reject_proposal(config: FolioConfig, proposal_id: str) -> RelationshipPropos
         new_status="rejected",
     )
     _write_markdown(view.source_path, content, fm)
-    return proposal
+    return proposal, list(view.flagged_inputs)
 
 
-def confirm_doc(config: FolioConfig, doc_id: str) -> int:
-    views, _ = collect_pending_relationship_proposals(config, doc_id=doc_id)
+def confirm_doc(
+    config: FolioConfig,
+    doc_id: str,
+    *,
+    include_flagged: bool = False,
+) -> tuple[int, int]:
+    """Confirm all pending proposals for a document.
+
+    Returns `(acted, flagged_excluded)` per v0.6.4 CB-2: `flagged_excluded`
+    is the number of proposals that would have been surfaced with
+    `include_flagged=True` but were filtered out because source or target
+    had `review_status: flagged`.
+    """
+    views, counts = collect_pending_relationship_proposals(
+        config, doc_id=doc_id, include_flagged=include_flagged
+    )
     proposals = [view.proposal.proposal_id for view in views]
-    count = 0
+    acted = 0
     for proposal_id in proposals:
-        confirm_proposal(config, proposal_id, confirmation_source="folio links confirm-doc")
-        count += 1
-    return count
+        confirm_proposal(
+            config,
+            proposal_id,
+            confirmation_source="folio links confirm-doc",
+            include_flagged=include_flagged,
+        )
+        acted += 1
+    return acted, counts.flagged_input
 
 
-def reject_doc(config: FolioConfig, doc_id: str) -> int:
-    views, _ = collect_pending_relationship_proposals(config, doc_id=doc_id)
+def reject_doc(
+    config: FolioConfig,
+    doc_id: str,
+    *,
+    include_flagged: bool = False,
+) -> tuple[int, int]:
+    """Reject all pending proposals for a document.
+
+    Returns `(acted, flagged_excluded)` per v0.6.4 CB-2.
+    """
+    views, counts = collect_pending_relationship_proposals(
+        config, doc_id=doc_id, include_flagged=include_flagged
+    )
     proposals = [view.proposal.proposal_id for view in views]
-    count = 0
+    acted = 0
     for proposal_id in proposals:
-        reject_proposal(config, proposal_id)
-        count += 1
-    return count
+        reject_proposal(config, proposal_id, include_flagged=include_flagged)
+        acted += 1
+    return acted, counts.flagged_input
+
+

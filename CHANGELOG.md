@@ -4,6 +4,49 @@ All notable changes to folio.love are documented here. The format loosely follow
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
 changes at minor versions are permitted but flagged explicitly.
 
+## [v0.6.4] — 2026-04-15
+
+### Added
+- **Trust-gated surfacing** for the `folio links` command family (§11 of the
+  Tier 4 proposal). Proposals whose source or target document has
+  `review_status: flagged` are excluded from `folio links review`,
+  `folio links status`, and bulk mutations by default.
+- `--include-flagged` flag on `folio links review`, `status`, `confirm`,
+  `reject`, `confirm-doc`, and `reject-doc` — operator opt-in to see or act
+  on flagged-input proposals. Flagged proposals surfaced under the flag carry
+  a `(flagged: source|target|source, target)` trust-posture tag.
+- `folio links status` output gains a `Flagged Excluded` column and footer
+  total. Rows are emitted for sources that have only flagged-excluded
+  proposals (no silent omission).
+- Silent-empty disclosure on `folio links review` when the queue is empty
+  only because flagged inputs were filtered.
+- `folio links confirm-doc` / `reject-doc` print a diagnostic when 0
+  proposals were acted on but flagged exclusions exist.
+
+### Changed
+- **Return-type migration:** `collect_pending_relationship_proposals` now
+  returns `tuple[list[RelationshipProposalView], SuppressionCounts]` (was
+  `dict[str, int]`). `SuppressionCounts` has `.rejection_memory: dict[str, int]`
+  and `.flagged_input: int`. Prevents producer-name collision with a sentinel
+  dict key.
+- `relationship_status_summary` returns
+  `tuple[list[RelationshipStatusRow], int]` where the `int` is the total
+  flagged-excluded count across the scope.
+- `RelationshipStatusRow` gains `flagged_excluded: int = 0`.
+- `RelationshipProposalView` gains `flagged_inputs: list[str]` (empty when
+  neither source nor target is flagged).
+- `confirm_doc` / `reject_doc` return `tuple[int, int]` (`acted`,
+  `flagged_excluded`).
+- `_find_pending_view`, `confirm_proposal`, `reject_proposal` gain
+  `include_flagged: bool` keyword-only parameter for consent propagation.
+
+### Fixed
+- **Target trust-state staleness (CB-1):** target `review_status` is now
+  read from the target document's frontmatter, not the registry snapshot.
+  Registry state can lag behind frontmatter edits; reading frontmatter
+  directly closes the bypass path where a flagged target was still
+  surfaced as default-reviewable between syncs.
+
 ## [v0.6.3] — 2026-04-15
 
 ### Changed

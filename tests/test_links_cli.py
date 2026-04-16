@@ -154,7 +154,8 @@ def test_collect_pending_relationship_proposals_orders_by_source_then_confidence
 
     config = FolioConfig.load(config_path)
     proposals, suppression_counts = collect_pending_relationship_proposals(config)
-    assert suppression_counts == {}
+    assert suppression_counts.rejection_memory == {}
+    assert suppression_counts.flagged_input == 0
     assert [(view.source_id, view.proposal.confidence, view.proposal.proposal_id) for view in proposals] == [
         (
             source_a,
@@ -402,7 +403,8 @@ def test_pending_filter_excludes_rejected_with_matching_fingerprint(tmp_path):
     config = FolioConfig.load(config_path)
     views, suppression_counts = collect_pending_relationship_proposals(config)
     assert views == []
-    assert suppression_counts == {"enrich": 1}
+    assert suppression_counts.rejection_memory == {"enrich": 1}
+    assert suppression_counts.flagged_input == 0
 
 
 def test_pending_filter_keeps_non_matching_fingerprint(tmp_path):
@@ -423,7 +425,8 @@ def test_pending_filter_keeps_non_matching_fingerprint(tmp_path):
     views, suppression_counts = collect_pending_relationship_proposals(config)
     assert len(views) == 1
     assert views[0].revived is True
-    assert suppression_counts == {}
+    assert suppression_counts.rejection_memory == {}
+    assert suppression_counts.flagged_input == 0
 
 
 def test_pending_filter_keeps_unrelated_pending(tmp_path):
@@ -470,7 +473,8 @@ def test_pending_filter_keeps_unrelated_pending(tmp_path):
     assert len(views) == 1
     assert views[0].proposal.target_id == other_target
     assert views[0].revived is False
-    assert suppression_counts == {}
+    assert suppression_counts.rejection_memory == {}
+    assert suppression_counts.flagged_input == 0
 
 
 def test_pending_filter_scoped_per_doc(tmp_path):
@@ -528,7 +532,8 @@ def test_pending_filter_scoped_per_doc(tmp_path):
     views, suppression_counts = collect_pending_relationship_proposals(config)
     assert len(views) == 1
     assert views[0].source_id == source_b
-    assert suppression_counts == {}
+    assert suppression_counts.rejection_memory == {}
+    assert suppression_counts.flagged_input == 0
 
 
 def test_pending_filter_scoped_per_producer(tmp_path):
@@ -575,7 +580,8 @@ def test_pending_filter_scoped_per_producer(tmp_path):
     views, suppression_counts = collect_pending_relationship_proposals(config)
     assert len(views) == 1
     assert views[0].producer == "digest"
-    assert suppression_counts == {}
+    assert suppression_counts.rejection_memory == {}
+    assert suppression_counts.flagged_input == 0
 
 
 def test_filter_tolerates_malformed_proposal_entries(tmp_path):
@@ -596,7 +602,8 @@ def test_filter_tolerates_malformed_proposal_entries(tmp_path):
     config = FolioConfig.load(config_path)
     views, suppression_counts = collect_pending_relationship_proposals(config)
     assert len(views) == 1
-    assert suppression_counts == {}
+    assert suppression_counts.rejection_memory == {}
+    assert suppression_counts.flagged_input == 0
 
 
 def test_filter_skips_links_namespace(tmp_path):
@@ -634,7 +641,8 @@ def test_filter_skips_links_namespace(tmp_path):
     config = FolioConfig.load(config_path)
     views, suppression_counts = collect_pending_relationship_proposals(config)
     assert len(views) == 1  # links namespace is NOT treated as a producer
-    assert suppression_counts == {}
+    assert suppression_counts.rejection_memory == {}
+    assert suppression_counts.flagged_input == 0
 
 
 # ---------------------------------------------------------------------------
@@ -697,11 +705,16 @@ def test_filter_handles_missing_source_id_target_id(tmp_path):
     # proposal surfaces.
     assert len(views) == 1
     assert views[0].proposal.target_id == target_id
-    assert counts == {}
+    assert counts.rejection_memory == {}
+    assert counts.flagged_input == 0
 
 
 def test_return_type_is_tuple_views_and_counts(tmp_path):
-    """DB-4 explicit: collect_pending returns a 2-tuple (views, counts)."""
+    """DB-4 explicit: collect_pending returns a 2-tuple (views, SuppressionCounts).
+
+    v0.6.4: counts migrated from dict[str, int] to SuppressionCounts dataclass.
+    """
+    from folio.links import SuppressionCounts
     source_id = "clienta_evidence_tuple"
     target_id = "clienta_evidence_tgt_t"
     config_path = _setup_library_with_producer_proposals(
@@ -715,11 +728,15 @@ def test_return_type_is_tuple_views_and_counts(tmp_path):
     result = collect_pending_relationship_proposals(FolioConfig.load(config_path))
     assert isinstance(result, tuple) and len(result) == 2
     views, counts = result
-    assert isinstance(views, list) and isinstance(counts, dict)
+    assert isinstance(views, list) and isinstance(counts, SuppressionCounts)
 
 
 def test_relationship_status_summary_post_migration(tmp_path):
-    """DB-4 explicit regression: relationship_status_summary survives tuple-return migration."""
+    """DB-4 explicit regression: relationship_status_summary survives tuple-return migration.
+
+    v0.6.4: return type changed from list[RelationshipStatusRow] to
+    tuple[list[RelationshipStatusRow], int] where int is total_flagged_excluded.
+    """
     from folio.config import FolioConfig
     from folio.links import relationship_status_summary
 
@@ -731,9 +748,10 @@ def test_relationship_status_summary_post_migration(tmp_path):
         target_id,
         [_proposal(source_id, "impacts", target_id, "sha256:ok")],
     )
-    rows = relationship_status_summary(FolioConfig.load(config_path))
+    rows, total_flagged_excluded = relationship_status_summary(FolioConfig.load(config_path))
     # row emitted for the source doc with one pending proposal; no crash.
     assert any(row.source_id == source_id and row.pending == 1 for row in rows)
+    assert total_flagged_excluded == 0
 
 
 def test_find_pending_view_post_migration(tmp_path):
@@ -855,4 +873,691 @@ def test_filter_rejection_key_ignores_empty_basis_fingerprint(tmp_path):
     # The pending proposal with a real fingerprint must surface; empty-fp
     # rejection must not act as a suppression key.
     assert len(views) == 1
-    assert counts == {}
+    assert counts.rejection_memory == {}
+    assert counts.flagged_input == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase C (v0.6.4): trust-gated surfacing — source/target review_status filter,
+# --include-flagged override, silent-empty protection, disclosure lines.
+# ---------------------------------------------------------------------------
+
+
+def _setup_flagged_lib(
+    tmp_path: Path,
+    *,
+    source_id: str,
+    target_id: str,
+    source_flagged: bool = False,
+    target_flagged: bool = False,
+    proposals: list[dict] | None = None,
+    extra_targets: dict[str, bool] | None = None,
+) -> Path:
+    """Build a library where source and/or target have review_status: flagged.
+
+    extra_targets maps target_id -> flagged boolean for multi-target fixtures.
+    """
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    entries = {
+        source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+        target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+    }
+    for extra_id in (extra_targets or {}):
+        entries[extra_id] = _registry_entry(extra_id, f"ClientA/{extra_id}.md")
+    _write_registry(library, entries)
+
+    target_rs = "flagged" if target_flagged else "clean"
+    _write_note(library / "ClientA" / f"{target_id}.md",
+                _base_note(target_id, target_id, review_status=target_rs))
+    for extra_id, is_flagged in (extra_targets or {}).items():
+        rs = "flagged" if is_flagged else "clean"
+        _write_note(library / "ClientA" / f"{extra_id}.md",
+                    _base_note(extra_id, extra_id, review_status=rs))
+
+    source_rs = "flagged" if source_flagged else "clean"
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            review_status=source_rs,
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": proposals or [
+                                _proposal(source_id, "impacts", target_id, "sha256:ok")
+                            ]
+                        }
+                    }
+                }
+            },
+        ),
+    )
+    return config_path
+
+
+def test_flagged_source_excluded_by_default(tmp_path):
+    """S4-1: proposal from flagged source doc not in views; flagged_input counted."""
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id="clienta_evidence_flagged_src",
+        target_id="clienta_evidence_tgt_s4_1",
+        source_flagged=True,
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    assert views == []
+    assert counts.flagged_input == 1
+    assert counts.rejection_memory == {}
+
+
+def test_flagged_target_excluded_by_default(tmp_path):
+    """S4-2: proposal targeting flagged doc not in views; flagged_input counted."""
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id="clienta_evidence_src_s4_2",
+        target_id="clienta_evidence_flagged_tgt",
+        target_flagged=True,
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    assert views == []
+    assert counts.flagged_input == 1
+    assert counts.rejection_memory == {}
+
+
+def test_include_flagged_surfaces_proposals(tmp_path):
+    """S4-3: include_flagged=True surfaces flagged-input proposals."""
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id="clienta_evidence_src_s4_3",
+        target_id="clienta_evidence_tgt_s4_3",
+        source_flagged=True,
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(
+        FolioConfig.load(config_path), include_flagged=True
+    )
+    assert len(views) == 1
+    assert counts.flagged_input == 0  # not suppressed when included
+
+
+def test_flagged_proposals_have_trust_annotation(tmp_path):
+    """S4-4: view.flagged_inputs contains "source" / "target" appropriately."""
+    # Source-only flagged
+    sub_a = tmp_path / "a"
+    sub_a.mkdir()
+    config_path = _setup_flagged_lib(
+        sub_a,
+        source_id="clienta_evidence_src_s4_4_src",
+        target_id="clienta_evidence_tgt_s4_4_src",
+        source_flagged=True,
+    )
+    from folio.config import FolioConfig
+    views, _ = collect_pending_relationship_proposals(
+        FolioConfig.load(config_path), include_flagged=True
+    )
+    assert len(views) == 1
+    assert views[0].flagged_inputs == ["source"]
+
+    # Target-only flagged
+    sub_b = tmp_path / "b"
+    sub_b.mkdir()
+    config_path2 = _setup_flagged_lib(
+        sub_b,
+        source_id="clienta_evidence_src_s4_4_tgt",
+        target_id="clienta_evidence_tgt_s4_4_tgt",
+        target_flagged=True,
+    )
+    views2, _ = collect_pending_relationship_proposals(
+        FolioConfig.load(config_path2), include_flagged=True
+    )
+    assert len(views2) == 1
+    assert views2[0].flagged_inputs == ["target"]
+
+
+def test_flagged_excluded_count(tmp_path):
+    """S4-5: flagged_input counts correctly across multiple proposals."""
+    source_id = "clienta_evidence_src_s4_5"
+    target_a = "clienta_evidence_tgt_s4_5_a"
+    target_b = "clienta_evidence_tgt_s4_5_b"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_a,
+        target_flagged=True,
+        extra_targets={target_b: True},
+        proposals=[
+            _proposal(source_id, "impacts", target_a, "sha256:fp-a"),
+            _proposal(source_id, "draws_from", target_b, "sha256:fp-b"),
+        ],
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    assert views == []
+    assert counts.flagged_input == 2
+
+
+def test_both_source_and_target_flagged(tmp_path):
+    """S4-6: both "source" and "target" in flagged_inputs; counted once."""
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id="clienta_evidence_src_s4_6",
+        target_id="clienta_evidence_tgt_s4_6",
+        source_flagged=True,
+        target_flagged=True,
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(
+        FolioConfig.load(config_path), include_flagged=True
+    )
+    assert len(views) == 1
+    assert views[0].flagged_inputs == ["source", "target"]
+    # Default mode: still counted as 1 suppression, not 2
+    views_default, counts_default = collect_pending_relationship_proposals(
+        FolioConfig.load(config_path)
+    )
+    assert views_default == []
+    assert counts_default.flagged_input == 1
+
+
+def test_clean_documents_unaffected(tmp_path):
+    """S4-7: proposals between clean review_status docs pass through unchanged."""
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id="clienta_evidence_src_s4_7",
+        target_id="clienta_evidence_tgt_s4_7",
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    assert len(views) == 1
+    assert views[0].flagged_inputs == []
+    assert counts.flagged_input == 0
+
+
+def test_rejection_memory_precedes_flagged_input(tmp_path):
+    """S4-8: a proposal both rejected AND flagged counts as rejection_memory only."""
+    source_id = "clienta_evidence_src_s4_8"
+    target_id = "clienta_evidence_tgt_s4_8"
+    fp = "sha256:both-reasons"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,  # source flagged
+        proposals=[
+            _rejected_proposal(source_id, "impacts", target_id, fp),
+            _proposal(source_id, "impacts", target_id, fp),  # same fp -> rejected
+        ],
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    assert views == []
+    # Rejection-memory wins; flagged_input not bumped for the same proposal.
+    assert counts.rejection_memory == {"enrich": 1}
+    assert counts.flagged_input == 0
+
+
+def test_extraction_confidence_not_used_as_filter(tmp_path):
+    """S4-9 (SF-C): §11 rule 6 — extraction_confidence is informational only.
+
+    Even though the basis_fingerprint carries no trust signal, a proposal with
+    extraction_confidence metadata should not be filtered. We ensure clean-docs
+    proposals always surface, and no code path consults extraction_confidence.
+    """
+    source_id = "clienta_evidence_src_s4_9"
+    target_id = "clienta_evidence_tgt_s4_9"
+    proposal = _proposal(source_id, "impacts", target_id, "sha256:low-conf")
+    proposal["extraction_confidence"] = 0.01  # hypothetical low value
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        proposals=[proposal],
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    assert len(views) == 1  # NOT filtered despite low extraction_confidence
+    assert counts.flagged_input == 0
+
+
+def test_malformed_review_status_not_flagged():
+    """S4-10 (SF-J): _is_flagged handles None, missing, list, bool, wrong case."""
+    from folio.links import _is_flagged
+    assert _is_flagged(None) is False
+    assert _is_flagged("") is False
+    assert _is_flagged("clean") is False
+    assert _is_flagged("unknown") is False
+    assert _is_flagged("flagged") is True
+    assert _is_flagged("FLAGGED") is True
+    assert _is_flagged(" Flagged ") is True
+    assert _is_flagged(["flagged"]) is False  # list is malformed, fail-open
+    assert _is_flagged({"flagged": True}) is False
+    assert _is_flagged(True) is False  # boolean truthy but not "flagged"
+    assert _is_flagged(1) is False
+
+
+def test_target_frontmatter_authoritative_vs_registry(tmp_path):
+    """S4-11 (CB-1): target flagged state is read from frontmatter, not stale registry."""
+    source_id = "clienta_evidence_src_s4_11"
+    target_id = "clienta_evidence_tgt_s4_11"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    # Registry says target is clean (no review_status field at all on registry row)
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: _registry_entry(target_id, f"ClientA/{target_id}.md"),
+        },
+    )
+    # But target frontmatter says flagged
+    _write_note(
+        library / "ClientA" / f"{target_id}.md",
+        _base_note(target_id, target_id, review_status="flagged"),
+    )
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {"axes": {"relationships": {
+                    "proposals": [_proposal(source_id, "impacts", target_id, "sha256:ok")]
+                }}}
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    # Frontmatter is authoritative: filtered even though registry row has no review_status
+    assert views == []
+    assert counts.flagged_input == 1
+
+
+def test_suppression_counts_structure_prevents_collision():
+    """S4-12 (CB-3): producer named 'flagged_input' does not collide with sentinel."""
+    from folio.links import SuppressionCounts
+    # A producer named "flagged_input" writes to rejection_memory, not the
+    # trust-gate scalar. Structure separation prevents collision.
+    counts = SuppressionCounts()
+    counts.rejection_memory["flagged_input"] = 3  # producer with this literal name
+    counts.flagged_input = 2  # trust-gate count
+    assert counts.total() == 5
+    assert counts.rejection_memory["flagged_input"] == 3
+    assert counts.flagged_input == 2
+
+
+def test_links_review_include_flagged_flag_renders_tag(tmp_path):
+    """S4-13 (SF-F): CLI --include-flagged prints (flagged: source) tag."""
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id="clienta_evidence_src_s4_13",
+        target_id="clienta_evidence_tgt_s4_13",
+        source_flagged=True,
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "review", "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    assert "(flagged: source)" in result.output
+
+
+def test_links_review_silent_empty_protection(tmp_path):
+    """S4-14: 0-view output includes excluded-count sentence."""
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id="clienta_evidence_src_s4_14",
+        target_id="clienta_evidence_tgt_s4_14",
+        target_flagged=True,
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_path), "links", "review"])
+    assert result.exit_code == 0
+    assert "0 items" in result.output
+    assert "excluded" in result.output
+    assert "--include-flagged" in result.output
+
+
+def test_links_status_discloses_flagged_excluded(tmp_path):
+    """S4-15 (CB-2): status output includes flagged-excluded column and disclosure."""
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id="clienta_evidence_src_s4_15",
+        target_id="clienta_evidence_tgt_s4_15",
+        target_flagged=True,
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_path), "links", "status"])
+    assert result.exit_code == 0
+    # Source row must surface with flagged_excluded count even though pending==0
+    assert "clienta_evidence_src_s4_15" in result.output
+    assert "Flagged Excluded" in result.output
+    assert "flagged-excluded" in result.output
+
+
+def test_links_confirm_doc_discloses_flagged_excluded(tmp_path):
+    """S4-16 (CB-2): confirm-doc with all-flagged source prints diagnostic."""
+    source_id = "clienta_evidence_src_s4_16"
+    target_id = "clienta_evidence_tgt_s4_16"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(config_path), "links", "confirm-doc", source_id]
+    )
+    assert result.exit_code == 0
+    assert "Confirmed 0 proposal(s)" in result.output
+    assert "flagged inputs" in result.output
+    assert "--include-flagged" in result.output
+
+
+def test_links_confirm_rejects_flagged_id_without_flag(tmp_path):
+    """S4-17 (CB-4): confirm <flagged_id> without --include-flagged errors."""
+    source_id = "clienta_evidence_src_s4_17"
+    target_id = "clienta_evidence_tgt_s4_17"
+    proposal = _proposal(source_id, "impacts", target_id, "sha256:flagged-proposal")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    # Try confirming the flagged proposal without --include-flagged
+    result = runner.invoke(
+        cli, ["--config", str(config_path), "links", "confirm", proposal["proposal_id"]]
+    )
+    assert result.exit_code == 1
+    assert "Unknown proposal_id" in result.output
+
+
+def test_links_confirm_accepts_flagged_id_with_flag(tmp_path):
+    """S4-18 (CB-4): confirm <flagged_id> --include-flagged succeeds."""
+    source_id = "clienta_evidence_src_s4_18"
+    target_id = "clienta_evidence_tgt_s4_18"
+    proposal = _proposal(source_id, "supersedes", target_id, "sha256:flag-confirm",
+                         confidence="high")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "confirm",
+         proposal["proposal_id"], "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    assert f"Confirmed {proposal['proposal_id']}" in result.output
+    # Canonical frontmatter actually updated
+    fm = _read_fm(tmp_path / "library" / "ClientA" / f"{source_id}.md")
+    assert fm["supersedes"] == target_id
+
+
+def test_target_frontmatter_flagged_registry_clean(tmp_path):
+    """S4-11b (DS-E): reverse staleness — registry says flagged, frontmatter says clean.
+
+    Per CB-1, target trust state is read from frontmatter only. When the
+    registry is stale in the "too cautious" direction (registry row has
+    review_status: flagged but frontmatter says clean), the proposal should
+    surface. This prevents false-negatives from a stale sync.
+    """
+    source_id = "clienta_evidence_src_s4_11b"
+    target_id = "clienta_evidence_tgt_s4_11b"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+
+    # Registry row claims the target is flagged.
+    target_entry = _registry_entry(target_id, f"ClientA/{target_id}.md")
+    target_entry["review_status"] = "flagged"
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: target_entry,
+        },
+    )
+    # But target frontmatter says clean — frontmatter is authoritative.
+    _write_note(
+        library / "ClientA" / f"{target_id}.md",
+        _base_note(target_id, target_id, review_status="clean"),
+    )
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {"axes": {"relationships": {
+                    "proposals": [_proposal(source_id, "impacts", target_id, "sha256:rev")]
+                }}}
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    # Stale "flagged" registry row is ignored; clean frontmatter wins.
+    assert len(views) == 1
+    assert views[0].flagged_inputs == []
+    assert counts.flagged_input == 0
+
+
+def test_links_reject_rejects_flagged_id_without_flag(tmp_path):
+    """S4-17b (DS-F): reject <flagged_id> without --include-flagged errors."""
+    source_id = "clienta_evidence_src_s4_17b"
+    target_id = "clienta_evidence_tgt_s4_17b"
+    proposal = _proposal(source_id, "impacts", target_id, "sha256:flag-reject")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(config_path), "links", "reject", proposal["proposal_id"]]
+    )
+    assert result.exit_code == 1
+    assert "Unknown proposal_id" in result.output
+
+
+def test_links_reject_accepts_flagged_id_with_flag(tmp_path):
+    """S4-18b (DS-F): reject <flagged_id> --include-flagged succeeds, shows posture."""
+    source_id = "clienta_evidence_src_s4_18b"
+    target_id = "clienta_evidence_tgt_s4_18b"
+    proposal = _proposal(source_id, "impacts", target_id, "sha256:flag-reject-ok")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        target_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "reject",
+         proposal["proposal_id"], "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    assert f"Rejected {proposal['proposal_id']}" in result.output
+    # DS-C: trust posture surfaces in success line
+    assert "(flagged: target)" in result.output
+
+
+def test_links_confirm_with_flag_shows_trust_posture(tmp_path):
+    """DS-C: confirm --include-flagged success line annotates trust posture."""
+    source_id = "clienta_evidence_src_ds_c"
+    target_id = "clienta_evidence_tgt_ds_c"
+    proposal = _proposal(source_id, "supersedes", target_id, "sha256:ds-c",
+                         confidence="high")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        target_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "confirm",
+         proposal["proposal_id"], "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    assert "(flagged: source, target)" in result.output
+
+
+def test_links_confirm_doc_include_flagged_acts_on_flagged(tmp_path):
+    """S4-20 (DS-F): confirm-doc --include-flagged acts on flagged-input proposals."""
+    source_id = "clienta_evidence_src_s4_20"
+    target_id = "clienta_evidence_tgt_s4_20"
+    proposal = _proposal(source_id, "supersedes", target_id, "sha256:s4-20",
+                         confidence="high")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "confirm-doc", source_id,
+         "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    assert "Confirmed 1 proposal(s)" in result.output
+    # No exclusion diagnostic because --include-flagged consumed the flagged set
+    assert "flagged inputs" not in result.output
+    # Canonical frontmatter actually updated
+    fm = _read_fm(tmp_path / "library" / "ClientA" / f"{source_id}.md")
+    assert fm["supersedes"] == target_id
+
+
+def test_links_confirm_doc_mixed_clean_and_flagged_discloses(tmp_path):
+    """S4-21 (DC-2): mixed clean+flagged confirm-doc discloses the exclusion.
+
+    The DC-2 blocker: in v1.0, the disclosure only fired when acted==0.
+    With mixed (clean source, one clean target, one flagged target), the clean
+    proposal gets confirmed but the flagged one must be reported as excluded.
+    """
+    source_id = "clienta_evidence_src_s4_21"
+    clean_tgt = "clienta_evidence_tgt_s4_21_clean"
+    flagged_tgt = "clienta_evidence_tgt_s4_21_flagged"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=clean_tgt,
+        extra_targets={flagged_tgt: True},
+        proposals=[
+            _proposal(source_id, "impacts", clean_tgt, "sha256:clean"),
+            _proposal(source_id, "draws_from", flagged_tgt, "sha256:flagged"),
+        ],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(config_path), "links", "confirm-doc", source_id]
+    )
+    assert result.exit_code == 0
+    assert "Confirmed 1 proposal(s)" in result.output
+    assert "1 proposal(s) excluded" in result.output
+    assert "flagged inputs" in result.output
+    assert "--include-flagged" in result.output
+
+
+def test_links_reject_doc_mixed_clean_and_flagged_discloses(tmp_path):
+    """S4-22 (DC-2): mixed clean+flagged reject-doc discloses the exclusion."""
+    source_id = "clienta_evidence_src_s4_22"
+    clean_tgt = "clienta_evidence_tgt_s4_22_clean"
+    flagged_tgt = "clienta_evidence_tgt_s4_22_flagged"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=clean_tgt,
+        extra_targets={flagged_tgt: True},
+        proposals=[
+            _proposal(source_id, "impacts", clean_tgt, "sha256:clean-r"),
+            _proposal(source_id, "draws_from", flagged_tgt, "sha256:flagged-r"),
+        ],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(config_path), "links", "reject-doc", source_id]
+    )
+    assert result.exit_code == 0
+    assert "Rejected 1 proposal(s)" in result.output
+    assert "1 proposal(s) excluded" in result.output
+    assert "flagged inputs" in result.output
+
+
+def test_links_status_include_flagged_flag(tmp_path):
+    """S4-15b (DC-1): status --include-flagged counts flagged proposals as pending."""
+    source_id = "clienta_evidence_src_s4_15b"
+    target_id = "clienta_evidence_tgt_s4_15b"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        target_flagged=True,
+    )
+    runner = CliRunner()
+    # Without flag: 0 pending, 1 flagged_excluded
+    result_default = runner.invoke(cli, ["--config", str(config_path), "links", "status"])
+    assert result_default.exit_code == 0
+    assert "Flagged Excluded" in result_default.output
+    # With flag: flagged proposals count as pending; no Flagged Excluded column
+    result_flagged = runner.invoke(
+        cli, ["--config", str(config_path), "links", "status", "--include-flagged"]
+    )
+    assert result_flagged.exit_code == 0
+    assert "Flagged Excluded" not in result_flagged.output
+    # The source row shows 1 pending now (was 0 pending + 1 excluded before)
+    assert "| clienta_evidence_src_s4_15b | 1 | 0 |" in result_flagged.output
+
+
+def test_revived_and_flagged_tags_render_together(tmp_path):
+    """S4-19 (SF-I): revived + flagged tags render in correct order."""
+    source_id = "clienta_evidence_src_s4_19"
+    target_id = "clienta_evidence_tgt_s4_19"
+    # Rejected old + pending new = revived; source flagged = flagged tag
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        proposals=[
+            _rejected_proposal(source_id, "impacts", target_id, "sha256:old-fp"),
+            _proposal(source_id, "impacts", target_id, "sha256:new-fp"),
+        ],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "review", "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    # Both tags render and revived comes before flagged
+    assert "(revived — basis changed) (flagged: source)" in result.output
