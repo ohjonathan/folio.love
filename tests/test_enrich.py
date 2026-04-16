@@ -522,8 +522,10 @@ class TestRejectedProposalSuppression:
                 lifecycle_state="queued",
             )
         ]
-        result = _suppress_rejected_proposals(new_proposals, existing_meta, force=False)
-        assert len(result) == 0
+        result, count = _suppress_rejected_proposals(new_proposals, existing_meta, force=False)
+        assert len(result) == 1
+        assert result[0].lifecycle_state == "suppressed"
+        assert count == 1
 
     def test_allows_changed_basis(self):
         existing_meta = {
@@ -551,8 +553,10 @@ class TestRejectedProposalSuppression:
                 lifecycle_state="queued",
             )
         ]
-        result = _suppress_rejected_proposals(new_proposals, existing_meta, force=False)
+        result, count = _suppress_rejected_proposals(new_proposals, existing_meta, force=False)
         assert len(result) == 1
+        assert result[0].lifecycle_state == "queued"
+        assert count == 0
 
     def test_force_still_suppresses_same_basis(self):
         existing_meta = {
@@ -580,8 +584,235 @@ class TestRejectedProposalSuppression:
                 lifecycle_state="queued",
             )
         ]
-        result = _suppress_rejected_proposals(new_proposals, existing_meta, force=True)
-        assert len(result) == 0
+        result, count = _suppress_rejected_proposals(new_proposals, existing_meta, force=True)
+        assert len(result) == 1
+        assert result[0].lifecycle_state == "suppressed"
+        assert count == 1
+
+
+# ---------------------------------------------------------------------------
+# 6b. Emission-time rejection memory + queue-cap enforcement (v0.6.3)
+# ---------------------------------------------------------------------------
+
+class TestEmissionTimeRejection:
+    """v0.6.3: emission-time rejection marks proposals as suppressed."""
+
+    def test_emission_time_rejection_marks_suppressed(self):
+        """S3-1: same basis → suppressed, not dropped."""
+        existing_meta = {
+            "axes": {
+                "relationships": {
+                    "proposals": [
+                        {
+                            "relation": "supersedes",
+                            "target_id": "t1",
+                            "basis_fingerprint": "sha256:same",
+                            "lifecycle_state": "rejected",
+                        }
+                    ]
+                }
+            }
+        }
+        new = RelationshipProposal(
+            relation="supersedes", target_id="t1", basis_fingerprint="sha256:same",
+            confidence="high", signals=[], rationale="",
+        )
+        result, count = _suppress_rejected_proposals([new], existing_meta, force=False)
+        assert len(result) == 1
+        assert result[0].lifecycle_state == "suppressed"
+        assert count == 1
+
+    def test_emission_time_rejection_allows_changed_basis(self):
+        """S3-2: changed basis → stays queued."""
+        existing_meta = {
+            "axes": {
+                "relationships": {
+                    "proposals": [
+                        {
+                            "relation": "supersedes",
+                            "target_id": "t1",
+                            "basis_fingerprint": "sha256:old",
+                            "lifecycle_state": "rejected",
+                        }
+                    ]
+                }
+            }
+        }
+        new = RelationshipProposal(
+            relation="supersedes", target_id="t1", basis_fingerprint="sha256:new",
+            confidence="high", signals=[], rationale="",
+        )
+        result, count = _suppress_rejected_proposals([new], existing_meta, force=False)
+        assert len(result) == 1
+        assert result[0].lifecycle_state == "queued"
+        assert count == 0
+
+
+class TestPreserveRejectedProposals:
+    """v0.6.3: rejected proposals survive re-enrichment."""
+
+    def test_rejected_preserved(self):
+        """S3-3: rejected entries included in output."""
+        from folio.enrich import _preserve_rejected_proposals
+        existing_meta = {
+            "axes": {
+                "relationships": {
+                    "proposals": [
+                        {"relation": "supersedes", "target_id": "t1",
+                         "lifecycle_state": "rejected", "basis_fingerprint": "sha256:a"},
+                        {"relation": "impacts", "target_id": "t2",
+                         "lifecycle_state": "queued", "basis_fingerprint": "sha256:b"},
+                        {"relation": "impacts", "target_id": "t3",
+                         "lifecycle_state": "suppressed", "basis_fingerprint": "sha256:c"},
+                    ]
+                }
+            }
+        }
+        preserved = _preserve_rejected_proposals(existing_meta)
+        assert len(preserved) == 1
+        assert preserved[0]["lifecycle_state"] == "rejected"
+        assert preserved[0]["target_id"] == "t1"
+
+    def test_preserve_rejected_only_not_suppressed(self):
+        """S3-9: old suppressed entries are NOT preserved."""
+        from folio.enrich import _preserve_rejected_proposals
+        existing_meta = {
+            "axes": {
+                "relationships": {
+                    "proposals": [
+                        {"relation": "impacts", "target_id": "t1",
+                         "lifecycle_state": "suppressed", "basis_fingerprint": "sha256:x"},
+                    ]
+                }
+            }
+        }
+        preserved = _preserve_rejected_proposals(existing_meta)
+        assert len(preserved) == 0
+
+    def test_preserve_reads_legacy_status(self):
+        """D-2 fix: legacy status: rejected is preserved."""
+        from folio.enrich import _preserve_rejected_proposals
+        existing_meta = {
+            "axes": {
+                "relationships": {
+                    "proposals": [
+                        {"relation": "impacts", "target_id": "t1",
+                         "status": "rejected", "basis_fingerprint": "sha256:x"},
+                    ]
+                }
+            }
+        }
+        preserved = _preserve_rejected_proposals(existing_meta)
+        assert len(preserved) == 1
+        assert preserved[0]["target_id"] == "t1"
+
+
+class TestQueueCapEnforcement:
+    """v0.6.3: queue-cap enforcement."""
+
+    def test_queue_cap_enforced_at_boundary(self):
+        """S3-4: 18 existing + 5 new = 2 queued + 3 suppressed."""
+        from folio.enrich import _enforce_queue_cap
+        proposals = [
+            RelationshipProposal(
+                relation="impacts", target_id=f"t{i}",
+                basis_fingerprint=f"sha256:{i}",
+                confidence="high" if i < 3 else "medium",
+                signals=[], rationale="",
+            )
+            for i in range(5)
+        ]
+        result, count = _enforce_queue_cap(proposals, existing_queued_count=18, cap=20)
+        assert count == 3
+        queued = [p for p in result if p.lifecycle_state == "queued"]
+        suppressed = [p for p in result if p.lifecycle_state == "suppressed"]
+        assert len(queued) == 2
+        assert len(suppressed) == 3
+
+    def test_queue_cap_at_zero_remaining(self):
+        """S3-5: 20 existing + new = all suppressed."""
+        from folio.enrich import _enforce_queue_cap
+        proposals = [
+            RelationshipProposal(
+                relation="impacts", target_id="t1",
+                basis_fingerprint="sha256:1",
+                confidence="high", signals=[], rationale="",
+            )
+        ]
+        result, count = _enforce_queue_cap(proposals, existing_queued_count=20, cap=20)
+        assert count == 1
+        assert result[0].lifecycle_state == "suppressed"
+
+    def test_queue_cap_tie_breaking_confidence(self):
+        """S3-6: high-confidence survives before medium."""
+        from folio.enrich import _enforce_queue_cap
+        proposals = [
+            RelationshipProposal(
+                relation="impacts", target_id="t_med1",
+                basis_fingerprint="sha256:m1",
+                confidence="medium", signals=[], rationale="",
+            ),
+            RelationshipProposal(
+                relation="impacts", target_id="t_high",
+                basis_fingerprint="sha256:h1",
+                confidence="high", signals=[], rationale="",
+            ),
+            RelationshipProposal(
+                relation="impacts", target_id="t_med2",
+                basis_fingerprint="sha256:m2",
+                confidence="medium", signals=[], rationale="",
+            ),
+        ]
+        result, count = _enforce_queue_cap(proposals, existing_queued_count=19, cap=20)
+        assert count == 2
+        queued = [p for p in result if p.lifecycle_state == "queued"]
+        assert len(queued) == 1
+        assert queued[0].confidence == "high"
+
+    def test_queue_cap_ignores_suppressed(self):
+        """S3-7: already-suppressed proposals don't count against cap."""
+        from folio.enrich import _enforce_queue_cap
+        proposals = [
+            RelationshipProposal(
+                relation="impacts", target_id="t1",
+                basis_fingerprint="sha256:1",
+                confidence="high", signals=[], rationale="",
+                lifecycle_state="suppressed",
+            ),
+            RelationshipProposal(
+                relation="impacts", target_id="t2",
+                basis_fingerprint="sha256:2",
+                confidence="high", signals=[], rationale="",
+                lifecycle_state="queued",
+            ),
+        ]
+        result, count = _enforce_queue_cap(proposals, existing_queued_count=20, cap=20)
+        assert count == 1
+        suppressed_ids = [p.target_id for p in result if p.lifecycle_state == "suppressed"]
+        assert "t1" in suppressed_ids  # was already suppressed
+        assert "t2" in suppressed_ids  # newly suppressed by cap
+
+
+class TestSuppressionCountsDiagnostics:
+    """v0.6.3: suppression counts in EnrichAxisResult."""
+
+    def test_suppression_counts_in_axis_result(self):
+        """S3-8: to_dict includes suppression_counts when present."""
+        axis = EnrichAxisResult(
+            status="proposed",
+            proposals=[],
+            suppression_counts={"rejection_memory": 2, "queue_cap": 3},
+        )
+        d = axis.to_dict()
+        assert "suppression_counts" in d
+        assert d["suppression_counts"]["rejection_memory"] == 2
+        assert d["suppression_counts"]["queue_cap"] == 3
+
+    def test_suppression_counts_omitted_when_none(self):
+        """suppression_counts absent from to_dict when None."""
+        axis = EnrichAxisResult(status="proposed", proposals=[])
+        d = axis.to_dict()
+        assert "suppression_counts" not in d
 
 
 # ---------------------------------------------------------------------------

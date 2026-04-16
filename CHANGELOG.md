@@ -4,6 +4,29 @@ All notable changes to folio.love are documented here. The format loosely follow
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
 changes at minor versions are permitted but flagged explicitly.
 
+## [v0.6.3] — 2026-04-15
+
+### Changed
+- **Emission-time rejection memory:** proposals matching a previously
+  rejected `basis_fingerprint` are now marked `lifecycle_state: "suppressed"`
+  at enrichment time instead of being silently dropped. Suppressed proposals
+  are preserved in frontmatter for audit trail.
+- **Queue-cap enforcement:** per §9.1, no producer may hold more than 20
+  proposals in `lifecycle_state: "queued"` per library. Excess proposals
+  are marked `"suppressed"`. Tie-breaking: high-confidence first, then
+  emission order.
+
+### Fixed
+- **Rejected-proposal preservation:** operator rejections
+  (`folio links reject`) now survive re-enrichment. Previously, rejected
+  entries were lost when `_llm_metadata.enrich` was rebuilt on the next
+  enrich run.
+
+### Added
+- `suppression_counts` field in `_llm_metadata.enrich.axes.relationships`
+  reports per-cause suppression totals (keys: `rejection_memory`,
+  `queue_cap`).
+
 ## [v0.6.2] — 2026-04-15
 
 ### Changed

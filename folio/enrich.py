@@ -28,6 +28,7 @@ from .pipeline.enrich_data import (
     EnrichAxisResult,
     EnrichResult,
     RelationshipProposal,
+    _STATUS_TO_LIFECYCLE,
     compute_relationship_proposal_id,
     compute_input_fingerprint,
     compute_entity_resolution_fingerprint,
@@ -44,6 +45,9 @@ from .tracking import registry as registry_mod
 from .tracking.entities import sanitize_wikilink_name
 
 logger = logging.getLogger(__name__)
+
+# Per tier4_discovery_proposal_layer_spec.md section 9.1
+QUEUE_CAP: int = 20
 
 # Ownership marker for generated ## Related sections (B6)
 _RELATED_MARKER = "<!-- enrich:generated -->"
@@ -719,20 +723,52 @@ def enrich_note(
             # Enforce singular supersedes
             proposals = _enforce_singular_supersedes(proposals)
 
-            # Step 10: suppress rejected proposals with unchanged basis
-            proposals = _suppress_rejected_proposals(
+            existing_meta = _get_enrich_meta(fm)
+
+            # Step 10a: mark rejected-basis matches as suppressed
+            proposals, rejection_suppressed = _suppress_rejected_proposals(
                 new_proposals=proposals,
-                existing_meta=_get_enrich_meta(fm),
+                existing_meta=existing_meta,
                 force=force,
             )
 
-            # Remove proposals already promoted to canonical fields (spec 9.2.7)
+            # Step 10b: remove proposals already promoted to canonical fields
             proposals = _remove_promoted_proposals(proposals, fm)
 
-            if proposals:
+            # Step 10c: enforce queue cap (v0.6.3)
+            existing_queued = _count_library_queued_proposals(
+                config, "enrich", exclude_doc_id=plan_entry.entry.id,
+            )
+            proposals, cap_suppressed = _enforce_queue_cap(
+                proposals, existing_queued,
+            )
+
+            # Step 10d: preserve rejected entries from previous runs
+            preserved_rejected = _preserve_rejected_proposals(existing_meta)
+
+            all_proposal_dicts = (
+                preserved_rejected + [p.to_dict() for p in proposals]
+            )
+
+            # Suppression diagnostics
+            suppression_counts: dict[str, int] = {}
+            if rejection_suppressed:
+                suppression_counts["rejection_memory"] = rejection_suppressed
+            if cap_suppressed:
+                suppression_counts["queue_cap"] = cap_suppressed
+
+            if suppression_counts:
+                parts = [f"{k}: {v}" for k, v in suppression_counts.items()]
+                warnings.append(
+                    f"{sum(suppression_counts.values())} proposal(s) suppressed "
+                    f"({', '.join(parts)})"
+                )
+
+            if all_proposal_dicts:
                 relationships_axis = EnrichAxisResult(
                     status="proposed",
-                    proposals=[p.to_dict() for p in proposals],
+                    proposals=all_proposal_dicts,
+                    suppression_counts=suppression_counts or None,
                 )
             else:
                 relationships_axis = EnrichAxisResult(status="no_change")
@@ -970,10 +1006,11 @@ def _suppress_rejected_proposals(
     new_proposals: list[RelationshipProposal],
     existing_meta: dict,
     force: bool,
-) -> list[RelationshipProposal]:
-    """Suppress proposals that were previously rejected with unchanged basis.
+) -> tuple[list[RelationshipProposal], int]:
+    """Mark proposals matching a rejected basis as suppressed.
 
-    --force still respects unchanged rejection basis (spec section 7.3).
+    Returns (all_proposals_with_state_set, suppression_count).
+    --force still respects rejection memory (§10.1 zero-defect invariant).
     """
     # Build rejected map: (relation, target_id) -> basis_fingerprint
     rejected: dict[tuple[str, str], str] = {}
@@ -983,24 +1020,143 @@ def _suppress_rejected_proposals(
     if isinstance(old_proposals, list):
         for p in old_proposals:
             if isinstance(p, dict):
-                state = p.get("lifecycle_state")
-                if state is None:
-                    state = p.get("status")
-                if state != "rejected":
+                if _get_lifecycle_state(p) != "rejected":
                     continue
                 key = (p.get("relation", ""), p.get("target_id", ""))
                 rejected[key] = p.get("basis_fingerprint", "")
 
     result = []
+    suppressed_count = 0
     for proposal in new_proposals:
         key = (proposal.relation, proposal.target_id)
         if key in rejected:
             old_basis = rejected[key]
             if old_basis and old_basis == proposal.basis_fingerprint:
-                # Basis unchanged — suppress even with --force
-                continue
+                proposal.lifecycle_state = "suppressed"
+                suppressed_count += 1
         result.append(proposal)
-    return result
+    return result, suppressed_count
+
+
+def _preserve_rejected_proposals(existing_meta: dict) -> list[dict]:
+    """Return raw dicts for rejected proposals from existing frontmatter.
+
+    These are appended to the output proposals list so operator rejections
+    survive re-enrichment (§10.1 zero-defect invariant).
+    """
+    axes = existing_meta.get("axes", {})
+    rel_meta = axes.get("relationships", {})
+    old_proposals = rel_meta.get("proposals", [])
+    preserved = []
+    if isinstance(old_proposals, list):
+        for p in old_proposals:
+            if not isinstance(p, dict):
+                continue
+            state = p.get("lifecycle_state")
+            if state is None:
+                old_status = p.get("status")
+                state = _STATUS_TO_LIFECYCLE.get(old_status, old_status)
+            if state == "rejected":
+                preserved.append(p)
+    return preserved
+
+
+def _get_lifecycle_state(raw: dict) -> str:
+    """Get effective lifecycle state from a raw proposal dict."""
+    state = raw.get("lifecycle_state")
+    if state is None:
+        old_status = raw.get("status", "pending_human_confirmation")
+        state = _STATUS_TO_LIFECYCLE.get(old_status, old_status)
+    return state
+
+
+def _count_library_queued_proposals(
+    config,
+    producer: str,
+    exclude_doc_id: str,
+) -> int:
+    """Count queued proposals across the library for a producer.
+
+    L2 failure policy: per-document errors are caught and skipped.
+    Registry read failure returns 0 (fail-open).
+    """
+    library_root = config.library_root.resolve()
+    registry_path = library_root / "registry.json"
+    if not registry_path.exists():
+        return 0
+    try:
+        reg_data = registry_mod.load_registry(registry_path)
+    except Exception:
+        logger.warning("Queue cap: cannot read registry; cap not enforced")
+        return 0
+
+    count = 0
+    for deck_id, entry_data in reg_data.get("decks", {}).items():
+        if deck_id == exclude_doc_id:
+            continue
+        md_rel = entry_data.get("markdown_path", "")
+        if not md_rel:
+            continue
+        md_path = library_root / md_rel
+        try:
+            if not md_path.exists():
+                continue
+            fm = _read_frontmatter(md_path)
+            if not fm:
+                continue
+            producer_meta = fm.get("_llm_metadata", {}).get(producer)
+            if not isinstance(producer_meta, dict):
+                continue
+            proposals = (
+                producer_meta.get("axes", {})
+                .get("relationships", {})
+                .get("proposals", [])
+            )
+            if not isinstance(proposals, list):
+                continue
+            for raw in proposals:
+                if isinstance(raw, dict) and _get_lifecycle_state(raw) == "queued":
+                    count += 1
+        except Exception:
+            logger.warning("Queue cap: skipping unreadable %s", deck_id)
+            continue
+    return count
+
+
+def _enforce_queue_cap(
+    proposals: list[RelationshipProposal],
+    existing_queued_count: int,
+    cap: int = QUEUE_CAP,
+) -> tuple[list[RelationshipProposal], int]:
+    """Enforce per-producer queue cap. Only queued proposals are eligible.
+
+    Returns (all_proposals, cap_suppression_count).
+    Tie-breaking: high confidence first, then emission order (stable sort).
+    """
+    queued = [p for p in proposals if p.lifecycle_state == "queued"]
+    non_queued = [p for p in proposals if p.lifecycle_state != "queued"]
+
+    remaining_capacity = cap - existing_queued_count
+    if remaining_capacity >= len(queued):
+        return proposals, 0
+
+    # Stable sort: high confidence first
+    queued_sorted = sorted(
+        queued,
+        key=lambda p: 0 if p.confidence == "high" else 1,
+    )
+
+    suppressed_count = 0
+    if remaining_capacity <= 0:
+        for p in queued_sorted:
+            p.lifecycle_state = "suppressed"
+            suppressed_count += 1
+    else:
+        for p in queued_sorted[remaining_capacity:]:
+            p.lifecycle_state = "suppressed"
+            suppressed_count += 1
+
+    return non_queued + queued_sorted, suppressed_count
 
 
 def _remove_promoted_proposals(

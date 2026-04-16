@@ -1,17 +1,18 @@
 ---
 id: framework-learnings-v1.1-adoption
 created: 2026-04-15
-source: folio.love first production adoption (3 slices)
+source: folio.love first production adoption (4 slices)
 purpose: Feed frameworks/llm-dev-v1/ROADMAP.md v1.2 scope
 slices_covered:
   - proposal-review-hardening-v0-6-0 (slice 1, PR #44)
   - proposal-lifecycle-rename-v0-6-1 (slice 2, PR #45)
   - provenance-lifecycle-rename-v0-6-2 (PROV-1, PR #46)
+  - emission-time-rejection-v0-6-3 (slice 3)
 ---
 
 # Framework Learnings — llm-dev-v1.1 Production Adoption (folio.love)
 
-Three full lifecycle runs on a real Python codebase. Friction entries F-001 through F-030 are the raw data; this document extracts the six structural lessons that feed v1.2 scope.
+Four full lifecycle runs on a real Python codebase. Friction entries F-001 through F-044 are the raw data; this document extracts the six structural lessons that feed v1.2 scope.
 
 ---
 
@@ -199,6 +200,51 @@ Slice 2's manifest was drafted from slice 1 in ~5 minutes. Key changes: differen
 
 ---
 
+## Slice 3 addendum (emission-time-rejection-v0-6-3)
+
+### 1. Token-fill friction (slice 3)
+
+No new token-fill issues. The manifest was templated from slice 2 and all tokens filled without ambiguity. The lean-slice path (inherited Pre-A, narrow scope-lock) makes token-fill straightforward for mechanical slices.
+
+### 2. Template gaps (slice 3)
+
+**Missing:** A "planner's findings" section in Template 12 (spec author). Slice 3's critical bug (rejected-proposal preservation) was discovered during pre-implementation planning exploration, not during spec authoring or code review. The spec template has no designated section for documenting risks found during the planning phase. Without this, the finding only appears in the plan file, which is session-local and not preserved.
+
+**Halt conditions:** No false fires. The codex adversarial failure (F-042) would have triggered a "reviewer non-delivery" halt if strictly enforced, but the framework has no such halt condition. Three of four reviewers delivered.
+
+### 3. Multi-family dispatch friction (slice 3)
+
+| Family | Reliability | Context pressure | Verdict quality |
+|--------|-------------|-----------------|-----------------|
+| Claude (orchestrator) | Stable | Moderate (1M context comfortably held spec + code + plan) | N/A (author, not reviewer) |
+| Claude-sub (peer, product) | Stable | Low (Agent tool isolates) | Good — caught P-1, P-2 (blockers), PR-1 (blocker) |
+| Gemini (alignment) | 429 on first attempt; recovered | Low | Good — caught AL-1 (the most significant blocker: unauthorized scope expansion) |
+| Codex (adversarial) | **Failed** — output budget consumed by file reads | N/A | **Zero findings** — codex exec with full-auto ran shell commands reading files until output truncated. No structured review produced. |
+
+**Codex adversarial remains the friction hotspot.** F-042 is the third distinct codex invocation issue across 4 slices (F-006: claude-sub weakness in slice 1; user directive to switch to codex; F-042: codex exec output truncation in slice 3). The `codex exec` subcommand prioritizes autonomy over structured output, which conflicts with the review board's need for a formatted verdict document.
+
+### 4. Verify-script accuracy (slice 3)
+
+`verify-all.sh`: **8/8 green** with the new manifest. No false positives. The `verify-p3.sh` correctly identified the new manifest as `user_facing: false` and skipped the product-lens requirement check. `verify-gate-categories.sh` correctly validated all six gate categories present.
+
+No real issues missed by the verify script either — the script validates structural correctness, not semantic correctness, which is appropriate.
+
+### 5. Manifest/schema ergonomics (slice 3)
+
+The manifest was easy to draft — copied from slice 2, changed IDs, narrowed scope, swapped codex/claude-sub roles. Time: ~5 minutes.
+
+One friction: the `scope.forbidden_paths` list grew from 8 to 13 entries because slice 3's narrower scope means more paths to explicitly forbid. This is the opposite of the "narrow scope, less ceremony" promise. **Recommendation:** Support glob negation (`!folio/enrich.py` means "everything in folio/ except enrich.py") to avoid long exclusion lists.
+
+### 6. Concrete v1.2 recommendations (slice 3 addendum)
+
+| Priority | Recommendation | Friction ref | Effort |
+|----------|---------------|--------------|--------|
+| C-9 | **Codex exec review mode.** Document or implement a `codex exec --review` flag that produces structured markdown output instead of autonomous tool-use exploration. Alternatively, document the exact invocation pattern that produces a review verdict. | F-042, F-044 | 2 hours (doc or 1 day feature) |
+| C-10 | **Template 12 "planner's findings" section.** Add an optional section to the spec-author template where the author documents risks/bugs found during pre-implementation analysis. | Slice 3 retro | 30 min |
+| C-11 | **Manifest forbidden-path globs.** Support `folio/**` minus `folio/enrich.py` syntax to reduce exclusion list verbosity. | Slice 3 manifest | 2 hours |
+
+---
+
 ## Appendix: friction-to-recommendation cross-reference
 
 | Friction | Recommendation | Status |
@@ -234,3 +280,6 @@ Slice 2's manifest was drafted from slice 1 in ~5 minutes. Key changes: differen
 | F-028 | B-2 (D.5 single-verifier) | open |
 | F-029 | B-2 | open |
 | F-030 | B-3 (D.6 as script) | open |
+| F-042 | C-9 (codex exec review mode) | open |
+| F-043 | C-3 (rate-limit observability) | open |
+| F-044 | C-9 (codex exec invocation docs) | open |

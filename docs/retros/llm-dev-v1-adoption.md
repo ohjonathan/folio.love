@@ -424,3 +424,52 @@ The slice-2 manifest (`frameworks/manifests/proposal-lifecycle-rename-v0-6-1.yam
 - Scope-expansion declarations with explicit justification per §15.7
 - `regression_guards` block citing prior slice deliverable IDs
 - Updated model_assignments with codex as adversarial (per user feedback on F-006)
+
+---
+
+## Slice 3 — emission-time-rejection-v0-6-3
+
+### Metrics
+
+| Metric | Value |
+|--------|-------|
+| Phases executed | A, B (1 round), C, D (1 round), E |
+| Blockers raised | 4 (B.1 Round 1: AL-1, P-1, P-2, PR-1) |
+| Blockers addressed | 4 (all resolved in spec v1.1) |
+| Should-fix items | 10 (6 resolved, 4 deferred as carry-forwards) |
+| D.4 fix commits | 1 (D-COD-2/D-12 legacy fallback consistency + D-2 legacy test) |
+| Test delta | +11 new tests (118 → 129 scope; 1655 → 1666 full) |
+| Gate result | 11/11 pass |
+
+### What worked
+
+1. **Lean lifecycle:** No Pre-A. Spec → 4-lens review → implement → code review → gate in one session. The Shipping Plan §15.3 pre-ratification meant no proposal ceremony.
+2. **Planning caught the critical bug:** The rejected-proposal preservation issue (line 860 overwrites `_llm_metadata.enrich`) was identified during planning exploration, not during code review. The framework's Phase A analysis phase caught what Phase D would likely have missed because the bug is about data loss across runs, not a single-run correctness issue.
+3. **Cross-reviewer convergence:** Both adversarial and peer reviews independently identified D-COD-2/D-12 (inconsistent legacy fallback). This validates the multi-lens approach for catching consistency issues.
+4. **Spec revision loop was efficient:** 4 blockers + 10 should-fixes → single v1.1 revision → B.3 Approve. No Round 2 dispatch needed.
+
+### What broke
+
+1. **Codex CLI adversarial (F-042):** `codex exec --full-auto` consumed entire output budget reading files (spec, code, parent proposal) via shell commands. Produced zero structured findings. The `-q` flag doesn't exist for `exec` subcommand, and `--approval-mode` is also not a valid flag. The adversarial lens was partially covered by other reviewers but this is a repeat of the multi-family dispatch friction from earlier slices.
+2. **Gemini rate-limited again (F-043):** 429 on first attempt, recovered with backoff. Same pattern as F-014 from slice 1.
+
+### Delta retrospective (vs. slices 1-2)
+
+| Dimension | Slice 1 | Slice 2 | Slice 3 |
+|-----------|---------|---------|---------|
+| Pre-A | Full (halted R1) | Inherited | Inherited |
+| B rounds | 2 | 2 | 1 |
+| D rounds | 1 | 1 | 1 |
+| Blockers found | 3 (Pre-A) | 6 (B.1) | 4 (B.1) |
+| Test delta | +42 | +10 | +11 |
+| Codex adversarial | N/A | Peer role | Failed (output truncated) |
+
+**Critical delta question answer:** The rejected-entry preservation bug surfaced during *planning*, not during code review or spec review. This validates the framework's emphasis on pre-implementation analysis (the Explore phase in plan mode). However, it also means the formal Phase B review board would not have caught this bug because reviewers only see the spec, not the planning exploration. **Recommendation for v1.2:** Add a "planner's findings" section to the Phase A spec template where the author documents bugs/risks discovered during pre-implementation analysis.
+
+### New friction entries
+
+| ID | Description | Severity | Target |
+|----|-------------|----------|--------|
+| F-042 | Codex CLI `exec` subcommand consumed output budget on file reads without producing findings. No `-q` or `--approval-mode` flags available. | high | v1.2 |
+| F-043 | Gemini 429 rate limit on first attempt (same as F-014). | low | v1.2 |
+| F-044 | Codex adversarial required 3 CLI invocation attempts before discovering correct flag syntax (`codex exec --full-auto`). No single canonical "non-interactive review" invocation documented. | medium | v1.2 |
