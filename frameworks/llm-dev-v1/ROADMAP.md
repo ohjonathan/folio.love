@@ -78,10 +78,9 @@ the last mechanics gap (Codex-7). Same playbook as v1.0.0.
 
 ---
 
-## v1.1.1 — Candidate (2026-04-16)
+## v1.1.1 — Released 2026-04-16
 
-**Status.** Under review as PR #7 (merge SHA `TBD` until the
-cross-family canonical verdict reaches Approve). Cherry-picked from
+**Status.** Released via PR #7 (merge `4dfa01f`). Cherry-picked from
 folio.love PR #51 (merge `ab4bc2735660`) — the first production
 adopter of v1.1.0 surfaced five backward-compat-safe bug fixes; the
 framework maintainer pulled them into the canonical bundle so the two
@@ -114,12 +113,66 @@ regex widening). v1.0.0 and v1.1.0 example manifests validate under
 v1.1.1 unchanged (mechanically confirmed by `scripts/verify-schema.sh`).
 `verify-all.sh` remains 8-script / 8 green.
 
-**Exit criteria (pending merge).** 2-family review board (Claude +
-Codex) per patch-release policy; Gemini reviewer-of-reviewer audits
-the cross-family meta-consolidator. Canonical verdict at
-`frameworks/llm-dev-v1/review-board/v1.1.1-spec-verdict.md` upon
-Approve. Post-merge stamp replaces TBD PR# and merge SHA; session
-archived via `ontos log -e "v1-1-1-release"`.
+**Exit criteria met.** 2-family review board (Claude + Codex) per
+patch-release policy produced canonical **Approve** at
+`frameworks/llm-dev-v1/review-board/v1.1.1-spec-verdict.md`
+(re-evaluation after stamp-prose residuals fix-pass `1ba23b1`). Gemini
+reviewer-of-reviewer **Concur** at
+`frameworks/llm-dev-v1/review-board/v1.1.1-gemini-audit.md`. Merged
+via PR #7 at `4dfa01f`; CHANGELOG stamped; session archived via
+`ontos log -e "v1-1-1-release"`.
+
+---
+
+## v1.2.0 — Candidate (2026-04-16)
+
+**Status.** Under review as PR #TBD (merge SHA `TBD` until the full
+3-family review-board canonical verdict reaches Approve). First v1.x
+minor release to merge cross-run findings from two independent adopter
+retros: the framework maintainer's D3 Manifest Spec retro and
+folio.love's v1.1 first-adoption 5-slice retro.
+
+**Scope shipped.** 16 items across 4 build phases (per
+`docs/v1.2-build-plan.md`):
+
+- **Phase 1 — must-ship cross-run consensus (4 items).** 1.1
+  adversarial-family MUST-differ-provider invariant · 1.2
+  `verify-d6-gate.sh` + Template 07 machine-readable emit · 1.3 CB
+  `preserved_blocker_ids` carry-forward + `verify-circuit-breaker.sh`
+  · 1.4 Template 06 CB escalation-record + new-vs-recurring judgment
+  prose.
+- **Phase 2 — must-ship folio-only coherence (2 items).** 2.1
+  `verify-adopter.sh` + `--manifest` flag propagation · 2.2 Template
+  16 P5-style divergent-reviewer consolidation.
+- **Phase 3 — should-ship (9 items).** 3.1 `<CLI_CODEX_MODEL?>` +
+  probe · 3.2 `evidence_cap` · 3.3 loader-swap pattern · 3.4
+  metrics block · 3.5 adoption doc v2 + `day-one.sh` + `<MANIFEST_DIR>`
+  · 3.6 orchestrator fast-path · 3.7 Codex targeted-prompt pattern ·
+  3.8 contract enumeration checklist + dispatch preflight · 3.9
+  role-boundary tightening on T03/T04/T19.
+- **Phase 4 — nice-to-have (3 items).** 4.1 `<MERGE_WORKSPACE?>` +
+  workspace clarifier · 4.2 walkthroughs for Templates 17 + 18 · 4.3
+  ADV-SF5 re-deferred to v2 generator (decision only).
+
+**Non-goals held.** No breaking schema changes, no schema renames, no
+token removals. New schema fields (`review_rounds[]`,
+`cli_capability_matrix[].evidence_cap`,
+`cross_provider_adversarial_passes[]`) are additive and optional;
+v1.0.0 / v1.1.0 / v1.1.1 manifest contracts are preserved (any earlier-
+version manifest still validates under the v1.2.0 schema). The bundled
+`manifest/example-manifest.yaml` gained v1.2 demonstration entries
+while keeping `manifest_version: "1.0.0"` — the demo entries are
+grandfathered for pre-v1.2 manifests by `verify-p3.sh` and show shape
+only. v1.0.0 walkthrough byte-unchanged. Conformance suite 10/10
+green throughout the build.
+
+**Exit criteria (pending merge).** Full 3-family review board (Claude
++ Codex + Gemini) per minor-release policy — distinct from v1.1.1's
+2-family focused review. Claude family internal 3-lens review + family
+meta-consolidator run in-session; Codex + Gemini family dispatches
+handled externally by the orchestrator. Cross-family canonical verdict
+at `review-board/v1.2.0-spec-verdict.md`. Post-merge stamp replaces
+TBD PR# + merge SHA; session archived via `ontos log -e "v1-2-0-release"`.
 
 ---
 

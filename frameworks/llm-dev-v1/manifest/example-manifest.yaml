@@ -116,6 +116,11 @@ cli_capability_matrix:
     git: false
     test_runner: false
     doc_index: true
+    # (v1.2+) Gemini's sandbox blocks shell/git/test-runner per the row
+    # above; declaring evidence_cap here lets Template 06 auto-downgrade
+    # any blocker Gemini claims with direct-run evidence (which it
+    # cannot actually produce).
+    evidence_cap: static-inspection
 
 smoke_checks:
   - phase: "C"
@@ -138,6 +143,30 @@ smoke_checks:
         expect: "gte:1"
 
 regression_guards: []
+
+# (v1.2+) Optional review-round log. Orchestrator appends one entry per
+# meta-consolidator run; verify-circuit-breaker.sh reads this array to
+# detect cross-round ID overlap (halt) vs new IDs (not a halt). Demo-only
+# entry below: B.1 round 1 preserved two blockers. A real deliverable
+# would accrue entries as rounds land.
+review_rounds:
+  - phase: "B.1"
+    round: 1
+    preserved_blocker_ids: ["SPEC-1", "SPEC-2"]
+
+# (v1.2+) Demo of the structured same-provider-adversarial escape hatch.
+# This manifest's B.1 assigns claude-sonnet (adversarial) with claude-opus
+# as author — both share provider `claude`. Under v1.2+ the P3
+# Adversarial-family invariant (framework.md § P3) requires declaring a
+# cross-provider second-pass here AND a matching verdict-presence gate
+# (see gate_prerequisites below). verify-p3.sh validates both.
+# (This manifest_version is 1.0.0 so the check is grandfathered — the
+# entry demonstrates shape only.)
+cross_provider_adversarial_passes:
+  - phase: "B.1"
+    family: codex
+    provider: codex
+    artifact_path: "docs/reviews/currency-converter-B.1-r2-codex-adversarial.md"
 
 # Gate prerequisites organized by category. Every category has ≥1 entry.
 # Self-contained commands only — no project-local scripts required.
@@ -202,6 +231,16 @@ gate_prerequisites:
     verification:
       command: "git rev-list --count HEAD..main"
       expect: "eq:0"
+  # (v1.2+) verdict-presence gate paired with the cross_provider_adversarial_passes
+  # entry above. Demonstrates the structural linkage verify-p3.sh requires:
+  # the escape-hatch artifact_path must appear in a verdict-presence gate's
+  # verification.command string for the escape hatch to authorize the phase.
+  - id: G-xprov-adv-B.1
+    category: verdict-presence
+    description: "(v1.2+) Cross-provider adversarial second-pass artifact exists (codex adversary review of B.1 under the structured escape hatch)."
+    verification:
+      command: "test -f docs/reviews/currency-converter-B.1-r2-codex-adversarial.md"
+      expect: "exit-0"
 
 tracker:
   path: "docs/trackers/currency-converter.md"

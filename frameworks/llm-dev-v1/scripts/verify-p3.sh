@@ -15,6 +15,15 @@
 # an engineering family from another entry on the same phase, provided
 # the Product assignment lives in its own list entry.
 #
+# v1.2 adversarial-family invariant: under manifest_version ≥ 1.2.0,
+# the adversarial family at B.1 / B.2 / D.2 must not share a provider
+# with the author family (provider = first hyphen-delimited segment of
+# the family name). Same-provider adversarial is advisory-only and
+# requires a structured `cross_provider_adversarial_passes[]` entry
+# whose provider differs from the author's AND whose artifact_path is
+# referenced by a `gate_prerequisites` entry of category
+# verdict-presence. Pre-v1.2 manifests are grandfathered.
+#
 # Dependency: `python3` with pyyaml.
 #
 # Exits 0 on success, non-zero with diagnostics otherwise.
@@ -24,10 +33,20 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bundle="$(cd "$here/.." && pwd)"
 
-manifests=(
-  "$bundle/manifest/example-manifest.yaml"
-  "$bundle/manifest/example-user-facing-manifest.yaml"
-)
+# v1.2: accept `--manifest <path>` to validate a single adopter manifest.
+# Default (no args): validate the two bundled example manifests.
+if [[ "${1:-}" == "--manifest" ]]; then
+  if [[ -z "${2:-}" || ! -r "$2" ]]; then
+    echo "usage: verify-p3.sh [--manifest <path>]" >&2
+    exit 1
+  fi
+  manifests=("$2")
+else
+  manifests=(
+    "$bundle/manifest/example-manifest.yaml"
+    "$bundle/manifest/example-user-facing-manifest.yaml"
+  )
+fi
 
 python3 - "${manifests[@]}" <<'PY'
 import sys, yaml
@@ -133,6 +152,107 @@ for path in paths:
                 file=sys.stderr,
             )
             overall_rc = 1
+
+    # v1.2 adversarial-family provider invariant (grandfathered for < 1.2.0).
+    def _version_tuple(v):
+        try:
+            return tuple(int(x) for x in str(v).split("."))
+        except Exception:
+            return (0, 0, 0)
+
+    manifest_version = m.get("manifest_version", "1.0.0")
+    if _version_tuple(manifest_version) >= (1, 2, 0):
+        def _provider_of(family):
+            if not family:
+                return ""
+            return str(family).split("-", 1)[0]
+
+        author_providers = {_provider_of(f) for f in author_families if f}
+
+        # v1.2 escape hatch (structured; replaces the v1.2.0-RC1 gate-id-prefix
+        # convention that Codex ALIGN-BLOCKER1 showed was bypassable by a
+        # dummy gate prerequisite). The manifest declares
+        # `cross_provider_adversarial_passes[]` with
+        # {phase, family, provider, artifact_path}; verify-p3 asserts:
+        #   1. provider != any author provider (the second pass IS
+        #      cross-provider);
+        #   2. a `gate_prerequisites` entry of category `verdict-presence`
+        #      references `artifact_path` in its `verification.command`
+        #      (the second-pass artifact is mechanically checked at D.6).
+        # If both conditions hold, the phase is authorized for advisory-only
+        # same-provider adversarial.
+        xprov_passes = m.get("cross_provider_adversarial_passes") or []
+        gate_prereqs = m.get("gate_prerequisites") or []
+        escape_phases = set()
+        for i, xp in enumerate(xprov_passes):
+            xp_phase = xp.get("phase")
+            xp_family = xp.get("family")
+            xp_provider = xp.get("provider")
+            xp_artifact = xp.get("artifact_path")
+            ok = True
+            # Provider cross-reference: must be different from author providers.
+            if xp_provider in author_providers:
+                print(
+                    f"verify-p3: {path}: cross_provider_adversarial_passes[{i}] "
+                    f"provider {xp_provider!r} is the SAME as an author provider "
+                    f"{sorted(author_providers)}; the second pass must be cross-"
+                    f"provider to act as a v1.2 escape hatch.",
+                    file=sys.stderr,
+                )
+                overall_rc = 1
+                ok = False
+            # verdict-presence gate cross-reference: some gate_prerequisites entry
+            # of category verdict-presence must reference xp_artifact in its
+            # verification.command string. This ties the escape hatch to a
+            # mechanically-checkable D.6 gate row.
+            artifact_referenced = False
+            for gp in gate_prereqs:
+                if gp.get("category") != "verdict-presence":
+                    continue
+                cmd = ((gp.get("verification") or {}).get("command") or "")
+                if xp_artifact and xp_artifact in cmd:
+                    artifact_referenced = True
+                    break
+            if not artifact_referenced:
+                print(
+                    f"verify-p3: {path}: cross_provider_adversarial_passes[{i}] "
+                    f"artifact_path {xp_artifact!r} is not referenced by any "
+                    f"`gate_prerequisites` entry with category=verdict-presence. "
+                    f"The escape hatch requires a mechanical D.6 check that the "
+                    f"second-pass artifact exists — add a gate_prerequisite whose "
+                    f"verification.command contains this artifact_path.",
+                    file=sys.stderr,
+                )
+                overall_rc = 1
+                ok = False
+            if ok:
+                escape_phases.add(xp_phase)
+
+        adv_check_phases = {"B.1", "B.2", "D.2"}
+        for entry in assignments:
+            phase = entry.get("phase")
+            if phase not in adv_check_phases:
+                continue
+            for fam, role in entry.get("assignments", {}).items():
+                if role != "adversarial":
+                    continue
+                fam_provider = _provider_of(fam)
+                if fam_provider in author_providers and phase not in escape_phases:
+                    print(
+                        f"verify-p3: {path}: phase {phase}: adversarial family "
+                        f"{fam!r} shares provider {fam_provider!r} with author "
+                        f"{sorted(author_families)!r}. v1.2 adversarial-family "
+                        f"invariant (manifest_version {manifest_version}) "
+                        f"requires a different provider; same-provider "
+                        f"adversarial is advisory-only and must be authorized "
+                        f"via a `cross_provider_adversarial_passes[]` entry "
+                        f"for phase {phase} with a cross-provider `provider` "
+                        f"and an `artifact_path` that a verdict-presence "
+                        f"`gate_prerequisites` entry references (see "
+                        f"framework.md § P3 Adversarial-family invariant).",
+                        file=sys.stderr,
+                    )
+                    overall_rc = 1
 
     if user_facing:
         # Presence: artifacts.product_verdict must be declared and non-empty

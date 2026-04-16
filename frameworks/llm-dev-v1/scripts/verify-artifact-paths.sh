@@ -24,10 +24,20 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bundle="$(cd "$here/.." && pwd)"
 
-manifests=(
-  "$bundle/manifest/example-manifest.yaml"
-  "$bundle/manifest/example-user-facing-manifest.yaml"
-)
+# v1.2: accept `--manifest <path>` to validate a single adopter manifest.
+# Default (no args): validate the two bundled example manifests.
+if [[ "${1:-}" == "--manifest" ]]; then
+  if [[ -z "${2:-}" || ! -r "$2" ]]; then
+    echo "usage: verify-artifact-paths.sh [--manifest <path>]" >&2
+    exit 1
+  fi
+  manifests=("$2")
+else
+  manifests=(
+    "$bundle/manifest/example-manifest.yaml"
+    "$bundle/manifest/example-user-facing-manifest.yaml"
+  )
+fi
 
 python3 - "${manifests[@]}" <<'PY'
 import sys, yaml

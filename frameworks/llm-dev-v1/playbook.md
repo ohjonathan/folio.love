@@ -120,6 +120,39 @@ Stale assertions surface as false D.6 failures (F-026, F-027 in the
 v1.1 adoption friction log). Template `06-meta-consolidator.md` prescribes
 the re-baseline as a normative B.3 step.
 
+**Orchestrator consolidation fast-path (v1.2+ manifests only).** Under
+`manifest_version: 1.2.0` or later, when all lens verdicts in a B.3 or
+D.3 round return the *same* overall verdict (all Approve or all
+Needs-Fixes) AND no blocker conflicts exist across the lens tables
+(same-ID rulings agree; no family raises a finding another family
+explicitly rejects), the orchestrator MAY author the canonical verdict
+directly without dispatching a separate meta-consolidator family
+session. The canonical artifact still uses Template 06's output
+scaffolding (frontmatter, family verdict table, preserved blockers,
+metrics, decision summary), but the orchestrator writes it in-session
+and tags the frontmatter with `consolidation_mode: fast-path`. Reserved
+for non-split verdicts: any disagreement between lenses (including a
+lens raising a finding a peer rejected) requires the full
+meta-consolidator family dispatch so P5 + cross-family contradiction
+handling runs with its own reviewer. Template 06 §3 consolidation
+workflow notes the fast-path; the body of the template (input
+inventory, consolidation rules, contradiction section) runs on the
+split-verdict path.
+
+**Version gate (v1.2+ only).** Pre-v1.2 manifests — v1.0.0, v1.1.0,
+v1.1.1 — retain the mandatory meta-consolidator dispatch from
+`framework.md § Artifact contracts`; the orchestrator MUST NOT author
+the canonical verdict directly regardless of lens unanimity. This gate
+prevents older manifests silently inheriting the ownership change when
+run under the v1.2+ bundle. `framework.md § P3` documents the
+v1.2+ exception in the canonical-verdict ownership row.
+
+This streamlines the unanimous case that folio.love's B.2 and D.3
+rounds hit repeatedly — dispatching a 4th family session just to
+rubber-stamp unanimous Approve burned meaningful time (folio F-023,
+F-028, F-029). Split-verdict rounds continue to use the full
+consolidator dispatch; no acceptance loss.
+
 ## When the Product lens applies
 
 Trigger: the artifact touches a **user-facing surface**. Examples:
@@ -186,6 +219,39 @@ Worktrees share the parent clone's `.git`; if the origin state is
 poisoned or tampered with, a worktree inherits the poison. For routine
 per-phase dispatch, a worktree remains acceptable. The final-merge step
 alone requires the fresh clone.
+
+## D.6 Final-approval gate (v1.2+)
+
+The D.6 gate is structural: one `FAILED` row fails the gate. Template
+`07-final-approval-gate.md` produces the gate artifact with a
+machine-readable table — columns `#`, `Prerequisite`, `Result`,
+`Evidence class`, `Reproduction`. Result tokens are exact
+`PASSED`/`FAILED`; Evidence class uses the allowed tag set defined in
+Template 07.
+
+**Primary mechanism (v1.2+).** `scripts/verify-d6-gate.sh
+<final-approval-path>` parses the gate table and asserts every row is
+`PASSED` with an allowed Evidence-class tag (`test-pass`,
+`file-exists`, `grep-empty`, etc. — see Template 07 for the
+definitive list). The script emits row-level diagnostics on failure
+and exits non-zero. This is the default D.6 gate for v1.2+
+deliverables; adopters run it against their deliverable's
+final-approval artifact before invoking the merge sequence.
+
+**Reviewer-dispatched alternative (edge cases only).** For
+deliverables whose final-approval shape diverges from the standard
+(multi-deliverable merges, specialized post-merge audits, manual
+overrides), dispatch a reviewer family using Template 07 directly.
+The reviewer produces the same artifact shape; the orchestrator
+inspects the Gate outcome line manually. This path is deprecated for
+routine deliverables — keep it available, but prefer the script for
+reproducibility.
+
+**Fixture regression.** `scripts/verify-all.sh` runs
+`verify-d6-gate.sh` against `examples/d6-gate-fixture.md` on every
+invocation as a regression guard. If the script's parser or the gate
+schema drifts, the fixture check fails before any adopter's
+deliverable run does.
 
 ---
 

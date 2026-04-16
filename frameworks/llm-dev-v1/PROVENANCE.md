@@ -24,9 +24,9 @@ Breaking changes to any normative file bump the bundle major version.
 
 ## Non-normative provenance files
 
-These capture how v1.0.0, v1.1.0, and v1.1.1 were built and reviewed.
-They are useful for understanding framework decisions but are not part
-of the contract.
+These capture how v1.0.0, v1.1.0, v1.1.1, and v1.2.0 were built and
+reviewed. They are useful for understanding framework decisions but
+are not part of the contract.
 
 | Path                              | What it is                                                                 |
 |-----------------------------------|----------------------------------------------------------------------------|
@@ -41,6 +41,9 @@ of the contract.
 | `review-board/v1.0.0-rereview-*.md` | v1.0.0 re-review family verdicts and consolidated re-review verdict.       |
 | `review-board/v1.1.0-*`          | v1.1.0 review-board artifacts (canonical verdict, family verdicts, response doc). Produced during Phase 7 of the v1.1 build plan. |
 | `review-board/v1.1.1-*`          | v1.1.1 review-board artifacts (canonical verdict + 2-family review + Gemini reviewer-of-reviewer). Focused patch-release review; 5 fixes cherry-picked from `folio.love#51` merge `ab4bc2735660`. |
+| `review-board/v1.2.0-*`          | v1.2.0 review-board artifacts (full 3-family board per minor-release policy). First v1.x release to merge cross-run findings from two independent adopter retros (johnny-os D3 + folio.love v1.1 5-slice adoption). See `docs/v1.2-build-plan.md` for the scope synthesis. |
+| `docs/v1.2-scope-proposal.md`    | v1.2 scope synthesis from the D3 Manifest Spec retro — 14 findings split across v1.1.1 and v1.2. Authored before `v1.2-build-plan.md`. |
+| `docs/v1.2-build-plan.md`        | v1.2 build plan merging johnny-os + folio.love findings by evidence weight. Drove this release. |
 
 **What a downstream adopter does with these.**
 

@@ -175,6 +175,88 @@ Abandon, or should it Split?
   in a way you cannot resolve by direct inspection of the proposal
   doc). Halt and record the contradiction; do not arbitrate facts.
 
+## P5-style divergent-reviewer consolidation (v1.2+, orchestrator pass)
+
+When the orchestrator holds ≥2 Proposal Review verdicts on the **same
+proposal** (same-variant multi-reviewer dispatch — folio F-013) and
+the verdicts diverge, apply the following consolidation rules to
+produce a single downstream verdict. These rules are invoked by the
+orchestrator, not by any single Proposal Reviewer; each Reviewer's
+verdict is produced per the scaffolding above.
+
+Cross-variant consolidation (multiple proposals each under their own
+review board) is out of scope for Template 16 in v1.2 — deferred to
+v1.3.
+
+### Step 1 — Extract blocker deltas
+
+Enumerate each Reviewer's findings side by side. One row per finding
+ID:
+
+| ID | Reviewer A ruling | Reviewer B ruling | Shared? | Evidence class |
+|----|--------------------|--------------------|---------|----------------|
+| PR-P-1 | blocker | not raised | solo-A | direct-run |
+| PR-T-2 | blocker | should-fix | shared | direct-run |
+| PR-P-5 | minor   | blocker | shared | static-inspection |
+
+- **shared** if both Reviewers raised findings against the same
+  finding-ID or the same underlying concern.
+- **solo-A / solo-B** if only one Reviewer raised it.
+
+### Step 2 — Apply evidence-class priority
+
+Classify each finding by priority:
+
+- **BUG** — direct-run reproduction in the proposal doc, or a
+  referenced prior-decision artifact directly contradicts the
+  proposal. Blocks the proposal regardless of ruling contention.
+- **STRUCTURAL** — the proposal cannot evolve correctly without this
+  fix (missing section, missing stakeholder, missing acceptance
+  criteria). Direct-run evidence not required; static-inspection with
+  a concrete locator suffices.
+- **COSMETIC** — prose, formatting, example-quality, naming
+  preferences. Does not affect direction.
+
+**Priority rule.** A higher-priority BLOCKER overrides a lower-priority
+ACCEPT by either Reviewer. Concretely:
+
+- Shared **BUG** → consolidated verdict cannot be Proceed.
+- Shared **STRUCTURAL** + one Reviewer Accept / one Revise → Revise.
+- Shared **COSMETIC** only + both Reviewers Proceed → Proceed (notes
+  record the cosmetic items for the Phase A author).
+- Solo-**BUG** with direct-run evidence → Revise (the lone finding
+  wins on evidence, per framework.md § P5).
+- Solo-**STRUCTURAL** with static-inspection evidence → record as
+  should-fix for the Phase A author; does not block Proceed on its
+  own.
+
+### Step 3 — Consolidated verdict
+
+Apply the decision matrix below. Record the chosen verdict **and** its
+rationale citing the specific finding IDs from each Reviewer that
+drove it:
+
+| Reviewer verdicts | Shared BUG? | Consolidated verdict |
+|--------------------|-------------|------------------------|
+| All Proceed        | no          | **Proceed to Phase A** |
+| All Proceed        | yes         | **Revise and re-review** (cite BUG IDs) |
+| ≥1 Revise, 0 Split, 0 Abandon | any | **Revise and re-review** |
+| ≥1 Split AND § 4 of either verdict identifies concrete sub-proposal boundaries | any | **Split into multiple proposals** |
+| ≥1 Abandon AND no Reviewer sees a fix path in any § 6 Unknown | any | **Abandon direction** (prefer Revise if any Reviewer sees a path; Abandon is final) |
+| Mixed (contradictory recommendations without a clear signal above) | — | HALT: record the contradiction; the orchestrator decides whether to timebox one final round, split, or escalate to a strategic-decision pass per playbook §13.5 |
+
+**Visible reasoning.** The consolidated verdict artifact MUST include
+a "Divergent-reviewer consolidation" subsection listing:
+
+- Each Reviewer verdict (family, artifact path, ruling).
+- The Step 1 deltas table.
+- The priority applied to each shared finding.
+- The row of the Step 3 matrix that drove the consolidated verdict.
+
+Without this transparency, future readers cannot audit how the
+consolidation chose between contradictory Reviewers — which is the
+failure mode F-013 captured in the folio.love v1.1 adoption retro.
+
 ## END PROPOSAL REVIEW
 
 ## `<FINAL_REPORT_SCHEMA>`

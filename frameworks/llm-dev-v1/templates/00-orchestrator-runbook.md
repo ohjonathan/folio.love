@@ -21,6 +21,7 @@ optional_tokens:
   - DOC_INDEX_ARCHIVE
   - CLI_CLAUDE
   - CLI_CODEX
+  - CLI_CODEX_MODEL
   - CLI_GEMINI
   - LOGS_DIR
   - DATE
@@ -71,7 +72,11 @@ validated by you. Writes outside ownership are reverted.
    `02-phase-dispatch-handoff.md`. Inline `01-worker-session-contract.md` into
    the preamble. Substitute all tokens.
 4. **Invoke.** Call the worker via `<CLI_CLAUDE>` / `<CLI_CODEX>` /
-   `<CLI_GEMINI>` with the composed prompt.
+   `<CLI_GEMINI>` with the composed prompt. For Codex, pass the
+   configured model via `<CLI_CODEX_MODEL>` (v1.2+); preflight with
+   `bash scripts/verify-tokens.sh --probe-codex-model <CLI_CODEX_MODEL>`
+   before the first B.1 dispatch to catch ChatGPT-plan account /
+   model-access mismatches early.
 5. **Artifact polling.** Watch for the worker's final report or halt report at
    the declared paths. Time-box per-phase expectations.
 6. **Mechanical validation.** Run the gate validation block for the phase

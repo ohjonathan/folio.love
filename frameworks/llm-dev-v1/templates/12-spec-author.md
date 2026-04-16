@@ -127,6 +127,34 @@ status: draft-for-review
 ```text
 <diagram>
 ```
+
+## 11. Contract enumeration checklist (v1.2+)
+
+For every §-level enum table in this spec (role enums, state enums,
+error-code enums, permission enums, CLI-flag lists, schema fields, ...),
+assert an implementation anchor — the concrete function / CLI flag /
+class field / test name that will realize the item in Phase C. The
+result is a row-level cross-reference the D.2 adversarial audit can
+grep for: any enum value that lacks an anchor is a latent scope gap.
+
+| Enum table (§ref) | Enum value | Implementation anchor | Anchor type |
+|-------------------|-----------|-----------------------|-------------|
+| §3.2 Roles        | `peer`     | `class PeerReviewer`   | class        |
+| §4.1 Error codes  | `E_LOCKED` | `raise LockError(...)` | exception    |
+| §6 Test strategy  | `scope-lock-enforced` | `test_scope_lock_rejects_migration_edit` | test         |
+
+Rules:
+- Every enum value from §1–§10 appears as a row. If the item is
+  intentionally out-of-scope, mark anchor `(deferred)` with a link
+  to § 9 Exclusion List — do not omit.
+- Anchor type is one of: `function`, `class`, `method`, `cli-flag`,
+  `exception`, `schema-field`, `test`, `deferred`.
+- D.2 adversarial uses this table as an audit surface: any row the
+  Phase C implementation doesn't match is a blocker-grade finding.
+
+Omitting this checklist triggers the halt condition in the list
+below.
+
 ```
 
 **Halt conditions (extending the contract's spec-author entry).**
@@ -139,6 +167,10 @@ status: draft-for-review
   have (escalate to the orchestrator; do not guess).
 - Diagrams and prose cannot be reconciled — halt, do not ship a known
   mismatch.
+- A §-level enum table in §1–§10 lacks a row in the § 11 Contract
+  enumeration checklist (v1.2+). Every enum value must have an
+  implementation anchor or an explicit `(deferred)` link to §9
+  Exclusion List.
 
 ## END SPEC AUTHOR
 

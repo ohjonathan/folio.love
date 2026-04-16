@@ -1,0 +1,15 @@
+# Circuit-breaker fixture (v1.2+): new blocker IDs per round (convergence).
+#
+# Two B.1 rounds: round 1 preserves SPEC-1 + SPEC-2; round 2 preserves
+# SPEC-7 + SPEC-8 (entirely new IDs — author closed round 1's blockers
+# and the improved artifact surfaced new problems). verify-circuit-breaker
+# should report CB quiescent — progress is happening, not stagnation.
+# Orchestrator may dispatch the next round.
+
+review_rounds:
+  - phase: "B.1"
+    round: 1
+    preserved_blocker_ids: ["SPEC-1", "SPEC-2"]
+  - phase: "B.1"
+    round: 2
+    preserved_blocker_ids: ["SPEC-7", "SPEC-8"]

@@ -1,4 +1,4 @@
-# Deliverable Manifest Schema — v1.1.0 (backward-compatible with v1.0.0)
+# Deliverable Manifest Schema — v1.2.0 (backward-compatible with v1.0.0, v1.1.0, v1.1.1)
 #
 # Structural + typed spec for a deliverable manifest. A manifest drives the
 # prompt-suite generator (see generator-spec.md) and is the source of truth
@@ -14,7 +14,12 @@
 # schema; manifests drafted before `manifest_version` was required
 # still need the field added — the `required` list itself is
 # unchanged from v1.0.0):
-#   - manifest_version accepts "1.0.0" or "1.1.0".
+#   - manifest_version accepts "1.0.0", "1.1.0", "1.1.1", or "1.2.0".
+#     v1.1.1 adopters may stamp "1.1.1" even though v1.1.1 added no
+#     schema fields — the version string tracks bundle identity.
+#     v1.2.0 unlocks review_rounds[] + cli_capability_matrix[].evidence_cap
+#     (both optional + additive) and the P3 adversarial-family
+#     MUST-differ-provider invariant enforced by verify-p3.sh.
 #   - phase_id enum gains three pre-A variants (-A.proposal, -A.triage,
 #     -A.validation) for optional entry points before Phase A.
 #   - role_label enum gains `product` (user-facing review lens) plus
@@ -113,9 +118,16 @@ definitions:
 properties:
 
   manifest_version:
-    description: Semver of this schema (tied to bundle version). v1.1 accepts v1.0.0 manifests unchanged.
+    description: |
+      Semver of this schema (tied to bundle version). Each enum value is
+      the bundle version the manifest targets. v1.2.0 accepts v1.0.0,
+      v1.1.0, and v1.1.1 manifests unchanged. Adopters upgrading from an
+      older bundle should bump this field to the target bundle version
+      to opt into any new enforcement layered on top (e.g., v1.2+
+      adversarial-family MUST-differ-provider in verify-p3.sh is
+      version-gated on manifest_version ≥ 1.2.0).
     type: string
-    enum: ["1.0.0", "1.1.0"]
+    enum: ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
 
   user_facing:
     description: When true, Phases B.1/B.2/D.2 require a Product reviewer (Template 19) in model_assignments. Enforcement lives in verify-p3.sh. Default false preserves v1.0.0 behavior.
@@ -256,6 +268,20 @@ properties:
         git:         { type: boolean }
         test_runner: { type: boolean }
         doc_index:   { type: boolean }
+        evidence_cap:
+          description: |
+            (v1.2+) Maximum evidence class this family's reviewers may claim
+            for blocker-grade findings. Absent / null = no cap (direct-run
+            permitted). Allowed values: `direct-run` (no cap),
+            `orchestrator-preflight` (no self-run; orchestrator reports),
+            `static-inspection` (reader-only). Template 06 auto-downgrades
+            any claimed blocker whose evidence class exceeds the reviewing
+            family's cap — mechanizes the scope-proposal §6 pattern where
+            sandboxed Gemini repeatedly needed post-hoc P5 downgrade to
+            static-inspection. Setting the cap pre-dispatch makes the
+            downgrade declarative rather than reactive.
+          type: string
+          enum: [direct-run, orchestrator-preflight, static-inspection]
 
   smoke_checks:
     description: Per-phase fast checks. Fills <SMOKE_CHECKS[]>.
@@ -316,6 +342,69 @@ properties:
           properties:
             command: { type: string }
             expect:  { "$ref": "#/definitions/expectation" }
+
+  cross_provider_adversarial_passes:
+    description: |
+      (v1.2+) When the manifest assigns an `adversarial` role whose family
+      shares a provider with the author family on B.1, B.2, or D.2 (e.g.,
+      claude-sonnet adversarial with claude-opus author), the v1.2 P3
+      adversarial-family invariant requires a cross-provider second-pass
+      review artifact to authorize the same-provider adversarial as
+      advisory-only. This field is the structured declaration of that
+      second pass.
+      verify-p3.sh enforces two conditions per entry:
+        1. `provider` MUST be different from any author provider (the
+           second pass is genuinely cross-provider).
+        2. At least one `gate_prerequisites` entry of category
+           `verdict-presence` MUST reference `artifact_path` in its
+           `verification.command` string (the second-pass artifact is
+           mechanically checked at D.6).
+      Replaces the v1.2.0-RC1 gate-id-prefix convention, which was
+      bypassable by a dummy `gate_prerequisites` entry (folio.love-style
+      ALIGN-BLOCKER1; Codex Alignment review of v1.2.0 candidate).
+      Pre-v1.2 manifests ignore this field.
+    type: array
+    items:
+      type: object
+      required: [phase, family, provider, artifact_path]
+      additionalProperties: false
+      properties:
+        phase: { "$ref": "#/definitions/phase_id" }
+        family: { type: string, minLength: 1 }
+        provider:
+          description: Provider label; must differ from the author family's provider (first hyphen-delimited segment of the author family name).
+          type: string
+          minLength: 1
+        artifact_path:
+          description: Path pattern for the cross-provider second-pass review artifact. Must be referenced by a verdict-presence gate_prerequisites entry.
+          type: string
+          minLength: 1
+
+  review_rounds:
+    description: |
+      (v1.2+) Optional log of completed review-board rounds per phase.
+      Each entry records the canonical verdict's preserved-blocker IDs for
+      that round. v1.2+ circuit-breaker fires only on ID overlap across
+      rounds (same IDs cycling across rounds = halt; new IDs found in an
+      improved artifact = not a halt). Orchestrators append an entry after
+      each meta-consolidator run (Template 06 emit guidance).
+      scripts/verify-circuit-breaker.sh validates the schema and reports
+      per-phase CB state. Absent / empty is valid for deliverables that
+      have not yet started review rounds.
+    type: array
+    items:
+      type: object
+      required: [phase, round, preserved_blocker_ids]
+      additionalProperties: false
+      properties:
+        phase: { "$ref": "#/definitions/phase_id" }
+        round:
+          type: integer
+          minimum: 1
+        preserved_blocker_ids:
+          description: List of stable blocker IDs preserved by the canonical verdict for this round. Empty list allowed (round produced Approve).
+          type: array
+          items: { type: string }
 
   tracker:
     description: Location and row schema for the deliverable tracker.

@@ -1,0 +1,13 @@
+# Circuit-breaker fixture (v1.2+): malformed — missing preserved_blocker_ids.
+#
+# verify-circuit-breaker.sh should detect the missing required field and
+# exit 1 with a row-level diagnostic. Used to confirm the schema-validation
+# path fires (not just the CB-state-reporting path).
+
+review_rounds:
+  - phase: "B.1"
+    round: 1
+    preserved_blocker_ids: ["SPEC-1"]
+  - phase: "B.1"
+    round: 2
+    # preserved_blocker_ids intentionally omitted

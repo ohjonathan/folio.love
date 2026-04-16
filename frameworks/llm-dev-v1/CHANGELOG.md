@@ -3,13 +3,103 @@
 All notable changes to the `llm-dev-v1` framework bundle are documented here.
 Versioning is bundle-scoped (`llm-dev-vMAJOR.MINOR.PATCH`).
 
-## v1.1.1 — Candidate 2026-04-16 (PR #7, merge `TBD`)
+## v1.2.0 — Candidate 2026-04-16 (PR #TBD, merge `TBD`)
+
+Minor release; first v1.x release to merge cross-run findings from two
+independent adopter retros: the framework maintainer's D3 Manifest Spec
+retro and folio.love's v1.1.0 adoption retro (5 slices). Full 3-family
+review board (Claude + Codex + Gemini) per minor-release policy —
+distinct from v1.1.1's 2-family focused review. Canonical verdict path:
+`review-board/v1.2.0-spec-verdict.md` (pending Gemini reviewer-of-
+reviewer audit on top of the consolidated family verdicts).
+
+**Non-goals held.** No breaking schema changes, no schema renames, no
+token removals. New schema fields (`review_rounds[]`,
+`cli_capability_matrix[].evidence_cap`,
+`cross_provider_adversarial_passes[]`) are additive and optional —
+v1.0.0 / v1.1.0 / v1.1.1 manifest CONTRACTS are preserved (a manifest
+drafted under any earlier version still validates under the v1.2.0
+schema). The bundled `manifest/example-manifest.yaml` file stays at
+`manifest_version: "1.0.0"` but gained v1.2 demonstration entries
+(`evidence_cap` on gemini in `cli_capability_matrix`; one-entry
+`review_rounds[]`; one-entry `cross_provider_adversarial_passes[]`
++ matching verdict-presence gate) — these are grandfathered for
+pre-v1.2 manifests by `verify-p3.sh` and are there only to show the
+shape v1.2 adopters use. The v1.0.0 walkthrough
+(`examples/walkthrough-mini-deliverable.md`) is byte-unchanged.
+
+Source evidence: merged via evidence-weight priority from
+`docs/v1.2-build-plan.md`. Cross-run findings (both retros concur) get
+must-ship; single-retro findings get should-ship unless
+coherence-critical.
+
+**Must-ship shipped (cross-run consensus).**
+
+| Item | Summary | Files |
+|------|---------|-------|
+| 1.1 | Adversarial-family MUST-differ-provider invariant. Provider = first hyphen-delimited segment of family name (`claude-opus` + `claude-sonnet` share `claude`). Same-provider adversarial is advisory-only; escape hatch via `gate_prerequisites` id prefix `G-xprov-adv-<phase>`. v1.2+ manifests only; v1.0/1.1/1.1.1 grandfathered. | `framework.md` § P3, `templates/05-review-board-adversarial.md`, `scripts/verify-p3.sh` |
+| 1.2 | `scripts/verify-d6-gate.sh` (new) — machine-readable D.6 gate-table parser. Template 07 output schema updated with `Evidence class` column + allowed tag set (test-pass, file-exists, grep-empty, grep-match, count-eq, count-gte, command-exit-0, command-exit-nonzero, orchestrator-preflight). `verify-all.sh` runs the script against `examples/d6-gate-fixture.md` as a regression. | `templates/07-final-approval-gate.md`, `scripts/verify-d6-gate.sh`, `playbook.md` § D.6 |
+| 1.3 | Circuit-breaker preserved-blocker-ID carry-forward. Schema adds optional `review_rounds[]`; Template 06 emits `preserved_blocker_ids` in frontmatter; `scripts/verify-circuit-breaker.sh` (new) reports per-phase CB fire (ID overlap) vs quiescent (new IDs). | `manifest/deliverable-manifest.schema.yaml`, `templates/06-meta-consolidator.md`, `scripts/verify-circuit-breaker.sh`, `examples/cb-fixture-*.yaml` |
+| 1.4 | Template 06 CB escalation-record + new-vs-recurring judgment prose (orchestrator-authored override for false CB fires). | `templates/06-meta-consolidator.md` |
+| 2.1 | `scripts/verify-adopter.sh` (new) — unified adopter-CI entrypoint; `--manifest <path>` flag propagated to `verify-schema.sh`, `verify-p3.sh`, `verify-gate-categories.sh`, `verify-artifact-paths.sh`. | `scripts/verify-adopter.sh`, 4 verify-\*.sh scripts, `README.md` |
+| 2.2 | Template 16 P5-style divergent-reviewer consolidation (blocker deltas → BUG/STRUCTURAL/COSMETIC priority → consolidated verdict matrix). Single-variant only; cross-variant deferred to v1.3. | `templates/16-proposal-review.md` |
+
+**Should-ship shipped.**
+
+| Item | Summary |
+|------|---------|
+| 3.1 | `<CLI_CODEX_MODEL?>` token + `verify-tokens.sh --probe-codex-model` preflight. |
+| 3.2 | `cli_capability_matrix[].evidence_cap` — declarative per-family evidence ceiling; Template 06 auto-downgrades over-cap claims. |
+| 3.3 | Canonical loader-swap verification pattern in Template 15 (`git show <pre>:<path>` → pytest swap). |
+| 3.4 | Template 06 preserve/downgrade metrics block (per-family counts, evidence cap column). |
+| 3.5 | Adoption doc v2: README § Adopter onboarding rewritten; `examples/day-one.sh` (new) bootstrap script; `<MANIFEST_DIR>` token; per-language scope-lock starting points (Python / TS / Go). |
+| 3.6 | Orchestrator consolidation fast-path on unanimous non-conflicting rounds (playbook § Review board + Template 06). |
+| 3.7 | Codex adversarial targeted-prompt pattern (Template 05): sparingly-read file list + pre-declared failure categories + classified output. |
+| 3.8 | Contract enumeration checklist (Template 12 § 11) + B.1/D.2 `yq` preflight (Template 02). |
+| 3.9 | Role-boundary tightening on Templates 03 / 04 / 19 (enumeration audit → Alignment; scope compliance → mechanical gate; Product stays on UX). |
+
+**Nice-to-have shipped.**
+
+| Item | Summary |
+|------|---------|
+| 4.1 | `<MERGE_WORKSPACE?>` token + workspace / worktree / merge-workspace clarifier (tokens.md). |
+| 4.2 | `examples/walkthrough-triage.md` + `examples/walkthrough-validation-run.md` micro-walkthroughs (closes v1.1.0 PEER-SF2 deferral). |
+
+**Deferred to v1.3 or later.**
+
+- Phase 4.3 ADV-SF5 — `<USER_FACING>` / `<PRODUCT_VERDICT_PATH>`
+  token↔manifest mechanical linkage re-deferred to the v2 generator
+  (substitution-layer work; adopter friction did not surface in
+  folio.love v1.1 slices).
+- Cross-variant Pre-A proposal consolidation (Template 16b) — user
+  decision 2026-04-16.
+- Folio.love-parked items: B-1 (scope-audit pre-phase), B-4
+  (stdout-worker adapter), B-6 (`<SCOPE_BASE_COMMIT>`), B-7
+  (regression_guards inherits-from), C-3 (rate-limit observability),
+  C-6 (Pre-A posture suffix), C-7 (severity-aware CB — superseded by
+  1.3 mechanical CB), C-8 (partial-closure state), C-10 (Template 12
+  planner's findings), C-11 (forbidden-path glob negation), C-14
+  (D.4 fix-summary line-citation regen), ADV-SF-003 (mechanical B.3
+  cardinality re-baseline beyond B-5 prose norm).
+
+Friction surfaced during v1.2 build (details in
+`docs/retros/v1.2-build-retro.md`) promoted to v1.3 should-fix:
+- #11 pseudo-token scanner false positives (3rd recurrence).
+- #13 shellcheck not in conformance suite.
+- #14 `yq` dependency introduced implicitly by 3.8 preflight.
+
+Conformance suite: 10/10 green throughout the build (8 from v1.0/1.1
++ `verify-d6-gate.sh` fixture regression + `verify-circuit-breaker.sh`
+on both example manifests).
+
+## v1.1.1 — Released 2026-04-16 (PR #7, merge `4dfa01f`)
 
 Five bug fixes cherry-picked from folio.love's first production adoption
-of v1.1.0. Light-touch 2-family review (Claude + Codex) per patch-release
-policy; full 3-family board reserved for v1.2. Release stamp flips from
-"Candidate" to "Released" and `merge TBD` to the real SHA after the
-cross-family canonical verdict reaches Approve.
+of v1.1.0. Canonical 2-family review-board verdict: **Approve** at
+`review-board/v1.1.1-spec-verdict.md`; Gemini reviewer-of-reviewer
+**Concur** at `review-board/v1.1.1-gemini-audit.md`. Patch-release
+policy (light-touch 2-family board); full 3-family board reserved for
+v1.2.
 
 **Non-goals held.** No breaking schema changes, no schema renames, no new
 templates, no token removals. Existing templates and scripts receive

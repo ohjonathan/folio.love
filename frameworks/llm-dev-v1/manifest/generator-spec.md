@@ -211,10 +211,17 @@ remaining in a prompt, except `<FINAL_REPORT_SCHEMA>`.
 
 ## Versioning coupling
 
-The generator targets `manifest_version: 1.0.0` or `1.1.0`. v1.1 is
-backward-compatible with v1.0.0 manifests: v1.1 additions (`user_facing`,
-`pre_a`, `product_verdict`, pre-A phase enums, new role labels) are all
-optional and default to v1.0.0 behavior when absent. A manifest with a
-higher version than the generator supports is rejected with a message
-indicating the generator version gap. Breaking changes to the manifest
-schema bump the bundle to `llm-dev-v2/` and the generator follows.
+The generator targets `manifest_version: 1.0.0`, `1.1.0`, `1.1.1`, or
+`1.2.0`. Each higher version is backward-compatible with every lower
+version's manifests. v1.1 additions (`user_facing`, `pre_a`,
+`product_verdict`, pre-A phase enums, new role labels) are all optional
+and default to v1.0.0 behavior when absent. v1.1.1 is a bundle-identity
+bump with no new schema fields. v1.2 additions (`review_rounds[]`,
+`cli_capability_matrix[].evidence_cap`,
+`cross_provider_adversarial_passes[]`) are additive + optional; the
+v1.2 P3 adversarial-family MUST-differ-provider invariant is enforced
+by `verify-p3.sh` only when `manifest_version ≥ 1.2.0`. A manifest with
+a higher version than the generator supports is rejected with a
+message indicating the generator version gap. Breaking changes to the
+manifest schema bump the bundle to `llm-dev-v2/` and the generator
+follows.

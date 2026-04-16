@@ -3,12 +3,48 @@
 # is defined in tokens.md (and vice versa, modulo the allowed
 # <FINAL_REPORT_SCHEMA> placeholder).
 #
+# v1.2+ flag: `--probe-codex-model <MODEL>` runs a minimal codex-CLI
+# dispatch to verify the adopter's Codex account can reach the named
+# model. Useful as a pre-B.1 preflight: `<CLI_CODEX?>` binds the
+# binary, `<CLI_CODEX_MODEL?>` binds the model; this probe confirms
+# the combination works before any dispatch burns credits. Does NOT
+# run by default; opt-in only.
+#
 # Exits 0 on success, non-zero with a list of offending tokens otherwise.
+# Probe mode: exit 0 if model reachable; 1 if CLI exit nonzero; 2 if
+# `codex` not on PATH.
 
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bundle="$(cd "$here/.." && pwd)"
+
+# v1.2+ preflight probe: test Codex CLI × model reachability. Blocks
+# until codex exits — no timeout wrapper (macOS default shell lacks
+# `timeout`/`gtimeout`; adopter may Ctrl-C to abort). Real prompts at
+# xhigh reasoning may take 10-30 seconds; adopter-tolerable for a
+# pre-dispatch preflight.
+if [[ "${1:-}" == "--probe-codex-model" ]]; then
+  if [[ -z "${2:-}" ]]; then
+    echo "usage: verify-tokens.sh --probe-codex-model <MODEL>" >&2
+    exit 1
+  fi
+  model="$2"
+  if ! command -v codex >/dev/null 2>&1; then
+    echo "verify-tokens: probe-codex-model: codex CLI not on PATH" >&2
+    exit 2
+  fi
+  echo "verify-tokens: probing codex × model=$model (runs until codex exits; Ctrl-C to abort)..."
+  if echo "ping" | codex exec --full-auto --model "$model" - >/dev/null 2>&1; then
+    echo "verify-tokens: probe-codex-model: OK (model=$model reachable)"
+    exit 0
+  else
+    rc=$?
+    echo "verify-tokens: probe-codex-model: FAILED (exit $rc) — check that your Codex account has access to model '$model'" >&2
+    echo "verify-tokens: the D3 retro FL#2 documented 'codex exec -m o3' failing under ChatGPT-plan accounts even when the CLI itself works" >&2
+    exit 1
+  fi
+fi
 
 templates_dir="$bundle/templates"
 framework="$bundle/framework.md"

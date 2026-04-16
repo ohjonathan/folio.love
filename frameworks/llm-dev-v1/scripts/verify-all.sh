@@ -10,6 +10,7 @@
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bundle="$(cd "$here/.." && pwd)"
 
 checks=(
   "verify-schema.sh"
@@ -20,6 +21,7 @@ checks=(
   "verify-gate-categories.sh"
   "verify-artifact-paths.sh"
   "verify-portability.sh"
+  "verify-circuit-breaker.sh"
 )
 
 failed=()
@@ -39,6 +41,23 @@ for c in "${checks[@]}"; do
   fi
   echo
 done
+
+# v1.2 fixture regression: verify-d6-gate.sh runs per-deliverable, not
+# per-bundle, so the bundle check validates the script against a known-good
+# fixture (examples/d6-gate-fixture.md). If the parser or schema drifts,
+# this fires before any adopter's deliverable run does.
+echo "::: verify-d6-gate.sh (fixture) :::"
+if bash "$here/verify-d6-gate.sh" "$bundle/examples/d6-gate-fixture.md"; then
+  :
+else
+  status=$?
+  if [[ $status -eq 2 ]]; then
+    skipped+=("verify-d6-gate.sh(fixture)")
+  else
+    failed+=("verify-d6-gate.sh(fixture)")
+  fi
+fi
+echo
 
 echo "-----------------------------------------------------------------"
 if [[ ${#failed[@]} -gt 0 ]]; then
