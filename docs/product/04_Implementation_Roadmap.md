@@ -503,11 +503,14 @@ synthetic lifecycle test proves the complete Tier 3 pipeline end-to-end.
 
 **Only build when the library has enough depth that discovery becomes the bottleneck.**
 
-Tier 4 is now ready to begin on the retained production library. The remaining
-post-closeout operational follow-ups were closed on 2026-04-04, and the
-shared graph-ops foundation landed on 2026-04-15. The first remaining
-synthesis slice is therefore `folio digest`, not a new graph-authoring
-workflow.
+Tier 4 is well underway on the retained production library. The remaining
+post-closeout operational follow-ups closed on 2026-04-04; the shared
+graph-ops foundation landed on 2026-04-15; the proposal review layer
+(slices 1-6a) shipped through 2026-04-16; and `folio digest` (daily +
+weekly, the first synthesis surface) shipped on 2026-04-16 as v0.7.0
+(PR #58). The next committed work is the §15.6 shared-consumer expansion —
+unblocked by digest establishing the source-less analysis-doc consumer
+pattern.
 
 ### Tier 4 Foundation (Shipped)
 
@@ -532,15 +535,19 @@ review UX:
 
 ### Tier 4 Implementation Order
 
-1. Daily digest (`folio digest`)
-2. Weekly digest (`folio digest --week`)
-3. Graph quality layer (`folio enrich diagnose`, trust-aware graph behavior,
-   relation-schema validation)
-4. Related links + Maps of Content
-5. `folio synthesize`
-6. Proposal review hardening for producers already in play
-7. Heavier / deferred discovery work (`folio search`, org traversal queries,
-   `folio vocab`, optional watcher, discovery experiments)
+| # | Slice | Status | Reference |
+|---|---|---|---|
+| 0 | Proposal review hardening (slices 1-5) | **Shipped** | PRs #44 (v0.6.0), #45 (v0.6.1), #46 (PROV-1 / v0.6.2), #47 (v0.6.3), v0.6.4 (slice 4) |
+| 0a | Entity-merge rejection memory (slice 6a) | **Shipped** | PR #57 (v0.6.5) |
+| 1 | Daily digest (`folio digest`) | **Shipped** | PR #58 (v0.7.0) |
+| 2 | Weekly digest (`folio digest --week`) | **Shipped** | PR #58 (v0.7.0; same slice as daily) |
+| 3 | **Slice 6b — shared-consumer expansion** (parent §15.6) | **Unblocked, next** | `folio synthesize`, `folio search`, generalized `folio graph` proposals — each consumes the shared §5 proposal contract + inherits rejection memory + lifecycle states + trust gating from slices 1-6a + the source-less analysis-doc pattern from v0.7.0 digest |
+| 4 | Graph quality layer (`folio enrich diagnose`, trust-aware graph behavior, relation-schema validation) | Pending | — |
+| 5 | Related links + Maps of Content | Pending | — |
+| 6 | `folio synthesize` | Pending (shipped under #3 if folded into shared-consumer slice) | — |
+| 7 | Heavier / deferred discovery work (`folio search`, org traversal queries, `folio vocab`, optional watcher, discovery experiments) | Pending | — |
+
+**Digest carry-forwards (deferred to v0.7.x or later, not blocking #3 shared-consumer expansion):** `--steerco` output mode, watcher / automatic trigger, cross-engagement digest scope, manual-edit preservation across rerun, transient-error LLM retry policy, digest-generated relationship suggestions routing through `folio links` (CF-3 — naturally folds into #3 shared-consumer expansion).
 
 ### Week 23-25: Temporal Roll-Ups
 
