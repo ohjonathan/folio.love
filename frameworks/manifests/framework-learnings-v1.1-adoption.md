@@ -432,3 +432,91 @@ All three are adopter-experience hygiene; none are design-critical. Slice 6a con
 | v1.2+ recs | — | C-1..C-4 | C-5..C-8 | C-9..C-14 | — | T-1..T-3 | Accumulating cleanly |
 
 **Net effect:** Slice 6a matches slice 4's low-friction baseline (2 entries). Both new entries (F-047, F-048) are ergonomic, not structural. The framework has converged for the adopter's code-surface category; remaining friction is in adopter tooling (ontos, glob support) and orchestrator heuristics (when to dispatch codex vs. orchestrator-consolidate).
+
+---
+
+# Slice 7 supplement — folio-digest-v0-7-0 (2026-04-16)
+
+First **greenfield-module** slice (vs. slices 1–6a which all extended existing modules). 1210-line spec across 3 versions (v1.0 → v1.1 → v1.2), 2 B rounds + B.3 R3 orchestrator-direct closure, 1 D round + D.4 fix + D.5 verify + D.6 gate. 240 tests green at D.6.
+
+### 1. Token-fill friction
+
+**No new findings.** Greenfield modules don't surface new token-fill issues — the manifest schema handles them identically to extension slices.
+
+### 2. Template gaps
+
+**One new template gap surfaced and mitigated within-session:** The B.3 / D.3 canonical-verdict templates (Template 06) have no documented support for **orchestrator-direct round-N closure** (i.e., orchestrator authors B.3 R(N+1) without dispatching a fresh 4-lens board, citing prior verdict criteria). v0.7.0 used this pattern at B.3 R3 successfully (`docs/validation/v0.7.0_spec_canonical_verdict_round3.md`) following the slice 6a B.3 R2 precedent. The pattern works when the prior round's verdict explicitly states criteria for orchestrator-direct closure ("If v1.2 closes the blocker AND ≥7/9 SF cleanly...").
+
+**v1.3 recommendation (promoted to should-ship):** Document the orchestrator-direct R(N+1) closure pattern as a Template 06 variant. The trade-off is real: skipping a fresh 4-lens dispatch saves cost but loses fresh-adversarial signal on the revision. v0.7.0 saw this trade-off bite at D.2 — the v1.2 spec contained an implementation gap (orphan self-heal not pre-LLM, B-201) that a fresh B.3 R3 lens dispatch likely would have caught. The pattern is valid but should be applied judiciously: surgical revisions yes, structural design changes no. (Friction signal: F-N/A — emerged from B.3 R3 → D.2 trace, not a discrete entry.)
+
+### 3. Multi-family dispatch friction
+
+**Codex prompt-template friction surfaced twice (F-053):** Codex round 1 (ADV-009) and codex round 2 (ADV-107) both reported "manifest absent" — false positives caused by F-052 mid-session branch-state confusion. Codex's adversarial template (templates/05-review-board-adversarial.md) does NOT require file-existence verification (`git ls-files`, `git rev-parse HEAD`, `git branch --show-current`) before generating a "file missing" finding. It defaulted to "if I can't ls it, it's missing" without distinguishing tree state from repo state.
+
+**Adversarial recall pattern reconfirmed and extended.** Slice 7:
+- B.1 R1: codex caught no blockers (the spec was conceptually clean from the start); peer caught both blockers (PR-1 + PR-2 — wrong CLI shape + wrong pattern citation, both line-reference verifiable). **First time peer outperformed codex on B.1 blocker count.**
+- B.2 R2: codex caught the B-101 blocker (Trust Notes ownership/validation contradiction). Peer caught PR-101 (atomic_write capture-ordering bug). Two lenses, two distinct blockers.
+- D.2 R1: codex caught the B-201 blocker (orphan self-heal pre-LLM). Peer downgraded the same finding to should-fix; gemini independently raised it as alignment defect ALIGN-201.
+- **Conclusion (extending slice 6a's analysis):** codex remains highest-yield on **failure-mode reasoning**; peer is highest-yield on **line-reference verification + helper-signature accuracy**. The two are complementary and both justify their dispatch slot. The "save codex when spec is converged" recommendation from slice 6a still holds — but only when the revision is mostly mechanical. v0.7.0's D.2 surfaced a real implementation defect that codex caught and others didn't.
+
+**v1.3 recommendation (should-ship):** Add file-existence verification preamble to ALL reviewer prompts (not just codex). One-line addition: "Before claiming a file is absent, verify with `git ls-files <path>` AND `git rev-parse HEAD` matches the deliverable's expected branch HEAD. If `git ls-files` returns the path, the file exists in the repo even if your `ls` cannot read it." See F-053.
+
+### 4. Verify-script accuracy
+
+**No verify-script regressions.** All 12 D.6 gate prerequisites passed first attempt (G-test-1, G-test-2, G-scope-1, G-scope-2, G-cardinality-1, G-cardinality-2, G-verdict-1, G-verdict-2, G-verdict-3, G-blocker-1, G-branch-1, G-branch-2). Codex final-approval gate ran cleanly with structured pass/fail output.
+
+**F-048 recurrence (codified):** Three independent runs of codex / Ontos auto-regenerated `Ontos_Context_Map.md` mid-session despite the file being in `scope.forbidden_paths`. Each was reverted via `git checkout`. This is the third v1.3 confirmation that adopter pre-D.6 guidance ("revert auto-regenerated files in forbidden_paths before D.6") is the right answer (slice 6a F-048 + v0.7.0 F-051 + the codex sub-process invocations during this slice's review board).
+
+### 5. Manifest/schema ergonomics
+
+**One new schema gap (F-047 recurrence):** Round-2 + Round-3 validation file paths weren't in the original `scope.allowed_paths` list. Specifically `v0.7.0_spec_alignment_gemini_round2.md` was not enumerated even though `_round2` variants for codex / claude-sub were. This recurs slice 6a's F-047 — the v1.3 glob support (`scope.allowed_path_patterns`) would close it.
+
+The G-scope-1 gate didn't FAIL on this because the gate only checks that no FORBIDDEN paths were modified; it doesn't verify allowed-paths exhaustively. So the manifest under-enumeration is silent at gate time but real at audit time. This is consistent with slice 6a's analysis.
+
+**One new schema observation (gentle):** The branch-name convention `feat/<DELIVERABLE_ID>-<PHASE_ID>-<ROLE>-<FAMILY>` from `tokens.md` produces `feat/folio-digest-v0-7-0-C-author-claude` for v0.7.0 — implying one branch per phase. In practice (and matching all six prior slices), one branch per slice was used, with the branch name reflecting the eventual implementation author (Phase C). The convention vs. practice gap is documented in F-051. v1.3 should clarify the convention is "branch per slice, named by terminal phase author."
+
+### 6. Concrete v1.3 recommendations (additions to slice 6a's T-1..T-3)
+
+| Tier | ID | Recommendation | Friction ref | Effort estimate |
+|------|----|----------------|--------------|----|
+| **Should-ship** | T-4 | Add file-existence verification preamble to all reviewer prompt templates (templates/03..05, 19): instruct reviewers to `git ls-files` + `git rev-parse HEAD` before raising "file missing" findings. | F-053 | Template edit + smoke test: ~1 hour |
+| **Should-ship** | T-5 | Document orchestrator-direct R(N+1) closure pattern as a Template 06 variant. Include explicit trade-off note (saves dispatch cost, loses fresh-adversarial signal; safe for surgical revisions, unsafe for structural). | This-slice B.3 R3 → D.2 B-201 trace | Template 06 amendment: ~2 hours |
+| **Should-ship** | T-6 | Manifest pre-A justification template: when citing a contract that lives OUTSIDE the Pre-A artifact, MUST use full `<doc> §<section>` form. Avoids the §15.7-cite-path confusion that surfaced in v0.7.0 (F-049). | F-049 | Manifest README + schema docs: ~1 hour |
+| **Should-ship** | T-7 | Helper-divergence-disclosure section in spec template (Template 12) for "first consumer of an existing helper family." Forces the author to either extend the helper's signature OR document the divergence explicitly in the spec's §3 (module structure). | F-050 | Template 12 amendment: ~2 hours |
+| Polish | T-8 | Orchestrator runbook: pre-dispatch branch-pinning check. `git branch --show-current` must equal the deliverable's feature branch before any subprocess invocation. Prevents the F-052 class of errors. | F-052 | Runbook section: ~30 min |
+| Polish | T-9 | Spec template prompt for "self-inflicted regression risk acknowledgment": when a revision (vN → vN+1) addresses N findings, the spec author should explicitly check whether the fix introduces new defects. v0.7.0's v1.1 introduced SF-101 (atomic_write ordering) and PROD-SF-101 (DG-CLI-9c pluralization) while fixing 22 round-1 findings. v1.2 caught both via fresh B.2 review, but if R3 had skipped (the slice 6a precedent), they'd have leaked to D.2. | This-slice v1.1 → v1.2 trace | Template 12 amendment: ~30 min |
+
+### Delta retrospective (vs. slices 1-6a)
+
+| Dimension | Slice 1 | Slice 2 | PROV-1 | Slice 3 | Slice 4 | Slice 6a | **Slice 7 (v0.7.0)** |
+|-----------|---------|---------|--------|---------|---------|----------|----------------------|
+| Pre-A | Full (halted R1) | Inherited | Inherited | Inherited | Inherited | Inherited | Inherited (design spec rev 4) |
+| Spec versions | v1.0→v1.1→v1.2→v1.3 (4) | v1.0→v1.1 (2) | v1.0→v1.1 (2) | v1.0→v1.1 (2) | v1.0→v1.1→v1.2 (3) | v1.0→v1.1→v1.2 (3) | **v1.0→v1.1→v1.2 (3)** |
+| B rounds | 4 | 2 | 2 | 1 | 2 | 2 + R3 ortho | **2 + R3 ortho** |
+| D rounds | 1 | 1 | 1 | 1 | 1 + D.4 | 1 + D.4 | **1 + D.4** |
+| Blockers found (B) | 3 (Pre-A) | 6 (B.1) | 3 (B.1) | 4 (B.1) | 4 (B.1) | 2 (B.1 codex) | **2 (B.1 peer) + 1 (B.2 codex)** |
+| Blockers found (D) | 0 | 0 | 0 | 0 | 2 (D.2) | 0 | **1 (D.2 codex orphan self-heal)** |
+| Test delta | +42 | +10 | +12 | +11 | +27 | +23 | **+79** (greenfield module) |
+| Codex adversarial yield | N/A | Peer-role | N/A | Failed (F-042) | Strong | Strong (2 blockers B.1) | **Mixed: 0 B.1 blockers; 1 B.2 blocker; 1 D.2 blocker. Peer caught B.1 blockers.** |
+| Friction count | 28 | 5 | 4 | 4 | 2 | 2 | **5 (F-049..F-053)** |
+| New f-issue type | Token-fill / Template gaps | (none new) | (none new) | (none new) | Author hygiene | Manifest schema (glob), Verify-script (ontos) | **Branch-state hygiene; Codex prompt-template; Helper-divergence disclosure; Spec→Implementation traceability** |
+
+**Critical delta question:** **Did the orchestrator-direct R3 closure pattern hold up?** Partially. v0.7.0's B.3 R3 cleared the v1.2 spec for Phase C, but D.2 then caught B-201 (orphan self-heal not pre-LLM) — a defect the v1.2 spec text described but the implementation didn't deliver. A fresh B.3 R3 4-lens dispatch likely would have caught it (specifically, codex adversarial would have noticed that the spec said "before LLM call" but the code path only registered after success). Slice 7 confirms the pattern is **safe for surgical revisions** (line citations, parameter renames, wording) but **adds risk for structural revisions** (new control-flow expectations like the §10.4 self-heal sequencing). v1.3 T-5 codifies this guidance.
+
+### Cross-slice friction trend (updated through slice 7)
+
+| Class | Slice 1 | Slice 2 | PROV-1 | Slice 3 | Slice 4 | Slice 6a | **Slice 7** | Trend |
+|-------|---------|---------|--------|---------|---------|----------|-------------|-------|
+| Token-fill | 6 | 0 | 0 | 0 | 0 | 0 (1 adjacent) | **0** | Stable-clean |
+| Template gap | 3 | 1 | 0 | 1 | 0 | 0 | **1 (R(N+1) closure pattern)** | Stable-clean |
+| Multi-family | 2 | 0 | 0 | 0 | 1 (mitigated) | 0 | **1 (codex F-053 file-presence)** | Stable |
+| Verify-script | 1 | 0 | 0 | 0 | 1 | 1 (F-048 ontos) | **1 (F-048 recurrence)** | Stable; F-048 codified |
+| Manifest/schema | 0 | 1 | 0 | 0 | 0 | 1 (F-047 glob) | **1 (F-047 recurrence + branch-name convention F-051)** | F-047 codified |
+| **NEW: Branch-state hygiene** | — | — | — | — | — | — | **1 (F-052)** | Sole-occurrence — orchestrator-side discipline |
+| **NEW: Helper-divergence disclosure** | — | — | — | — | — | — | **1 (F-050)** | Greenfield-module-class — first occurrence |
+| **NEW: Spec→Impl traceability** | — | — | — | — | — | — | **1 (B.3 R3 → D.2 B-201 trace)** | Process gap — when revision is structural |
+| v1.3+ recs | — | — | — | — | — | T-1..T-3 | **T-4..T-9** | Accumulating cleanly |
+
+**Net effect:** Slice 7 surfaced 5 friction entries (F-049..F-053) — moderately higher than slice 4 / 6a's 2 each. **Three are NEW friction classes** (branch-state hygiene, helper-divergence disclosure, spec→impl traceability) which is signal worth noting: greenfield modules + structural revisions stress the framework's process boundaries differently from extension slices. The framework absorbed all 5 cleanly via in-session mitigation; the 6 v1.3 recommendations (T-4..T-9) feed cleanly into the next bundle revision.
+
+The "framework converged" claim from slice 6a needs a refinement after slice 7: **converged for extension-class slices; emerging-friction for greenfield-class slices on first contact**. Future greenfield slices (slice 6b shared-consumer expansion) will validate whether this is a slice-7-specific spike or a sustained pattern.

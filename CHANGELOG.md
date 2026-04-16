@@ -4,6 +4,47 @@ All notable changes to folio.love are documented here. The format loosely follow
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
 changes at minor versions are permitted but flagged explicitly.
 
+## [v0.7.0] — 2026-04-16
+
+### Added
+- **`folio digest` command** — first implementation of the Tier 4 digest cluster
+  (`docs/specs/tier4_digest_design_spec.md` rev 4 + `docs/specs/v0.7.0_folio_digest_spec.md`
+  v1.2). Generates daily and weekly synthesis digests for one engagement scope.
+- `folio digest <scope>` — daily digest from the day's eligible evidence and
+  interaction notes. `--date YYYY-MM-DD` for non-current days; `--include-flagged`
+  to widen the predicate to source-backed inputs whose `review_status` is `flagged`
+  (daily mode only; no-op in `--week`).
+- `folio digest <scope> --week` — weekly digest assembled from existing daily
+  digests in the requested ISO week.
+- `--llm-profile` override for routing.digest.
+- Output path: `<engagement-root>/analysis/digests/<digest-id>/<digest-id>.md`,
+  ID `{client}_{engagement-short}_analysis_{period-compact}_{label}`.
+- Source-less `analysis` registry entries (omits `source`, `source_hash`, etc.;
+  carries `subtype: digest`, `digest_period`, `digest_type`, `draws_from`,
+  `review_status: flagged`, `review_flags: [synthesis_requires_review]`).
+- Programmatic `## Trust Notes` and `## Documents Drawn From` / `## Daily Digests
+  Drawn From` rendering — never trusted to the LLM, deterministic audit trail.
+- `folio.digest.generate_daily_digest` and `folio.digest.generate_weekly_digest`
+  public API; `DigestResult`, `DigestFlaggedCounts`, `DailyInputSelection` dataclasses.
+- 50+ tests (`tests/test_digest.py` + `tests/test_cli_digest.py`) covering the
+  predicate, identity, atomicity, registry contract, retry policy, fence-aware
+  heading detection, AST-based forbidden-symbol scan, and the registry-compatibility
+  canaries (status, scan, refresh, enrich, rebuild_registry).
+
+### Changed
+- `cli.refresh` skipped-analysis message is now subtype-aware: digest rows
+  receive `↷ <id>: skipping digest (source-less); rerun \`folio digest\` instead`,
+  preserving the prior generic message for non-digest analysis subtypes.
+
+### Notes
+- Digest mutations are serialized via the existing `library_lock(library_root,
+  "digest")` to prevent concurrent rerun races.
+- Validation retry: missing/duplicate LLM-owned section triggers one corrective
+  re-prompt before failing per spec §11. Transient-error retry (timeout, rate-limit)
+  is deferred to a follow-up slice.
+- Deferred from this slice: `--steerco`, watcher/automatic trigger, cross-engagement
+  scope, digest-generated relationship suggestions, manual-edit preservation across
+  rerun (see §14 carry-forwards).
 ## [v0.6.5] — 2026-04-16
 
 ### Added
@@ -29,7 +70,6 @@ changes at minor versions are permitted but flagged explicitly.
   v0.6.5 readers load cleanly (key defaulted to `[]`). `_schema_version`
   is NOT bumped (stays at `1`).
   Spec: `docs/specs/v0.6.5_entity_merge_rejection_memory_spec.md`.
-
 ## [v0.6.4] — 2026-04-15
 
 ### Added

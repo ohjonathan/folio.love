@@ -608,3 +608,113 @@ Resolved 2026-04-16. Bundle resynced from johnny-os@4dfa01f via PR #53.
 - **Impact:** Pre-D.6 had to `git checkout` the two files to keep working tree clean for the G-branch-1 prerequisite. Harmless but noisy; on a slice with stricter gate automation, this would be a false positive.
 - **v1.3 target (tool-side, not framework-core):** either (a) `ontos map` respects an active deliverable manifest's forbidden_paths, (b) adopters stop running ontos tools on feature branches, (c) the adoption doc adds explicit pre-D.6 guidance to revert ontos regeneration. Least invasive: (c).
 
+---
+
+## Slice 7 — folio-digest-v0-7-0 (2026-04-16, Phase A in flight)
+
+Entry point: Phase A (claude spec-author) on branch `feat/folio-digest-v0-7-0-C-author-claude`. Pre-A inherited from `tier4_digest_design_spec.md` rev 4. Manifest committed at `02ccaa8`. Phase A draft landed at `docs/specs/v0.7.0_folio_digest_spec.md` v1.0 (790 lines, all 15 sections, both cardinality-required exports declared).
+
+### New friction entries
+
+#### [F-049] §15.7 narrowing-contract reference lives in parent spec, not design spec
+
+- **When:** Phase A authoring.
+- **What:** The manifest's `pre_a.justification` cites "§15.7 contract (slice manifests narrow, don't reinterpret)". The `tier4_digest_design_spec.md` (the Pre-A artifact) only goes to §13; there is no §15 in that doc. The contract actually lives in `tier4_discovery_proposal_layer_spec.md` §15.7 (the *parent* Tier-4 spec). An author reading only the design spec would look for §15 in the wrong file and not find it.
+- **Where:** Manifest line 27 (`pre_a.justification`) + design spec table of contents.
+- **Resolution:** Chased the reference across two spec docs. Spec now cites both the design spec §§ 1–12 narrowing AND the parent spec §§ 11/15.4/15.6/15.7 honors separately, making the two axes explicit.
+- **v1.3 target:** Manifest `pre_a.justification` should cite the EXACT doc + § that hosts a referenced contract when the referenced doc is not the Pre-A artifact itself. Rewrite as `"Phase A narrows the design spec per tier4_discovery_proposal_layer_spec.md §15.7 (slice manifests narrow, don't reinterpret)."` so the cite path is unambiguous.
+
+#### [F-050] `analysis_docs.create_analysis_document` API close-but-not-right for digest
+
+- **When:** Phase A module-structure design (§3.2 helpers of v0.7.0 spec).
+- **What:** `folio.analysis_docs` already has `build_analysis_id`, `resolve_analysis_path`, `create_analysis_document` for source-less analysis docs, and registers `"digest"` as a valid subtype (line 22). But three shape mismatches prevent direct reuse for digest:
+  1. `build_analysis_id` uses `datetime.now().strftime("%Y%m%d")` (generation date); digest design §7 requires `digest_period_compact` (the period date, not today).
+  2. `resolve_analysis_path` returns `analysis/<subtype>/<id>.md`; digest design §7 requires `analysis/digests/<id>/<id>.md` (per-digest folder).
+  3. `create_analysis_document` raises `FileExistsError` on rerun; digest design §10 requires idempotent rerun with version increment.
+- **Where:** Reading `folio/analysis_docs.py` during §3 module-structure drafting.
+- **Resolution:** v0.7.0 spec §3.2 commits to digest-specific `_compute_digest_id`, `_compute_digest_path`, and `_load_existing_digest` helpers. Shared bits (`ANALYSIS_SUBTYPES`, `registry.upsert_entry`, `RegistryEntry` shape) are still imported read-only. Spec §7 documents the path-layout divergence explicitly so alignment review can verify it's intentional.
+- **v1.3 target:** Framework template for "first consumer of an existing helper family" should prompt the author to either (a) extend the helper's signature to cover the new case OR (b) document the divergence explicitly in the spec's §3 (module structure). Otherwise adopters silently re-implement, and the duplication goes unnoticed until code review. Pattern: "helper-divergence-disclosure" section.
+
+#### [F-051] F-048 recurs in Phase A setup — confirms v1.3 option (c)
+
+- **When:** Phase A setup (Ontos activation via `AGENTS.md` trigger phrase).
+- **What:** `ontos map` regenerated `Ontos_Context_Map.md` during activation (doc count went 242 → 269, map version tick). This file is in `scope.forbidden_paths` for the folio-digest-v0-7-0 manifest. Same friction surfaced in slice 6a as F-048.
+- **Where:** `AGENTS.md` activation flow runs `ontos map` unconditionally; the slice manifest's forbidden_paths isn't consulted.
+- **Resolution:** Reverted `Ontos_Context_Map.md` via `git checkout` mid-session, before any commits. Orientation was already captured from the map's Tier 1.
+- **v1.3 target:** Confirms F-048's option (c) is the right answer — adoption doc needs explicit pre-D.6 guidance ("revert any `Ontos_Context_Map.md` / `AGENTS.md` regeneration before D.6 gate"). Secondary recommendation: Ontos could skip regeneration when it detects an active deliverable manifest whose `scope.forbidden_paths` include the target file, but that's tool-side work, not framework-core. For now, the adoption-doc pre-D.6 checklist is the cheap fix.
+
+#### [F-052] Mid-session transient branch-switch to `main` caused subprocess reviewers to read wrong tree state
+
+- **When:** Between B.1 dispatch and B.2 dispatch (somewhere in the codex-r1 / Ontos auto-regeneration window).
+- **What:** Working tree silently switched from `feat/folio-digest-v0-7-0-C-author-claude` to `main`. The feature-branch HEAD has the manifest commit (`02ccaa8`); `main` does not (PR #57's slice-6a content landed on `main` but the v0.7.0 manifest is only on the feature branch). Codex round 1 (ADV-009) and codex round 2 (ADV-107) both reported "manifest absent" — both were running while the orchestrator's working tree was on `main`. The orchestrator did not catch the branch-state confusion until investigating ADV-107 with `git ls-files`.
+- **Where:** Branch state + subprocess inheritance. Likely cause: a `git checkout -- Ontos_Context_Map.md` operation OR an Ontos hook ran `git checkout main` somewhere in the codex session-closeout flow. Not yet root-caused.
+- **Resolution:** `git stash push -u`, `git checkout feat/folio-digest-v0-7-0-C-author-claude`, `git stash pop`, resolve retros conflict (the stash carried slice-6a content from main + my F-049/50/51 — accepted "theirs" to merge cleanly). All untracked files (spec v1.1, validation files, log files) carried over because they were working-tree-only.
+- **v1.3 target:** (1) Orchestrator runbook in `frameworks/llm-dev-v1/` MUST add a pre-dispatch branch-pinning check: `git branch --show-current` matches the deliverable's feature branch. (2) Subprocess invocation contracts (codex/gemini/claude-sub prompt templates) MUST include "verify branch state matches deliverable feature branch" as a session-prelude step. (3) Adopter-side: orchestrator should never invoke `git checkout` operations during a deliverable lifecycle except via the framework's dispatch flow.
+
+#### [F-053] Codex prompt template should verify file presence before claiming absence
+
+- **When:** Codex round 1 (ADV-009) and codex round 2 (ADV-107) both reported "manifest absent" — the manifest IS present at the cited path on the feature branch, but codex's working environment (caused by F-052 branch state confusion) couldn't see it.
+- **What:** Codex's adversarial review template (templates/05-review-board-adversarial.md) does not require file-existence verification before generating a "file missing" finding. Codex defaulted to "if I can't read it, it's missing" without distinguishing "file doesn't exist in the repo" from "I can't read it from my current context".
+- **Resolution:** Suppressed ADV-009 and ADV-107 as false positives in B.3 round-1 and round-2 canonical verdicts. Documented branch-state cause in F-052 (root) and SF-20 / suppressed-finding section in canonical verdicts.
+- **v1.3 target:** Codex prompt template should add: "Before claiming a file is absent, verify with `git rev-parse HEAD`, `git branch --show-current`, AND `git ls-files <path>`. If `git ls-files` returns the path, it exists in the repo even if your `ls` cannot read it (filesystem state may differ from git index)." This is also useful for any reviewer family — but codex's tendency to use shell aggressively makes it most prone to this class of false positive.
+
+### Slice 7 closure (Phase E summary)
+
+| Metric | Value |
+|---|---|
+| Phases executed | A, B (2 rounds + B.3 R3 orchestrator-direct closure), C, D (1 round + D.4 fix + D.5 verify + D.6 gate), E |
+| Phase A spec versions | v1.0 → v1.1 → v1.2 (two revision cycles) |
+| Blockers raised (B.1 R1) | 2 (peer PR-1 CLI shape, PR-2 wrong pattern citation) |
+| Blockers raised (B.2 R2) | 1 (codex ADV-101 Trust Notes ownership contradiction) |
+| Blockers raised (D.2 R1) | 1 (codex ADV-201 orphan self-heal not pre-LLM) |
+| Blockers preserved at ship | 0 (all 4 closed in v1.1, v1.2, D.4) |
+| Should-fix raised (B + D total) | ~38 (20 in B.3 R1 + 9 in B.3 R2 + 8 in D.3) |
+| Should-fix preserved at ship | 3 (MN-201, MN-202, MN-203 — non-load-bearing) |
+| Test count delta | +79 tests (greenfield module — module + CLI + registry-compat) |
+| Scope tests at ship | 79/79 digest + 161/161 regression = 240/240 green at D.6 |
+| D.6 gate result | 12/12 PASS |
+| Lint introduced | 0 new errors (folio/digest.py clean per ruff) |
+| Adopter-only contract | honored — zero bundle edits; 5 framework gaps surfaced as F-049..F-053 for v1.3 |
+
+#### What worked
+
+1. **Greenfield module landed cleanly.** First slice to introduce a brand-new `folio/<module>.py` (vs. extension slices 1-6a). Spec → implementation → test → gate cycle held without any structural rework.
+
+2. **B.3 R3 orchestrator-direct closure pattern (v1.2 candidate from slice 6a) applied to v0.7.0 R3.** Saved one full 4-lens dispatch cycle by orchestrator-authoring the canonical verdict after v1.2 addressed all R2 items. The trade-off bit at D.2 (B-201 leaked through), but the pattern remains valid for surgical revisions; v1.3 T-5 codifies the guidance.
+
+3. **Cross-lens convergence on the high-signal D.2 blocker.** Codex (BLOCKER), peer (should-fix), gemini (should-fix) all independently flagged §10.4 orphan self-heal as a defect. Codex's evidence rule + reproduction made the verdict unambiguous. Validates the 4-lens board for catching subtle spec→implementation traceability gaps.
+
+4. **Self-inflicted regression caught at boundary.** v1.1 introduced PR-101 (atomic_write capture-ordering bug) and PROD-SF-101 (DG-CLI-9c pluralization) WHILE fixing 22 round-1 findings. Both caught by R2 board. Reinforces value of round-2 dispatch on substantial revisions.
+
+5. **D.4 closure efficiency.** All 7 fixes (1 blocker + 8 SF) landed in a single revision; D.5 verifier confirmed each row of the D.3 verdict is closed. No D.3 R2 needed.
+
+#### What broke
+
+1. **Mid-session branch-state confusion (F-052).** Working tree silently switched to `main` at some point during B.1 / B.2 dispatch window. Caused codex to read wrong tree state and report false-positive "manifest absent" twice (ADV-009, ADV-107). Recovered via stash/checkout/pop + retros conflict resolution. Worth a v1.3 orchestrator-runbook section (T-8) and codex prompt template fix (T-4 / F-053).
+
+2. **§15.7 narrowing-contract reference cross-document chase (F-049).** Manifest cited `§15.7` but the section lives in the parent Tier-4 spec (`tier4_discovery_proposal_layer_spec.md`), not the Pre-A artifact (`tier4_digest_design_spec.md`). Spec author had to chase across two spec docs to find the actual contract text. Worth a v1.3 manifest-template fix (T-6).
+
+3. **`analysis_docs.create_analysis_document` API close-but-not-right for digest (F-050).** Three shape mismatches (date semantics, path layout, rerun handling) prevented direct reuse. Spec committed to digest-specific helpers + read-only imports of shared bits. v1.3 T-7 proposes a "helper-divergence disclosure" template section.
+
+4. **F-048 recurrence three times in single session.** Ontos auto-regenerated `Ontos_Context_Map.md` on every codex / Ontos invocation despite the file being in scope.forbidden_paths. Reverted manually each time. v1.3 T-2 (slice 6a) confirmed-once-per-slice; v0.7.0 confirms at scale.
+
+#### Delta retrospective (vs. slices 1–6a)
+
+See `frameworks/manifests/framework-learnings-v1.1-adoption.md` Slice 7 supplement → "Delta retrospective" + "Cross-slice friction trend" tables for the full comparison.
+
+**Critical delta question:** Does the orchestrator-direct R(N+1) closure pattern (slice 6a precedent) hold for greenfield-module slices? **Partially.** v0.7.0's R3 cleared v1.2 for Phase C, but D.2 caught B-201 — a structural defect (control-flow ordering for §10.4 self-heal) that the spec described but the implementation didn't deliver. A fresh R3 4-lens dispatch likely would have caught it. The pattern is safe for surgical revisions, risky for structural revisions. v1.3 T-5 codifies this nuance.
+
+#### Friction summary (this slice)
+
+| ID | Severity | Class | Title | v1.3 target |
+|---|---|---|---|---|
+| F-049 | Medium | Manifest cite-path | §15.7 narrowing contract reference lives in parent spec | T-6 |
+| F-050 | Medium | Helper-API divergence | analysis_docs API close-but-not-right for digest | T-7 |
+| F-051 | Low | Verify-script (recurrence of F-048) | Ontos auto-regen during activation | T-2 (codified) |
+| F-052 | High | Branch-state hygiene | Mid-session branch-switch caused subprocess wrong-tree-state | T-8 |
+| F-053 | High | Codex prompt template | Codex claims file-missing without git verification | T-4 |
+
+#### F-048 / F-051 status update
+
+After three sessions (slice 6a, v0.7.0 setup, v0.7.0 codex/Ontos invocations), F-048 is now **confirmed at scale** as a recurring class of friction. v1.3 T-2 (adopter-doc pre-D.6 revert step) is the right answer; the alternative (Ontos respects forbidden_paths) is tool-side work outside framework-core.
+
