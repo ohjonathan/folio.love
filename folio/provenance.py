@@ -61,7 +61,7 @@ class ProvenanceProposal:
     basis_fingerprint: str
     model: str
     timestamp_proposed: str
-    status: str = "pending_human_confirmation"
+    lifecycle_state: str = "queued"
     replaces_link_id: Optional[str] = None
 
     def to_dict(self) -> dict:
@@ -74,7 +74,7 @@ class ProvenanceProposal:
             "basis_fingerprint": self.basis_fingerprint,
             "model": self.model,
             "timestamp_proposed": self.timestamp_proposed,
-            "status": self.status,
+            "lifecycle_state": self.lifecycle_state,
         }
         if self.replaces_link_id:
             data["replaces_link_id"] = self.replaces_link_id
@@ -82,6 +82,11 @@ class ProvenanceProposal:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProvenanceProposal":
+        from .pipeline.enrich_data import _STATUS_TO_LIFECYCLE
+        lifecycle_state = data.get("lifecycle_state")
+        if lifecycle_state is None:
+            old_status = str(data.get("status", "pending_human_confirmation"))
+            lifecycle_state = _STATUS_TO_LIFECYCLE.get(old_status, old_status)
         return cls(
             proposal_id=str(data.get("proposal_id", "")),
             source_claim=dict(data.get("source_claim", {}) or {}),
@@ -91,7 +96,7 @@ class ProvenanceProposal:
             basis_fingerprint=str(data.get("basis_fingerprint", "")),
             model=str(data.get("model", "")),
             timestamp_proposed=str(data.get("timestamp_proposed", "")),
-            status=str(data.get("status", "pending_human_confirmation")),
+            lifecycle_state=lifecycle_state,
             replaces_link_id=data.get("replaces_link_id"),
         )
 
@@ -268,7 +273,10 @@ def _has_pending_repair_proposals(pair_meta: dict, repair_links: list[dict]) -> 
     for raw in pair_meta.get("proposals", []) or []:
         if not isinstance(raw, dict):
             continue
-        if raw.get("status") != "pending_human_confirmation":
+        state = raw.get("lifecycle_state")
+        if state is None:
+            state = raw.get("status")
+        if state not in ("queued", "pending_human_confirmation"):
             continue
         if str(raw.get("replaces_link_id", "")) in repair_ids:
             return True
@@ -518,7 +526,12 @@ def _suppress_rejections(
         return proposals
     rejected: dict[tuple[int, int, int, int], str] = {}
     for raw in pair_meta.get("proposals", []) or []:
-        if not isinstance(raw, dict) or raw.get("status") != "rejected":
+        if not isinstance(raw, dict):
+            continue
+        state = raw.get("lifecycle_state")
+        if state is None:
+            state = raw.get("status")
+        if state != "rejected":
             continue
         source_claim = raw.get("source_claim", {}) or {}
         target_evidence = raw.get("target_evidence", {}) or {}
@@ -1006,7 +1019,8 @@ def provenance_batch(
         if clear_rejections and pair_meta.get("proposals"):
             pair_meta["proposals"] = [
                 raw for raw in pair_meta["proposals"]
-                if not isinstance(raw, dict) or raw.get("status") != "rejected"
+                if not isinstance(raw, dict)
+                or (raw.get("lifecycle_state") if raw.get("lifecycle_state") is not None else raw.get("status")) != "rejected"
             ]
         if _has_pending_repair_proposals(pair_meta, repair_links):
             result.skipped += 1
@@ -1236,11 +1250,13 @@ def provenance_batch(
             if clear_rejections and current_pair_meta.get("proposals"):
                 current_pair_meta["proposals"] = [
                     raw for raw in current_pair_meta["proposals"]
-                    if not isinstance(raw, dict) or raw.get("status") != "rejected"
+                    if not isinstance(raw, dict)
+                    or (raw.get("lifecycle_state") if raw.get("lifecycle_state") is not None else raw.get("status")) != "rejected"
                 ]
             existing_rejected = [
                 raw for raw in current_pair_meta.get("proposals", [])
-                if isinstance(raw, dict) and raw.get("status") == "rejected"
+                if isinstance(raw, dict)
+                and (raw.get("lifecycle_state") if raw.get("lifecycle_state") is not None else raw.get("status")) == "rejected"
             ]
             current_pair_meta["proposals"] = existing_rejected + proposal_payload
             current_pair_meta["pair_fingerprint"] = current_pair_fp
@@ -1410,7 +1426,7 @@ def collect_pending_proposals(
                 if not isinstance(raw, dict):
                     continue
                 proposal = ProvenanceProposal.from_dict(raw)
-                if proposal.status != "pending_human_confirmation":
+                if proposal.lifecycle_state != "queued":
                     continue
                 if not include_low and proposal.confidence == "low":
                     continue
@@ -1532,9 +1548,12 @@ def provenance_status_summary(config: FolioConfig, *, scope: str | None = None) 
             for raw in pair_meta.get("proposals", []) or []:
                 if not isinstance(raw, dict):
                     continue
-                if raw.get("status") == "pending_human_confirmation":
+                state = raw.get("lifecycle_state")
+                if state is None:
+                    state = raw.get("status")
+                if state in ("queued", "pending_human_confirmation"):
                     pending += 1
-                elif raw.get("status") == "rejected":
+                elif state == "rejected":
                     rejected += 1
         rows.append(
             {
@@ -1689,7 +1708,7 @@ def reject_proposal(config: FolioConfig, proposal_id: str) -> None:
     updated = False
     for raw in pair_meta.get("proposals", []) or []:
         if isinstance(raw, dict) and raw.get("proposal_id") == proposal_id:
-            raw["status"] = "rejected"
+            raw["lifecycle_state"] = "rejected"
             updated = True
             break
     if not updated:

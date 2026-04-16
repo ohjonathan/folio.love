@@ -201,8 +201,8 @@ def test_passthrough_helpers_preserve_provenance_and_mark_pairs_stale():
                         "repair_error_detail": "timeout",
                         "re_evaluate_requested": True,
                         "proposals": [
-                            {"proposal_id": "prov-a", "status": "pending_human_confirmation"},
-                            {"proposal_id": "prov-b", "status": "rejected"},
+                            {"proposal_id": "prov-a", "lifecycle_state": "queued"},
+                            {"proposal_id": "prov-b", "lifecycle_state": "rejected"},
                         ],
                     }
                 }
@@ -225,7 +225,7 @@ def test_passthrough_helpers_preserve_provenance_and_mark_pairs_stale():
     assert "repair_error_detail" not in pair
     assert "re_evaluate_requested" not in pair
     assert preserved["_llm_metadata"]["links"]["confirmed_relationships"][0]["proposal_id"] == "rprop-1234"
-    statuses = [proposal["status"] for proposal in pair["proposals"]]
+    statuses = [proposal["lifecycle_state"] for proposal in pair["proposals"]]
     assert statuses == ["stale_pending", "rejected"]
 
 
@@ -541,7 +541,7 @@ def test_provenance_cli_review_and_status_match_spec_output(tmp_path):
                                 "basis_fingerprint": "sha256:basis",
                                 "model": "anthropic/test-model",
                                 "timestamp_proposed": "2026-03-29T00:00:00Z",
-                                "status": "pending_human_confirmation",
+                                "lifecycle_state": "queued",
                                 "replaces_link_id": "plink-000000000654",
                             }
                         ]

@@ -4,6 +4,15 @@ All notable changes to folio.love are documented here. The format loosely follow
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
 changes at minor versions are permitted but flagged explicitly.
 
+## [v0.6.2] — 2026-04-15
+
+### Changed
+- **Provenance proposal schema rename:** `ProvenanceProposal.status` →
+  `lifecycle_state`, same mapping as v0.6.1 relationship proposals.
+  `stale_pending` value preserved (provenance-specific).
+  **No operator action required.** Spec:
+  `docs/specs/v0.6.2_provenance_lifecycle_rename_spec.md`.
+
 ## [v0.6.1] — 2026-04-15
 
 ### Changed
@@ -14,8 +23,7 @@ changes at minor versions are permitted but flagged explicitly.
   `status` transparently; `to_dict` emits only `lifecycle_state`. Raw-dict
   readers also handle both formats via fallback.
   **No operator action required** — backward-compatible reads handle old data
-  automatically. Provenance proposals (`ProvenanceProposal`) are unaffected.
-  Spec: `docs/specs/v0.6.1_proposal_lifecycle_rename_spec.md`.
+  automatically. Spec: `docs/specs/v0.6.1_proposal_lifecycle_rename_spec.md`.
 
 ## [v0.6.0] — 2026-04-15
 
