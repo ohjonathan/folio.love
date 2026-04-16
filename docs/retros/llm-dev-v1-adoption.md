@@ -530,3 +530,11 @@ The slice-2 manifest (`frameworks/manifests/proposal-lifecycle-rename-v0-6-1.yam
 ### F-042 status update
 
 Previously logged as "codex adversarial consumed output budget on file reads without producing findings." Slice 4 used a different prompt structure: numbered failure-mode targets (1-6), explicit "use shell commands sparingly" instruction, and explicit file list. Codex produced a 273-line structured review with 1 blocker + 3 should-fix. **Status:** Mitigated via prompt structure; not a framework defect after all. Update v1.2 docs to recommend the targeted-failure-mode prompt pattern for adversarial dispatch.
+
+---
+
+## Adopter-authority divergence (resolved 2026-04-16)
+
+Folio authored v1.1.1 locally (PR #51, merge `ab4bc27`) before johnny-os did. The framework maintainer (johnny-os) absorbed folio's v1.1.1 commits into its canonical v1.1.1 via cherry-pick and redefined folio's role as adopter-only going forward. Documented in `README.md § Framework bundle source`.
+
+Lesson: adopters surface signal, maintainer builds. Local bundle edits create divergence that must be reconciled.
