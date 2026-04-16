@@ -116,7 +116,7 @@ the body. `scripts/verify-frontmatter.sh` enforces this mechanically.
 |-------|---------|--------------|
 | `<DOC_INDEX_TOOL?>` | Project-specific documentation indexer | `ontos`, `docindex`, or empty |
 | `<DOC_INDEX_ACTIVATION?>` | Command to run at worker start to load context | `ontos map` |
-| `<DOC_INDEX_ARCHIVE?>` | Command to run at worker end to archive session | `ontos log -e "<SLUG>"` |
+| `<DOC_INDEX_ARCHIVE?>` | Command to run at worker end to archive session. For Phase E retrospectives, runs as the final step **after** the retro is committed — see `templates/08-retrospective.md`. | `ontos log -e "<DELIVERABLE_SLUG>"` |
 | `<CLI_CLAUDE?>` | CLI invocation for Claude worker | `claude --print --model claude-opus-4-6` |
 | `<CLI_CODEX?>` | CLI invocation for Codex worker | `codex --no-interactive` |
 | `<CLI_GEMINI?>` | CLI invocation for Gemini worker | `gemini --headless` |
@@ -200,6 +200,36 @@ empty when the orchestrator has nothing to inject.
 | `<POWER_RESILIENCE_TOOL?>` | UPS or smart-plug integration | `apcupsd`, `Shelly`, `Tasmota` |
 | `<PACKAGE_MANIFEST?>` | Package bootstrap manifest | `Brewfile`, `apt-packages.txt`, `requirements.txt` |
 | `<FAMILY_CLI_MAP?>` | YAML fragment mapping family → CLI invocation + capabilities. Used by `templates/10-infra-bootstrap.md` to avoid hardcoding specific model families. | (multiline YAML; see template 10 for example shape) |
+
+## Orchestrator-only tokens (v1.1.1)
+
+The tokens listed below are intentionally consumed **outside template bodies**
+— they are read by the manifest generator, the orchestrator runbook, or
+CHANGELOG/PR tooling rather than by worker-session templates. They are
+legitimate definitions, but `scripts/verify-tokens.sh` will not find
+corresponding `<ANGLE_UPPER>` references inside `templates/`, `framework.md`,
+`playbook.md`, or `generator-spec.md`.
+
+`verify-tokens.sh` reads this section at runtime and suppresses the
+"defined but not referenced" warning for any token listed here.
+
+Orchestrator-only tokens:
+
+- `<DELIVERABLE_SLUG>` — filesystem-safe slug consumed by artifact-path
+  construction in the orchestrator.
+- `<META_CONSOLIDATOR_FAMILY>` — manifest-level role assignment read by the
+  dispatch layer when selecting the B.3 / D.3 consolidator.
+- `<MODEL_ASSIGNMENTS>` — manifest-level family → role map consumed by the
+  orchestrator to construct each phase's launch prompt.
+- `<PR_TITLE_PATTERN>` — PR-creation convention string; the orchestrator
+  interpolates it when opening the merge request.
+- `<REPO_URL>` — manifest-level VCS identity used by the orchestrator for
+  clone / remote-tracking operations.
+- `<STATIC_CHECKS>` — manifest-level linter/typechecker list; the
+  orchestrator pipes it into its pre-merge smoke script.
+
+If you add a new orchestrator-only token, append it to this list so
+`verify-tokens.sh` keeps the unused-warning quiet without manual suppression.
 
 ## Category 13 — Pre-A variants (v1.1)
 

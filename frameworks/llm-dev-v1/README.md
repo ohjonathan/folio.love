@@ -63,8 +63,11 @@ optional Product lens for user-facing deliverables.
 - **Git + shell access** on the orchestrator host. Workers may have
   reduced capability (some families cannot execute shell); the
   orchestrator always does.
-- **A YAML schema validator** for `manifest/example-manifest.yaml`
-  (`check-jsonschema` works; see `scripts/verify-schema.sh`).
+- **`check-jsonschema` is required** (not optional). `scripts/verify-schema.sh`
+  validates both example manifests against `manifest/deliverable-manifest.schema.yaml`
+  using this tool. As of v1.1.1 the script fails hard (exit 1) if the tool is
+  absent — silent-skip on missing dep was removed because it looked identical
+  to a passing check.
 - **The `infra-bootstrap` template is opt-in.** It parameterizes a
   control-plane host; fill its tokens only if you're standing one up.
 - **The manifest generator is spec-only in v1.** Prompts are hand-
@@ -110,9 +113,12 @@ pipx install check-jsonschema
 python3 -m pip install --user --break-system-packages pyyaml   # or use a venv
 ```
 
-If a dependency is missing the individual script exits 2; `verify-all.sh`
-treats that as skipped (not failed) and prints which checks were
-skipped so CI can catch the gap.
+If a dependency is missing, individual scripts generally exit 2 and
+`verify-all.sh` treats that as skipped (not failed) and prints which checks
+were skipped so CI can catch the gap. **Exception (v1.1.1):**
+`verify-schema.sh` now exits 1 (hard fail) when `check-jsonschema` is
+absent — silent-skip on a missing validator was masking real schema
+failures.
 
 ## Versioning
 

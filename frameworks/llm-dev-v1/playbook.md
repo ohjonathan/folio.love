@@ -112,6 +112,14 @@ under P10. `verify-p3.sh` enforces both the 3-engineering-family floor AND
 the Product-presence requirement on user-facing deliverables. See
 `framework.md` § P3 for the full rule.
 
+**B.3 cardinality re-baseline (v1.1.1).** Before the meta-consolidator
+emits an `Approve` verdict on B.3, the manifest's `cardinality_assertions`
+list must be re-baselined against the finalized Phase A spec. Phase A
+often narrows scope; assertions drafted at manifest time can go stale.
+Stale assertions surface as false D.6 failures (F-026, F-027 in the
+v1.1 adoption friction log). Template `06-meta-consolidator.md` prescribes
+the re-baseline as a normative B.3 step.
+
 ## When the Product lens applies
 
 Trigger: the artifact touches a **user-facing surface**. Examples:

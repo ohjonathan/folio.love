@@ -39,8 +39,30 @@ grep -oE '<[A-Z][A-Z0-9_]+(:LIST|\[\])?\??>' "$tokens" \
 echo "<FINAL_REPORT_SCHEMA>" >> "$tmp/defined"
 sort -u "$tmp/defined" -o "$tmp/defined"
 
+# Orchestrator-only tokens (v1.1.1): tokens consumed outside template bodies
+# (manifest generator, orchestrator runbook, CHANGELOG/PR tooling). They are
+# legitimately defined in tokens.md but never appear in <ANGLE_UPPER> form in
+# any template. Extract them from the "Orchestrator-only tokens" section of
+# tokens.md and skip the defined-but-not-used warning for them.
+#
+# Flag-based awk range so the next `## ` heading terminates extraction
+# regardless of its first letter (an earlier range `/,/^## [^O]/` broke on
+# sections starting with 'O' — ADV-SF-001).
+awk '
+  /^## Orchestrator-only tokens/ { flag = 1; next }
+  flag && /^## / { flag = 0 }
+  flag
+' "$tokens" \
+  | grep -oE '<[A-Z][A-Z0-9_]+>' \
+  | sort -u > "$tmp/orchestrator_only"
+
 used_not_defined=$(comm -23 "$tmp/used" "$tmp/defined")
-defined_not_used=$(comm -13 "$tmp/used" "$tmp/defined")
+defined_not_used_raw=$(comm -13 "$tmp/used" "$tmp/defined")
+if [[ -s "$tmp/orchestrator_only" ]]; then
+  defined_not_used=$(echo "$defined_not_used_raw" | grep -vFx -f "$tmp/orchestrator_only" || true)
+else
+  defined_not_used="$defined_not_used_raw"
+fi
 
 rc=0
 

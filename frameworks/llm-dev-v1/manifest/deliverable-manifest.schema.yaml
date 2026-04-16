@@ -143,12 +143,17 @@ properties:
         minLength: 1
 
   id:
-    description: Unique deliverable identifier (fills <DELIVERABLE_ID>).
+    description: Unique deliverable identifier (fills <DELIVERABLE_ID>). Accepts
+      dots and dashes as component separators so adopters may embed semver
+      fragments (e.g. `my-thing-v0.6.4`). Rejects adjacent separators
+      (`x..y`, `x.-y`, `x-.y`), a trailing separator (`x.`, `x-`), and a
+      leading separator.
     type: string
-    pattern: "^[a-z][a-z0-9-]*$"
+    pattern: "^[a-z][a-z0-9]*([.-][a-z0-9]+)*$"
 
   slug:
-    description: Filesystem-safe slug (fills <DELIVERABLE_SLUG>).
+    description: Filesystem-safe slug (fills <DELIVERABLE_SLUG>). Slug stays
+      dot-free — it's used in filesystem paths where dots read as extensions.
     type: string
     pattern: "^[a-z][a-z0-9-]*$"
 
