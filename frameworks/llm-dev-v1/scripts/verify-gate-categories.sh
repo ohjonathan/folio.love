@@ -11,7 +11,18 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bundle="$(cd "$here/.." && pwd)"
-manifest="$bundle/manifest/example-manifest.yaml"
+
+# v1.2: accept `--manifest <path>` to validate a single adopter manifest.
+# Default (no args): validate the bundled example manifest.
+if [[ "${1:-}" == "--manifest" ]]; then
+  if [[ -z "${2:-}" || ! -r "$2" ]]; then
+    echo "usage: verify-gate-categories.sh [--manifest <path>]" >&2
+    exit 1
+  fi
+  manifest="$2"
+else
+  manifest="$bundle/manifest/example-manifest.yaml"
+fi
 
 python3 - "$manifest" <<'PY'
 import sys, yaml

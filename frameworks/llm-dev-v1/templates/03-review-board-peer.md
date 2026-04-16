@@ -42,6 +42,15 @@ not approval.
 
 - Compliance with approved documents → that's Alignment.
 - How it fails under hostile input → that's Adversarial.
+- **(v1.2+ boundary tightening.)** Enumeration completeness — checking
+  whether a spec's § 11 contract-enumeration checklist lists every
+  surface and anchors each correctly — is Alignment's surface, not
+  Peer's. Peer checks correctness of each surface in isolation;
+  Alignment checks whether the list is complete and per-anchor valid.
+  Scope-lock / forbidden-path violations are mechanical gates
+  (verify-artifact-paths, verify-portability, D.6); Peer flags only
+  when the violation signals a design-quality issue the mechanical
+  gate would miss.
 
 Do not duplicate the other lenses. If a finding belongs to another lens,
 note it briefly and move on.

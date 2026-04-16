@@ -71,6 +71,16 @@ review remains out of scope (that's Peer / Alignment / Adversarial).
   tolerated by design; you frame "does the user understand the
   failure?", Adversarial frames "is the failure reachable?".
 - Code quality, test coverage → that's Peer.
+- **(v1.2+ boundary tightening.)** Product is operator / end-user
+  experience only. Product does NOT perform scope compliance
+  (forbidden paths, cardinality assertions, allowed-path checks) —
+  those belong to the mechanical gate (verify-artifact-paths,
+  verify-portability, D.6). Nor does Product enumerate spec surfaces
+  (Template 12 § 11) — that's Alignment. Stay on UX signal: what
+  would the user notice, trip on, or misread? Scope and surface
+  audits are handled elsewhere; a Product finding that reduces to
+  "this path shouldn't have been touched" belongs in Alignment,
+  not here.
 
 Do not duplicate the other lenses. If a finding belongs to another lens,
 note it briefly and move on.

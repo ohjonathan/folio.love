@@ -15,10 +15,21 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bundle="$(cd "$here/.." && pwd)"
 
 schema="$bundle/manifest/deliverable-manifest.schema.yaml"
-manifests=(
-  "$bundle/manifest/example-manifest.yaml"
-  "$bundle/manifest/example-user-facing-manifest.yaml"
-)
+
+# v1.2: accept `--manifest <path>` to validate a single adopter manifest.
+# Default (no args): validate the two bundled example manifests.
+if [[ "${1:-}" == "--manifest" ]]; then
+  if [[ -z "${2:-}" || ! -r "$2" ]]; then
+    echo "usage: verify-schema.sh [--manifest <path>]" >&2
+    exit 1
+  fi
+  manifests=("$2")
+else
+  manifests=(
+    "$bundle/manifest/example-manifest.yaml"
+    "$bundle/manifest/example-user-facing-manifest.yaml"
+  )
+fi
 
 if ! command -v check-jsonschema >/dev/null 2>&1; then
   echo "verify-schema: FAILED — check-jsonschema is not installed." >&2

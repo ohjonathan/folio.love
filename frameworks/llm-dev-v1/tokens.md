@@ -82,7 +82,24 @@ the body. `scripts/verify-frontmatter.sh` enforces this mechanically.
 | `<DEFAULT_BRANCH>` | Branch merges target | `main` |
 | `<BRANCH_CONVENTION>` | Pattern for worker branches | `feat/<DELIVERABLE_ID>-<role>` |
 | `<WORKTREE_ROOT>` | Directory where per-deliverable worktrees live | `/tmp/myrepo-worktrees` |
+| `<MERGE_WORKSPACE?>` | (v1.2+) Fresh non-local clone used at final merge per `playbook.md § Merge safety`. Distinct from `<WORKSPACE>` (orchestrator-host repo) and per-phase worktrees under `<WORKTREE_ROOT>`. Required only on D.6 → merge; leave empty until then. | `/tmp/myrepo-mergeclone-<deliverable-id>` |
+| `<MANIFEST_DIR>` | (v1.2+) Directory where adopter deliverable manifests live. Convention: `frameworks/manifests/` for monorepos that host the bundle alongside manifests; `manifests/` for standalone adopter repos. Required fill; referenced by `examples/day-one.sh` bootstrap. | `frameworks/manifests/` or `manifests/` |
 | `<PR_TOOL>` | CLI or API name for PR creation | `gh` |
+
+**Workspace / worktree / merge-workspace clarifier (v1.2+).** Three
+related directory tokens that the orchestrator must not confuse —
+D3 retro §1 recorded one such confusion during merge. Distinct
+purposes; distinct lifetimes:
+
+| Token | Purpose | Lifetime | Location |
+|-------|---------|----------|----------|
+| `<WORKSPACE>` | Orchestrator-host repo; source of truth for branch state, commits, manifest reads. | Persistent; one per project on the orchestrator host. | `/home/me/myrepo` (example) |
+| `<WORKTREE_ROOT>` (+ per-phase subdirs) | Per-phase / per-role sandboxes where workers execute. Share the parent clone's `.git`. Cheap to create / destroy; one per `(deliverable, role, family)` dispatch. | Ephemeral (lifetime of the dispatch + any follow-up debugging). | `/tmp/myrepo-worktrees/<DELIVERABLE_ID>/<ROLE>-<FAMILY>` |
+| `<MERGE_WORKSPACE?>` | Final-merge-only fresh non-local clone (not a worktree — worktrees share `.git` with the parent, which defeats the integrity guarantee). Used once per merge; then deleted. | Single-use. Created at D.6 gate pass, deleted post-merge. | `/tmp/myrepo-mergeclone-<DELIVERABLE_ID>` |
+
+Rule-of-thumb: phase dispatches use `<WORKTREE_ROOT>` children; the
+final merge step uses `<MERGE_WORKSPACE?>`. Manifest reads, canonical
+verdict paths, and tracker updates always happen on `<WORKSPACE>`.
 
 ## Category 2 — Identity & scope
 
@@ -119,6 +136,7 @@ the body. `scripts/verify-frontmatter.sh` enforces this mechanically.
 | `<DOC_INDEX_ARCHIVE?>` | Command to run at worker end to archive session. For Phase E retrospectives, runs as the final step **after** the retro is committed — see `templates/08-retrospective.md`. | `ontos log -e "<DELIVERABLE_SLUG>"` |
 | `<CLI_CLAUDE?>` | CLI invocation for Claude worker | `claude --print --model claude-opus-4-6` |
 | `<CLI_CODEX?>` | CLI invocation for Codex worker | `codex --no-interactive` |
+| `<CLI_CODEX_MODEL?>` | Model name the Codex CLI should target (v1.2+). Paired with `<CLI_CODEX?>`. `<CLI_CODEX?>` binds the binary; this token binds the model. The Codex CLI may accept a model per `<CLI_CODEX?>` invocation but fail at dispatch if the account lacks access. Preflight: `bash scripts/verify-tokens.sh --probe-codex-model <model>`. | `gpt-5.4`, `gpt-5`, or `o3` |
 | `<CLI_GEMINI?>` | CLI invocation for Gemini worker | `gemini --headless` |
 | `<TEST_COMMAND>` | Full test suite command | `pytest -xvs` |
 | `<SMOKE_CHECKS:LIST>` | Per-phase fast checks (name + command) | `import: python -c "import currency"` |
@@ -140,6 +158,7 @@ the body. `scripts/verify-frontmatter.sh` enforces this mechanically.
 | `<MODEL_ASSIGNMENTS:LIST>` | Family → role map for the current phase | `claude=peer, codex=alignment, gemini=adversarial` |
 | `<META_CONSOLIDATOR_FAMILY>` | Family that consolidates the phase | `codex` |
 | `<AUTHOR_FAMILY>` | Family that authored the artifact being reviewed (excluded from review of its own artifact) | `claude` |
+| `<EVIDENCE_CAP?>` | (v1.2+) Maximum evidence class this reviewer family may claim for blocker-grade findings. Read from `cli_capability_matrix[family].evidence_cap`. Template 05 embeds this so the reviewer self-enforces; Template 06 auto-downgrades claims that exceed the cap. Absent → `direct-run` (no cap). | `direct-run`, `orchestrator-preflight`, `static-inspection` |
 | `<USER_FACING?>` | Whether the deliverable touches a user-facing surface (drives the Product lens requirement on B.1/B.2/D.2 per the v1.1 P3 extension). Default `false` matches v1.0.0 behavior. | `true`, `false` |
 | `<PRODUCT_VERDICT_PATH?>` | Path to the Product-lens verdict, read by `06-meta-consolidator.md` when `<USER_FACING>` is true. Single path (one Product reviewer per phase). | `docs/reviews/billing-B.1-codex-product.md` |
 
@@ -217,6 +236,9 @@ Orchestrator-only tokens:
 
 - `<DELIVERABLE_SLUG>` — filesystem-safe slug consumed by artifact-path
   construction in the orchestrator.
+- `<MANIFEST_DIR>` — (v1.2+) directory where adopter manifests live;
+  referenced by `README.md § Adopter onboarding` and `examples/day-one.sh`
+  bootstrap, not by template bodies.
 - `<META_CONSOLIDATOR_FAMILY>` — manifest-level role assignment read by the
   dispatch layer when selecting the B.3 / D.3 consolidator.
 - `<MODEL_ASSIGNMENTS>` — manifest-level family → role map consumed by the

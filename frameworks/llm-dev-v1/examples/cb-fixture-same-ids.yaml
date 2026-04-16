@@ -1,0 +1,18 @@
+# Circuit-breaker fixture (v1.2+): same blocker IDs cycling across rounds.
+#
+# Two B.1 rounds preserve SPEC-1 in both; SPEC-2 carries over too.
+# verify-circuit-breaker.sh should report CB FIRES — the reviewer board
+# is stagnating, not converging. Orchestrator halt recommended before
+# dispatching a third round.
+#
+# Minimal shape: only `review_rounds` is populated. verify-circuit-breaker
+# operates on this file directly — full manifest schema validation is not
+# required for CB logic testing.
+
+review_rounds:
+  - phase: "B.1"
+    round: 1
+    preserved_blocker_ids: ["SPEC-1", "SPEC-2"]
+  - phase: "B.1"
+    round: 2
+    preserved_blocker_ids: ["SPEC-1", "SPEC-2", "SPEC-3"]

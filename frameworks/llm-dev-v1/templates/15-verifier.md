@@ -69,6 +69,50 @@ If you cannot execute shell / git / tests in your environment, label
 your verdict `static-inspection` and annotate which blockers you
 inspected by reading the diff only.
 
+**Canonical loader-swap verification pattern (v1.2+).** For
+loader-shape or module-import blockers, use the `git show` swap
+pattern — this is the pattern all three D3 verifiers independently
+converged on (scope-proposal §7). It produces the strongest evidence
+because you execute the SAME regression test against the SAME
+checked-out branch with only the target module reverted, proving the
+test actually covers the reported failure mode:
+
+```bash
+# 1. Identify the pre-fix commit <pre-sha> and post-fix commit <post-sha>
+#    from the D.4 fix summary + canonical verdict. <path> is the module or
+#    loader file the blocker targets.
+
+# 2. Snapshot the current (post-fix) contents so you can restore later.
+#    (Optional — `git checkout` will restore from index below.)
+cp <path> /tmp/<basename>.postfix
+
+# 3. Swap to the pre-fix version by extracting it into place.
+git show <pre-sha>:<path> > <path>
+
+# 4. Run the regression test. It MUST fail (the test covers the
+#    blocker's failure mode; pre-fix code should trigger it).
+pytest <test-file> -xvs
+echo "exit=$?"   # expect non-zero
+
+# 5. Restore the post-fix version.
+git checkout <path>
+
+# 6. Run the regression test again. It MUST pass.
+pytest <test-file> -xvs
+echo "exit=$?"   # expect 0
+```
+
+Record the two test-run evidence labels (`direct-run` for both) in
+your per-blocker table; cite the pre-fix and post-fix SHAs. If the
+test passes in step 4 (pre-fix) or fails in step 6 (post-fix), the
+regression test does NOT actually cover the blocker — halt per the
+"regression test does not cover the reported failure mode" condition
+below.
+
+Use any test-runner equivalent for non-Python stacks (`npm test`,
+`go test ./...`, `cargo test`, etc.). The pattern is language-
+agnostic; only the test command changes.
+
 **Regression check.**
 
 - Run `<SMOKE_CHECKS>` against the post-fix commit. All must pass.

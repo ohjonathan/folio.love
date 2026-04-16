@@ -38,6 +38,30 @@ reviewer/author template. Inject **runtime facts** (branch name, worktree
 path, live CLI notes, corrected smoke checks, preflight evidence) so workers
 do not rely on stale defaults.
 
+## Orchestrator preflight (B.1 / D.2 launches, v1.2+)
+
+Before dispatching the **first** worker on a B.1 or D.2 review round,
+the orchestrator enumerates every model-assignments entry for the phase
+and confirms all are scheduled. This catches the folio Slice-4 DC-1 /
+F-045 failure mode: silently-missing review-family dispatches that
+leave B.3 consolidation short a lens.
+
+```bash
+# Run at the top of a B.1 / D.2 launch:
+yq '.model_assignments[] | select(.phase == "<PHASE_ID>")' <manifest-path>
+```
+
+Count the entries. Record each as "pending dispatch" in the tracker
+with the family, role, and lens. Explicit checkpoint: **"Confirm all
+assignments dispatched. Proceed?"** — halt if the dispatch queue
+count does not match the `yq` count. Only after this checkpoint does
+the orchestrator start emitting per-worker BEGIN-DISPATCH-PREAMBLE
+instances below.
+
+This preflight is orchestrator-side and not inlined into worker
+prompts. Workers see only the BEGIN DISPATCH PREAMBLE block that
+follows.
+
 ## BEGIN DISPATCH PREAMBLE
 
 **Deliverable:** `<DELIVERABLE_ID>`

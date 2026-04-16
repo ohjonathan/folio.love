@@ -42,6 +42,24 @@ Product intake entirely — three rows, unchanged.
 findings. Rank them, reconcile contradictions, and preserve the ones that
 carry evidence.
 
+**Fast-path note (v1.2+ manifests only).** Under
+`manifest_version: 1.2.0` or later, when all lens verdicts are
+unanimous AND no cross-lens conflicts exist, the playbook's §
+"Orchestrator consolidation fast-path" permits the orchestrator to
+author the canonical verdict directly without dispatching this
+template. The output scaffolding below still applies; tag the
+frontmatter `consolidation_mode: fast-path`. This template body runs
+on split-verdict rounds — any disagreement between lenses, any
+finding a peer rejects, any contradiction — because P5 +
+contradiction handling needs its own reviewer. If you are reading
+this template and all lenses agree, stop and check whether the
+fast-path applies before starting.
+
+Pre-v1.2 manifests (v1.0.0 / v1.1.0 / v1.1.1) are NOT eligible for
+the fast-path: they retain the mandatory meta-consolidator ownership
+from `framework.md § Artifact contracts`. Confirm
+`manifest_version >= 1.2.0` before taking the fast-path.
+
 **Rules (P5).**
 
 1. **Preserve supported blockers.** A blocker with file:line evidence and a
@@ -50,6 +68,14 @@ carry evidence.
 2. **Downgrade unsupported blockers.** A blocker without `direct-run` or
    `orchestrator-preflight` evidence is moved to should-fix. Annotate the
    downgrade.
+   **(v1.2+ evidence-cap rule.)** If the raising family declares
+   `cli_capability_matrix[<FAMILY>].evidence_cap` in the manifest AND
+   the claimed evidence class exceeds that cap (e.g., a family capped
+   at `static-inspection` claims `direct-run`), auto-downgrade the
+   blocker to should-fix with a note — regardless of the reproduction
+   text. Pre-declared caps formalize the scope-proposal §6 pattern
+   where sandboxed Gemini reviewers repeatedly needed post-hoc
+   downgrade; declarative caps are enforced here.
 3. **Separate contradictions from blockers.** If families disagree on a
    fact (not a judgment), list the contradiction under a dedicated section
    and halt if you cannot determine which fact is correct from direct
@@ -147,6 +173,32 @@ If families disagree on fact:
 - Issues raised by 1 family with reproduction (evidence-preserved): <list>
 - Issues raised by 1 family without reproduction (downgraded): <list>
 
+## Metrics (v1.2+)
+
+Make the preserve-vs-downgrade ratio directly readable from the canonical
+verdict so retros and dashboards do not have to reconstruct it
+(scope-proposal §6 rec #8).
+
+| Counter | Value |
+|---------|-------|
+| Blockers claimed (all families)      | N |
+| Blockers preserved                    | N |
+| Blockers downgraded to should-fix     | N |
+| Should-fix findings (total)           | N |
+| Minor findings (total)                | N |
+
+| Family | Claimed | Preserved | Downgraded | Evidence cap |
+|--------|---------|-----------|------------|--------------|
+| <fam1> | N | N | N | direct-run / static-inspection / ... |
+| <fam2> | N | N | N | ... |
+| <fam3> | N | N | N | ... |
+| <prodfam> | N | N | N | ... |  <!-- only when USER_FACING is true -->
+
+`Evidence cap` column reports the family's declared
+`cli_capability_matrix[<family>].evidence_cap` (v1.2+) so readers can
+see whether a low preservation rate correlates with a capped
+evidence class. Leave blank if no cap is declared.
+
 ## Required actions for author
 A numbered list the author works through in the fix phase (phase A
 update for B, or phase D.4 for D). Each numbered action cites the
@@ -184,6 +236,75 @@ B.3. For each entry:
 Skipping this step is a documented cause of false D.6 failures (F-026,
 F-027 in the v1.1 adoption friction log). The re-baseline is normative
 for v1.1.1 B.3 consolidation regardless of deliverable type.
+
+**Preserved-blocker-ID emit (v1.2+).** Your canonical verdict frontmatter
+MUST include `preserved_blocker_ids: ["SPEC-1", "SPEC-2", ...]` — the flat
+list of stable IDs extracted from the `## Preserved blockers` section
+(replace the example strings with this round's real IDs; empty list is
+valid when the round produced Approve). After writing the canonical
+verdict, the orchestrator appends an entry to the manifest's
+`review_rounds` array:
+
+```yaml
+review_rounds:
+  - phase: <PHASE_ID>
+    round: N   # monotonically increasing integer per phase
+    preserved_blocker_ids: ["SPEC-1", "SPEC-2"]
+```
+
+The v1.2 circuit-breaker rule: for any phase with ≥2 rounds, if
+round N+1's `preserved_blocker_ids` **overlaps** round N's, the
+reviewer board is stagnating (same blockers cycling) and the
+orchestrator halts before dispatching round N+2. If round N+1's
+IDs are all **new** (no overlap with round N), the board is
+converging (different problems surfaced by an improved artifact) and
+the orchestrator may continue. `scripts/verify-circuit-breaker.sh`
+mechanizes this check against the manifest's review_rounds array.
+
+When your consolidation run is part of a multi-round phase, include a
+`## Round history` section listing prior rounds' preserved IDs + this
+round's preserved IDs so the reader can see the carry-forward at a
+glance.
+
+**User-authorized CB override (v1.2+ escalation record).** When the
+mechanical CB fires on ID overlap but the orchestrator judges that
+review is in fact converging — typically because an author-side fix
+commit landed between the round's consolidation and the CB check — the
+orchestrator MAY authorize a one-round override. The override is an
+explicit record, not a silent continuation.
+
+*New-vs-recurring judgment rule:*
+- **Same IDs, no in-flight author fix** — genuine stagnation. CB fires
+  correctly. Do NOT override; escalate per `playbook.md § Halt circuit
+  breaker`.
+- **Same IDs, author-side fix committed after the round's consolidator
+  run** — CB is looking at stale data. Override legitimate for ONE
+  round only.
+- **New IDs in round N+1** — CB already quiescent; no override needed.
+- **Mixed (some same, some new)** — default to no-override unless the
+  "same" IDs are demonstrably closed by an in-flight fix commit.
+
+*Escalation-record format.* The orchestrator authors a commit on the
+review-board branch with subject
+`v<version>: CB override — <PHASE_ID> round <round-n>` and body
+containing:
+
+- `Override authorized by:` orchestrator identity (person + tool
+  invoking the override).
+- `CB-fire evidence:` verbatim output from
+  `scripts/verify-circuit-breaker.sh` showing the carry-forward IDs.
+- `Progress evidence:` the concrete artifact the orchestrator cites to
+  show convergence (e.g., "D.4 fix commit <fix-sha> closed SPEC-1 +
+  SPEC-2; the carry-forward list is stale until the next consolidator
+  run re-reads the current artifact").
+- `Scope of override:` the single round this record authorizes. Each
+  override covers exactly one round — repeat authorization requires a
+  new record.
+
+*After the override round.* The next consolidator run produces a fresh
+`preserved_blocker_ids` list. If that list still overlaps the
+pre-override round, the override judgment was wrong; escalate
+unconditionally and do not author a second override.
 
 ## END META-CONSOLIDATION
 

@@ -1,4 +1,4 @@
-# LLM Development Framework — v1.1.1 (patch-release candidate)
+# LLM Development Framework — v1.2.0 (candidate)
 
 A portable, project-agnostic meta-prompt framework for LLM-driven software development.
 Drop this bundle into any repo, fill in the tokens in `tokens.md`, and you have a
@@ -7,11 +7,12 @@ development lifecycle (Spec → Spec Review → Implementation → Code Review),
 with optional pre-A entry points (Proposal / Triage / Validation Run) and an
 optional Product lens for user-facing deliverables.
 
-> **Status note.** v1.1.0 is released (`main` @ `2ec49e7`). v1.1.1 is a
-> patch-release candidate under review on PR #7; merge SHA is `TBD`
-> until the 2-family canonical verdict reaches Approve. Adopters
-> pulling today should anchor on v1.1.0 at `2ec49e7`; re-copy after
-> v1.1.1 merges. See `CHANGELOG.md` for the full release log.
+> **Status note.** v1.1.1 released on `main` @ `4dfa01f`. v1.2.0 is a
+> minor-release candidate under review on PR #TBD; merge SHA is `TBD`
+> until the full 3-family canonical verdict reaches Approve. Adopters
+> pulling today should anchor on v1.1.1 at `4dfa01f`; re-copy after
+> v1.2.0 merges. Previous releases: v1.1.0 at `2ec49e7`, v1.0.0 at
+> `1a1d9e5`. See `CHANGELOG.md` for the full release log.
 
 ## What's in the bundle
 
@@ -73,20 +74,105 @@ optional Product lens for user-facing deliverables.
   composed from templates. See `manifest/generator-spec.md` and
   `ROADMAP.md` for the v2 implementation.
 
-## 10-minute adoption
+## Adopter onboarding (v1.2+)
 
-1. Copy `frameworks/llm-dev-v1/` into your repo (or git-submodule it).
-2. Open `tokens.md` and fill in the substitution values for your project
-   (workspace path, branch convention, doc index tool, model CLIs, etc.).
-3. Read `framework.md` end to end. It's short. It's the spine.
-4. Pick your entry point in `playbook.md`:
-   - New deliverable from scratch → write a manifest, then use
-     `02-phase-dispatch-handoff.md`.
-   - Resuming after an interruption → use `11-continuation-prompt.md`.
-   - Running just a review board → use `03`/`04`/`05` + `06`.
-5. Run `bash scripts/verify-all.sh` to confirm the bundle is internally
-   consistent for your project's fill.
-6. Dispatch.
+This section replaces the v1.0 "10-minute adoption" checklist with a
+durable flow: one variable to fill (`<adopter-repo-root>`), a bootstrap
+script, per-language scope-lock starting points, and mechanical
+preflights.
+
+### 1. Drop the bundle into your repo
+
+Copy `frameworks/llm-dev-v1/` into `<adopter-repo-root>/ops/llm-dev-v1/`
+(or any path — the bundle is self-contained). Verbatim copy is the
+recommended mode for your first deliverable. Subtree / submodule
+alternatives live in the adoption handoff referenced by any
+maintainer-authored project handoff.
+
+### 2. Run the bootstrap
+
+```bash
+cd <adopter-repo-root>
+bash ops/llm-dev-v1/examples/day-one.sh <deliverable-id>
+```
+
+`examples/day-one.sh` creates:
+- `<MANIFEST_DIR>/<deliverable-id>.yaml` — manifest skeleton derived
+  from `manifest/example-manifest.yaml` with `id` and `slug`
+  substituted. Default `<MANIFEST_DIR>`: `<adopter-repo-root>/manifests/`
+  (override via `MANIFEST_DIR` env var — convention is
+  `frameworks/manifests/` for monorepos that host the bundle
+  alongside manifests, `manifests/` for standalone adopter repos).
+- `docs/trackers/<deliverable-id>.md` — empty tracker skeleton.
+- `tokens.local.md` (alongside `tokens.md` inside the bundle copy) if
+  absent — a starter fill file.
+
+### 3. Fill `tokens.local.md`
+
+Open `ops/llm-dev-v1/tokens.local.md` and populate at minimum:
+
+- `<WORKSPACE>` — absolute path to `<adopter-repo-root>`.
+- `<REPO_URL>`, `<DEFAULT_BRANCH>` — your VCS identity.
+- `<CLI_CLAUDE?>` / `<CLI_CODEX?>` / `<CLI_CODEX_MODEL?>` /
+  `<CLI_GEMINI?>` — your CLI invocations + the Codex model.
+- `<TEST_COMMAND>` — your test runner (see per-language defaults
+  below).
+- `<MANIFEST_DIR>` — where your manifests live.
+
+### 4. Preflight + verify-adopter
+
+```bash
+bash ops/llm-dev-v1/scripts/verify-tokens.sh --probe-codex-model <CLI_CODEX_MODEL>
+bash ops/llm-dev-v1/scripts/verify-adopter.sh <MANIFEST_DIR>/<deliverable-id>.yaml
+```
+
+Both must pass before any worker dispatches. The Codex probe catches
+the D3 FL#2 failure mode (model-access denied despite CLI working);
+`verify-adopter` runs the four manifest-scoped conformance checks
+(schema, P3, gate-categories, artifact-paths).
+
+### 5. Dispatch
+
+Follow the entry-point table in `playbook.md` (Proposal / Triage /
+Validation / Phase 0). Workers use the templates under `templates/`.
+Resume a halted session via `11-continuation-prompt.md`; run a
+standalone review board via `03`/`04`/`05` + `06`.
+
+### Per-language scope-lock starting points (v1.2+ appendix)
+
+Scope-lock blocks (`scope.allowed_paths`, `scope.forbidden_paths`,
+`scope.forbidden_symbols`) depend on your project's language. These
+are starting points, not prescriptions.
+
+**Python**
+- `allowed_paths`: `src/<module>/`, `tests/test_<module>.py`.
+- `forbidden_paths`: `migrations/`, `.github/`, secrets paths.
+- `forbidden_symbols`: `requests.`, `httpx.`, `import asyncio` (for
+  sync/offline modules); adjust per deliverable.
+- `<TEST_COMMAND>`: `pytest -xvs`.
+
+**TypeScript / Node.js**
+- `allowed_paths`: `src/<feature>/`, `src/components/<feature>/`,
+  `tests/<feature>.test.ts` (or `.spec.ts`).
+- `forbidden_paths`: `node_modules/`, `.next/`, `dist/`, `build/`,
+  `.github/`.
+- `forbidden_symbols`: `any` (typed-out), `@ts-ignore`, raw `fetch(`
+  if a project wrapper exists.
+- `<TEST_COMMAND>`: `vitest run`, `jest --ci`, or `npm test`.
+
+**Go**
+- `allowed_paths`: `internal/<package>/`, `pkg/<package>/`, adjacent
+  `*_test.go` files.
+- `forbidden_paths`: `vendor/`, `.github/`.
+- `forbidden_symbols`: `fmt.Println` (prefer a logger),
+  `interface{}`, `time.Sleep` outside tests.
+- `<TEST_COMMAND>`: `go test ./... -race`.
+
+Other languages follow the same shape — source root + test path in
+`allowed_paths`; generated code + dependency caches in
+`forbidden_paths`; language anti-patterns in `forbidden_symbols`.
+`verify-portability.sh` guarantees the bundle itself carries no
+language-specific strings, so your scope-lock is adopter-local.
 
 ## Verification
 
@@ -98,12 +184,51 @@ passes as-is. Run `bash scripts/verify-all.sh` after any change.
 | `verify-schema.sh`             | both example manifests (`example-manifest.yaml`, `example-user-facing-manifest.yaml`) validate against `manifest/deliverable-manifest.schema.yaml` |
 | `verify-tokens.sh`             | every `<TOKEN>` used in templates is defined in `tokens.md`                                     |
 | `verify-frontmatter.sh`        | each template's `required_tokens` + `optional_tokens` ⇔ body usage                             |
-| `verify-p3.sh`                 | phases B.1 / D.2 / D.5 each have ≥3 distinct non-author families; user-facing manifests additionally assert Product role on B.1 / B.2 / D.2 |
+| `verify-p3.sh`                 | phases B.1 / D.2 / D.5 each have ≥3 distinct non-author families; user-facing manifests additionally assert Product role on B.1 / B.2 / D.2; v1.2+ manifests additionally require adversarial ≠ author provider (escape hatch: `gate_prerequisites` id prefix `G-xprov-adv-<phase>`) |
 | `verify-pre-a.sh`              | (v1.1) if `pre_a` is declared, entry + artifact_path coherent and the matching `artifacts.*` path is declared |
 | `verify-gate-categories.sh`    | `gate_prerequisites` covers the six required categories                                        |
 | `verify-artifact-paths.sh`     | `canonical_verdict` / `family_verdict` / `verification` placeholder shapes valid                |
 | `verify-portability.sh`        | no host-project strings in normative files                                                     |
+| `verify-d6-gate.sh` (v1.2)     | parses a D.6 final-approval gate artifact and asserts every row is `PASSED` with an allowed evidence-class tag. Per-deliverable: `bash scripts/verify-d6-gate.sh <final-approval-path>`. `verify-all.sh` runs it against `examples/d6-gate-fixture.md` as a regression. |
+| `verify-circuit-breaker.sh` (v1.2) | validates `review_rounds` schema and reports per-phase CB state (fires on ID overlap across rounds; quiescent on new IDs). Called by `verify-all.sh` on the two example manifests; adopters can invoke `bash scripts/verify-circuit-breaker.sh <manifest-path>` per-deliverable. |
+| `verify-adopter.sh` (v1.2)     | unified adopter entrypoint. Runs schema / p3 / gate-categories / artifact-paths against a single adopter manifest path with `--manifest` flag. Per-deliverable: `bash scripts/verify-adopter.sh <manifest-path>`. |
 | `verify-all.sh`                | runs all of the above; exit non-zero on any failure                                            |
+
+## Adopter CI integration (v1.2+)
+
+Adopters copying this bundle into their repo (or referencing it via
+submodule / subtree) typically care about two different verification
+surfaces:
+
+- **The bundle itself.** Did the upstream copy land intact? `bash
+  scripts/verify-all.sh` walks the bundle's own invariants (schema
+  validity, token coverage, template frontmatter, portability, etc.)
+  and the two bundled example manifests. Runs without args; exits
+  non-zero on any gap. Appropriate in bundle-upgrade CI (when
+  re-copying a new bundle version).
+- **Your own manifest.** Does an adopter-authored deliverable manifest
+  satisfy the framework's manifest-scoped invariants? `bash
+  scripts/verify-adopter.sh <manifest-path>` runs the four
+  manifest-scoped checks (schema, P3, gate-categories,
+  artifact-paths) against a single adopter manifest path.
+  Appropriate in per-deliverable CI.
+
+Each of the four manifest-scoped scripts also accepts a
+`--manifest <path>` flag if you want to invoke them individually. The
+default (no flag) remains the bundle-maintainer behavior (validate
+the two bundled examples) so existing `verify-all.sh` runs are
+unchanged.
+
+Example adopter CI pattern (GitHub Actions):
+
+```yaml
+- name: Validate adopter manifest
+  run: bash ops/llm-dev-v1/scripts/verify-adopter.sh ops/manifests/my-deliverable.yaml
+```
+
+`verify-circuit-breaker.sh <manifest-path>` is runtime-state-aware
+(reads `review_rounds`); invoke it post-round rather than in manifest
+CI.
 
 **Install dependencies**:
 

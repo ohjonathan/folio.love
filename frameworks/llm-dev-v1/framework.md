@@ -136,6 +136,20 @@ version. A phase may contain multiple rounds. Each round produces exactly
 three family verdicts (Peer, Alignment, Adversarial) from three distinct
 non-author families, plus one canonical verdict from the meta-consolidator.
 
+**Fast-path exception (v1.2+ manifests).** Under
+`manifest_version: 1.2.0` or later, when all lens verdicts in a
+B.3 or D.3 round are unanimous (all-Approve or all-Needs-Fixes) AND no
+cross-lens finding conflicts exist, the orchestrator MAY author the
+canonical verdict directly without dispatching a separate
+meta-consolidator family session. The canonical artifact uses Template
+06's output scaffolding and carries `consolidation_mode: fast-path`
+in its frontmatter. Split-verdict rounds (any disagreement, any
+rejected finding, any contradiction) continue to require the full
+meta-consolidator dispatch so P5 + contradiction handling runs with
+its own reviewer. Pre-v1.2 manifests (v1.0.0, v1.1.0, v1.1.1) retain
+the mandatory meta-consolidator path. See `playbook.md § Review board
+§ Orchestrator consolidation fast-path` for the dispatch-side rules.
+
 **Pre-A carve-out.** P3 applies to review boards on phase-advance artifacts
 (Phases B and D). The pre-A variants are scoped differently and do not all
 share the strict P3 floor:
@@ -161,7 +175,30 @@ a strictly-disjoint 5-family composition (1 author + 3 engineering + 1
 Product, all distinct families) may configure their manifest that way; v1.1
 does not mandate it.
 
-<!-- Provenance: playbook §2 intentional model diversity; v1.0.0 review board verdict §7 B1; v1.1 extension scope per docs/v1.1-doctrine-decisions.md §3 -->
+**Adversarial-family invariant (v1.2+).** Under `manifest_version: 1.2.0`
+or later, the family assigned `adversarial` at B.1, B.2, or D.2 MUST NOT
+share a **provider** with the author family. Provider is the first
+hyphen-delimited segment of the family name: `claude-opus` and
+`claude-sonnet` share provider `claude`; `codex` and `gemini` each form
+their own provider. Same-provider adversarial review is `advisory-only`
+— its blockers do not gate phase advance on their own — and is permitted
+only when the manifest declares a `cross_provider_adversarial_passes[]`
+entry with:
+1. `provider` different from any author family's provider (second pass
+   is genuinely cross-provider);
+2. `artifact_path` referenced by at least one `gate_prerequisites` entry
+   of category `verdict-presence` (the second-pass artifact is
+   mechanically checked at D.6).
+`verify-p3.sh` enforces both conditions on v1.2+ manifests;
+v1.0 / v1.1 / v1.1.1 manifests are grandfathered. The v1.2.0-RC1
+gate-id-prefix convention (`G-xprov-adv-<phase>`) was removed in the
+v1.2 fix-pass after Codex Alignment demonstrated a bypass using a
+dummy gate entry.
+Evidence: D3 Manifest Spec retro (same-provider + sandbox adversarial
+produced advisory-only quality 5× in one run); folio.love F-006; v1.2.0
+Codex Alignment ALIGN-BLOCKER1.
+
+<!-- Provenance: playbook §2 intentional model diversity; v1.0.0 review board verdict §7 B1; v1.1 extension scope per docs/v1.1-doctrine-decisions.md §3; v1.2 adversarial-family invariant per docs/v1.2-build-plan.md §Phase-1.1 -->
 
 ### P4 — Three-lens review
 
@@ -259,7 +296,7 @@ generator (see `manifest/generator-spec.md`) exists to eliminate hand-cloning.
 | Spec vN             | A           | Author               | `<SPEC_DIR>/<DELIVERABLE_ID>-spec.md` |
 | Family verdict      | B, D        | Peer/Alignment/Adversarial per family | `<REVIEWS_DIR>/<DELIVERABLE_ID>-<phase>-<family>-<role>.md` |
 | Product verdict     | B, D (user-facing only) | Product per family | `<REVIEWS_DIR>/<DELIVERABLE_ID>-<phase>-<family>-product.md` |
-| Canonical verdict   | B, D        | Meta-Consolidator    | `<REVIEWS_DIR>/<DELIVERABLE_ID>-<phase>-verdict.md` |
+| Canonical verdict   | B, D        | Meta-Consolidator (default); Orchestrator on unanimous non-split rounds under `manifest_version ≥ 1.2.0` (fast-path; see playbook § Orchestrator consolidation fast-path) | `<REVIEWS_DIR>/<DELIVERABLE_ID>-<phase>-verdict.md` |
 | Fix summary         | B, D        | Author               | `<REVIEWS_DIR>/<DELIVERABLE_ID>-<phase>-fix-summary.md` |
 | Final-approval gate | D (final)   | Final-Approval Gate  | `<REVIEWS_DIR>/<DELIVERABLE_ID>-final-approval.md` |
 | Retrospective       | E           | Retrospective author | `<RETRO_DIR>/<DELIVERABLE_ID>-retro.md` |

@@ -38,11 +38,28 @@ deviation and cites authority to override.
 - Prior-decision overrides without citation.
 - Naming-convention drift from the project's established patterns.
 - Artifact frontmatter fields that don't match the project's artifact contract.
+- **(v1.2+.)** Surface enumeration audit — when the artifact is a spec,
+  confirm the § 11 Contract enumeration checklist (Template 12 v1.2+)
+  exists and every §-level enum value has an implementation anchor
+  (function / class / method / cli-flag / exception / schema-field /
+  test / deferred-with-§9-link). Missing rows or missing anchors are
+  blocker-grade findings. When the artifact is an implementation
+  (Phase D.2), confirm each § 11 row resolves to the stated anchor;
+  anchor-mismatches are also blocker-grade.
 
 **What is NOT your lens.**
 
 - Is the design good? → that's Peer.
 - How does it fail? → that's Adversarial.
+- **(v1.2+ boundary tightening.)** Alignment is parent-spec fidelity
+  only. Alignment does NOT perform scope compliance against
+  `scope.allowed_paths` / `scope.forbidden_paths` / `forbidden_symbols`
+  — those are mechanical gates (verify-artifact-paths,
+  verify-portability, D.6's gate table). Alignment raises such
+  findings only if the underlying violation reflects a prior-decision
+  or architecture breakage (e.g., the spec said to touch module X;
+  the implementation touched X and Y; the Y touch lacks spec
+  authority). The gate catches raw path violations on its own.
 
 **Evidence.** Every finding carries an evidence label. An alignment blocker
 cites the exact approved document and line range being violated AND the
