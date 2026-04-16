@@ -308,8 +308,10 @@ class TestRelationshipProposal:
             relation="impacts", target_id="t1", basis_fingerprint="sha256:abc",
             confidence="medium", signals=[], rationale="",
         )
-        result = _suppress_rejected_proposals([new], existing_meta, force=False)
-        assert len(result) == 0
+        result, count = _suppress_rejected_proposals([new], existing_meta, force=False)
+        assert len(result) == 1
+        assert result[0].lifecycle_state == "suppressed"
+        assert count == 1
 
     def test_graph_acceptance_rate_reads_legacy_rejected_status(self):
         """T-8: graph acceptance-rate aggregation counts legacy status: rejected."""

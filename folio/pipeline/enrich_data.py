@@ -144,6 +144,7 @@ class EnrichAxisResult:
 
     # Relationship axis
     proposals: Optional[list[dict]] = None
+    suppression_counts: Optional[dict[str, int]] = None
 
     def to_dict(self) -> dict:
         """Serialize, omitting None fields."""
@@ -158,6 +159,8 @@ class EnrichAxisResult:
             d["unresolved_created"] = self.unresolved_created
         if self.proposals is not None:
             d["proposals"] = self.proposals
+        if self.suppression_counts is not None:
+            d["suppression_counts"] = dict(self.suppression_counts)
         return d
 
 
