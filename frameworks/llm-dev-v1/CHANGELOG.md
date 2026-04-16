@@ -3,7 +3,7 @@
 All notable changes to the `llm-dev-v1` framework bundle are documented here.
 Versioning is bundle-scoped (`llm-dev-vMAJOR.MINOR.PATCH`).
 
-## v1.1.1 — Released 2026-04-16 (PR #TBD, merge `TBD`)
+## v1.1.1 — Released 2026-04-16 (PR #51, merge `ab4bc27`)
 
 Five bug fixes against v1.1.0's shipped surface — no schema breaking
 changes, no new templates, no manifest contract changes. v1.0.0 and v1.1.0

@@ -78,6 +78,64 @@ the last mechanics gap (Codex-7). Same playbook as v1.0.0.
 
 ---
 
+## v1.1.1 — Released 2026-04-16
+
+**Status.** Released via PR #51 (merge `ab4bc27`). Bug-fix patch. No
+git tag. 2-family light review (claude-sub + codex) per patch-release
+policy.
+
+**Scope shipped.**
+
+- **C-1** — `id` regex accepts component-separator dots
+  (`^[a-z][a-z0-9]*([.-][a-z0-9]+)*$`). Rejects pathological forms
+  (`x..y`, `x.-y`, trailing separators).
+- **C-2** — `verify-tokens.sh` suppresses "defined but not referenced"
+  warnings for orchestrator-only tokens. `tokens.md` gains a
+  dedicated "Orchestrator-only tokens" section.
+- **C-4** — `<DOC_INDEX_ARCHIVE?>` runs after Phase E retrospective is
+  committed, documented in `templates/08-retrospective.md` and
+  `tokens.md`.
+- **C-5** — `verify-schema.sh` hard-fails on missing `check-jsonschema`
+  instead of silent-skip. `README.md` marks the dependency as required.
+- **B-5** — Cardinality re-baseline at B.3 Approve is normative.
+  `templates/06-meta-consolidator.md` prescribes it.
+
+**Exit criteria met.** Conformance suite 8/8 green. v1.0.0 and v1.1.0
+manifests validate unchanged. Full rationale in
+`frameworks/manifests/framework-learnings-v1.1-adoption.md`.
+
+---
+
+## v1.2.0 — Planned
+
+**Status.** Build plan drafted at `docs/v1.2-build-plan.md`. Freeze
+pending `folio.love` Phase D retrospective. Not started.
+
+**Planned scope** (subject to freeze review):
+
+- **Must-ship (4):**
+  - A-1 Codex adversarial as default (cross-provider required)
+  - A-2 `verify-adopter.sh <manifest-path>` unified entry point
+  - A-3 Pre-A tightening — P5-style adjudication rules in Template 16
+  - B-3 D.6 gate as script (`verify-d6-gate.sh`)
+- **Should-ship (5):**
+  - A-4 Adoption doc v2 with per-language appendix + `day-one.sh`
+  - B-2 Orchestrator consolidation fast-path on unanimous verdicts
+  - C-9 Codex adversarial prompt template (targeted-prompt pattern)
+  - C-12 Contract-enumeration checklist + model-assignments preflight
+  - C-13 B.1 role-overlap reduction (alignment vs product vs peer)
+
+**Friction sources.** Drawn from 46 adoption friction entries and 25
+recommendations consolidated at
+`frameworks/manifests/framework-learnings-v1.1-adoption.md`. Each
+item cites at least one F-xxx reference in the build plan.
+
+**Exit criteria.** 3-family review-board round emits Approve;
+conformance suite 8/8 + new assertions; v1.0.0/v1.1.0/v1.1.1
+manifests all validate.
+
+---
+
 ## v1.x — Continuous improvements
 
 **Trigger.** Per-deliverable retrospectives.
