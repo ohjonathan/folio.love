@@ -1127,6 +1127,48 @@ class TestEntityMergeRejectionMemoryCLI:
         )
         assert "Reviewable duplicate person candidates: 0" in result.output
 
+    # T-11 — graph doctor honors rejection memory (D.4 fix per peer M-1)
+    def test_cli_graph_doctor_honors_rejection_memory(self, tmp_path):
+        """After rejecting a pair, graph doctor's duplicate_person_candidate
+        finding no longer includes that pair."""
+        library, config_path = self._setup_alice_pair_library(tmp_path)
+        # Need a registry.json for graph_doctor to iterate.
+        (library / "registry.json").write_text(json.dumps({"decks": {}}))
+
+        runner = CliRunner()
+        # Before rejection: the duplicate pair surfaces as a doctor finding.
+        result_before = runner.invoke(
+            cli, ["--config", str(config_path), "graph", "doctor"]
+        )
+        assert result_before.exit_code == 0
+        assert "duplicate_person_candidate" in result_before.output or "Alice Chen" in result_before.output
+
+        # Reject the pair.
+        runner.invoke(
+            cli, ["--config", str(config_path), "entities", "reject-merge",
+                  "alice_chen", "chen_alice"]
+        )
+
+        # After rejection: doctor's duplicate_person_candidate for this pair
+        # is gone (other findings like missing_entity_stub may still include
+        # the keys — filter to the duplicate finding class only).
+        result_after = runner.invoke(
+            cli, ["--config", str(config_path), "graph", "doctor"]
+        )
+        assert result_after.exit_code == 0
+        before_dup_lines = [
+            line for line in result_before.output.splitlines()
+            if "duplicate_person_candidate" in line
+        ]
+        after_dup_lines = [
+            line for line in result_after.output.splitlines()
+            if "duplicate_person_candidate" in line
+        ]
+        assert len(before_dup_lines) > len(after_dup_lines), (
+            f"Expected fewer duplicate_person_candidate findings after "
+            f"rejection. Before: {before_dup_lines}. After: {after_dup_lines}."
+        )
+
     # T-15 — lock contract (raises LibraryLockError on held lock, does not block)
     def test_cli_reject_merge_honors_library_lock(self, tmp_path):
         library, config_path = self._setup_alice_pair_library(tmp_path)

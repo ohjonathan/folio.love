@@ -33,13 +33,20 @@ scope:
     - folio/graph.py
     - tests/test_cli_entities.py
     - tests/test_entities.py
+    - tests/test_graph_cli.py
     - CHANGELOG.md
     - docs/specs/v0.6.5_entity_merge_rejection_memory_spec.md
+    # Validation artifacts — including round-N re-dispatch artifacts
+    # (v1.2 framework manifest schema doesn't support globs; enumerated).
     - docs/validation/v0.6.5_spec_peer_claude-sub.md
+    - docs/validation/v0.6.5_spec_peer_claude-sub_round2.md
     - docs/validation/v0.6.5_spec_alignment_gemini.md
     - docs/validation/v0.6.5_spec_adversarial_codex.md
+    - docs/validation/v0.6.5_spec_adversarial_codex_round2.md
     - docs/validation/v0.6.5_spec_product_claude-sub.md
+    - docs/validation/v0.6.5_spec_product_claude-sub_round2.md
     - docs/validation/v0.6.5_spec_canonical_verdict.md
+    - docs/validation/v0.6.5_spec_canonical_verdict_round2.md
     - docs/validation/v0.6.5_code_peer_claude-sub.md
     - docs/validation/v0.6.5_code_alignment_gemini.md
     - docs/validation/v0.6.5_code_adversarial_codex.md
