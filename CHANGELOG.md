@@ -125,3 +125,48 @@ changes at minor versions are permitted but flagged explicitly.
   `list[RelationshipProposalView]` to `tuple[list[RelationshipProposalView], dict[str, int]]`.
   All internal callers updated in the same commit (`folio/links.py`, `folio/graph.py`,
   `folio/cli.py`). No external API consumers identified.
+
+## [v0.5.2] — 2026-03-28
+
+### Added
+- `folio enrich` — post-hoc enrichment for tags, entity backfill, and
+  LLM-proposed relationships (`supersedes`, `impacts`) surfaced under
+  `_llm_metadata.enrich`.
+- `## Related` section generation from canonical relationship frontmatter.
+- `folio enrich diagnose` — read-only pre-run mutation-safety surface.
+- `--dry-run` preview mode, idempotency markers, per-file skip behavior
+  so reruns are safe.
+
+## [v0.5.1] — 2026-03-23
+
+### Added
+- Entity registry (`entities.json`): canonical name store with type
+  namespacing (person, department, system, process), aliases, and
+  confirmation workflow.
+- `folio entities` CLI: `list`, `show`, `import` (CSV), `confirm`, `reject`.
+- CSV import for bulk org-chart loading — names, titles, departments,
+  reporting relationships, client tags.
+- Ingest-time entity resolution: exact-match and alias-match against
+  confirmed entities during `folio ingest`.
+- LLM soft-match proposals for unconfirmed entity candidates, flagged
+  `needs_confirmation` for human review.
+
+## [v0.5.0] — 2026-03-22
+
+### Added
+- `folio ingest` — interaction ingestion pipeline for `.txt` and `.md`
+  transcripts.
+- Interaction document type (`type: interaction`; subtypes:
+  `client_meeting`, `expert_interview`, `internal_sync`,
+  `partner_check_in`, `workshop`).
+- Reviewability fields on interaction notes: `review_status`,
+  `review_flags`, `extraction_confidence`, `grounding_summary`.
+- Ingest-time entity extraction (people, departments, systems, processes)
+  rendered as unresolved Obsidian wikilinks for later confirmation.
+- Interaction registry integration: interaction entries tracked in
+  `registry.json` alongside evidence documents.
+- Re-ingest identity via `source_hash` to prevent duplicate notes on
+  re-processing.
+- Optional flags: `--client`, `--engagement`, `--participants`,
+  `--duration-minutes`, `--source-recording`, `--title`, `--target`,
+  `--llm-profile`.
