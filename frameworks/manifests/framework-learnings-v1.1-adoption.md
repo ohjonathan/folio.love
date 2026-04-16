@@ -2,19 +2,20 @@
 id: framework-learnings-v1.1-adoption
 created: 2026-04-15
 updated: 2026-04-16
-source: folio.love first production adoption (5 slices)
-purpose: Feed frameworks/llm-dev-v1/ROADMAP.md v1.2 scope
+source: folio.love first production adoption (6 slices)
+purpose: Feed frameworks/llm-dev-v1/ROADMAP.md v1.2+ scope
 slices_covered:
   - proposal-review-hardening-v0-6-0 (slice 1, PR #44)
   - proposal-lifecycle-rename-v0-6-1 (slice 2, PR #45)
   - provenance-lifecycle-rename-v0-6-2 (PROV-1, PR #46)
   - emission-time-rejection-v0-6-3 (slice 3, PR #47)
   - trust-gated-surfacing-v0-6-4 (slice 4)
+  - entity-merge-rejection-memory-v0-6-5 (slice 6a)
 ---
 
 # Framework Learnings — llm-dev-v1.1 Production Adoption (folio.love)
 
-Five full lifecycle runs on a real Python codebase. Friction entries F-001 through F-046 are the raw data; this document extracts the six structural lessons that feed v1.2 scope.
+Six full lifecycle runs on a real Python codebase. Friction entries F-001 through F-048 are the raw data; this document extracts the six structural lessons that feed v1.2+ scope. Slice 6a supplement at the bottom applies the same six-point template to the latest run.
 
 ---
 
@@ -362,3 +363,72 @@ Existing recommendations (C-1..C-8, B-2..B-6 from prior slices) stand. Slice 4 a
 | v1.2 recs | — | C-1..C-4 | C-5..C-8 | C-9..C-14 | Accumulating cleanly |
 
 **Net effect:** Slice 4 produced fewer friction entries than any prior slice (2 vs. 3-8). Framework is converging. The remaining signal is not about framework defects but about author hygiene (checklist-able) and reviewer role-overlap (template-fixable). Next slice will likely stabilize further.
+
+---
+
+# Slice 6a supplement — entity-merge-rejection-memory-v0-6-5
+
+Reviewed against the six-point framework per the earlier session directive (frameworks/manifests README).
+
+### 1. Token-fill friction
+
+**No new findings.** Slice 6a was a clean manifest drop from the slice-1 / slice-2 template. All tokens auto-resolved.
+
+However, a token-adjacent gap emerged: `scope.allowed_paths` in the manifest schema doesn't support glob patterns. Every adopter slice that touches cross-cutting regression tests or produces Round-N artifacts needs per-file enumeration. Surfaced as friction F-047.
+
+**v1.3 recommendation (promoted from polish to should-ship):** `scope.allowed_path_patterns: [glob...]` schema field. See §6 recommendation T-1 below.
+
+### 2. Template gaps
+
+**No new template gaps.** v1.1.1 closed the B-3 (D.6 as script) target; slice 6a ran D.6 via orchestrator-authored machine-verified prerequisites with no reviewer dispatch. Clean end-to-end.
+
+Template 16 Pre-A tightening (v1.2 A-3) wasn't exercised this slice (Pre-A inherited from parent proposal §15.6). Unchanged signal.
+
+### 3. Multi-family dispatch friction
+
+**No new CLI reliability issues.** Four dispatches per round, all completed within their timeout budgets:
+- codex exec (adversarial): ~3-4 min per round, clean output
+- gemini -p (alignment): ~1-2 min, correct scope verification
+- Claude agent (peer + product): ~2-3 min each, deep line-by-line coverage
+
+**Adversarial recall pattern reconfirmed.** Slice 6a:
+- B.1 R1: codex adversarial found 2 blockers (ADV-001 schema-bump, ADV-002 lost-update). Peer, alignment, product found zero blockers.
+- D.2: codex adversarial Approve with zero findings after v1.2 spec and clean Phase C. Peer / product / gemini found only minor or scope-hygiene items.
+- **Conclusion:** codex adversarial is still the single highest-yield lens for design-defect detection when the spec is fresh. When the spec has already converged (v1.2), codex's marginal value is near-zero. Recommend keeping codex adversarial on B.1 R1 + D.2 R1 as policy; subsequent rounds can de-emphasize if codex R1 returned clean.
+
+### 4. Verify-script accuracy
+
+**No verify-script regressions.** Post-v1.1.1 cardinality-assertion format (Python-native imports instead of CLI-help grep) worked cleanly — both cardinality assertions passed first try.
+
+**One new finding:** D.6 gate's G-branch-1 ("working tree clean") is sensitive to `ontos map` auto-regeneration of `AGENTS.md` and `Ontos_Context_Map.md` (both in scope.forbidden_paths). Had to `git checkout` them before the gate would pass. Surfaced as friction F-048.
+
+**v1.3 recommendation (polish):** adoption doc should document the "revert ontos auto-regeneration before D.6" step for adopters using ontos-adjacent tooling.
+
+### 5. Manifest/schema ergonomics
+
+**No schema errors.** Manifest passed `verify-all.sh` on first draft.
+
+**One real ergonomic friction:** §15.6 says scope is "folio/tracking/entities.py" but the slice's label-rename side-effect ("Duplicate person candidates" → "Reviewable…") forced test updates in `tests/test_graph_cli.py` — a file that wasn't in the primary scope. Manifest drafting underestimated the cross-cutting blast radius. The fix is F-047's glob support.
+
+### 6. Concrete v1.3 recommendations (ranked, friction-linked)
+
+| Tier | ID | Recommendation | Friction ref | Effort estimate |
+|------|----|----------------|--------------|----|
+| **Should-ship** | T-1 | Manifest `scope.allowed_path_patterns: [glob, ...]` schema field. Match semantics: in-scope if file matches any exact path OR any glob. Documented exclude list for safety. | F-047 | Schema + matcher: ~1 day |
+| Polish | T-2 | Adoption doc entry: "before D.6 gate, revert any `ontos map` / auto-generated regenerations that land in scope.forbidden_paths." One-paragraph insert. | F-048 | ~30 min |
+| Polish | T-3 | ROADMAP entry: "codex adversarial marginal value drops after spec convergence (v1.2+)." Useful orchestrator guidance for when to save a dispatch. | Slice 6a D.2 observation | ~15 min |
+
+All three are adopter-experience hygiene; none are design-critical. Slice 6a confirms the framework has stabilized into "patch-class friction" territory (small ergonomic fixes) rather than "structural-class friction" (template gaps, halt-condition miscalibrations, family-diversity breakdowns).
+
+### Cross-slice friction trend (updated through slice 6a)
+
+| Class | Slice 1 | Slice 2 | PROV-1 | Slice 3 | Slice 4 | Slice 6a | Trend |
+|-------|---------|---------|--------|---------|---------|----------|-------|
+| Token-fill | 6 | 0 | 0 | 0 | 0 | 0 (1 adjacent → F-047) | Stable-clean |
+| Template gap | 3 | 1 | 0 | 1 | 0 | 0 | Stable-clean |
+| Multi-family | 2 | 0 | 0 | 0 | 1 (F-042, mitigated in slice 4) | 0 (adversarial-value note) | Stable |
+| Verify-script | 1 | 0 | 0 | 0 | 1 (line citation drift) | 1 (F-048 ontos regen) | Stable |
+| Manifest/schema | 0 | 1 | 0 | 0 | 0 | 1 (F-047 glob) | Stable |
+| v1.2+ recs | — | C-1..C-4 | C-5..C-8 | C-9..C-14 | — | T-1..T-3 | Accumulating cleanly |
+
+**Net effect:** Slice 6a matches slice 4's low-friction baseline (2 entries). Both new entries (F-047, F-048) are ergonomic, not structural. The framework has converged for the adopter's code-surface category; remaining friction is in adopter tooling (ontos, glob support) and orchestrator heuristics (when to dispatch codex vs. orchestrator-consolidate).

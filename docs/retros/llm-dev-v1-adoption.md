@@ -540,3 +540,71 @@ Folio authored v1.1.1 locally (PR #51, merge `ab4bc27`) before johnny-os did. Th
 Lesson: adopters surface signal, maintainer builds. Local bundle edits create divergence that must be reconciled.
 
 Resolved 2026-04-16. Bundle resynced from johnny-os@4dfa01f via PR #53.
+
+---
+
+## Slice 6a — entity-merge-rejection-memory-v0-6-5 (2026-04-16)
+
+### Metrics
+
+| Metric | Value |
+|--------|-------|
+| Phases executed | A, B (2 rounds), C, D (1 round + D.4 fix), E |
+| Phase A spec versions | v1.0 → v1.1 → v1.2 (two revision cycles) |
+| Blockers raised (B.1 R1) | 2 codex adversarial (ADV-001 schema-bump downgrade break, ADV-002 reject-merge lost-update race) |
+| Blockers preserved at Phase C dispatch | 0 |
+| Should-fix raised (B + D total) | 14 (4 Phase B R1 codex + 6 R1 peer + 4 R1 product + 3 B.2 R2 codex + 1 D.2 gemini scope) — plus 4 peer minor / 3 product informational at D.2 |
+| Should-fix preserved at ship | 0 (all 14 closed in v1.1/v1.2/D.4) |
+| Test count delta | +23 tests (12 in test_entities.py, 11 in test_cli_entities.py) — 208→209 after D.4 added T-11 |
+| Scope tests at ship | 209/209 green |
+| D.6 gate result | 12/12 PASS |
+| Lint introduced | 0 new errors (10 pre-existing F541 in cli.py < line 2470 ignored per v1.2 policy) |
+| Adopter-only contract | honored — zero bundle edits; one manifest-scope issue upstreamed as v1.3 friction |
+
+### What worked
+
+1. **B-2 v1.2 orchestrator-consolidation policy saved a round.** B.3 R2 had 3-Approves + 1-Needs-Fixes-zero-blockers (codex). Under v1.1.0 rules this would have dispatched a formal B.3 meta-consolidator. Under v1.2's orchestrator-consolidation-with-P5-weighting policy (adopted in v1.1.1+v1.2 patch), the orchestrator authored the canonical verdict directly, noting the dominant-verdict pattern. Round count reduced from ≥3 to 2; zero signal lost.
+
+2. **Codex adversarial remains the strongest lens for this class of slice.** On B.1 R1, codex caught 2 real blockers (schema-bump downgrade break, lost-update race) that all other lenses missed. On D.2, codex's 7-point targeted failure-mode review went deepest (lock coverage, fingerprint injectivity, malformed-record handling, idempotency semantics, CHANGELOG promise verification, T-15 lock contract). Confirms the A-1 v1.2 policy decision.
+
+3. **Parent §15.6 design call held up under review.** The "no new EntityMergeProposal dataclass — layer rejection records on top of heuristic suggestions" decision was challenged in peer R1 but alignment (gemini) explicitly endorsed it. The alternative (invent a full proposal object for a deterministic heuristic) would have inflated scope by 2-3x for a feature that doesn't have an LLM producer.
+
+4. **Round-2 spec cleanups closed 10+ should-fixes without a full review re-round.** v1.1 addressed 2 blockers + 6 peer + 4 product + 2 codex SFs in one revision. v1.2 addressed 3 more codex SFs. Each closure was mechanical (copy edit, signature rename, test addition) — not design iteration.
+
+### What broke
+
+1. **Manifest scope gap — `tests/test_graph_cli.py` not in allowed_paths.** When Slice 6a's label change ("Duplicate person candidates" → "Reviewable duplicate person candidates") required a test update, the test file wasn't in the manifest. Gemini alignment D.2 caught it. D.4 closed by amending the manifest.
+   - **Root cause:** Manifest was drafted with only the directly-touched test files (`test_entities.py` + `test_cli_entities.py`). Any cross-cutting test that scrapes changed CLI output needs preemptive inclusion.
+   - **v1.3 target:** manifest `scope.allowed_paths` should accept glob patterns (`tests/test_*.py`) with optional excludes, reducing per-file enumeration. This would be a framework schema change upstream.
+
+2. **Manifest scope gap — `*_round2.md` validation files.** Same root cause as (1). B.2 R2 produced 3 new validation artifacts with `_round2` suffix that weren't anticipated at manifest drafting time.
+   - **Root cause:** Round-N re-dispatch produces artifacts whose paths aren't known until after Round 1.
+   - **v1.3 target:** same glob support would cover `docs/validation/v0.6.X_*.md`.
+
+3. **`ontos map` auto-regenerates files in scope.forbidden_paths.** `AGENTS.md` and `Ontos_Context_Map.md` were modified by auto-sync (timestamp, branch name, doc count) but are in forbidden_paths for this slice. Had to revert before D.6 gate to keep working tree clean.
+   - **v1.3 target (adopter-side):** `ontos map` should be scope-aware when a deliverable manifest is active, OR adopters should run `ontos map` outside slice branches only. Folio-specific friction, not framework-core.
+
+4. **Legacy stray `docs/logs/` autogen files keep appearing.** Ontos log hooks produce auto-filenames that have accumulated across sessions (including from merged PRs). Cleaned up per-session but the friction recurs. Low severity.
+
+### Delta retrospective (vs. slices 1–4)
+
+- **Convergence speed unchanged** — 2 Phase-B rounds, 1 Phase-D round + D.4 fix. Same cadence as slice 3 (most-converged to date).
+- **Codex adversarial recall remains load-bearing.** B.1 R1 blockers (2) found zero by peer, zero by alignment, zero by product. Slice 1 F-006-confirmed pattern is holding across slices 1, 4, 6a (every slice where codex adversarial has been assigned, it has caught at least one finding other lenses missed).
+- **Orchestrator consolidation is now normal.** Applied at B.3 R2 + D.3 R1. Both were dominant-verdict consolidations (3-1). Each saved one dispatch round without measurable signal loss.
+- **New friction class: manifest scope hygiene on cross-cutting changes.** Not surfaced in slices 1–4 because those slices had tighter code-file scopes. When a slice changes user-visible output (label rename here), regression test files from outside the primary scope become in-scope and need manifest accommodation.
+- **D.6 as mechanical check.** Per v1.2 B-3 target. Entire D.6 gate was machine-verifiable; no reviewer dispatch needed. This is the third slice (after 4 and 6a themselves) to ship D.6 without a dispatched reviewer.
+
+### New friction entries
+
+#### [F-047] Manifest `scope.allowed_paths` requires per-file enumeration; no glob support
+
+- **Where:** D.2 gemini alignment review caught 2 files (tests/test_graph_cli.py + 4 `_round2.md` artifacts) missing from allowed_paths.
+- **Impact:** Every adopter who (a) ships a label change touching a regression guard outside the primary scope, OR (b) goes through a Round-2 re-dispatch, has to amend the manifest mid-slice. Gemini catches it correctly but the fix is pure scope hygiene, not design signal.
+- **v1.3 target:** framework manifest schema gains `scope.allowed_path_patterns: [glob, ...]` alongside the explicit list. Matching semantics: file is in-scope if it matches any path (exact) OR any pattern (glob). Adopter manifest gets patterns like `tests/test_*.py` and `docs/validation/v0.6.5_*.md` to handle cross-cutting tests and round-N artifacts.
+
+#### [F-048] Ontos auto-sync regenerates forbidden-path files within slice branches
+
+- **Where:** `ontos map` invocations during OP-4 / slice 6a setup rewrote `AGENTS.md` and `Ontos_Context_Map.md` with new timestamps, branch metadata, and doc counts. Both paths are in scope.forbidden_paths for slice 6a.
+- **Impact:** Pre-D.6 had to `git checkout` the two files to keep working tree clean for the G-branch-1 prerequisite. Harmless but noisy; on a slice with stricter gate automation, this would be a false positive.
+- **v1.3 target (tool-side, not framework-core):** either (a) `ontos map` respects an active deliverable manifest's forbidden_paths, (b) adopters stop running ontos tools on feature branches, (c) the adoption doc adds explicit pre-D.6 guidance to revert ontos regeneration. Least invasive: (c).
+

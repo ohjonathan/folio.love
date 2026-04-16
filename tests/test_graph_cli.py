@@ -237,7 +237,7 @@ def test_graph_status_reports_expected_aggregate_counts(tmp_path):
     assert "Enrich-protected notes: 1" in result.output
     assert "Unconfirmed entities: 1" in result.output
     assert "Confirmed entities missing stubs: 2" in result.output
-    assert "Duplicate person candidates: 1" in result.output
+    assert "Reviewable duplicate person candidates: 1" in result.output
     assert "Stale analysis artifacts: 1" in result.output
 
 
