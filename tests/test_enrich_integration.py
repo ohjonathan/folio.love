@@ -622,7 +622,7 @@ class TestRejectedProposalSuppression:
         proposals = rel_axis.get("proposals", [])
         supersedes_proposals = [p for p in proposals if p.get("relation") == "supersedes"]
         # Should be suppressed (empty or no pending)
-        assert all(p.get("status") != "pending_human_confirmation" for p in supersedes_proposals)
+        assert all(p.get("lifecycle_state") != "queued" for p in supersedes_proposals)
 
 
 # ---------------------------------------------------------------------------

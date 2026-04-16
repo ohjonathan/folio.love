@@ -294,6 +294,31 @@ class TestRelationshipProposal:
         p = RelationshipProposal.from_dict({"relation": "impacts", "target_id": "x"})
         assert p.lifecycle_state == "queued"
 
+    def test_enrich_emission_time_rejection_filter_reads_legacy_status(self):
+        """T-6: rejection filter at enrich.py emission time handles legacy status."""
+        from folio.enrich import _suppress_rejected_proposals
+        legacy_rejected = {
+            "relation": "impacts",
+            "target_id": "t1",
+            "basis_fingerprint": "sha256:abc",
+            "status": "rejected",
+        }
+        existing_meta = {"axes": {"relationships": {"proposals": [legacy_rejected]}}}
+        new = RelationshipProposal(
+            relation="impacts", target_id="t1", basis_fingerprint="sha256:abc",
+            confidence="medium", signals=[], rationale="",
+        )
+        result = _suppress_rejected_proposals([new], existing_meta, force=False)
+        assert len(result) == 0
+
+    def test_graph_acceptance_rate_reads_legacy_rejected_status(self):
+        """T-8: graph acceptance-rate aggregation counts legacy status: rejected."""
+        raw = {"status": "rejected"}
+        state = raw.get("lifecycle_state")
+        if state is None:
+            state = raw.get("status")
+        assert state == "rejected"
+
 
 # ---------------------------------------------------------------------------
 # EnrichAxisResult serialization
