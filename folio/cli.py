@@ -130,8 +130,11 @@ def _mark_enrich_stale(preserved: dict) -> None:
                     for proposal in proposals:
                         if not isinstance(proposal, dict):
                             continue
-                        if proposal.get("status") == "pending_human_confirmation":
-                            proposal["status"] = "stale_pending"
+                        state = proposal.get("lifecycle_state")
+                        if state is None:
+                            state = proposal.get("status")
+                        if state in ("queued", "pending_human_confirmation"):
+                            proposal["lifecycle_state"] = "stale_pending"
 
 
 # Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.

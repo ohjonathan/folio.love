@@ -189,7 +189,7 @@ def _proposal_dict(
         "basis_fingerprint": basis_fingerprint,
         "model": "anthropic/test-model",
         "timestamp_proposed": "2026-03-29T00:00:00Z",
-        "status": "pending_human_confirmation",
+        "lifecycle_state": "queued",
     }
 
 
@@ -304,7 +304,7 @@ def test_suppress_rejections_respects_basis_and_clear_rejections():
                 target_item=target_item,
                 basis_fingerprint="sha256:same",
             ),
-            "status": "rejected",
+            "lifecycle_state": "rejected",
         }
     )
     same_basis = provenance_mod.ProvenanceProposal.from_dict(
@@ -611,7 +611,7 @@ def test_confirm_range_missing_endpoint_errors(tmp_path):
                                 "basis_fingerprint": "sha256:basis",
                                 "model": "anthropic/test-model",
                                 "timestamp_proposed": "2026-03-29T00:00:00Z",
-                                "status": "pending_human_confirmation",
+                                "lifecycle_state": "queued",
                             }
                         ],
                     }
