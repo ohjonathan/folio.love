@@ -1020,10 +1020,7 @@ def _suppress_rejected_proposals(
     if isinstance(old_proposals, list):
         for p in old_proposals:
             if isinstance(p, dict):
-                state = p.get("lifecycle_state")
-                if state is None:
-                    state = p.get("status")
-                if state != "rejected":
+                if _get_lifecycle_state(p) != "rejected":
                     continue
                 key = (p.get("relation", ""), p.get("target_id", ""))
                 rejected[key] = p.get("basis_fingerprint", "")

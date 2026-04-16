@@ -689,6 +689,23 @@ class TestPreserveRejectedProposals:
         preserved = _preserve_rejected_proposals(existing_meta)
         assert len(preserved) == 0
 
+    def test_preserve_reads_legacy_status(self):
+        """D-2 fix: legacy status: rejected is preserved."""
+        from folio.enrich import _preserve_rejected_proposals
+        existing_meta = {
+            "axes": {
+                "relationships": {
+                    "proposals": [
+                        {"relation": "impacts", "target_id": "t1",
+                         "status": "rejected", "basis_fingerprint": "sha256:x"},
+                    ]
+                }
+            }
+        }
+        preserved = _preserve_rejected_proposals(existing_meta)
+        assert len(preserved) == 1
+        assert preserved[0]["target_id"] == "t1"
+
 
 class TestQueueCapEnforcement:
     """v0.6.3: queue-cap enforcement."""
