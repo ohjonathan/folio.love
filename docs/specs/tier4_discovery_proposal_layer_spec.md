@@ -4,8 +4,16 @@ type: spec
 status: draft
 ontos_schema: 2.2
 created: 2026-04-15
-revision: 4
+revision: 5
 revision_note: |
+  Rev 5 (2026-04-15, post-ship Shipping Plan amendment): Add §15 "Shipping Plan"
+  formalizing this proposal as a multi-slice deliverable. Slice 1
+  (proposal-review-hardening-v0-6-0) shipped under spec
+  docs/specs/v0.6.0_proposal_review_hardening_spec.md on branch
+  feat/proposal-review-hardening-v0-6-0-C-author-claude. Follow-up slices
+  named and sequenced here. Closes the llm-dev-v1 first-adoption retro's OP-5
+  open item and the gemini B.1 R1 alignment concerns A-1..A-4 (downgraded to
+  should-fix in B.3 R1 canonical verdict; now formally disposed).
   Rev 4 (2026-04-15, post Pre-A Round 2): Close the one preserved blocker B-4
   (canonical verdict: docs/validation/v0.6.0_pre_a_proposal_canonical_verdict_round2.md)
   raised by gemini against Rev 3's §9.2 "rolling window" framing — that framing
@@ -375,3 +383,101 @@ The workstream clears only if:
       usefulness
 - [ ] This spec does not commit Folio to a custom graph database, automatic
       confirmation, unsupervised schema minting, or full diagram parsing
+
+## 15. Shipping Plan
+
+The proposal's committed surface area (§§ 5–12) is larger than any single
+Phase C implementation slice. This section formalizes the multi-slice
+sequencing, so alignment reviewers can read each slice's manifest as a
+legitimate narrowing of the proposal rather than a scope-leakage away from
+it.
+
+### 15.1 Slice 1 — proposal-review-hardening-v0-6-0 (shipped)
+
+- **Spec:** `docs/specs/v0.6.0_proposal_review_hardening_spec.md` (v1.3, B.3
+  canonical Approve after four rounds).
+- **Branch:** `feat/proposal-review-hardening-v0-6-0-C-author-claude`.
+- **Scope:** rejection-memory filter on `folio links review`; cumulative
+  producer acceptance-rate diagnostic on `folio graph doctor` (diagnostic
+  only, no enforcement).
+- **Honors from this proposal:** §§ 5 contract (used as read-only);
+  §7 fingerprint (consumer side); §10.1 rejection memory (at surface time);
+  §10.3 stale invalidation (implicit via fingerprint drift); §9.1 queue-cap
+  framing (documented; enforcement deferred to slice 3).
+- **Defers from this proposal:** §6 lifecycle-state renames
+  (pending_human_confirmation → queued, add suppressed/stale/superseded);
+  §8 review rendering contract full trust-label / schema-warning surface;
+  §9.1 emission-time enforcement; §9.2 acceptance-rate *enforcement*
+  (diagnostic-only shipped); §10.2 merge dampener;
+  §11 trust-gated surfacing and `--include-flagged`;
+  §13 validation workstream; §12 shared-consumer contract for
+  `folio synthesize` / `folio search` / fully generalized `folio graph`
+  proposals.
+
+### 15.2 Slice 2 — proposal-lifecycle-rename (next)
+
+- **Purpose:** rename the storage schema from `status:
+  pending_human_confirmation | rejected` to `lifecycle_state: queued |
+  accepted | rejected | suppressed | stale | superseded`, honoring § 6 of
+  this proposal. Migration-only; no behavior change in isolation.
+- **Scope-lock expansion:** may touch `folio/pipeline/enrich_data.py` and
+  `folio/enrich.py` (emission paths), `folio/links.py` (consumer paths).
+- **Trigger:** scheduled after slice 1 lands and before slice 3 or 4 can
+  reference the new lifecycle states cleanly.
+
+### 15.3 Slice 3 — emission-time rejection memory + queue-cap enforcement
+
+- **Purpose:** move rejection-memory filter from *surface time*
+  (slice 1's scope) to *emission time* (pipeline refuses to enqueue
+  duplicates), honoring §§ 9.1 + 10.1 jointly. Ships the pending-queue cap
+  enforcement (20-queued-per-producer-per-engagement).
+- **Scope-lock expansion:** `folio/enrich.py`, `folio/pipeline/enrich_data.py`.
+- **Depends on:** slice 2 (for the lifecycle-state renames so `suppressed`
+  status has meaning).
+
+### 15.4 Slice 4 — trust-gated surfacing + `--include-flagged`
+
+- **Purpose:** honor § 11 of this proposal for `folio digest`
+  (FR-811 landing), and re-apply the same trust-gating rules to
+  `folio links review` output.
+- **Scope-lock expansion:** `folio/digest.py` (if present) or subsequent
+  digest slice; `folio/cli.py`; `folio/links.py`.
+- **Depends on:** slice 2 (lifecycle states) and slice 3 (emission-time
+  infrastructure).
+
+### 15.5 Slice 5 — acceptance-rate gate enforcement
+
+- **Purpose:** move the § 9.2 cumulative acceptance-rate gate from
+  slice 1's diagnostic-only output to *enforcement* (producers below the
+  gate have their proposals non-default-surfaced).
+- **Scope-lock expansion:** `folio/links.py`, `folio/graph.py`, `folio/cli.py`.
+- **Depends on:** field evidence from slice 1's diagnostic output accumulating
+  enough reviewed proposals to make the gate meaningful. Timing, not code,
+  is the gating factor.
+
+### 15.6 Slice 6+ — entity-merge rejection memory; shared-consumer expansion
+
+- **Entity-merge rejection memory:** apply the same filter pattern shipped
+  in slice 1 for relationship proposals to entity-merge proposals on
+  `folio/tracking/entities.py`.
+- **Shared-consumer expansion:** as `folio synthesize`, `folio search`, and
+  fully generalized `folio graph` proposals ship, each consumes the shared
+  proposal contract from § 5 and inherits the rejection memory, lifecycle
+  states, and trust gating landed in slices 1–5.
+
+### 15.7 Contract: slice manifests narrow, they don't reinterpret
+
+Each slice's Phase A spec must cite this Shipping Plan explicitly and
+declare which §§ of this proposal doc the slice implements and which it
+defers. An alignment reviewer can then validate that deferrals match this
+plan (no silent scope-reshaping). The slice 1 spec
+(`docs/specs/v0.6.0_proposal_review_hardening_spec.md` §11 carry-forward
+disposition table) is the worked example.
+
+### 15.8 When to revise this Shipping Plan
+
+This Shipping Plan is normative-for-sequencing, not normative-for-scope. If
+field evidence from a shipped slice reveals that a deferred requirement
+belongs in an earlier slot than this plan indicates, revise rev 6+ of this
+proposal doc. A shipped slice that silently re-opens a scope decision this
+plan formally deferred is itself a B.1 alignment defect.
