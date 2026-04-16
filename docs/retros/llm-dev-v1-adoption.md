@@ -473,3 +473,60 @@ The slice-2 manifest (`frameworks/manifests/proposal-lifecycle-rename-v0-6-1.yam
 | F-042 | Codex CLI `exec` subcommand consumed output budget on file reads without producing findings. No `-q` or `--approval-mode` flags available. | high | v1.2 |
 | F-043 | Gemini 429 rate limit on first attempt (same as F-014). | low | v1.2 |
 | F-044 | Codex adversarial required 3 CLI invocation attempts before discovering correct flag syntax (`codex exec --full-auto`). No single canonical "non-interactive review" invocation documented. | medium | v1.2 |
+
+---
+
+## Slice 4 — trust-gated-surfacing-v0-6-4 (2026-04-16)
+
+### Metrics
+
+| Metric | Value |
+|---|---|
+| Phase A rev count | 2 (v1.0 → v1.1 from B.3; v1.1 → v1.2 from D.3) |
+| Phase B rounds | 1 (4 lens) |
+| Phase D rounds | 1 (4 lens) + D.4 fix + D.5 verification |
+| Blockers at B.3 | 4 consolidated (CB-1..CB-4) |
+| Blockers at D.3 | 2 consolidated (DC-1, DC-2) + 7 should-fix (DS-A..DS-G) |
+| D.4 fix commits | 1 (batched) |
+| Test delta | +27 new tests (129 → 164 scope-local; 44 on `test_links_cli.py`: 17 baseline + 19 S4-1..19 + 8 D.4) |
+| Gate result | 9/9 PASS |
+
+### What worked
+
+1. **Codex adversarial reliability improved:** Unlike Slice 3 (F-042), codex produced a substantial 273-line review with real findings. Prompt structure change (numbered failure-mode targets inside the prompt body) appears to have helped; codex stayed on task instead of exhausting budget on file reads. F-042 considered mitigated with targeted-prompting pattern.
+2. **Four-reviewer convergence was decisive:** CB-1 (registry staleness), CB-2 (silent-empty across surfaces), CB-3 (suppression_counts collision), CB-4 (consent workflow). Two to four reviewers independently hit each. No "solo finding" blockers — every blocker had multi-lens corroboration. Suggests the 4-lens board is functioning as intended.
+3. **Code-review layer found what spec-review missed:** DC-2 (mixed clean+flagged disclosure) was a spec wording defect. Spec §5.6 literally said `acted == 0`, and every B reviewer accepted it. Codex D.2 caught the operator-experience gap only by mentally executing a mixed test case. This validates the necessity of both phases.
+4. **D.5 verification closed the loop:** Gemini verifier cross-checked D.4 fix table row-by-row against D.3 blockers. Hygiene caught (cited line numbers drifted ~18 lines) but logic confirmed.
+
+### What broke
+
+1. **Surface enumeration miss (author error, not framework):** Spec §5.1 listed six commands needing `--include-flagged`. Phase C implementation wired five. All four D.2 reviewers flagged this (DC-1). Framework worked — the gap was a checklist miss that a "cross-reference your enum" pre-commit hook could catch.
+2. **Spec v1.0 under-scoped the surfaces:** Initial v1.0 treated `folio links review` as the only trust-gated surface. B.1 alignment + product independently raised §11 rule 5 violations in `status`, `confirm-doc`, `reject-doc`. Author mental model of "surface" was narrower than the contract required. v1.1 revision scope expanded substantially (13 new test IDs).
+3. **`sum(suppression_counts.values())` landmine (B-001 / ADV-004):** The v0.6.0 dict shape was too loose — adding a `"flagged_input"` sentinel key collided with the existing `total_suppressed = sum(...)` renderer. Peer + adversarial both caught this. Pattern: "sentinel keys in open-schema dicts" is a recurring smell worth logging.
+4. **I initially skipped the codex adversarial lens entirely:** Dispatched peer + alignment + product in parallel but forgot codex. User explicitly called it out mid-run. Caught before B.3 consolidation — no harm done but worth logging as F-045.
+
+### Delta retrospective (vs. slices 1-3)
+
+| Dimension | Slice 1 | Slice 2 | Slice 3 | Slice 4 |
+|-----------|---------|---------|---------|---------|
+| Pre-A | Full (halted R1) | Inherited | Inherited | Inherited |
+| B rounds | 2 | 2 | 1 | 1 |
+| Spec revisions | 1 | 1 | 1 | **2** (v1.0→v1.1→v1.2) |
+| D rounds | 1 | 1 | 1 | 1 |
+| Blockers found (B) | 3 (Pre-A) | 6 (B.1) | 4 (B.1) | 4 (B.1) |
+| Blockers found (D) | 0 | 0 | 0 | **2** (DC-1, DC-2) |
+| Test delta | +42 | +10 | +11 | **+27** |
+| Codex adversarial | N/A | Peer role | Failed (F-042) | **Produced 273-line review with ADV-001 blocker** |
+
+**Critical delta question:** Slice 4 is the first slice where D.3 introduced blockers (DC-1, DC-2) after B.3 approved a spec. This is evidence that the code review layer adds signal beyond spec review when the spec itself is under-specified at §-level enumerations. Spec §5.1 listed 6 surfaces; implementation wired 5; reviewers caught the sixth only when the implementation made the gap visible. **Recommendation for v1.2:** Spec templates should include a "surface enumeration checklist" that B reviewers verify against CLI `--help` output once implementation lands.
+
+### New friction entries
+
+| ID | Description | Severity | Target |
+|----|-------------|----------|--------|
+| F-045 | Author dispatched 3/4 B.1 reviewers in parallel but forgot codex adversarial. User caught it mid-run. Rechecking manifest model_assignments after launching reviewers would have caught this. | low | v1.2 (docs) |
+| F-046 | Four-reviewer B.1 consumed ~4 minutes wall time for spec of ~220 lines. Two reviewers (alignment, product) produced overlapping findings (§11 rule 5 on status / confirm-doc). B.3 dedup worked but might be cheaper with a single combined "operator-contract" role. | low | v1.2 (template) |
+
+### F-042 status update
+
+Previously logged as "codex adversarial consumed output budget on file reads without producing findings." Slice 4 used a different prompt structure: numbered failure-mode targets (1-6), explicit "use shell commands sparingly" instruction, and explicit file list. Codex produced a 273-line structured review with 1 blocker + 3 should-fix. **Status:** Mitigated via prompt structure; not a framework defect after all. Update v1.2 docs to recommend the targeted-failure-mode prompt pattern for adversarial dispatch.

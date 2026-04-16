@@ -1,18 +1,20 @@
 ---
 id: framework-learnings-v1.1-adoption
 created: 2026-04-15
-source: folio.love first production adoption (4 slices)
+updated: 2026-04-16
+source: folio.love first production adoption (5 slices)
 purpose: Feed frameworks/llm-dev-v1/ROADMAP.md v1.2 scope
 slices_covered:
   - proposal-review-hardening-v0-6-0 (slice 1, PR #44)
   - proposal-lifecycle-rename-v0-6-1 (slice 2, PR #45)
   - provenance-lifecycle-rename-v0-6-2 (PROV-1, PR #46)
-  - emission-time-rejection-v0-6-3 (slice 3)
+  - emission-time-rejection-v0-6-3 (slice 3, PR #47)
+  - trust-gated-surfacing-v0-6-4 (slice 4)
 ---
 
 # Framework Learnings — llm-dev-v1.1 Production Adoption (folio.love)
 
-Four full lifecycle runs on a real Python codebase. Friction entries F-001 through F-044 are the raw data; this document extracts the six structural lessons that feed v1.2 scope.
+Five full lifecycle runs on a real Python codebase. Friction entries F-001 through F-046 are the raw data; this document extracts the six structural lessons that feed v1.2 scope.
 
 ---
 
@@ -280,6 +282,83 @@ One friction: the `scope.forbidden_paths` list grew from 8 to 13 entries because
 | F-028 | B-2 (D.5 single-verifier) | open |
 | F-029 | B-2 | open |
 | F-030 | B-3 (D.6 as script) | open |
-| F-042 | C-9 (codex exec review mode) | open |
+| F-042 | C-9 (codex exec review mode) | **mitigated** (Slice 4: targeted-prompt pattern resolves without framework change) |
 | F-043 | C-3 (rate-limit observability) | open |
 | F-044 | C-9 (codex exec invocation docs) | open |
+| F-045 | C-12 (model-assignment checklist) | open |
+| F-046 | C-13 (B.1 role-overlap reduction) | open |
+
+---
+
+## Slice 4 addendum (2026-04-16)
+
+### Axis 1 — Token-fill friction (no change)
+
+No new token gaps. `<SCOPE_LOCK_PATHS[]>` / `<NO_TOUCH_PATHS[]>` handling already accommodates Python file+dir patterns; Slice 4 forbidden-path list matches Slice 3 shape. `<CARDINALITY_ASSERTIONS[]?>` was intentionally omitted for Slice 4 (no new enum cardinality to guard) — confirms that this token is discretionary, not required, which should be documented in `tokens.md`.
+
+### Axis 2 — Template gaps
+
+**New gap:** spec templates do not prompt the author to cross-reference a "surface enumeration checklist." Slice 4 §5.1 listed six surfaces needing `--include-flagged`; v1.0 implementation wired five. All four D.2 reviewers flagged it (DC-1). This is a recurring class of bug — the spec enumerates a contract, the author forgets one item, reviewers see the gap only when code is present.
+
+**v1.2 recommendation (C-12):** Phase C template should include a "contract enumeration checklist" that extracts §-level enum tables from the spec and verifies each item has a matching implementation anchor (function, CLI flag, class field, test). This runs before D.1 and is cheap.
+
+### Axis 3 — Multi-family dispatch friction
+
+**F-042 status update:** Mitigated without framework change. Slice 4 used a targeted-prompt pattern for codex adversarial:
+
+1. Explicit numbered failure-mode targets (1-6) in the prompt body.
+2. "Use shell commands sparingly" instruction up front.
+3. Pre-listed file paths to read.
+4. Strict output format (frontmatter + classification).
+
+Result: codex produced a 273-line review with 1 blocker + 3 should-fix, including a finding (ADV-001 in B.1, D-ADV-001 in D.2) that no other reviewer caught. This is the first clear adversarial-lens win on codex.
+
+**v1.2 recommendation (C-9):** Update adversarial-prompt template to encode the targeted-prompt pattern. Suggested template:
+
+```
+You are the adversarial reviewer for <DELIVERABLE_ID>. Find what breaks.
+Read (sparingly): <FILE_LIST>.
+Target failure modes:
+1. <MODE_1>
+2. <MODE_2>
+...
+Classify: Blockers, Should-fix, Informational.
+```
+
+**New friction F-045:** Author initially dispatched 3/4 B.1 reviewers in parallel but omitted codex. Caught mid-run by user. Manifest `model_assignments` section was not cross-checked before the parallel dispatch.
+
+**v1.2 recommendation (C-12 extended):** Phase B.1 and Phase D.2 launch templates should list the manifest's model_assignments for the phase as a pre-flight checklist. A one-line command (e.g., `yq '.model_assignments[] | select(.phase == "B.1")' manifest.yaml`) would print the assignments. Then: "Confirm all assignments dispatched. Proceed?"
+
+### Axis 4 — Verify-script accuracy
+
+D.5 verifier (gemini) caught a real hygiene issue in Slice 4's D.4 fix summary: line numbers in citations drifted ~18 lines from the actual code location because fix authoring ran multiple edits without refreshing references. Logic was correct; hygiene was off.
+
+**v1.2 recommendation (C-14):** D.4 fix-summary template should instruct the fix author to generate line citations by running `git grep -n <anchor>` AFTER the final commit, not during edit sessions. Cheap, mechanical fix.
+
+### Axis 5 — Manifest/schema ergonomics
+
+Slice 4's manifest reused Slice 3's structure with minimal change (scope-lock swap, regression_guards inheritance). Copy-paste between slice manifests is now frictionless but creates a drift risk: if the parent spec adds a new regression_guard (e.g., a new tier requires a new test file), manifest inheritance won't catch it.
+
+**v1.2 recommendation (B-7):** `regression_guards[]` should support an inherits-from pattern (list of prior deliverable_ids), with a lint check that warns when a listed deliverable has active regression_guards not carried forward.
+
+### Axis 6 — Concrete v1.2 recommendations (additions)
+
+Existing recommendations (C-1..C-8, B-2..B-6 from prior slices) stand. Slice 4 adds:
+
+- **C-9 update:** Codify the targeted-prompt pattern for codex adversarial (see Axis 3). Mark F-042 mitigated.
+- **C-12 (new):** Contract-enumeration checklist in Phase C + model-assignments dispatch preflight.
+- **C-13 (new):** B.1 role-overlap reduction — alignment + product repeatedly produce overlapping findings when the spec under-scopes "surface." Consider a combined "operator-contract" role or explicit division in role templates (alignment = parent-spec fidelity; product = operator experience; no overlap on surface enumeration).
+- **C-14 (new):** D.4 fix-summary line-citation regen-after-commit guidance.
+
+### Delta signal table (updated)
+
+| Axis | Slice 1 | Slice 2 | Slice 3 | Slice 4 | Trend |
+|------|---------|---------|---------|---------|-------|
+| Token-fill friction | 4 entries | 1 | 0 | 0 | Converging — templates stabilized |
+| Template gaps | 3 (Pre-A) | 1 | 2 | 1 (contract enum) | New class surfaced |
+| Multi-family | 2 (F-014, gemini 429) | 1 | 3 (F-042/43/44) | 1 (F-045 dispatch hygiene) | F-042 mitigated |
+| Verify-script | 1 | 0 | 0 | 1 (line citation drift) | New |
+| Manifest/schema | 0 | 1 | 0 | 0 | Stable |
+| v1.2 recs | — | C-1..C-4 | C-5..C-8 | C-9..C-14 | Accumulating cleanly |
+
+**Net effect:** Slice 4 produced fewer friction entries than any prior slice (2 vs. 3-8). Framework is converging. The remaining signal is not about framework defects but about author hygiene (checklist-able) and reviewer role-overlap (template-fixable). Next slice will likely stabilize further.
