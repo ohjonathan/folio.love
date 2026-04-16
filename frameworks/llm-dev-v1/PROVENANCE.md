@@ -24,9 +24,9 @@ Breaking changes to any normative file bump the bundle major version.
 
 ## Non-normative provenance files
 
-These capture how v1.0.0 and v1.1.0 were built and reviewed. They are
-useful for understanding framework decisions but are not part of the
-contract.
+These capture how v1.0.0, v1.1.0, and v1.1.1 were built and reviewed.
+They are useful for understanding framework decisions but are not part
+of the contract.
 
 | Path                              | What it is                                                                 |
 |-----------------------------------|----------------------------------------------------------------------------|
@@ -40,6 +40,7 @@ contract.
 | `review-board/v1.0.0-rereview-dispatch.md` | The focused re-review dispatch run after the v1.0.0 revision.         |
 | `review-board/v1.0.0-rereview-*.md` | v1.0.0 re-review family verdicts and consolidated re-review verdict.       |
 | `review-board/v1.1.0-*`          | v1.1.0 review-board artifacts (canonical verdict, family verdicts, response doc). Produced during Phase 7 of the v1.1 build plan. |
+| `review-board/v1.1.1-*`          | v1.1.1 review-board artifacts (canonical verdict + 2-family review + Gemini reviewer-of-reviewer). Focused patch-release review; 5 fixes cherry-picked from `folio.love#51` merge `ab4bc2735660`. |
 
 **What a downstream adopter does with these.**
 
