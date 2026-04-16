@@ -29,6 +29,8 @@ RELATIONSHIP_FIELDS = (
     "instantiates",
 )
 
+_SINGULAR_RELATIONSHIP_FIELDS = frozenset({"supersedes"})
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -62,12 +64,16 @@ class RelationshipProposal:
     signals: list[str]
     rationale: str
     status: str  # "pending_human_confirmation" or "rejected"
+    proposal_id: str = ""
+    producer: str = "enrich"
 
     def to_dict(self) -> dict:
         """Serialize to dict matching spec section 9.3."""
         return {
+            "proposal_id": self.proposal_id,
             "relation": self.relation,
             "target_id": self.target_id,
+            "producer": self.producer,
             "basis_fingerprint": self.basis_fingerprint,
             "confidence": self.confidence,
             "signals": list(self.signals),
@@ -78,15 +84,29 @@ class RelationshipProposal:
     @classmethod
     def from_dict(cls, d: dict) -> RelationshipProposal:
         """Deserialize from dict."""
-        return cls(
-            relation=d["relation"],
-            target_id=d["target_id"],
-            basis_fingerprint=d.get("basis_fingerprint", ""),
+        relation = d["relation"]
+        target_id = d["target_id"]
+        basis_fingerprint = d.get("basis_fingerprint", "")
+        producer = d.get("producer", "enrich")
+        proposal = cls(
+            relation=relation,
+            target_id=target_id,
+            basis_fingerprint=basis_fingerprint,
             confidence=d.get("confidence", "medium"),
             signals=list(d.get("signals", [])),
             rationale=d.get("rationale", ""),
             status=d.get("status", "pending_human_confirmation"),
+            proposal_id=d.get("proposal_id", ""),
+            producer=producer,
         )
+        if not proposal.proposal_id:
+            proposal.proposal_id = compute_relationship_proposal_id(
+                source_id=str(d.get("source_id", "")),
+                relation=relation,
+                target_id=target_id,
+                basis_fingerprint=basis_fingerprint,
+            )
+        return proposal
 
 
 @dataclass
@@ -148,6 +168,26 @@ class EnrichResult:
 def _sha256_hex(data: str) -> str:
     """Compute sha256 hex digest of a string."""
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def compute_relationship_proposal_id(
+    *,
+    source_id: str,
+    relation: str,
+    target_id: str,
+    basis_fingerprint: str,
+) -> str:
+    """Compute a deterministic proposal ID for document-level relationships."""
+    payload = json.dumps(
+        [source_id, relation, target_id, basis_fingerprint],
+        sort_keys=True,
+    )
+    return f"rprop-{_sha256_hex(payload)[:16]}"
+
+
+def is_singular_relationship(relation: str) -> bool:
+    """Return True when a canonical relationship field accepts one target only."""
+    return relation in _SINGULAR_RELATIONSHIP_FIELDS
 
 
 def compute_input_fingerprint(
