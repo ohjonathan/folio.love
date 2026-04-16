@@ -708,6 +708,10 @@ folio/
     └── versions.py     # Version detection + change sets
 ```
 
+## Framework bundle source
+
+The `frameworks/llm-dev-v1/` directory is a verbatim copy of the canonical bundle maintained in `ohjonathan/johnny-os`. Folio is an adopter, not the framework maintainer — do not modify the bundle in this repo. Framework friction is captured in `docs/retros/llm-dev-v1-adoption.md`, filed upstream as issues on `ohjonathan/johnny-os`, and resynced via `scripts/resync-bundle.sh` after each johnny-os release. Full contract at [`docs/framework-adoption.md`](docs/framework-adoption.md).
+
 ## Roadmap
 
 - **Tier 4 discovery proposal layer** — shipped through Slice 4 (v0.6.4). Remaining: acceptance-rate gate enforcement (Slice 5, awaiting field data) and entity-merge rejection memory + shared-consumer expansion (Slice 6+).
