@@ -1311,6 +1311,233 @@ def test_links_confirm_accepts_flagged_id_with_flag(tmp_path):
     assert fm["supersedes"] == target_id
 
 
+def test_target_frontmatter_flagged_registry_clean(tmp_path):
+    """S4-11b (DS-E): reverse staleness — registry says flagged, frontmatter says clean.
+
+    Per CB-1, target trust state is read from frontmatter only. When the
+    registry is stale in the "too cautious" direction (registry row has
+    review_status: flagged but frontmatter says clean), the proposal should
+    surface. This prevents false-negatives from a stale sync.
+    """
+    source_id = "clienta_evidence_src_s4_11b"
+    target_id = "clienta_evidence_tgt_s4_11b"
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+
+    # Registry row claims the target is flagged.
+    target_entry = _registry_entry(target_id, f"ClientA/{target_id}.md")
+    target_entry["review_status"] = "flagged"
+    _write_registry(
+        library,
+        {
+            source_id: _registry_entry(source_id, f"ClientA/{source_id}.md"),
+            target_id: target_entry,
+        },
+    )
+    # But target frontmatter says clean — frontmatter is authoritative.
+    _write_note(
+        library / "ClientA" / f"{target_id}.md",
+        _base_note(target_id, target_id, review_status="clean"),
+    )
+    _write_note(
+        library / "ClientA" / f"{source_id}.md",
+        _base_note(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {"axes": {"relationships": {
+                    "proposals": [_proposal(source_id, "impacts", target_id, "sha256:rev")]
+                }}}
+            },
+        ),
+    )
+    from folio.config import FolioConfig
+    views, counts = collect_pending_relationship_proposals(FolioConfig.load(config_path))
+    # Stale "flagged" registry row is ignored; clean frontmatter wins.
+    assert len(views) == 1
+    assert views[0].flagged_inputs == []
+    assert counts.flagged_input == 0
+
+
+def test_links_reject_rejects_flagged_id_without_flag(tmp_path):
+    """S4-17b (DS-F): reject <flagged_id> without --include-flagged errors."""
+    source_id = "clienta_evidence_src_s4_17b"
+    target_id = "clienta_evidence_tgt_s4_17b"
+    proposal = _proposal(source_id, "impacts", target_id, "sha256:flag-reject")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(config_path), "links", "reject", proposal["proposal_id"]]
+    )
+    assert result.exit_code == 1
+    assert "Unknown proposal_id" in result.output
+
+
+def test_links_reject_accepts_flagged_id_with_flag(tmp_path):
+    """S4-18b (DS-F): reject <flagged_id> --include-flagged succeeds, shows posture."""
+    source_id = "clienta_evidence_src_s4_18b"
+    target_id = "clienta_evidence_tgt_s4_18b"
+    proposal = _proposal(source_id, "impacts", target_id, "sha256:flag-reject-ok")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        target_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "reject",
+         proposal["proposal_id"], "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    assert f"Rejected {proposal['proposal_id']}" in result.output
+    # DS-C: trust posture surfaces in success line
+    assert "(flagged: target)" in result.output
+
+
+def test_links_confirm_with_flag_shows_trust_posture(tmp_path):
+    """DS-C: confirm --include-flagged success line annotates trust posture."""
+    source_id = "clienta_evidence_src_ds_c"
+    target_id = "clienta_evidence_tgt_ds_c"
+    proposal = _proposal(source_id, "supersedes", target_id, "sha256:ds-c",
+                         confidence="high")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        target_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "confirm",
+         proposal["proposal_id"], "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    assert "(flagged: source, target)" in result.output
+
+
+def test_links_confirm_doc_include_flagged_acts_on_flagged(tmp_path):
+    """S4-20 (DS-F): confirm-doc --include-flagged acts on flagged-input proposals."""
+    source_id = "clienta_evidence_src_s4_20"
+    target_id = "clienta_evidence_tgt_s4_20"
+    proposal = _proposal(source_id, "supersedes", target_id, "sha256:s4-20",
+                         confidence="high")
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        source_flagged=True,
+        proposals=[proposal],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_path), "links", "confirm-doc", source_id,
+         "--include-flagged"],
+    )
+    assert result.exit_code == 0
+    assert "Confirmed 1 proposal(s)" in result.output
+    # No exclusion diagnostic because --include-flagged consumed the flagged set
+    assert "flagged inputs" not in result.output
+    # Canonical frontmatter actually updated
+    fm = _read_fm(tmp_path / "library" / "ClientA" / f"{source_id}.md")
+    assert fm["supersedes"] == target_id
+
+
+def test_links_confirm_doc_mixed_clean_and_flagged_discloses(tmp_path):
+    """S4-21 (DC-2): mixed clean+flagged confirm-doc discloses the exclusion.
+
+    The DC-2 blocker: in v1.0, the disclosure only fired when acted==0.
+    With mixed (clean source, one clean target, one flagged target), the clean
+    proposal gets confirmed but the flagged one must be reported as excluded.
+    """
+    source_id = "clienta_evidence_src_s4_21"
+    clean_tgt = "clienta_evidence_tgt_s4_21_clean"
+    flagged_tgt = "clienta_evidence_tgt_s4_21_flagged"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=clean_tgt,
+        extra_targets={flagged_tgt: True},
+        proposals=[
+            _proposal(source_id, "impacts", clean_tgt, "sha256:clean"),
+            _proposal(source_id, "draws_from", flagged_tgt, "sha256:flagged"),
+        ],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(config_path), "links", "confirm-doc", source_id]
+    )
+    assert result.exit_code == 0
+    assert "Confirmed 1 proposal(s)" in result.output
+    assert "1 proposal(s) excluded" in result.output
+    assert "flagged inputs" in result.output
+    assert "--include-flagged" in result.output
+
+
+def test_links_reject_doc_mixed_clean_and_flagged_discloses(tmp_path):
+    """S4-22 (DC-2): mixed clean+flagged reject-doc discloses the exclusion."""
+    source_id = "clienta_evidence_src_s4_22"
+    clean_tgt = "clienta_evidence_tgt_s4_22_clean"
+    flagged_tgt = "clienta_evidence_tgt_s4_22_flagged"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=clean_tgt,
+        extra_targets={flagged_tgt: True},
+        proposals=[
+            _proposal(source_id, "impacts", clean_tgt, "sha256:clean-r"),
+            _proposal(source_id, "draws_from", flagged_tgt, "sha256:flagged-r"),
+        ],
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(config_path), "links", "reject-doc", source_id]
+    )
+    assert result.exit_code == 0
+    assert "Rejected 1 proposal(s)" in result.output
+    assert "1 proposal(s) excluded" in result.output
+    assert "flagged inputs" in result.output
+
+
+def test_links_status_include_flagged_flag(tmp_path):
+    """S4-15b (DC-1): status --include-flagged counts flagged proposals as pending."""
+    source_id = "clienta_evidence_src_s4_15b"
+    target_id = "clienta_evidence_tgt_s4_15b"
+    config_path = _setup_flagged_lib(
+        tmp_path,
+        source_id=source_id,
+        target_id=target_id,
+        target_flagged=True,
+    )
+    runner = CliRunner()
+    # Without flag: 0 pending, 1 flagged_excluded
+    result_default = runner.invoke(cli, ["--config", str(config_path), "links", "status"])
+    assert result_default.exit_code == 0
+    assert "Flagged Excluded" in result_default.output
+    # With flag: flagged proposals count as pending; no Flagged Excluded column
+    result_flagged = runner.invoke(
+        cli, ["--config", str(config_path), "links", "status", "--include-flagged"]
+    )
+    assert result_flagged.exit_code == 0
+    assert "Flagged Excluded" not in result_flagged.output
+    # The source row shows 1 pending now (was 0 pending + 1 excluded before)
+    assert "| clienta_evidence_src_s4_15b | 1 | 0 |" in result_flagged.output
+
+
 def test_revived_and_flagged_tags_render_together(tmp_path):
     """S4-19 (SF-I): revived + flagged tags render in correct order."""
     source_id = "clienta_evidence_src_s4_19"

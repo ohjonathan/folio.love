@@ -1660,43 +1660,58 @@ def links_review_cmd(
 
 @links.command("status")
 @click.argument("scope", required=False, default=None)
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Count proposals involving flagged-input documents toward Pending.",
+)
 @click.pass_context
-def links_status_cmd(ctx, scope: Optional[str]):
+def links_status_cmd(ctx, scope: Optional[str], include_flagged: bool):
     """Summarize canonical and pending document-level relationships."""
     from .links import relationship_status_summary
 
     config = ctx.obj["config"]
-    rows, total_flagged_excluded = relationship_status_summary(config, scope=scope)
+    rows, total_flagged_excluded = relationship_status_summary(
+        config, scope=scope, include_flagged=include_flagged
+    )
     if not rows:
-        if total_flagged_excluded > 0:
-            click.echo(
-                f"No document-level relationship data to review. "
-                f"{total_flagged_excluded} proposal(s) excluded due to flagged inputs; "
-                "use folio links review --include-flagged to inspect."
-            )
-        else:
-            click.echo("No document-level relationship data found.")
+        # When rows is empty, flagged_excluded is necessarily zero because a
+        # source with flagged_excluded > 0 would have been emitted as a row.
+        # (Dead-code guard removed per D.3 DS-G.)
+        click.echo("No document-level relationship data found.")
         return
 
     total_pending = 0
     total_confirmed = 0
-    click.echo("| Source Document | Pending | Confirmed | Flagged Excluded |")
-    click.echo("|---|---:|---:|---:|")
+    show_flagged_col = total_flagged_excluded > 0
+    if show_flagged_col:
+        click.echo("| Source Document | Pending | Confirmed | Flagged Excluded |")
+        click.echo("|---|---:|---:|---:|")
+    else:
+        click.echo("| Source Document | Pending | Confirmed |")
+        click.echo("|---|---:|---:|")
     for row in rows:
         total_pending += row.pending
         total_confirmed += row.confirmed
-        click.echo(
-            f"| {row.source_id} | {row.pending} | {row.confirmed} | {row.flagged_excluded} |"
-        )
+        if show_flagged_col:
+            click.echo(
+                f"| {row.source_id} | {row.pending} | {row.confirmed} | {row.flagged_excluded} |"
+            )
+        else:
+            click.echo(f"| {row.source_id} | {row.pending} | {row.confirmed} |")
     click.echo("")
-    click.echo(
-        f"Total: {total_pending} pending, {total_confirmed} confirmed, "
-        f"{total_flagged_excluded} flagged-excluded"
-    )
-    if total_flagged_excluded:
+    if show_flagged_col:
         click.echo(
-            "Use folio links review --include-flagged to inspect excluded proposals."
+            f"Total: {total_pending} pending, {total_confirmed} confirmed, "
+            f"{total_flagged_excluded} flagged-excluded"
         )
+        click.echo(
+            "Use folio links status --include-flagged to count excluded proposals as pending, "
+            "or folio links review --include-flagged to inspect them."
+        )
+    else:
+        click.echo(f"Total: {total_pending} pending, {total_confirmed} confirmed")
 
 
 @links.command("confirm")
@@ -1716,14 +1731,18 @@ def links_confirm_cmd(ctx, proposal_id: str, include_flagged: bool):
     config = ctx.obj["config"]
     try:
         with library_lock(config.library_root.resolve(), "links"):
-            proposal = confirm_proposal(
+            proposal, flagged_inputs = confirm_proposal(
                 config, proposal_id, include_flagged=include_flagged
             )
     except (LibraryLockError, ValueError) as e:
         click.echo(f"✗ {e}")
         sys.exit(1)
+    flagged_suffix = (
+        f" (flagged: {', '.join(flagged_inputs)})" if flagged_inputs else ""
+    )
     click.echo(
-        f"✓ Confirmed {proposal.proposal_id}: {proposal.relation} -> {proposal.target_id}"
+        f"✓ Confirmed {proposal.proposal_id}: {proposal.relation} -> "
+        f"{proposal.target_id}{flagged_suffix}"
     )
 
 
@@ -1744,14 +1763,18 @@ def links_reject_cmd(ctx, proposal_id: str, include_flagged: bool):
     config = ctx.obj["config"]
     try:
         with library_lock(config.library_root.resolve(), "links"):
-            proposal = reject_proposal(
+            proposal, flagged_inputs = reject_proposal(
                 config, proposal_id, include_flagged=include_flagged
             )
     except (LibraryLockError, ValueError) as e:
         click.echo(f"✗ {e}")
         sys.exit(1)
+    flagged_suffix = (
+        f" (flagged: {', '.join(flagged_inputs)})" if flagged_inputs else ""
+    )
     click.echo(
-        f"✓ Rejected {proposal.proposal_id}: {proposal.relation} -> {proposal.target_id}"
+        f"✓ Rejected {proposal.proposal_id}: {proposal.relation} -> "
+        f"{proposal.target_id}{flagged_suffix}"
     )
 
 
@@ -1779,7 +1802,7 @@ def links_confirm_doc_cmd(ctx, doc_id: str, include_flagged: bool):
         click.echo(f"✗ {e}")
         sys.exit(1)
     click.echo(f"✓ Confirmed {acted} proposal(s)")
-    if acted == 0 and flagged_excluded > 0:
+    if flagged_excluded > 0 and not include_flagged:
         click.echo(
             f"{flagged_excluded} proposal(s) excluded from {doc_id} (flagged inputs); "
             "use --include-flagged to act on them."
@@ -1810,7 +1833,7 @@ def links_reject_doc_cmd(ctx, doc_id: str, include_flagged: bool):
         click.echo(f"✗ {e}")
         sys.exit(1)
     click.echo(f"✓ Rejected {acted} proposal(s)")
-    if acted == 0 and flagged_excluded > 0:
+    if flagged_excluded > 0 and not include_flagged:
         click.echo(
             f"{flagged_excluded} proposal(s) excluded from {doc_id} (flagged inputs); "
             "use --include-flagged to act on them."

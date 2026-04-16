@@ -315,6 +315,7 @@ def relationship_status_summary(
     config: FolioConfig,
     *,
     scope: Optional[str] = None,
+    include_flagged: bool = False,
 ) -> tuple[list[RelationshipStatusRow], int]:
     """Summarize pending + confirmed relationships per source document.
 
@@ -322,19 +323,23 @@ def relationship_status_summary(
     carries a `flagged_excluded` count for §11 rule 5 (no silent empty when
     flagged inputs are the real cause). A row is emitted whenever pending,
     confirmed, OR flagged_excluded is nonzero.
+
+    When `include_flagged=True`, flagged-input proposals count toward
+    `pending` and `flagged_excluded` is zero (operator has opted in).
     """
     library_root = config.library_root.resolve()
     registry_data = registry_mod.load_registry(library_root / "registry.json")
 
-    # Single pass with include_flagged=True; partition per-source into
-    # reviewable pending (clean) vs. flagged-excluded.
+    # Single pass with include_flagged=True on collect so we can partition.
+    # When the caller sets include_flagged=True, we roll flagged proposals
+    # into `pending` and leave `flagged_excluded` at zero.
     all_views, _ = collect_pending_relationship_proposals(
         config, scope=scope, include_flagged=True
     )
     pending_counts: dict[str, int] = {}
     flagged_counts: dict[str, int] = {}
     for view in all_views:
-        if view.flagged_inputs:
+        if view.flagged_inputs and not include_flagged:
             flagged_counts[view.source_id] = flagged_counts.get(view.source_id, 0) + 1
         else:
             pending_counts[view.source_id] = pending_counts.get(view.source_id, 0) + 1
@@ -503,7 +508,12 @@ def confirm_proposal(
     *,
     confirmation_source: str = "folio links confirm",
     include_flagged: bool = False,
-) -> RelationshipProposal:
+) -> tuple[RelationshipProposal, list[str]]:
+    """Confirm a pending proposal; return `(proposal, flagged_inputs)`.
+
+    v0.6.4 DS-C: trust-posture annotation flows back to the CLI success line
+    when the operator used `--include-flagged`.
+    """
     view = _find_pending_view(config, proposal_id, include_flagged=include_flagged)
     content, fm = _read_markdown(view.source_path)
     if fm is None:
@@ -523,7 +533,7 @@ def confirm_proposal(
         confirmation_source=confirmation_source,
     )
     _write_markdown(view.source_path, content, fm)
-    return proposal
+    return proposal, list(view.flagged_inputs)
 
 
 def reject_proposal(
@@ -531,7 +541,11 @@ def reject_proposal(
     proposal_id: str,
     *,
     include_flagged: bool = False,
-) -> RelationshipProposal:
+) -> tuple[RelationshipProposal, list[str]]:
+    """Reject a pending proposal; return `(proposal, flagged_inputs)`.
+
+    v0.6.4 DS-C: trust-posture annotation flows back to the CLI success line.
+    """
     view = _find_pending_view(config, proposal_id, include_flagged=include_flagged)
     content, fm = _read_markdown(view.source_path)
     if fm is None:
@@ -545,7 +559,7 @@ def reject_proposal(
         new_status="rejected",
     )
     _write_markdown(view.source_path, content, fm)
-    return proposal
+    return proposal, list(view.flagged_inputs)
 
 
 def confirm_doc(
@@ -596,3 +610,5 @@ def reject_doc(
         reject_proposal(config, proposal_id, include_flagged=include_flagged)
         acted += 1
     return acted, counts.flagged_input
+
+
