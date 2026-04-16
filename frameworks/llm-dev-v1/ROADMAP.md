@@ -78,6 +78,51 @@ the last mechanics gap (Codex-7). Same playbook as v1.0.0.
 
 ---
 
+## v1.1.1 — Candidate (2026-04-16)
+
+**Status.** Under review as PR #7 (merge SHA `TBD` until the
+cross-family canonical verdict reaches Approve). Cherry-picked from
+folio.love PR #51 (merge `ab4bc2735660`) — the first production
+adopter of v1.1.0 surfaced five backward-compat-safe bug fixes; the
+framework maintainer pulled them into the canonical bundle so the two
+copies stay byte-equivalent.
+
+**Scope shipped.** Five fixes; patch-level normative clarifications only:
+
+- **C-1** (F-011): `id` regex accepts dot separators for semver
+  fragments (`manifest/deliverable-manifest.schema.yaml`). `slug`
+  stays dot-free.
+- **C-2** (F-009): `verify-tokens.sh` suppresses defined-but-not-used
+  warnings for orchestrator-only tokens; `tokens.md` gains a named
+  section listing the six affected tokens.
+- **C-4** (F-004): Archive ordering — `<DOC_INDEX_ARCHIVE?>` runs after
+  the Phase E retrospective is committed. Template 08 adds a normative
+  paragraph; `tokens.md` row updated.
+- **C-5** (F-005): `verify-schema.sh` hard-fails (exit 1) when
+  `check-jsonschema` is absent. Silent-skip looked identical to a
+  passing check. README marks the dependency as required.
+- **B-5** (F-026, F-027): Cardinality re-baseline at B.3 Approve is
+  normative. Template 06 adds a 3-step procedure; `playbook.md`
+  cross-references it in the review-board section.
+
+**Non-goals held.** No breaking schema changes, no schema renames, no
+new templates, no token removals. Existing templates and scripts
+receive patch-level normative clarifications only (Template 06 B.3
+cardinality re-baseline; Template 08 archive ordering; verify-schema
+exit-semantics; verify-tokens orchestrator-only suppression; `id`
+regex widening). v1.0.0 and v1.1.0 example manifests validate under
+v1.1.1 unchanged (mechanically confirmed by `scripts/verify-schema.sh`).
+`verify-all.sh` remains 8-script / 8 green.
+
+**Exit criteria (pending merge).** 2-family review board (Claude +
+Codex) per patch-release policy; Gemini reviewer-of-reviewer audits
+the cross-family meta-consolidator. Canonical verdict at
+`frameworks/llm-dev-v1/review-board/v1.1.1-spec-verdict.md` upon
+Approve. Post-merge stamp replaces TBD PR# and merge SHA; session
+archived via `ontos log -e "v1-1-1-release"`.
+
+---
+
 ## v1.x — Continuous improvements
 
 **Trigger.** Per-deliverable retrospectives.

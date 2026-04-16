@@ -3,16 +3,22 @@
 All notable changes to the `llm-dev-v1` framework bundle are documented here.
 Versioning is bundle-scoped (`llm-dev-vMAJOR.MINOR.PATCH`).
 
-## v1.1.1 — Released 2026-04-16 (PR #TBD, merge `TBD`)
+## v1.1.1 — Candidate 2026-04-16 (PR #7, merge `TBD`)
 
-Five bug fixes against v1.1.0's shipped surface — no schema breaking
-changes, no new templates, no manifest contract changes. v1.0.0 and v1.1.0
-manifests remain valid under v1.1.1. Ships ahead of the host project's
-next deliverable so adopters don't re-eat the same friction. Light-touch
-2-family review (claude + codex) per patch-release policy; full 3-family
-board reserved for v1.2.
+Five bug fixes cherry-picked from folio.love's first production adoption
+of v1.1.0. Light-touch 2-family review (Claude + Codex) per patch-release
+policy; full 3-family board reserved for v1.2. Release stamp flips from
+"Candidate" to "Released" and `merge TBD` to the real SHA after the
+cross-family canonical verdict reaches Approve.
 
-Source: `folio.love` first production adoption (5 slices, F-001..F-046).
+**Non-goals held.** No breaking schema changes, no schema renames, no new
+templates, no token removals. Existing templates and scripts receive
+patch-level normative clarifications only. v1.0.0 and v1.1.0 manifests
+remain valid under v1.1.1.
+
+Source: cherry-picked from `folio.love#51` merge `ab4bc2735660`. Five
+fixes originated in folio.love's first production adoption (5 slices,
+findings F-001..F-046).
 
 Shipped:
 
@@ -21,7 +27,7 @@ Shipped:
 | C-1 | `id` regex accepts dots as component separators (`^[a-z][a-z0-9]*([.-][a-z0-9]+)*$`) so adopters may embed semver fragments (e.g., `my-thing-v0.6.4`). Rejects pathological forms (`x..y`, `x.`, `x.-y`). `slug` stays dot-free. | `manifest/deliverable-manifest.schema.yaml` | F-011 |
 | C-2 | `verify-tokens.sh` suppresses the "defined but not referenced" warning for tokens tagged orchestrator-only. `tokens.md` gains a dedicated "Orchestrator-only tokens" section listing `<DELIVERABLE_SLUG>`, `<META_CONSOLIDATOR_FAMILY>`, `<MODEL_ASSIGNMENTS>`, `<PR_TITLE_PATTERN>`, `<REPO_URL>`, `<STATIC_CHECKS>`. | `scripts/verify-tokens.sh`, `tokens.md` | F-009 |
 | C-4 | Archive ordering documented: `<DOC_INDEX_ARCHIVE?>` runs as the final step **after** the Phase E retrospective is committed, not before. Prevents the archive entry from missing the retrospective itself. | `templates/08-retrospective.md`, `tokens.md` | F-004 |
-| C-5 | `verify-schema.sh` fails hard (exit 1) when `check-jsonschema` is absent — silent-skip (exit 2) was masking real schema failures because "validator missing" looked identical to "validation passed". `README.md` updated to mark the dependency as required. | `scripts/verify-schema.sh`, `README.md` | F-005 |
+| C-5 | `verify-schema.sh` fails hard (exit 1) when `check-jsonschema` is absent — silent-skip (exit 2) was masking real schema failures because "validator missing" looked identical to "validation passed". `README.md` updated to mark the dependency as required. | `scripts/verify-schema.sh`, `scripts/verify-all.sh`, `README.md` | F-005 |
 | B-5 | Cardinality re-baseline at B.3 is now a normative meta-consolidator step. Manifest `cardinality_assertions` are drafted before Phase A; Phase A often narrows scope, leaving stale assertions that surface as false D.6 failures. `templates/06-meta-consolidator.md` prescribes the re-baseline; `playbook.md` cross-references it in the review-board section. | `templates/06-meta-consolidator.md`, `playbook.md` | F-026, F-027 |
 
 Conformance suite: 8/8 green (`scripts/verify-all.sh`).

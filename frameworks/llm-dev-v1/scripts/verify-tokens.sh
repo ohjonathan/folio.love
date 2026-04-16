@@ -47,14 +47,26 @@ sort -u "$tmp/defined" -o "$tmp/defined"
 #
 # Flag-based awk range so the next `## ` heading terminates extraction
 # regardless of its first letter (an earlier range `/,/^## [^O]/` broke on
-# sections starting with 'O' — ADV-SF-001).
+# sections starting with 'O' — ADV-SF-001). Extraction is restricted to
+# bullet rows matching ^- `<TOKEN>` so explanatory prose inside the section
+# cannot add suppressed token names by accident (CODEX-SF3 v1.1.1 hardening).
+
+# Section-presence precondition (v1.1.1 C-2). Missing section is a regression;
+# fail with a named diagnostic rather than silent exit under `set -euo pipefail`
+# (CODEX-SF4 / ADV-SF1 v1.1.1 hardening).
+if ! grep -q '^## Orchestrator-only tokens' "$tokens"; then
+  echo "verify-tokens: FAILED — Orchestrator-only tokens section missing from tokens.md" >&2
+  echo "verify-tokens: section was added in v1.1.1 (C-2). Regression if absent." >&2
+  exit 1
+fi
+
 awk '
   /^## Orchestrator-only tokens/ { flag = 1; next }
   flag && /^## / { flag = 0 }
-  flag
+  flag && /^- `<[A-Z][A-Z0-9_]+>`/ { print }
 ' "$tokens" \
   | grep -oE '<[A-Z][A-Z0-9_]+>' \
-  | sort -u > "$tmp/orchestrator_only"
+  | sort -u > "$tmp/orchestrator_only" || true
 
 used_not_defined=$(comm -23 "$tmp/used" "$tmp/defined")
 defined_not_used_raw=$(comm -13 "$tmp/used" "$tmp/defined")

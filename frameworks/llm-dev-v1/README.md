@@ -1,4 +1,4 @@
-# LLM Development Framework — v1.1.0 (pending review board)
+# LLM Development Framework — v1.1.1 (patch-release candidate)
 
 A portable, project-agnostic meta-prompt framework for LLM-driven software development.
 Drop this bundle into any repo, fill in the tokens in `tokens.md`, and you have a
@@ -7,12 +7,11 @@ development lifecycle (Spec → Spec Review → Implementation → Code Review),
 with optional pre-A entry points (Proposal / Triage / Validation Run) and an
 optional Product lens for user-facing deliverables.
 
-> **Status note.** v1.1.0 is scope-complete on branch
-> `frameworks/llm-dev-v1.1` (PR #4) but still pending the canonical
-> 3-family review board verdict. CHANGELOG status will flip to
-> "Released" after the canonical verdict is `Approve`. Until then,
-> adopters can use the v1.0.0 frozen baseline at commit
-> `1a1d9e5` on `main`.
+> **Status note.** v1.1.0 is released (`main` @ `2ec49e7`). v1.1.1 is a
+> patch-release candidate under review on PR #7; merge SHA is `TBD`
+> until the 2-family canonical verdict reaches Approve. Adopters
+> pulling today should anchor on v1.1.0 at `2ec49e7`; re-copy after
+> v1.1.1 merges. See `CHANGELOG.md` for the full release log.
 
 ## What's in the bundle
 
