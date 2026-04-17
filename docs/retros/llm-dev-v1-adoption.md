@@ -721,6 +721,128 @@ After three sessions (slice 6a, v0.7.0 setup, v0.7.0 codex/Ontos invocations), F
 
 ---
 
+## Slice 6b.1 — folio-graph-generalized-proposals-v0-7-1 (2026-04-16)
+
+Entry point: Phase 0 (claude manifest-author + spec-author) on branch `feat/graph-generalized-proposals-v0-7-1-C-author-claude`. Pre-A inherited from `tier4_discovery_proposal_layer_spec.md` rev 5 (§5, §15.6, §15.7). This is sub-slice 1 of 3 under Shipping Plan §15.6 (shared-consumer expansion); retrofits `folio/graph.py` to formally consume the §5 shared-proposal contract. v1.2.0 manifest (first slice to use the bundle's v1.2 features end-to-end).
+
+### New friction entries
+
+#### [F-054] v1.2.0 must-differ-provider × single-provider outage — B.1 alignment lens unreachable
+
+- **When:** B.1 board dispatch. Gemini CLI (manifest-assigned to B.1 alignment per v1.2.0 `≥3 non-author engineering families` floor) returned HTTP 429 on trivial `gemini -p "ping"` pre-dispatch sanity check. Persisted through B.2 and D.2.
+- **What:** Under v1.1.x manifests, rate-limit-but-completed behavior was friction-class F-014 (slow but workable). Under **v1.2.0**, the must-differ-provider invariant + the ≥3-family floor means a single-provider outage hard-blocks the entire review-board round — there's no in-family substitute. This is a NEW friction class distinct from F-014.
+- **Where:** Dispatch infrastructure + v1.2.0 policy interaction.
+- **Resolution:** Operator-authorized **codex-as-alignment** swap (B.1, B.2, D.2). Board ran with 2 distinct non-author engineering families (codex + claude-sub) rather than 3, with codex covering both adversarial AND alignment lenses as separate sessions. Documented in each alignment verdict's frontmatter `dispatch_note` field. All verdicts delivered substantive findings; swap did not degrade review quality for this slice (may not generalize).
+- **Secondary occurrence at D.5 (F-055):** Gemini CLI in the operator's environment separately lacks shell+write tools (distinct mode: not rate-limit, but environmental tool-set). Extended the codex-as-X swap pattern via codex-as-gemini for the D.5 verifier role.
+- **v1.3 target:**
+  1. Framework policy doc should enumerate the escalation ladder for unreachable required-reviewer families (1h retry → ≤24h halt → >24h documented 3-lens fallback + supplementary round). Proven workable on this slice.
+  2. Manifest schema could allow an optional `reviewer_family_substitutes[]` field listing operator-authorized swaps (e.g., `{"lens":"alignment","fallback":"codex","condition":"primary unavailable >1h"}`) to mechanize what was ad-hoc here.
+  3. P3 `must-differ-provider` invariant enforcement should distinguish "reviewer unavailable" from "reviewer declined" — today both look like non-compliant advisory-only output.
+
+#### [F-055] Gemini CLI read-only in operator environment — D.5 verifier role needs shell+write
+
+- **When:** D.5 dispatch. The originally-assigned gemini verifier executed but responded `"I cannot execute these commands or write the verification file because I do not have access to the run_shell_command or write_file tools in this environment."`
+- **What:** Gemini CLI can reason over read-only inputs but cannot execute pytest / shell commands / write verdict files needed for the verifier role. This is a distinct failure mode from F-054's rate-limit — the CLI IS reachable but lacks the tools the manifest-defined role requires.
+- **Where:** Environment capability mismatch: manifest `cli_capability_matrix.gemini = { shell: false, git: false, test_runner: false, doc_index: false }` (already acknowledges the limitation) but the D.5 verifier role needs `test_runner: true` + `shell: true`. The capability matrix is advisory, not enforced.
+- **Resolution:** Extended F-054's codex-as-X swap pattern: **codex-as-gemini** at D.5. Two codex sessions covering codex (own slot) + codex-as-gemini (swap), plus claude-sub via Agent — 3 verifier sessions, 2 distinct engineering families.
+- **v1.3 target:**
+  1. `verify-p3.sh` should cross-check manifest role assignments against `cli_capability_matrix[<FAMILY>]` requirements and flag incompatible assignments at manifest-validation time. E.g., `gemini: verifier` would fail P3 if `gemini.test_runner` is false.
+  2. Orchestrator dispatch flow should refuse to dispatch a family to a role its capability matrix doesn't support, rather than discovering the mismatch at role-execution time.
+
+#### [F-056] Manifest cardinality-gate test paths typoed — caught at D.2 by 2-lens convergence
+
+- **When:** D.2 code review (adversarial codex ADV-D2-B1 + alignment codex-as-alignment A-1, both direct-run with reproduction).
+- **What:** Manifest `cardinality_assertions[0..1]` and `gate_prerequisites[G-cardinality-1/2]` all referenced `tests/test_graph.py::<test_name>`, but the named tests were implemented in `tests/test_graph_cli.py`. The cardinality gate commands would fail collection at D.6 — gate cannot prove the contract it's supposed to gate. Adversarial reproduced: mutation testing (remove `trust_status` from renderer → the CORRECT-path test fails; wrong-path command exits 4).
+- **Where:** Authorship error at Phase A spec v1.2 + Phase 0 manifest. The test-location decision (unit vs CLI-fixture layer) was made mid-C when the fixture-based integration test was written in `test_graph_cli.py`; the manifest still pointed at the pre-C intention (`test_graph.py`). Would have been caught at Phase 0 `verify-adopter.sh` if it ran pytest-collect on the named tests; it doesn't today.
+- **Resolution:** D.4 surgical fix — 4 manifest string substitutions. One line each in `cardinality_assertions` × 2 and `gate_prerequisites` × 2. Tests already existed at the correct path (adversarial confirmed mutation-testing proves the tests are meaningful).
+- **v1.3 target:**
+  1. `verify-adopter.sh` (or a new `verify-gate-commands.sh`) should actually execute each `cardinality_assertions[].command` at manifest-validation time — not just schema-check. Today's P3/schema validation passes even when the commands themselves are nonsense.
+  2. Framework adopter doc should add a Phase-0 checklist item: "dry-run every manifest cardinality_assertion command; each must exit 0 today even if the feature is unimplemented — otherwise the test reference is wrong." This would catch F-056 at Phase 0 instead of D.2.
+
+#### [F-057] `supported_relation` gate rule unreachable end-to-end — only caught at D.2 product review
+
+- **When:** D.2 product review (PRD-D2-1, direct-run). Product reviewer built a fixture with `relation="refs_unknown"` and observed `graph doctor` output = "No graph-health findings" — the gate rule never fires.
+- **What:** Phase A spec §3.3 authorized a minimal `supported_relation` schema-gate rule alongside `target_registered`. Implementation correctly checks the rule. But `folio/links.py:191` filters unsupported-relation proposals upstream, BEFORE `collect_pending_relationship_proposals` returns them — so `graph_doctor` never sees a proposal that could fail `supported_relation`. The rule is forward-compat (ready for future `proposal_type` values that bypass the upstream filter) but delivers zero operator value today. Neither spec review nor code review caught this; it took a product-lens direct-run walkthrough.
+- **Where:** Design-time analysis gap: when authoring a new gate rule, the author didn't audit the upstream filter path to verify the rule could ever fire.
+- **Resolution:** D.4 closure — CHANGELOG "Known gaps" honesty bullet documenting that `supported_relation` is forward-compat-only. Rule + test + annotation retained (cheap to keep, non-zero future value). Alternative (drop the rule) was considered and rejected per operator — forward-compat value is real even if today-value is zero.
+- **v1.3 target:**
+  1. Framework peer-review template should add a "reachability audit" prompt for new validation rules: "For each new rule, cite one test case that today's emission path CAN produce that will trigger this rule. If none exists, document as forward-compat." Would have surfaced F-057 at B.1, not D.2.
+  2. Narrowing-exemplar spec pattern should include a "rule-reachability" sub-section when adding validation-layer logic — mirror the "helper-divergence disclosure" pattern from v1.3 T-7 (slice 7).
+
+#### [F-058] Mid-Phase-C scope-lock line-cap friction — G-scope-3 too tight for flagged-test coverage
+
+- **When:** Phase C test authoring. Phase A spec §4 listed `test_graph_doctor_cli_stdout_renders_flagged_annotation` (test 22) as required. Implementing that test required surfacing flagged proposals via `folio graph doctor --include-flagged` — a CLI flag that the spec (v1.0/v1.1/v1.2) did not explicitly authorize. Adding the flag pushed `folio/cli.py` diff to 33 lines, breaking the originally-authored `G-scope-3: ≤25 lines` gate.
+- **What:** Phase A authorship under-estimated how much cli.py editing the flagged-test coverage would require. The 25-line gate was authored BEFORE the test-plan full scope was finalized. Once the dependency chain (flagged test → flagged finding must surface → --include-flagged flag → cli.py diff grows) became clear mid-C, the gate needed loosening.
+- **Where:** Scope-lock gate authoring sequence — gates authored before the test plan is frozen can mis-calibrate.
+- **Resolution:** D.1 manifest tweak (commit `0b10cb4`) raised G-scope-3 from 25 to 40 lines. Surgical; documented in the commit message. Spec §3.4 backfilled in D.4 to authorize `--include-flagged` explicitly (addressing the separate P-2/SF-2 review finding).
+- **v1.3 target:**
+  1. Manifest authoring guidance should recommend authoring scope-lock line-cap gates AFTER the full Phase-A test plan is locked, OR explicitly including 50-100% headroom when gates are authored pre-test-plan.
+  2. `G-scope-N` gates should carry a rationale string so future adopters understand what "25 lines" or "40 lines" is actually bounding. (Today they're bare numbers without justification.)
+
+### Slice 6b.1 closure (Phase E summary)
+
+| Metric | Value |
+|---|---|
+| Phases executed | 0, A, B (R1 + R2 + B.3 orchestrator-direct closure), C, D (D.1 gate-tweak + D.2 R1 + D.3 orchestrator-direct + D.4 fixes + D.5 verify × 3 + D.6 gate), E |
+| Phase A spec versions | v1.0 → v1.1 → v1.2 (two revision cycles, both surgical) |
+| Blockers raised (B.1 R1) | 6 unique (convergent across 4 lenses — subject_id 3-lens, others 1-2 lens) |
+| Blockers raised (B.2 R2) | 2 convergent (both on §3.3 schema-gate design; P-R2-1 + ADV-R2-B1) |
+| Blockers raised (D.2 R1) | 1 convergent (ADV-D2-B1 + A-1 — manifest cardinality path typo) |
+| Blockers preserved at ship | **0** (all 9 closed across v1.1, v1.2, D.4) |
+| Should-fix raised (all B + D rounds) | ~26 (13 B.1 + 8 B.2 + 8 D.2 — some overlaps) |
+| Should-fix preserved at ship | 0 load-bearing; 1 deferred-as-carry-forward (PRD-2-R2 schema_version → sub-slice 2) |
+| Test count delta | +41 new tests (19 unit in test_graph.py + 22 CLI in test_graph_cli.py); 1 migrated legacy test |
+| Scope tests at ship | 279/279 scope-relevant green at D.6 (113 pre-existing + 166 in-scope) |
+| D.6 gate result | **15/15 PASSED** (verify-d6-gate.sh OK) |
+| Lint introduced | 0 new errors on scope paths (ruff clean on folio/graph.py + new tests); folio/cli.py has 10 pre-existing errors identical to main (out-of-slice) |
+| Adopter-only contract | honored — zero bundle edits |
+| v1.2.0 features exercised | must-differ-provider (codex adversarial), verify-p3 (enforced the ≥3 engineering-family floor → surfaced F-054 + F-055), verify-adopter.sh (passed 4/4 twice post-tweaks), verify-d6-gate.sh (passed) |
+
+#### What worked
+
+1. **Two orchestrator-direct R(N+1) closures (B.3 + D.3) via F-051 surgical-fixes fast-path.** B.3 closed 2 convergent surgical blockers without a B.2 R3 dispatch; D.3 closed 1 convergent surgical blocker without a D.2 R2 dispatch. Saved two full 4-lens dispatch cycles. The convergence criterion ("multiple lenses flag the same surgical fix") proved reliable; slice-7 F-051 pattern held across two additional closure rounds.
+
+2. **Cross-lens convergence on material findings.** subject_id regression flagged by 3 lenses at B.1 (PRD-1 + P-1 + ADV-SF1, all direct-run). §3.3 gate naming flagged by 2 lenses at B.2 (P-R2-1 non-deck angle + ADV-R2-B1 archived-target angle). Manifest-path typo flagged by 2 lenses at D.2 (ADV-D2-B1 + A-1). Each convergent blocker had surgical closure — the 4-lens board surfaces real defects and the convergences are load-bearing.
+
+3. **Product-lens direct-run caught `supported_relation` unreachability (F-057) that spec + code review missed.** Neither adversarial nor alignment nor peer surfaced this; it took PRD-D2-1's fixture-level walkthrough. Validates the Product lens as a distinct failure-surface detector, not a duplicate of Peer.
+
+4. **v1.2.0 verify-d6-gate.sh worked first-try.** 15-row gate table parsed cleanly with allowed evidence classes. No false negatives.
+
+5. **Adopter-only contract preserved under contentious conditions.** Despite scope broaden (`folio/cli.py` added to allowed_paths mid-B.1 closure) and multiple manifest tweaks (D.1 line-cap, D.4 test-path), no bundle edits. All adjustments in adopter scope only.
+
+#### What broke
+
+1. **Dispatch-infrastructure fragility under v1.2.0 strictness (F-054 + F-055).** Gemini 429 rate-limit + environmental tool-gap eliminated the entire alignment + verifier lens for this deliverable. The codex-as-X swap pattern salvaged delivery but violated the strict ≥3 non-author engineering family floor. First-slice-to-use-v1.2.0 stress-tested this; v1.3 should mechanize substitute-family discipline.
+
+2. **Manifest cardinality-gate test paths typoed (F-056).** 2 gates out of 12 pointed at nonexistent test paths. Not caught at Phase 0 `verify-adopter.sh` (doesn't execute commands), only at D.2 when adversarial actually ran them. Framework-side: add gate-command dry-run to verify-adopter.sh.
+
+3. **`supported_relation` gate rule unreachable end-to-end (F-057).** Spec and code review missed that today's upstream filter suppresses the proposals the rule would fire on. Product-lens direct-run caught it at D.2. Forward-compat rule retained with CHANGELOG honesty note.
+
+4. **Scope-lock line-cap authored pre-test-plan (F-058).** G-scope-3's 25-line initial cap didn't accommodate legitimate Phase-C scope growth (--include-flagged flag needed for flagged-test coverage). D.1 tweak to 40 was surgical but signals a broader authoring-sequence issue.
+
+#### Delta retrospective (vs. slices 1–7)
+
+See `frameworks/manifests/framework-learnings-v1.1-adoption.md` Slice 6b.1 supplement for the full cross-slice comparison (test-count deltas, blocker convergence patterns, orchestrator-direct closure usage trajectory, v1.2.0 first-use findings).
+
+**Critical delta question:** How does v1.2.0's increased strictness interact with single-provider dispatch outages? **Answer (this slice):** the must-differ-provider invariant + ≥3-engineering-family floor converts what was friction-class F-014 (rate-limit-but-completed) into hard-blocking friction-class F-054/F-055. The codex-as-X swap pattern is a workable *ad-hoc* fallback, but framework-side mechanization (reviewer_family_substitutes manifest field, orchestrator capability-matrix pre-check) should land in v1.3 to make the fallback durable.
+
+#### Friction summary (this slice)
+
+| ID | Severity | Class | Title | v1.3 target |
+|---|---|---|---|---|
+| F-054 | High | Dispatch infrastructure × v1.2 policy | Gemini outage hard-blocks B.1 alignment lens under must-differ-provider | Policy doc: substitute-family escalation ladder; optional manifest `reviewer_family_substitutes[]`; P3 distinguishes unavailable vs declined |
+| F-055 | Medium | Capability-matrix × role-assignment | Gemini CLI read-only at D.5 verifier role | verify-p3.sh cross-checks manifest role assignments against cli_capability_matrix |
+| F-056 | High | Manifest gate-command validation | Cardinality-gate test paths typoed, not caught by verify-adopter | Add gate-command dry-run to verify-adopter.sh; Phase-0 checklist |
+| F-057 | Medium | Review-lens design gap | supported_relation rule unreachable end-to-end, only caught at D.2 Product | Peer-review template adds "reachability audit" prompt for new validation rules |
+| F-058 | Medium | Scope-lock authoring sequence | G-scope-3 line-cap too tight for post-C test-plan reality | Manifest authoring guidance: author line-caps after test-plan frozen, or 50-100% headroom |
+
+#### F-054 / F-055 status
+
+First slice to exercise v1.2.0 end-to-end. Dispatch-infrastructure friction under strict family-diversity is a new friction class not present under v1.1.x. Operator-authorized codex-as-X swap pattern worked for this deliverable but should not be the permanent answer. v1.3 mechanization is a priority.
+
+
+---
+
 ## v1.2.0 resynced from johnny-os@e40b5c3 on 2026-04-16
 
 Bundle delta absorbed (54 files changed):

@@ -1,0 +1,343 @@
+# Deliverable manifest: folio-graph-generalized-proposals-v0-7-1
+#
+# Retrofit deliverable (Shipping Plan §15.6 slice 6b sub-slice 1 of 3):
+# formalize folio/graph.py's consumption of the shared proposal contract from
+# docs/specs/tier4_discovery_proposal_layer_spec.md §5. First of three
+# sub-deliverables; validates the shared-contract shape on existing code
+# before the greenfield `folio synthesize` (v0.8.0) and `folio search`
+# (v0.9.0) sub-slices land.
+#
+# Pre-A INHERITED from tier4_discovery_proposal_layer_spec.md §5 (Proposal
+# Object Contract), §15.6 (Shared-consumer expansion), and §15.7 (Contract:
+# slice manifests narrow, they don't reinterpret). Phase A authors a
+# narrowing implementation spec per §15.7 — declares which §§ this slice
+# implements vs. defers. F-049 compliance: cite sections by number and name,
+# not paraphrase.
+#
+# Codex assigned to adversarial role per v1.2.0 must-differ-provider
+# invariant (author family = claude → adversarial family ≠ claude*).
+#
+# Adopter-only contract in effect: no bundle edits. Bundle at
+# frameworks/llm-dev-v1/ remains byte-identical to johnny-os@e40b5c3
+# (v1.2.0, resynced via PR #59).
+
+manifest_version: "1.2.0"
+id: folio-graph-generalized-proposals-v0-7-1
+slug: folio-graph-generalized-proposals
+summary: "Retrofit folio/graph.py to formally consume the shared proposal contract (§5) — surface trust_status, proposal_type, and evidence/reason fields in `graph doctor` findings; generalize the proposal-finding renderer so future proposal_types (entity-merge, diagram-archetype) flow through the same surface without dispatch edits. First of three Shipping Plan §15.6 sub-slices; greenfield synthesize + search follow in v0.8.0 and v0.9.0."
+
+user_facing: true
+
+# Pre-A inheritance note (v1.2.0 schema strictness):
+# pre_a.entry {proposal|triage|validation} declares a NEW pre-A artifact.
+# This slice inherits pre-A from the ratified parent spec
+# docs/specs/tier4_discovery_proposal_layer_spec.md rev 5 — §5 (Proposal
+# Object Contract, 9 required fields), §15.6 (Shared-consumer expansion —
+# folio graph as one of three consumers), §15.7 (narrow-don't-reinterpret).
+# Phase A will narrow those §§ into an implementation spec per §15.7.
+# The pre_a block is omitted (optional under schema) to avoid misclassifying
+# inherited ratification as a new proposal/triage/validation entry point.
+# F-049 compliance: §§ named not paraphrased.
+
+owners:
+  - "Jonathan Oh (ohjonathan)"
+
+scope:
+  allowed_paths:
+    # Retrofit scope
+    - folio/graph.py
+    # v1.1 scope broaden (post B.1 Round 1 blocker closure):
+    # folio/cli.py:2016-2021 stdout template must be updated when subject_id
+    # frees to §5 semantics. Bounded to the pending-finding renderer loop;
+    # G-scope-3 enforces no unrelated cli.py edits.
+    - folio/cli.py
+    # Tests
+    - tests/test_graph_cli.py
+    - tests/test_graph.py
+    # Documentation
+    - CHANGELOG.md
+    - docs/specs/v0.7.1_folio_graph_generalized_proposals_spec.md
+    - docs/validation/v0.7.1_spec_peer_claude-sub.md
+    - docs/validation/v0.7.1_spec_peer_claude-sub_round2.md
+    - docs/validation/v0.7.1_spec_alignment_gemini.md
+    - docs/validation/v0.7.1_spec_adversarial_codex.md
+    - docs/validation/v0.7.1_spec_adversarial_codex_round2.md
+    - docs/validation/v0.7.1_spec_product_claude-sub.md
+    - docs/validation/v0.7.1_spec_product_claude-sub_round2.md
+    - docs/validation/v0.7.1_spec_canonical_verdict.md
+    - docs/validation/v0.7.1_spec_canonical_verdict_round2.md
+    - docs/validation/v0.7.1_code_peer_claude-sub.md
+    - docs/validation/v0.7.1_code_alignment_gemini.md
+    - docs/validation/v0.7.1_code_adversarial_codex.md
+    - docs/validation/v0.7.1_code_product_claude-sub.md
+    - docs/validation/v0.7.1_code_canonical_verdict.md
+    - docs/validation/v0.7.1_d4_fix_summary.md
+    - docs/validation/v0.7.1_d5_verification_gemini.md
+    - docs/validation/v0.7.1_d5_verification_codex.md
+    - docs/validation/v0.7.1_d5_verification_claude-sub.md
+    - docs/validation/v0.7.1_d6_final_approval.md
+    - docs/retros/llm-dev-v1-adoption.md
+    - frameworks/manifests/framework-learnings-v1.1-adoption.md
+  forbidden_paths:
+    # Not in scope for this retrofit
+    - folio/enrich.py
+    - folio/digest.py
+    - folio/links.py
+    - folio/provenance.py
+    - folio/tracking/entities.py
+    - folio/pipeline/
+    # Other Tier-4 spec documents (referenced, not edited)
+    - docs/specs/tier4_discovery_proposal_layer_spec.md
+    - docs/specs/tier4_digest_design_spec.md
+    # Adopter-only contract
+    - frameworks/llm-dev-v1/
+    - docs/product/
+    - docs/architecture/
+    - ontos/
+    - .github/
+    - Ontos_Context_Map.md
+    - AGENTS.md
+  forbidden_symbols:
+    - "pickle.loads"
+    - "eval("
+  cardinality_assertions:
+    # v1.1 (post B.1 ADV-SF3 closure): substring inspect.getsource gates are
+    # spoofable by comments/docstrings (codex reproduced). Replaced with
+    # fixture-based runtime assertions via a dedicated test that is ALSO
+    # referenced by G-cardinality-1/2 gates.
+    - name: "pending-proposal findings carry all 11 shared-contract emitted keys (runtime fixture)"
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_fixture_mandatory_contract_invariant -q"
+      expect: "exit-0"
+    - name: "pending-proposal findings carry the new proposal_id key (runtime fixture)"
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_proposal_id_preserves_view_proposal_id -q"
+      expect: "exit-0"
+    - name: "graph CLI surface unchanged (status + doctor only)"
+      command: "python3 -c 'from folio.cli import cli; g = cli.commands[\"graph\"]; names = sorted(g.commands.keys()); assert names == [\"doctor\", \"status\"], names; print(1)'"
+      expect: "eq:1"
+
+artifacts:
+  spec:              "docs/specs/v0.7.1_folio_graph_generalized_proposals_spec.md"
+  family_verdict:    "docs/validation/v0.7.1_<phase>_<role>_<family>.md"
+  canonical_verdict: "docs/validation/v0.7.1_<phase>_canonical_verdict.md"
+  product_verdict:   "docs/validation/v0.7.1_<phase>_product_<family>.md"
+  fix_summary:       "docs/validation/v0.7.1_d4_fix_summary.md"
+  verification:      "docs/validation/v0.7.1_d5_verification_<family>.md"
+  final_approval:    "docs/validation/v0.7.1_d6_final_approval.md"
+  retro:             "docs/retros/llm-dev-v1-adoption.md"
+
+# v1.2.0 override: artifacts.verification must contain <family>
+# (verify-artifact-paths). D.5 now has multiple verifier families below.
+# Re-declare below with <family> placeholder.
+
+# Model assignments — same pattern as slice 7 (v0.7.0). v1.2.0 invariant:
+# adversarial family must NOT share provider with author (claude ≠ codex — OK).
+model_assignments:
+  - phase: "A"
+    assignments:
+      claude: spec-author
+  - phase: "B.1"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.1"
+    assignments:
+      claude-sub: product
+  - phase: "B.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.2"
+    assignments:
+      claude-sub: product
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude: implementation-author
+  - phase: "D.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "D.2"
+    assignments:
+      claude-sub: product
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude: fix-author
+  # v1.2.0 review-phase invariant: D.5 requires ≥3 non-author engineering
+  # families (verify-p3). Slice 7 (1.1.0) got away with gemini-only; 1.2.0
+  # tightens to match B.1/D.2.
+  - phase: "D.5"
+    assignments:
+      gemini:     verifier
+      codex:      verifier
+      claude-sub: verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      claude: retro
+
+cli_capability_matrix:
+  claude:      { shell: true, git: true, test_runner: true,  doc_index: true  }
+  claude-sub:  { shell: true, git: true, test_runner: true,  doc_index: true  }
+  codex:       { shell: true, git: true, test_runner: true,  doc_index: false }
+  gemini:      { shell: true, git: false, test_runner: false, doc_index: false }
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "folio imports"
+        command: "python3 -c 'import folio'"
+        expect: "exit-0"
+      - name: "graph module imports"
+        command: "python3 -c 'import folio.graph'"
+        expect: "exit-0"
+      - name: "graph + scope-relevant test suites"
+        command: "python3 -m pytest tests/test_graph_cli.py tests/test_graph.py tests/test_links_cli.py -q"
+        expect: "exit-0"
+      - name: "lint clean on scope paths"
+        command: "python3 -m ruff check folio/graph.py"
+        expect: "exit-0"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards:
+  - name: "Slice 1 links tests"
+    command: "python3 -m pytest tests/test_links_cli.py -q"
+    owns_deliverable_id: "proposal-review-hardening-v0-6-0"
+  - name: "Slice 4 trust-gated tests"
+    command: "python3 -m pytest tests/test_links_cli.py tests/test_graph_cli.py -q"
+    owns_deliverable_id: "trust-gated-surfacing-v0-6-4"
+  - name: "Slice 6a entity rejection memory tests"
+    command: "python3 -m pytest tests/test_entities.py tests/test_cli_entities.py -q"
+    owns_deliverable_id: "entity-merge-rejection-memory-v0-6-5"
+  - name: "Slice 7 digest tests"
+    command: "python3 -m pytest tests/test_digest.py tests/test_cli_digest.py -q"
+    owns_deliverable_id: "folio-digest-v0-7-0"
+
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full scope-relevant test suites pass."
+    verification:
+      command: "python3 -m pytest tests/test_graph_cli.py tests/test_graph.py tests/test_links_cli.py tests/test_entities.py tests/test_cli_entities.py tests/test_digest.py tests/test_cli_digest.py -q"
+      expect: "exit-0"
+  - id: G-test-2
+    category: test
+    description: "Graph-specific tests pass."
+    verification:
+      command: "python3 -m pytest tests/test_graph_cli.py tests/test_graph.py -q"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "No changes to forbidden paths."
+    verification:
+      command: "git diff --name-only main..HEAD | grep -E '^(folio/enrich\\.py|folio/digest\\.py|folio/links\\.py|folio/provenance\\.py|folio/tracking/entities\\.py|folio/pipeline/|docs/specs/tier4_|docs/product/|docs/architecture/|frameworks/llm-dev-v1/|AGENTS\\.md|Ontos_Context_Map\\.md)'"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "Forbidden symbols absent from scope-lock paths."
+    verification:
+      command: "grep -rE 'pickle\\.loads|eval\\(' folio/graph.py"
+      expect: "exit-nonzero"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "Pending-proposal findings carry all 11 shared-contract emitted keys (runtime fixture; replaces v1.0 substring gate per ADV-SF3)."
+    verification:
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_fixture_mandatory_contract_invariant -q"
+      expect: "exit-0"
+  - id: G-cardinality-2
+    category: cardinality
+    description: "Pending-proposal findings carry the new proposal_id key preserving view.proposal.proposal_id (runtime fixture; replaces v1.0 substring gate per ADV-SF3)."
+    verification:
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_proposal_id_preserves_view_proposal_id -q"
+      expect: "exit-0"
+  - id: G-cardinality-3
+    category: cardinality
+    description: "graph CLI surface unchanged (status + doctor only — no new subcommands)."
+    verification:
+      command: "python3 -c 'from folio.cli import cli; g = cli.commands[\"graph\"]; names = sorted(g.commands.keys()); assert names == [\"doctor\", \"status\"], names; print(1)'"
+      expect: "eq:1"
+  - id: G-test-3
+    category: test
+    description: "CLI stdout regression guard — pending proposal renders proposal_id, not literal 'None' (closes PRD-1 / P-1)."
+    verification:
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_cli_stdout_renders_proposal_id -q"
+      expect: "exit-0"
+  - id: G-scope-3
+    category: scope
+    description: "folio/cli.py changes bounded to the pending-finding stdout renderer + the --include-flagged option (40-line cap added/deleted)."
+    verification:
+      command: "git diff --numstat main..HEAD -- folio/cli.py | awk '{ if ($1 > 40 || $2 > 40) exit 1 } END { print \"ok\" }'"
+      expect: "literal:ok"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "B.3 canonical spec verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.7.1_spec_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "D.3 canonical code verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.7.1_code_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "Product verdicts (B.1 + D.2) exist."
+    verification:
+      command: "ls docs/validation/v0.7.1_{spec,code}_product_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:2"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "D.5 verification exists (at least one per-family file)."
+    verification:
+      command: "ls docs/validation/v0.7.1_d5_verification_*.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:1"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean."
+    verification:
+      command: "git status --porcelain | grep -v '^??'"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Feature branch ahead of main."
+    verification:
+      command: "git rev-list --count main..HEAD"
+      expect: "gte:1"
+
+branch_map:
+  default: "feat/graph-generalized-proposals-v0-7-1-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/specs/tier4_discovery_proposal_layer_spec.md"
+    version: "rev 5"
+    relevance: "Pre-A anchor. §5 Proposal Object Contract (9 required fields), §6 Lifecycle (6 states), §8 Review Rendering Contract (compact summary + trust label + schema warning + 1–3 evidence locators), §15.6 Shared-consumer expansion (this slice), §15.7 Narrow-don't-reinterpret discipline."
+  - path: "docs/specs/v0.6.0_proposal_review_hardening_spec.md"
+    version: "shipped v0.6.0"
+    relevance: "Narrowing exemplar per §15.7. §11 carry-forward disposition table is the worked example for implements-vs-defers declaration."
+  - path: "docs/specs/v0.6.4_trust_gated_surfacing_spec.md"
+    version: "shipped v0.6.4"
+    relevance: "Trust-gating contract (`review_status: flagged` + `--include-flagged` flag). This retrofit surfaces the already-computed `flagged_inputs` as the §5 trust_status field on findings."
+  - path: "folio/graph.py"
+    version: "post-slice-7"
+    relevance: "Target of retrofit. Already imports collect_pending_relationship_proposals (L11), uses lifecycle_state via _aggregate_producer_acceptance_rates (L275-373), and calls entity rejection memory via suggest_person_merges(apply_rejection_memory=True) (L134). Renderer at L165-177 is the main change surface."
+  - path: "folio/links.py"
+    version: "post-slice-6a"
+    relevance: "Source of RelationshipProposalView (L25-33 of links.py) and collect_pending_relationship_proposals. Read-only dependency; this slice does not modify links.py."
+  - path: "folio/pipeline/enrich_data.py"
+    version: "post-slice-2"
+    relevance: "Source of RelationshipProposal dataclass (L68-127) and PROPOSAL_LIFECYCLE_STATES (L53-60). Read-only dependency."

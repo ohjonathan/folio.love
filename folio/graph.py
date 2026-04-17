@@ -8,7 +8,11 @@ from typing import Optional
 
 from .analysis_docs import compute_graph_input_fingerprint, resolve_input_entries
 from .config import FolioConfig
-from .links import canonical_relationship_targets, collect_pending_relationship_proposals
+from .links import (
+    SUPPORTED_RELATIONS as _SUPPORTED_RELATIONS,
+    canonical_relationship_targets,
+    collect_pending_relationship_proposals,
+)
 from .tracking import registry as registry_mod
 from .tracking.entities import EntityRegistry
 
@@ -18,6 +22,26 @@ _SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 _ACCEPTANCE_WARMUP_COUNT = 10
 _ACCEPTANCE_GATE_RATE = 0.50
 _STATUS_SORT_RANK = {"low-acceptance": 0, "ok": 1, "warmup": 2}
+
+# Shared proposal contract emitted keys (§5 of tier4_discovery_proposal_layer_spec
+# rev 5). 9 parent §5 rows → 11 emitted keys after ID-triad split. See
+# docs/specs/v0.7.1_folio_graph_generalized_proposals_spec.md §2.1.
+_SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS: tuple[str, ...] = (
+    "proposal_type",
+    "source_id",
+    "target_id",
+    "subject_id",
+    "evidence_bundle",
+    "reason_summary",
+    "trust_status",
+    "schema_gate_result",
+    "producer",
+    "input_fingerprint",
+    "lifecycle_state",
+)
+
+# _SUPPORTED_RELATIONS is sourced from folio/links.py (single source of truth;
+# re-exported via the imports block above to prevent drift per D.2 peer P-3).
 
 
 @dataclass
@@ -41,6 +65,45 @@ class ProducerAcceptanceRate:
     rate: Optional[float]
     status: str  # "ok" | "low-acceptance" | "warmup"
     warmup: bool
+
+
+def _derive_trust_status(view) -> str:
+    flagged = set(view.flagged_inputs or [])
+    return "flagged" if ({"source", "target"} & flagged) else "ok"
+
+
+def _compute_relationship_schema_gate(view, all_ids: set[str]) -> Optional[dict]:
+    if view.proposal.target_id not in all_ids:
+        return {"status": "fail", "rule": "target_registered"}
+    if view.proposal.relation not in _SUPPORTED_RELATIONS:
+        return {"status": "fail", "rule": "supported_relation"}
+    return None
+
+
+def _derive_recommended_action(trust_status: str, schema_gate_result: Optional[dict]) -> str:
+    if isinstance(schema_gate_result, dict):
+        rule = schema_gate_result.get("rule", "unknown")
+        if rule == "target_registered":
+            return (
+                "Target not in registry. Run `folio refresh` or `folio ingest` "
+                "upstream; if the target is intentionally missing, reject via "
+                "`folio links review`."
+            )
+        if rule == "supported_relation":
+            return (
+                "Proposal uses an unsupported relation kind. Reject via "
+                "`folio links review` or amend the producer."
+            )
+        return (
+            f"Schema gate failed (rule: {rule}). Review with "
+            "`folio links review`; upstream fix may be needed."
+        )
+    if trust_status == "flagged":
+        return (
+            "Review with `folio links review`; note: source or target "
+            "document has review_status: flagged."
+        )
+    return "Review with `folio links review` and confirm or reject it."
 
 
 def _matches_scope(path: str, scope: str) -> bool:
@@ -155,24 +218,45 @@ def graph_doctor(
     *,
     scope: Optional[str] = None,
     limit: Optional[int] = None,
+    include_flagged: bool = False,
 ) -> list[dict]:
     library_root = config.library_root.resolve()
     registry_data = registry_mod.load_registry(library_root / "registry.json")
     findings: list[dict] = []
     all_ids = set(registry_data.get("decks", {}).keys())
 
-    pending_views, _ = collect_pending_relationship_proposals(config, scope=scope)
+    pending_views, _ = collect_pending_relationship_proposals(
+        config, scope=scope, include_flagged=include_flagged
+    )
     for view in pending_views:
+        trust = _derive_trust_status(view)
+        gate = _compute_relationship_schema_gate(view, all_ids)
         findings.append(
             {
                 "code": "pending_relationship_proposal",
                 "severity": "medium",
-                "subject_id": view.proposal.proposal_id,
+                "subject_id": None,
                 "detail": (
                     f"{view.source_id} has pending {view.proposal.relation} -> "
                     f"{view.proposal.target_id} from {view.producer}"
                 ),
-                "recommended_action": "Review with `folio links review` and confirm or reject it.",
+                "recommended_action": _derive_recommended_action(trust, gate),
+                "proposal_id": view.proposal.proposal_id,
+                "proposal_type": "relationship",
+                "source_id": view.source_id,
+                "target_id": view.proposal.target_id,
+                "evidence_bundle": list(view.proposal.signals),
+                "reason_summary": view.proposal.rationale,
+                "trust_status": trust,
+                "schema_gate_result": gate,
+                "producer": view.producer,
+                # Legacy basis_fingerprint alias under the §5 key name. Does NOT
+                # satisfy the full parent §7 identity contract (normalized claim
+                # identity + relation kind + producer identity). Contract-
+                # complete derivation deferred to a future parent §7 revision;
+                # see spec v1.2 §2.2 §7 row for rationale.
+                "input_fingerprint": view.proposal.basis_fingerprint,
+                "lifecycle_state": view.proposal.lifecycle_state,
             }
         )
 
