@@ -278,9 +278,9 @@ gate_prerequisites:
       expect: "exit-0"
   - id: G-scope-3
     category: scope
-    description: "folio/cli.py changes bounded to the pending-finding stdout renderer (lines 2016-2021 + adjacent helper)."
+    description: "folio/cli.py changes bounded to the pending-finding stdout renderer + the --include-flagged option (40-line cap added/deleted)."
     verification:
-      command: "git diff --numstat main..HEAD -- folio/cli.py | awk '{ if ($1 > 25 || $2 > 25) exit 1 } END { print \"ok\" }'"
+      command: "git diff --numstat main..HEAD -- folio/cli.py | awk '{ if ($1 > 40 || $2 > 40) exit 1 } END { print \"ok\" }'"
       expect: "literal:ok"
   - id: G-verdict-1
     category: verdict-presence
