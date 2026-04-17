@@ -18,8 +18,9 @@ changes at minor versions are permitted but flagged explicitly.
 ### Operator notes
 
 - QUERY matching includes `relation`, so `folio search draws_from` will match every draws_from-typed proposal in scope (~1/6 of a typical pending queue). Use `--scope ENGAGEMENT` to narrow.
-- `--producer` is case-sensitive exact match. `folio search foo --producer Enrich` (mixed-case) prints a hint listing observed producer names in scope.
+- **`--producer` is case-sensitive exact match** — the only case-sensitive flag in the search command (QUERY itself is case-insensitive via casefold). `folio search foo --producer Enrich` (mixed-case) prints a hint listing the observed producer names among QUERY matches; the hint fires only when QUERY matched at least one view. When QUERY matches zero and `--producer` is set, the normal "No matches" breadcrumb fires instead (DCB-1 closure; prevents the misleading "no proposals in scope" message when the scope actually has proposals).
 - Missing `registry.json` yields zero results with a next-action breadcrumb (no error surface).
+- Invalid `--scope` exits 1 with a suggestion to run `folio graph status` or inspect `<library>/registry.json` for valid document IDs.
 
 ### Contract scaffolding
 

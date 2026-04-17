@@ -19,7 +19,6 @@ synthesize §3.3 versioning policy).
 
 from __future__ import annotations
 
-import json
 import unicodedata
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
@@ -194,6 +193,11 @@ def _view_to_finding(view) -> SearchFinding:
     Called only for matched views (post QUERY + --producer filter),
     honoring CSF-4 "once per matched view" invariant: the shared trust
     helper is invoked exactly once per emitted finding.
+
+    DCB-3 closure: defensive on ``None`` / missing ``signals`` and
+    ``flagged_inputs`` to match the matcher's tolerance. Malformed-but-
+    parseable frontmatter (e.g., ``signals=None``) no longer crashes
+    the conversion path.
     """
     return SearchFinding(
         proposal_id=view.proposal.proposal_id,
@@ -201,7 +205,7 @@ def _view_to_finding(view) -> SearchFinding:
         source_id=view.source_id,
         target_id=view.proposal.target_id,
         subject_id=None,
-        evidence_bundle=list(view.proposal.signals),
+        evidence_bundle=list(view.proposal.signals or []),
         reason_summary=view.proposal.rationale,
         trust_status=derive_trust_status(view),
         schema_gate_result=None,
@@ -209,7 +213,7 @@ def _view_to_finding(view) -> SearchFinding:
         input_fingerprint=view.proposal.basis_fingerprint,
         lifecycle_state=view.proposal.lifecycle_state,
         relation=view.proposal.relation,
-        flagged_inputs=list(view.flagged_inputs),
+        flagged_inputs=list(view.flagged_inputs or []),
     )
 
 
@@ -238,6 +242,11 @@ def search(
         raise ValueError(
             "QUERY must contain at least one non-whitespace character."
         )
+    # DCB-5 closure: function-level parity with the CLI IntRange(min=0).
+    # A direct caller that passes `limit=-1` otherwise silently uses
+    # Python slice semantics and emits all-but-last findings — footgun.
+    if limit is not None and limit < 0:
+        raise ValueError(f"limit must be non-negative, got {limit}")
     needle = _normalize_search_text(query)
     if needle is None:
         # Defensive guard — _normalize_search_text returns None for
@@ -263,9 +272,14 @@ def search(
     truncated = limit is not None and total_available > len(producer_matched)
     findings = [_view_to_finding(v) for v in producer_matched]
     producer_hint_names: Optional[list[str]] = None
-    if producer is not None and not findings:
-        # CSF-3: collect observed producer names from the QUERY-matched
-        # views (pre-producer-filter) so stdout can hint at case mismatch.
+    if producer is not None and not findings and query_matched:
+        # CSF-3 / DCB-1 closure: collect observed producer names from
+        # the QUERY-matched views (pre-producer-filter) so stdout can
+        # hint at case mismatch. Only populate when QUERY matched at
+        # least one view — if QUERY matched zero, the operator's first
+        # issue is the query, not the producer; fall through to the
+        # normal no-matches breadcrumb by leaving producer_hint_names
+        # as None.
         producer_hint_names = [v.producer for v in query_matched]
     return SearchReport(
         scope=_normalize_scope_arg(scope),
@@ -344,20 +358,22 @@ def _render_search_stdout(report: SearchReport) -> None:
     )
     if report.trust_override_active:
         click.echo("Trust override active: --include-flagged")
-    if not report.findings and producer_hint_names is not None:
-        if producer_hint_names:
-            observed = sorted(set(producer_hint_names))
-            click.echo(
-                "Hint: --producer matches exactly (case-sensitive). "
-                f"Observed producers in scope: {observed}"
-            )
-        else:
-            click.echo(
-                "Hint: no proposals in scope for any producer. "
-                "Run `folio ingest` / `folio enrich` to populate the queue."
-            )
+    # DCB-1 closure: producer_hint_names is None if QUERY matched zero
+    # views (regardless of --producer), so the hint only fires when
+    # QUERY did match and --producer filter killed all. The empty-list
+    # branch was removed — it fired on QUERY-miss and lied about scope.
+    if producer_hint_names:
+        observed = sorted(set(producer_hint_names))
+        click.echo(
+            "Hint: --producer matches exactly (case-sensitive). "
+            f"Observed producers among QUERY matches: {observed}"
+        )
+    # DCB-2 closure: gate the zero-match breadcrumb on the pre-limit
+    # total (report.total_available == 0), NOT on emitted findings.
+    # Otherwise --limit 0 prints "No matches for QUERY" alongside the
+    # truncation footer "(showing 0 of N)" — contradictory.
     elif (
-        not report.findings
+        report.total_available == 0
         and report.excluded_flagged_count == 0
         and producer_hint_names is None
     ):

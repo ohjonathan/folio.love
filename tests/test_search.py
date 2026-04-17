@@ -499,9 +499,11 @@ def _parse_search_module_ast() -> ast.Module:
 
 
 def test_no_forbidden_symbols_in_module():
+    """SRC-23 (DCB-4 hardened): full spec §2.3 forbidden-symbol coverage."""
     tree = _parse_search_module_ast()
 
-    forbidden_imports = {"re", "fnmatch"}
+    # (a) Forbidden module imports: stdlib + known third-party pattern engines.
+    forbidden_imports = {"re", "fnmatch", "regex", "re2", "importlib"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -513,17 +515,43 @@ def test_no_forbidden_symbols_in_module():
                 f"forbidden from-import: {node.module}"
             )
 
-    # re.* call detection
+    # (b) Forbidden call targets.
     forbidden_re_funcs = {"search", "match", "compile", "fullmatch", "findall"}
+    forbidden_path_attrs = {"match", "glob"}
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            value = node.func.value
-            if isinstance(value, ast.Name) and value.id == "re":
-                assert node.func.attr not in forbidden_re_funcs, (
-                    f"forbidden re.{node.func.attr}"
-                )
+        if isinstance(node, ast.Call):
+            func = node.func
+            # re.search(...), re.match(...), etc.
+            if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+                if func.value.id == "re":
+                    assert func.attr not in forbidden_re_funcs, (
+                        f"forbidden re.{func.attr}"
+                    )
+                if func.value.id == "regex":
+                    assert False, "forbidden regex.* call"
+            # importlib.import_module(...)
+            if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+                assert not (
+                    func.value.id == "importlib" and func.attr == "import_module"
+                ), "forbidden importlib.import_module"
+            # Builtin compile() — heuristic: bare Name('compile')
+            if isinstance(func, ast.Name) and func.id == "compile":
+                assert False, "forbidden builtin compile() call"
+            # subprocess.run(..., shell=True) — any call with shell=True kwarg
+            for kw in node.keywords:
+                if kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                    assert False, "forbidden subprocess call with shell=True"
 
-    # Substring grep fallback for stdlib-dangerous
+    # (c) Subscript access on globals()/locals() — ast.Subscript with
+    # value being a Call to Name('globals') or Name('locals').
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Call):
+            call_func = node.value.func
+            if isinstance(call_func, ast.Name) and call_func.id in {"globals", "locals"}:
+                assert False, f"forbidden {call_func.id}()[...] subscript"
+
+    # (d) Substring grep fallback for stdlib-dangerous symbols (catches
+    # string-literal smuggling that the AST walk might miss).
     src = (Path(__file__).parent.parent / "folio" / "search.py").read_text(
         encoding="utf-8"
     )
@@ -905,3 +933,53 @@ def test_normalize_search_text_normalizes_and_casefolds():
 
 def test_searchable_fields_constant_is_six_fields():
     assert len(SEARCHABLE_FIELDS) == 6
+
+
+# ---- SRC-42 (DCB-3: _view_to_finding tolerates None signals/flagged) -------
+
+
+def test_view_to_finding_tolerates_none_signals_and_flagged_inputs(tmp_path):
+    config = _make_config(tmp_path)
+    proposal = SimpleNamespace(
+        proposal_id="rprop-defensive",
+        relation="draws_from",
+        target_id="doc_y",
+        basis_fingerprint="sha:abc",
+        confidence="medium",
+        signals=None,  # <-- defensive-coercion target
+        rationale="match_me exactly",
+        lifecycle_state="queued",
+        producer="enrich",
+    )
+    view = SimpleNamespace(
+        source_id="src",
+        source_path=Path("/tmp/s.md"),
+        source_markdown_path="s.md",
+        producer="enrich",
+        proposal=proposal,
+        revived=False,
+        flagged_inputs=None,  # <-- defensive-coercion target
+    )
+    with patch(
+        "folio.search.collect_pending_relationship_proposals",
+        return_value=([view], SuppressionCounts()),
+    ):
+        report = search(config, query="match_me")
+    # MUST NOT crash — signals/flagged_inputs being None used to raise
+    # TypeError in list(); now coerced to empty list.
+    assert len(report.findings) == 1
+    assert report.findings[0].evidence_bundle == []
+    assert report.findings[0].flagged_inputs == []
+
+
+# ---- SRC-43 (DCB-5: public search(limit=-1) rejects) -----------------------
+
+
+def test_search_negative_limit_raises_value_error(tmp_path):
+    config = _make_config(tmp_path)
+    with patch(
+        "folio.search.collect_pending_relationship_proposals",
+        return_value=([], SuppressionCounts()),
+    ):
+        with pytest.raises(ValueError, match="limit must be non-negative"):
+            search(config, query="foo", limit=-1)

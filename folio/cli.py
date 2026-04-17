@@ -2067,7 +2067,9 @@ def search(ctx, query, scope, producer, include_flagged, json_output, limit):
         )
     except ScopeResolutionError as exc:
         click.echo(
-            f"Error: {exc} Try `folio status` to list valid scopes.",
+            f"Error: {exc} Try `folio graph status` for an engagement "
+            f"overview, or inspect `<library>/registry.json` for valid "
+            f"document IDs.",
             err=True,
         )
         ctx.exit(1)

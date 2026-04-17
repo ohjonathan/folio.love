@@ -553,12 +553,43 @@ def test_search_producer_zero_match_hint(tmp_path):
 # ---- SRC-CLI-31 (PROD-SF-003 scope-error suggests status) ------------------
 
 
+def test_search_producer_hint_suppressed_when_query_misses(tmp_path):
+    """SRC-CLI-32 (DCB-1 closure): --producer with zero QUERY matches must NOT
+    print the 'no proposals in scope for any producer' hint. Falls through
+    to the normal no-matches breadcrumb instead."""
+    config_path = _setup_clean_proposal_library(tmp_path)
+    # QUERY matches nothing in the library; --producer has a valid value.
+    r = _invoke(
+        config_path,
+        ["search", "zzz-matches-nothing", "--producer", "enrich"],
+    )
+    assert r.exit_code == 0
+    # The misleading empty-list branch MUST NOT fire.
+    assert "no proposals in scope for any producer" not in r.output
+    # The normal no-matches breadcrumb SHOULD fire.
+    assert "No matches for 'zzz-matches-nothing'" in r.output
+
+
+def test_search_limit_zero_no_false_no_matches_breadcrumb(tmp_path):
+    """SRC-CLI-33 (DCB-2 closure): --limit 0 with real matches in scope must
+    NOT print 'No matches for QUERY'. That was a contradiction with the
+    truncation footer '(showing 0 of N)'."""
+    config_path = _setup_clean_proposal_library(tmp_path)
+    # QUERY 'framework' matches the 1 proposal; --limit 0 truncates all.
+    r = _invoke(config_path, ["search", "framework", "--limit", "0"])
+    assert r.exit_code == 0
+    assert "No matches for 'framework'" not in r.output
+    # Optionally: truncation footer SHOULD fire when total_available > 0.
+    # (The footer check is in SRC-CLI-24 for positive limits; here we just
+    # confirm the breadcrumb doesn't fire.)
+
+
 def test_search_invalid_scope_error_suggests_status(tmp_path):
     config_path = _setup_clean_proposal_library(tmp_path)
     r = _invoke(
         config_path, ["search", "framework", "--scope", "nonexistent-scope"]
     )
     assert r.exit_code == 1
-    assert "Try `folio status`" in r.output or "folio status" in (
-        r.stderr if hasattr(r, "stderr") else r.output
-    )
+    # D.4 closure (PROD-SF-D2-003): `folio status` doesn't list scopes;
+    # error now points to `folio graph status` + registry.json inspection.
+    assert "folio graph status" in r.output or "registry.json" in r.output
