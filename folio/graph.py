@@ -15,6 +15,7 @@ from .links import (
 )
 from .tracking import registry as registry_mod
 from .tracking.entities import EntityRegistry
+from .tracking.trust import derive_trust_status
 
 _GRAPH_RELATION_FIELDS = ("depends_on", "draws_from", "impacts", "relates_to", "supersedes", "instantiates")
 _GRAPH_DOC_TYPES = frozenset({"analysis", "deliverable", "evidence", "interaction"})
@@ -65,11 +66,6 @@ class ProducerAcceptanceRate:
     rate: Optional[float]
     status: str  # "ok" | "low-acceptance" | "warmup"
     warmup: bool
-
-
-def _derive_trust_status(view) -> str:
-    flagged = set(view.flagged_inputs or [])
-    return "flagged" if ({"source", "target"} & flagged) else "ok"
 
 
 def _compute_relationship_schema_gate(view, all_ids: set[str]) -> Optional[dict]:
@@ -229,7 +225,7 @@ def graph_doctor(
         config, scope=scope, include_flagged=include_flagged
     )
     for view in pending_views:
-        trust = _derive_trust_status(view)
+        trust = derive_trust_status(view)
         gate = _compute_relationship_schema_gate(view, all_ids)
         findings.append(
             {

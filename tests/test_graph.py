@@ -14,7 +14,7 @@ from folio.graph import (
     _SUPPORTED_RELATIONS,
     _compute_relationship_schema_gate,
     _derive_recommended_action,
-    _derive_trust_status,
+    derive_trust_status,
 )
 from folio.pipeline.enrich_data import PROPOSAL_LIFECYCLE_STATES, RelationshipProposal
 
@@ -83,32 +83,20 @@ class TestSharedProposalContractEmittedKeys:
         assert set(_SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS) == expected
 
 
-class TestDeriveTrustStatus:
-    def test_empty_list_is_ok(self):
+class TestDeriveTrustStatusIntegration:
+    """Smoke test: graph.py re-exports the shared helper and returns the
+    correct posture end-to-end on a realistic view shape.
+
+    Comprehensive unit coverage lives in tests/test_trust.py (shared module).
+    """
+
+    def test_graph_view_ok(self):
         view = _make_view(flagged_inputs=[])
-        assert _derive_trust_status(view) == "ok"
+        assert derive_trust_status(view) == "ok"
 
-    def test_none_input_is_ok(self):
-        view = SimpleNamespace(flagged_inputs=None)
-        assert _derive_trust_status(view) == "ok"
-
-    def test_source_flagged_is_flagged(self):
+    def test_graph_view_flagged(self):
         view = _make_view(flagged_inputs=["source"])
-        assert _derive_trust_status(view) == "flagged"
-
-    def test_target_flagged_is_flagged(self):
-        view = _make_view(flagged_inputs=["target"])
-        assert _derive_trust_status(view) == "flagged"
-
-    def test_both_flagged_is_flagged(self):
-        view = _make_view(flagged_inputs=["source", "target"])
-        assert _derive_trust_status(view) == "flagged"
-
-    def test_unexpected_value_is_ok(self):
-        # ADV-SF5 edge case: unexpected list contents don't match
-        # {"source","target"}; result is "ok", not "flagged".
-        view = _make_view(flagged_inputs=["both"])
-        assert _derive_trust_status(view) == "ok"
+        assert derive_trust_status(view) == "flagged"
 
 
 class TestComputeRelationshipSchemaGate:

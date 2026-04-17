@@ -4,6 +4,72 @@ All notable changes to folio.love are documented here. The format loosely follow
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
 changes at minor versions are permitted but flagged explicitly.
 
+## [v0.8.0] — 2026-04-17
+
+### Added
+
+- **`folio synthesize [SCOPE]`** — new top-level command. Structural
+  synthesis report of §5 proposal-linked cross-references in a scope.
+  `SCOPE` resolves to a registered document ID, an engagement subtree
+  (matching `markdown_path` or `deck_dir`), or library-wide when `-`,
+  empty string, or omitted. Invalid scope exits with code 1 and a
+  stderr error message.
+  Read-only: no LLM calls, no registry mutations, no new doc artifacts.
+  This is the second sub-slice of Shipping Plan §15.6 (shared-consumer
+  expansion); sub-slice 1 (`folio graph` generalized proposals, v0.7.1)
+  shipped at PR #60. Narrative synthesis (LLM-backed) is planned for a
+  future version; v0.8.0 surfaces the shared proposal contract
+  structurally so operators can audit proposal flow across a scope.
+- **`folio synthesize --json`** — shared payload-level envelope with
+  `schema_version: "1.0"`, `command: "synthesize"`, `scope` (null for
+  library-wide), `trust_override_active`, `excluded_flagged_count`,
+  `findings`. Each finding carries all 11 parent §5 shared-contract
+  keys matching graph v0.7.1, plus `proposal_id` and `relation`.
+- **`folio synthesize --include-flagged`** — parent §11 trust-override
+  for flagged source/target inputs. Envelope `trust_override_active`
+  mirrors the flag; stdout shows "Trust override active" annotation.
+- **`folio synthesize --limit N`** — caps findings list (default
+  unbounded; must be ≥ 0 per `click.IntRange`). `excluded_flagged_count`
+  reflects full upstream exclusion, not the post-limit slice. When
+  `--limit` truncates, stdout prints a `(limited to N of M total)`
+  footer; the envelope's `findings_truncated` flag is deferred to
+  v0.8.1 with a `schema_version` bump.
+- Zero-findings + zero-exclusions case prints a `Next: check that the
+  scope resolves, or run \`folio ingest\` / \`folio enrich\`…`
+  diagnostic breadcrumb so operators can distinguish empty-scope from
+  producers-haven't-run (parent §11 rule 5 purposive honoring).
+- Each finding in the `--json` envelope carries `flagged_inputs`
+  (a list of `"source"` / `"target"`) so auditors running with
+  `--include-flagged` can tell which document triggered the flag.
+  Stdout renders this as `[flagged: source]`, `[flagged: target]`,
+  or `[flagged: source+target]`.
+- Shared trust-posture helper `folio.tracking.trust.derive_trust_status`
+  (promoted from `folio.graph._derive_trust_status` in Phase 0 commit
+  `831a741`). Both `folio graph doctor` and `folio synthesize` call
+  the same function object, proving shared-consumer uniformity per
+  parent §12.
+
+### Breaking
+
+- None. The shared envelope is NEW with synthesize — no existing
+  consumers to migrate.
+
+### Known gaps / planned follow-ups
+
+- **Graph envelope migration** — `folio graph doctor --json` still
+  emits the v0.7.1 shape without the `schema_version`/`command`
+  envelope wrap. Follow-up slice will migrate graph to the shared
+  envelope. Until then, graph is the divergent surface.
+- **LLM-backed narrative synthesis** — deferred to v0.8.1.
+- **`schema_gate_result` on synthesize findings** — v0.8.0 emits
+  literal `null` on every finding; synthesize is surface-time only
+  and does NOT compute gate rules (graph does, at its renderer).
+  Follow-up may lift gate computation into the shared collector.
+- **`input_fingerprint`** continues as legacy `basis_fingerprint`
+  alias pending a parallel parent-§7 revision workstream.
+- **`findings_truncated: bool`** envelope key (when `--limit` caps)
+  is reserved for v0.8.1 with a `schema_version` bump to `"1.1"`.
+
 ## [v0.7.1] — 2026-04-16
 
 ### Breaking

@@ -1951,6 +1951,51 @@ def links_reject_doc_cmd(ctx, doc_id: str, include_flagged: bool):
         )
 
 
+@cli.command()
+@click.argument("scope", required=False, default=None)
+@click.option("--json", "json_output", is_flag=True, default=False, help="Output as shared envelope JSON.")
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Include proposals whose source or target document has `review_status: flagged`.",
+)
+@click.option(
+    "--limit",
+    type=click.IntRange(min=0),
+    default=None,
+    help="Maximum number of findings to emit (default: unbounded).",
+)
+@click.pass_context
+def synthesize(ctx, scope, json_output, include_flagged, limit):
+    """List proposal-linked cross-references in a scope (v0.8.0 structural MVP).
+
+    v0.8.0 is read-only: no LLM calls, no registry mutations. Narrative
+    synthesis (LLM-backed) is planned for a future version; this version
+    surfaces the §5 shared proposal contract as a structural report.
+    See CHANGELOG v0.8.0 for the full contract.
+    """
+    from .synthesize import (
+        ScopeResolutionError,
+        _render_synthesis_stdout,
+        render_envelope,
+        synthesize as run_synthesize,
+    )
+
+    config = ctx.obj["config"]
+    try:
+        report = run_synthesize(
+            config, scope=scope, include_flagged=include_flagged, limit=limit
+        )
+    except ScopeResolutionError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+    if json_output:
+        click.echo(json.dumps(render_envelope(report), indent=2))
+        return
+    _render_synthesis_stdout(report)
+
+
 @cli.group()
 @click.pass_context
 def graph(ctx):
