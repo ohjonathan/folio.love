@@ -9,8 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 from folio.graph import (
     _SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS,
     _SUPPORTED_RELATIONS,

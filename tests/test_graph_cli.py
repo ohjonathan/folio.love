@@ -1080,3 +1080,17 @@ def test_graph_doctor_recommended_action_points_to_refresh_on_target_missing(tmp
     config_path, *_ = _build_minimal_pending_library(tmp_path, target_present=False)
     finding = _pending_finding(_doctor_json(config_path))
     assert "folio refresh" in finding["recommended_action"] or "folio ingest" in finding["recommended_action"]
+
+
+def test_graph_doctor_input_fingerprint_is_basis_fingerprint_alias(tmp_path):
+    """Per spec v1.2 §7 disposition: input_fingerprint is a legacy alias for
+    basis_fingerprint. This assertion is load-bearing for the §7 narrowing —
+    if contract-complete derivation ever ships (via parent-spec revision),
+    this test flags the aliasing change.
+
+    See spec §2.2 §7 row + `folio/graph.py` input_fingerprint inline comment.
+    """
+    basis = "sha256:alias-test-fingerprint"
+    config_path, *_ = _build_minimal_pending_library(tmp_path, basis_fingerprint=basis)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert finding["input_fingerprint"] == basis

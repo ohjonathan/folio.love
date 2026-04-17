@@ -106,10 +106,10 @@ scope:
     # fixture-based runtime assertions via a dedicated test that is ALSO
     # referenced by G-cardinality-1/2 gates.
     - name: "pending-proposal findings carry all 11 shared-contract emitted keys (runtime fixture)"
-      command: "python3 -m pytest tests/test_graph.py::test_graph_doctor_fixture_mandatory_contract_invariant -q"
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_fixture_mandatory_contract_invariant -q"
       expect: "exit-0"
     - name: "pending-proposal findings carry the new proposal_id key (runtime fixture)"
-      command: "python3 -m pytest tests/test_graph.py::test_graph_doctor_proposal_id_preserves_view_proposal_id -q"
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_proposal_id_preserves_view_proposal_id -q"
       expect: "exit-0"
     - name: "graph CLI surface unchanged (status + doctor only)"
       command: "python3 -c 'from folio.cli import cli; g = cli.commands[\"graph\"]; names = sorted(g.commands.keys()); assert names == [\"doctor\", \"status\"], names; print(1)'"
@@ -256,13 +256,13 @@ gate_prerequisites:
     category: cardinality
     description: "Pending-proposal findings carry all 11 shared-contract emitted keys (runtime fixture; replaces v1.0 substring gate per ADV-SF3)."
     verification:
-      command: "python3 -m pytest tests/test_graph.py::test_graph_doctor_fixture_mandatory_contract_invariant -q"
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_fixture_mandatory_contract_invariant -q"
       expect: "exit-0"
   - id: G-cardinality-2
     category: cardinality
     description: "Pending-proposal findings carry the new proposal_id key preserving view.proposal.proposal_id (runtime fixture; replaces v1.0 substring gate per ADV-SF3)."
     verification:
-      command: "python3 -m pytest tests/test_graph.py::test_graph_doctor_proposal_id_preserves_view_proposal_id -q"
+      command: "python3 -m pytest tests/test_graph_cli.py::test_graph_doctor_proposal_id_preserves_view_proposal_id -q"
       expect: "exit-0"
   - id: G-cardinality-3
     category: cardinality

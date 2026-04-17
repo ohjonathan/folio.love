@@ -1997,9 +1997,9 @@ def graph_doctor_cmd(
 ):
     """Emit actionable graph-health findings.
 
-    See CHANGELOG for v0.7.1 breaking change: pending-proposal findings now
-    carry the §5 shared-proposal-contract shape. Consumers reading `subject_id`
-    as proposal ID must switch to `proposal_id`.
+    v0.7.1 breaking change: in `--json` output, pending-proposal findings now
+    carry `proposal_id` (replacing `subject_id` for that use). See CHANGELOG
+    for full details.
     """
     from .graph import _aggregate_producer_acceptance_rates, graph_doctor
 

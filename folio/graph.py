@@ -8,7 +8,11 @@ from typing import Optional
 
 from .analysis_docs import compute_graph_input_fingerprint, resolve_input_entries
 from .config import FolioConfig
-from .links import canonical_relationship_targets, collect_pending_relationship_proposals
+from .links import (
+    SUPPORTED_RELATIONS as _SUPPORTED_RELATIONS,
+    canonical_relationship_targets,
+    collect_pending_relationship_proposals,
+)
 from .tracking import registry as registry_mod
 from .tracking.entities import EntityRegistry
 
@@ -36,9 +40,8 @@ _SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS: tuple[str, ...] = (
     "lifecycle_state",
 )
 
-# Mirrors folio/links.py:21. Duplicated here to avoid a retrofit-layer import
-# from links.py — this slice consumes the contract, does not modify links.
-_SUPPORTED_RELATIONS: frozenset[str] = frozenset({"supersedes", "impacts", "draws_from", "depends_on"})
+# _SUPPORTED_RELATIONS is sourced from folio/links.py (single source of truth;
+# re-exported via the imports block above to prevent drift per D.2 peer P-3).
 
 
 @dataclass
@@ -78,7 +81,7 @@ def _compute_relationship_schema_gate(view, all_ids: set[str]) -> Optional[dict]
 
 
 def _derive_recommended_action(trust_status: str, schema_gate_result: Optional[dict]) -> str:
-    if schema_gate_result is not None:
+    if isinstance(schema_gate_result, dict):
         rule = schema_gate_result.get("rule", "unknown")
         if rule == "target_registered":
             return (
@@ -247,6 +250,11 @@ def graph_doctor(
                 "trust_status": trust,
                 "schema_gate_result": gate,
                 "producer": view.producer,
+                # Legacy basis_fingerprint alias under the §5 key name. Does NOT
+                # satisfy the full parent §7 identity contract (normalized claim
+                # identity + relation kind + producer identity). Contract-
+                # complete derivation deferred to a future parent §7 revision;
+                # see spec v1.2 §2.2 §7 row for rationale.
                 "input_fingerprint": view.proposal.basis_fingerprint,
                 "lifecycle_state": view.proposal.lifecycle_state,
             }

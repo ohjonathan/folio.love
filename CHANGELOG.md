@@ -48,6 +48,13 @@ changes at minor versions are permitted but flagged explicitly.
 - Schema-gate `target_registered` rule checks registry deck-ID membership
   only; archived / deprecated / non-deck target validity is deferred to
   validation-track follow-up slices per parent §13.
+- Schema-gate `supported_relation` rule is **forward-compat today**: the
+  current producer path filters unsupported relations at
+  `folio/links.py:191` before `graph_doctor` sees them, so operators
+  won't encounter a `[schema-gate: supported_relation]` annotation in
+  v0.7.1. The rule is in place for future `proposal_type` producers that
+  emit via a different path (e.g., diagram-archetype proposals in
+  validation-track follow-ups).
 
 ## [v0.7.0] — 2026-04-16
 
