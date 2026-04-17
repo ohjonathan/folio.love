@@ -711,3 +711,122 @@ No new entries. MIN-2 (G-scope-4 file-existence guard `test -f folio/synthesize.
 | v1.3+ recs (cumulative) | T-10..T-15 | **T-16..T-22** | T-10..T-22 = 13 entries, of which 3 Must-ship, 10 Should-ship |
 
 The friction-class distribution is ROTATING across slices under v1.2.0 — different adopter slices hit different classes. Stable rate (4-5 per slice) with little class overlap between sibling slices suggests v1.3 mechanization should target the UNION of observed classes, not just the highest-recurrence ones.
+
+---
+
+## Slice 6b.3 addendum (folio-search-v0-9-0, 2026-04-17)
+
+Third and final sub-slice of Shipping Plan §15.6. Greenfield new CLI command (`folio search`) consuming the shared proposal contract (§5) established in sub-slice 1 + the shared payload-level envelope (schema_version 1.0) established in sub-slice 2. This slice exercises the **first minor-version bump** of the shared envelope (1.0 → 1.1 via `query` top-level key) and proves the shared-consumer pattern at **N=3** surfaces.
+
+### Axis 1 — Token-fill friction (no change)
+
+Zero entries. `pre_a` block omitted with header-comment justification (same pattern as sub-slices 6b.1 / 6b.2).
+
+### Axis 2 — Template gaps
+
+0 new entries. F-059 author-direct consolidation pattern invoked THREE times (B.3, D.3, D.6) per sub-slice 2 precedent; no new template gap surfaced.
+
+### Axis 3 — Multi-family dispatch friction
+
+**1 NEW entry, distinct from all prior slices:**
+
+- **F-064 (Medium)**: Subagent dispatch permission gate — `claude --dangerously-skip-permissions` for peer/product review dispatch was DENIED by the interactive session's permission mode. Sub-slice 2 used direct CLI `claude -p` with the flag; this slice's session environment intercepted the flag and blocked execution. Workaround: route peer + product dispatches through the integrated Agent subagent tool (`run_in_background: true`) — cleaner mechanically but creates per-role invocation asymmetry (codex/gemini via CLI, claude-sub via Agent). Distinct from F-055 (capability-matrix gap) and F-061 (gemini output semantics) because F-064 is about THE AUTHOR'S session mode, not the dispatched family's behavior.
+
+**F-054 / F-055 / F-060 / F-061 did NOT recur in this slice.** Codex (adversarial + D.5 verifier + D.6 final-approval), gemini (alignment + D.5 verifier), and claude-sub (peer + product + D.5 verifier) all participated without outage or AGENTS.md activation hangs (the skip-Ontos prompt prefix from sub-slice 2 was pre-emptively included in every codex dispatch). F-061 gemini file-write workaround (`tee` + python extract) worked reliably across 2 dispatches this slice.
+
+### Axis 4 — Verify-script accuracy
+
+No change. verify-d6-gate.sh PASSED 21/21 at D.6 (down from slice 6b.2's 24/24 — this slice declared fewer gate_prerequisites per category; not a regression). All scope + regression tests green (276 passed across 9-file focused suite).
+
+### Axis 5 — Manifest/schema ergonomics
+
+**1 NEW entry, previously deferred pattern now quantified:**
+
+- **F-065 (Low)**: G-scope-3 synthesize-tuned line-cap (50 lines added) is too tight for search's richer CLI surface. Search registration needed ~89 lines (QUERY required-positional + callback + --scope + --producer + --include-flagged + --json + --limit IntRange + docstring with v0.9.1 foreshadow). F-058 headroom mitigation was invoked mid-Phase-C; manifest G-scope-3 raised 50→100. Same underlying friction as F-058 (line-cap authoring timing) but with a concrete v0.9.0 data point: `synthesize+1 flag+1 callback+1 IntRange = ~2x cap`. Suggests either a two-tier cap schema (`tight_cap` / `rich_cap`) or moving line-cap authoring to D.1 (post-test-plan) as proposed in T-13.
+
+### Axis 6 — Concrete v1.3 recommendations (slice 6b.3 additions)
+
+| Tier | ID | Recommendation | Friction ref | Effort estimate |
+|------|----|----------------|--------------|-----------------|
+| **Should-ship** | T-23 | Adopter CLAUDE.md boilerplate: "After `git checkout -b <branch>`, verify `git branch --show-current` before the first commit. Framework template 01 Phase A pre-authoring check inserts this at scaffold time." | F-063 | Doc edit: ~30 min |
+| **Should-ship** | T-24 | `cli_capability_matrix` schema extension: `subagent_dispatch_mode: cli-flag \| agent-tool \| mcp-task`. Declares how the author-family dispatches its own sibling family for peer/product reviews. Interactive permission-gated sessions should declare `agent-tool` or `mcp-task`; autonomous sessions can use `cli-flag`. | F-064 | Schema + doc: ~2 hours |
+| **Must-ship** | T-25 | Peer-review template (template 03) Phase C addendum: "For every `forbidden_*` / `expected_*` / `allowed_*` collection defined in a test, grep the same test for at least one usage. Unused collections are a regression-prevention gap." Paired with verify-d6-gate.sh enhancement: a "defined-but-unused collection" scanner across `tests/test_<module>.py`. | F-066 | Template edit + script: ~2.5 hours |
+| **Should-ship** | T-26 | Manifest schema: move line-cap authoring to D.1 window OR introduce two-tier cap (`cli_registration_cap: tight \| rich`) with pre-declared thresholds. Current synthesize-tuned 50 is too tight for richer commands. | F-058 + F-065 | Schema + template: ~1.5 hours |
+
+### Delta retrospective (vs. slices 6b.1 + 6b.2)
+
+| Dimension | Slice 6b.1 (v0.7.1) | Slice 6b.2 (v0.8.0) | **Slice 6b.3 (v0.9.0)** |
+|-----------|---------------------|---------------------|-------------------------|
+| Class | Extension (retrofit) | Greenfield (new command) | Greenfield (new command, shared-envelope-consuming) |
+| manifest_version | 1.2.0 (first use) | 1.2.0 (second use) | 1.2.0 (third use) |
+| Spec versions | v1.0→v1.1→v1.2 (two cycles) | v1.0→v1.1 (one cycle) | v1.0→v1.1 (one cycle) |
+| B rounds | 2 + B.3 author-direct | 1 + B.3 author-direct | 1 + B.3 author-direct |
+| D rounds | 1 + D.3 author-direct + D.4 | 1 + D.3 author-direct + D.4 + D.6 author-direct | 1 + D.3 author-direct + D.4 + D.5 addendum + D.6 author-direct |
+| Blockers at B.1 R1 | 6 unique | 6 canonical (CB-1..6) | 4 canonical (CB-1..4) |
+| Blockers at D.2 R1 | 1 convergent | 2 canonical | 0 blockers / 5 canonical should-fix (DCB-1..5) |
+| **D.5 verifier findings** | 0 | 0 | **1 (DCB-4 test-completeness; closed via addendum)** |
+| Blockers preserved at ship | 0 | 0 | 0 |
+| Test delta | +41 | +52 | +75 |
+| D.6 gate | 15/15 | 24/24 | 21/21 |
+| Friction count | 5 (F-054..F-058) | 4 (F-059..F-062) | 4 (F-063..F-066) |
+| Convergence rate (B.1 + D.2) | 3 of 8 (37.5%) | 3 of 8 (37.5%) | 4 of 9 (44.4%) |
+
+**Critical delta answers:**
+
+1. **Does N=3 shared-consumer proof hold cleanly?** YES. Gemini B.1 + D.2 APPROVE (zero blockers, zero should-fix across both reviews — unprecedented in this adopter). The N=3 identity check `search.derive_trust_status is synthesize.derive_trust_status is graph.derive_trust_status is trust.derive_trust_status` passes runtime + class-level assertion. Shared-consumer pattern scales.
+2. **Does the shared-envelope minor bump (1.0 → 1.1) hold?** YES. Synthesize §3.3 versioning policy ("Producers MUST bump minor when adding a top-level key") is no longer theoretical — search exercised it via `query` additive. Consumer-side tolerate-unknown discipline holds (graph/synthesize JSON consumers see search's "1.1" without breakage).
+3. **Does F-051 surgical-fixes scale to a third sub-slice?** YES. B.3 + D.3 + D.5-addendum + D.6 all consolidated author-direct per F-059; no R2 board required. Five total applications across 6b.1 + 6b.2 + 6b.3 without a defect.
+4. **Does the 4-lens board's value stay in convergent rows?** YES, continued. 4 of 9 blockers in 6b.3 were 2+ lens convergent — highest rate yet (44%). DCB-1 was the first 3-lens convergence observed at D.2 (codex + peer + product caught the same producer-hint bug independently). 3-lens convergence is near-certain defect signal.
+5. **Does D.5 verify-p3 catch real gaps?** YES, first demonstrated in 6b.3. Codex D.5 FAIL on DCB-4 (forbidden_path_attrs defined-but-unused) was a legitimate regression-prevention gap that other verifiers + the D.4 fix-author missed. Validates the ≥3 non-author family discipline. This is the FIRST D.5 FAIL observed across all three slices.
+
+### F-063 / F-064 / F-065 / F-066 status
+
+- **F-063** (branch-state drift): adopter-config issue; one-time author oversight. Codify via T-23 boilerplate.
+- **F-064** (subagent permission gate): session-mode variability. Workaround (Agent-tool routing) is clean but needs framework codification (T-24).
+- **F-065** (CLI cap tightness): concrete data point for existing F-058 pattern. Feeds T-26.
+- **F-066** (D.5 completeness gap): NEW substantive friction class; test-infrastructure quality. Must-ship recommendation (T-25).
+
+### Cross-slice friction trend (updated through slice 6b.3 — SLICE 6B COMPLETE)
+
+| Class | Sl 6b.1 | Sl 6b.2 | **Sl 6b.3** | Cumulative |
+|-------|---------|---------|-------------|------------|
+| Multi-family dispatch | 2 (F-054, F-055) | 2 (F-060, F-061) | **1 (F-064)** | 5 |
+| Template gap | 1 (F-057) | 1 (F-059) | 0 | 2 |
+| Manifest/schema | 1 (F-058) | 0 | **1 (F-065)** | 2 |
+| Verify-script | 1 (F-056) | 0 | 0 | 1 |
+| Phase-C × spec-code drift | 0 | 1 (F-062) | 0 | 1 |
+| **Adopter × author × git state** | 0 | 0 | **1 (F-063) NEW** | 1 |
+| **D.5 verifier × test completeness** | 0 | 0 | **1 (F-066) NEW** | 1 |
+| v1.3+ recs (cumulative) | T-10..T-15 | T-16..T-22 | **T-23..T-26** | T-10..T-26 = **17 entries**, of which 4 Must-ship, 13 Should-ship |
+
+**Slice 6b total friction:** F-054..F-066 = 13 classes, 1 high severity (F-060 codex activation), 7 medium, 5 low. Steady rate of 4-5 classes per slice across three runs; class-distribution is ROTATING (each slice hits a slightly different mix); v1.2.0 policy strictness generates the friction rate, not the class pattern.
+
+**Framework recommendation:** v1.3 should prioritize the 4 Must-ship items (T-16 don't-bless-gap clause, T-19 skip-failing-activation boilerplate, T-25 unused-collection detector, and one new recommendation for a `D.5 re-verification window` after author-direct addendums close verifier-raised gaps). The 13 Should-ship items can land as opportunistic schema/template updates without blocking any v1.3 release.
+
+---
+
+## Slice 6b cumulative summary (slices 6b.1 + 6b.2 + 6b.3)
+
+§15.6 shared-consumer expansion is complete. Three full lifecycle runs at manifest v1.2.0, zero preserved blockers across all three, 13 friction classes surfaced and triaged, 17 v1.3 recommendations (T-10..T-26) accumulated.
+
+**Critical observations from the slice-6b super-cohort:**
+
+1. **Manifest v1.2.0 is adopter-stable.** Three slices ran to D.6 APPROVE-FOR-MERGE with no framework-side crashes, no schema failures, no verify-script false positives requiring escalation. The must-differ-provider invariant held every time, in every role (B.1/D.2/D.5/D.6 adversarial and final-approval all used codex while author is claude).
+
+2. **The 4-lens board's signal is in convergent rows, reliably.** 10 of 25 canonical blockers+DCBs across slice 6b were 2+ lens convergent (40%). The single 3-lens convergence observed (DCB-1 in 6b.3) was the most operator-observable defect in the entire slice-6b cohort. v1.3 manifest schema should formally recognize convergent-row priority (e.g., auto-escalate 3-lens convergence to "preserved-at-ship" candidate).
+
+3. **F-051 surgical-fixes fast-path is production-ready.** Eight applications across the cohort (B.3 ×3, D.3 ×3, D.6 ×2, plus D.5-addendum once in 6b.3), zero regression. v1.3 should codify this in template 06 with the author-direct-with-evidence-citation variant (T-17).
+
+4. **Shared-consumer invariant scales to N=3 cleanly.** The identity-check pattern (`search.derive_trust_status is synthesize.derive_trust_status is graph.derive_trust_status`) is cheap to author and catches aliasing/shim defects that function-level tests miss. Future slices that add consumer N=4+ can reuse the pattern unchanged.
+
+5. **Shared-envelope minor bump discipline works.** Synthesize §3.3's "Producers MUST bump minor when adding a top-level key" rule was exercised in production by search's `query` additive. Zero reviewer friction on the bump. Pattern is durable for future envelope additives (`total_scanned`, `producer_acceptance_rates`, etc.).
+
+6. **Author-direct consolidation + external 4-lens dispatch is the observed-optimal pattern.** All three sub-slices converged on: external 4-lens at B.1 + D.2 (highest signal), author-direct consolidation at B.3 + D.3 + D.6 (wall-clock + no-new-signal). v1.3 codification via T-17 + T-22 makes this explicit rather than a recurring F-059 friction.
+
+**Remaining v1.2.0 adopter risks NOT surfaced in slice 6b:**
+
+- No slice exercised B.2 (re-review after B.3 blocker preservation). All three closed blockers via v1.1 surgical revision.
+- No slice exercised D.5 verifier disagreement (3 verifiers split 2-PASS / 1-FAIL happened in 6b.3 but resolved via addendum, not via extended verification round).
+- No slice exercised circuit-breaker preserved-blocker-ID carry-forward. Candidate for a future stress test.
+
+§15.6 closes. Slice 6b is done. Next: either `render_envelope` hoist slice (N=3 duplication cleanup), graph envelope migration to "1.0+", or the backlog of deferred items (§10 of v0.9.0 spec) when operator priorities surface.
