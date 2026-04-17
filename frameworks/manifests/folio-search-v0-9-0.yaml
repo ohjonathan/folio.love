@@ -139,10 +139,14 @@ scope:
     - "pickle.loads"
     - "eval("
   cardinality_assertions:
-    # F-056 mitigation: every command below dry-runs to exit-0 TODAY.
-    # At manifest-freeze time (Phase A), assertions verify invariants
-    # that hold pre-implementation. Phase C will ADD tests that make the
-    # post-implementation assertions meaningful (G-cardinality-1/2/3/4).
+    # CB-1 (B.3 canonical verdict — codex ADV-B1-001 closure, v1.1):
+    # These commands are POST-IMPLEMENTATION runtime identity checks.
+    # Pre-Phase-C (before folio/search.py exists) they correctly FAIL;
+    # that failure is expected behavior, not a manifest defect. They
+    # RUN at D.6 gate time (mirrored into gate_prerequisites as
+    # G-cardinality-1..4 for gate enforcement); their presence here is
+    # declarative — documenting the invariants the slice commits to.
+    # F-056 mitigation (runtime enforcement) lives in gate_prerequisites.
     # F-058 mitigation: line-caps (G-scope-3) authored conservatively; can
     # expand at D.1 if headroom is needed.
     - name: "search command is registered on the Click CLI (runtime introspection)"
