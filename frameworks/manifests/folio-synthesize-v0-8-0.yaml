@@ -23,6 +23,20 @@
 # scope-lock below can forbid folio/graph.py and folio/tracking/trust.py
 # cleanly — the helper promotion is NOT part of the synthesize scope.
 #
+# Phase-0 audit note (SF-C11 closure — canonical verdict B.3):
+# At commit 831a741 (Phase 0), the following files were changed relative to
+# parent main (3d413a9):
+#   A  folio/tracking/trust.py    (+18 lines, new module)
+#   M  folio/graph.py             (+2/-6 lines, import + callsite change)
+#   A  tests/test_trust.py        (+62 lines, new test module)
+#   M  tests/test_graph.py        (+14/-24 lines, test migration)
+# Total Phase-0 diff: 4 files, +96/-30.
+# All diffs are within a single "promote private helper to shared module"
+# discipline; no forbidden-path edits were smuggled into the Phase-0 floor.
+# G-scope-1 baselines at 831a741..HEAD so synthesize scope starts AFTER the
+# helper promotion — the pre-reviewed floor is auditable via `git show
+# 831a741` and this manifest comment.
+#
 # Codex assigned to adversarial role per v1.2.0 must-differ-provider
 # invariant (author family = claude → adversarial family ≠ claude*).
 #
@@ -131,9 +145,9 @@ scope:
     - name: "shared-consumer invariant (v0.7.1 carry-forward): folio.graph uses the shared helper"
       command: "python3 -c 'from folio import graph as g; from folio.tracking import trust as t; assert g.derive_trust_status is t.derive_trust_status; print(1)'"
       expect: "eq:1"
-    - name: "no LLM imports in folio/synthesize.py (v0.8.0 structural-only MVP)"
-      command: "grep -E 'from folio.llm|import folio.llm|from openai|import openai|from anthropic|import anthropic' folio/synthesize.py"
-      expect: "exit-nonzero"
+    - name: "no direct LLM imports in folio/synthesize.py (v0.8.0 structural-only MVP; MIN-2 file-existence-guarded)"
+      command: "test -f folio/synthesize.py && ! grep -E 'from folio.llm|import folio.llm|from openai|import openai|from anthropic|import anthropic' folio/synthesize.py"
+      expect: "exit-0"
 
 artifacts:
   spec:              "docs/specs/v0.8.0_folio_synthesize_spec.md"
@@ -285,10 +299,10 @@ gate_prerequisites:
       expect: "literal:ok"
   - id: G-scope-4
     category: scope
-    description: "No LLM imports in folio/synthesize.py (structural-only MVP invariant — §2.5 non-goal)."
+    description: "No direct LLM imports in folio/synthesize.py (MVP invariant — §2.5 non-goal). MIN-2: file-existence guard prevents false pass when the module is absent."
     verification:
-      command: "grep -E 'from folio.llm|import folio.llm|from openai|import openai|from anthropic|import anthropic' folio/synthesize.py"
-      expect: "exit-nonzero"
+      command: "test -f folio/synthesize.py && ! grep -E 'from folio.llm|import folio.llm|from openai|import openai|from anthropic|import anthropic' folio/synthesize.py"
+      expect: "exit-0"
   - id: G-cardinality-1
     category: cardinality
     description: "synthesize command registered on the Click CLI."
@@ -315,9 +329,15 @@ gate_prerequisites:
       expect: "exit-0"
   - id: G-test-3
     category: test
-    description: "Envelope shape invariants (E1-E6) pass — synthesize JSON payload shape locked."
+    description: "Envelope shape invariants (E1-E7 per v1.1 §3.3) pass — producer-side exact key assertion + consumer-side tolerate-unknown discipline."
     verification:
       command: "python3 -m pytest tests/test_cli_synthesize.py -k 'envelope' -q"
+      expect: "exit-0"
+  - id: G-test-4
+    category: test
+    description: "CB-1 / CB-2 closure regression tests pass (SuppressionCounts field routing, 11 shared-contract keys, schema_gate_result null, input_fingerprint legacy alias, per-view helper call, transitive LLM import guard, read-only invariant)."
+    verification:
+      command: "python3 -m pytest tests/test_synthesize.py -k 'excluded_count_ignores_rejection_memory or all_11_shared_contract_keys or schema_gate_result_is_none or input_fingerprint_matches or called_once_per_view or no_transitive_llm or no_registry_or_doc_mutations' -q"
       expect: "exit-0"
   - id: G-verdict-1
     category: verdict-presence
