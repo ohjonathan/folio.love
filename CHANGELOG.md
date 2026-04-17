@@ -4,6 +4,28 @@ All notable changes to folio.love are documented here. The format loosely follow
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
 changes at minor versions are permitted but flagged explicitly.
 
+## [v0.9.0] — 2026-04-17
+
+### Added
+
+- **`folio search QUERY [--scope SCOPE] [--producer P] [--include-flagged] [--json] [--limit N]`** — new top-level command. Read-only search lens over the pending relationship-proposal queue (§5 shared contract). QUERY is matched case-insensitively against six text fields on each pending proposal: `source_id`, `target_id`, `relation`, `producer`, `reason_summary`, and any element of `evidence_bundle`. Matching uses `unicodedata.normalize("NFC", s).casefold()` + substring — no regex, no ranking, no semantic search. QUERY is required and must contain at least one non-whitespace character (exit 2 otherwise). `--scope` resolves to a registered document ID, engagement subtree, or library-wide when `-` or omitted. `--producer` applies exact case-sensitive match. Regex, ranking, semantic/embedding search, `--relation` / `--lifecycle` filters, and multi-lifecycle scope are deferred to v0.9.1+. Third and final sub-slice of Shipping Plan §15.6 (shared-consumer expansion); sub-slices 1 (`folio graph` v0.7.1, PR #60) and 2 (`folio synthesize` v0.8.0, PR #65) preceded this one.
+- **Shared-consumer invariant at N=3.** `folio.search`, `folio.graph`, and `folio.synthesize` all call `folio.tracking.trust.derive_trust_status` (identity-checked in `tests/test_trust.py::TestSharedConsumerInvariant`). Proves the shared-consumer pattern holds at three surfaces — closes §15.6 and completes Slice 6b.
+
+### Changed
+
+- **Shared payload-level `--json` envelope: first minor-version bump from `schema_version: "1.0"` to `schema_version: "1.1"`** via the addition of a `query` top-level key. This exercises the versioning policy from v0.8.0 synthesize §3.3 ("Producers MUST bump minor when adding a top-level key; consumers MUST tolerate unknown keys at the same major version") in production for the first time. `folio synthesize --json` remains at `schema_version: "1.0"` — envelope stays 6 top-level keys until synthesize adds a top-level key of its own. `folio graph doctor --json` remains at its pre-envelope state; migration to the shared envelope is a follow-up slice.
+
+### Operator notes
+
+- QUERY matching includes `relation`, so `folio search draws_from` will match every draws_from-typed proposal in scope (~1/6 of a typical pending queue). Use `--scope ENGAGEMENT` to narrow.
+- `--producer` is case-sensitive exact match. `folio search foo --producer Enrich` (mixed-case) prints a hint listing observed producer names in scope.
+- Missing `registry.json` yields zero results with a next-action breadcrumb (no error surface).
+
+### Contract scaffolding
+
+- QUERY normalization helper `_normalize_search_text(value) -> Optional[str]` in `folio.search` handles non-string/None/empty/whitespace gracefully; applies NFC + casefold to strings. Used for both QUERY and field-value normalization. Contract is total — no crash on malformed frontmatter.
+- Envelope `--json` top-level key set at v0.9.0: `{schema_version, command, scope, query, trust_override_active, excluded_flagged_count, findings}`. Finding shape unchanged from synthesize v0.8.0 (11 §5 shared-contract keys + `proposal_id` + `relation` + `flagged_inputs`).
+
 ## [v0.8.0] — 2026-04-17
 
 ### Added
