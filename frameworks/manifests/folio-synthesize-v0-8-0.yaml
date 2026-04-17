@@ -1,0 +1,386 @@
+# Deliverable manifest: folio-synthesize-v0-8-0
+#
+# Greenfield deliverable (Shipping Plan §15.6 slice 6b sub-slice 2 of 3):
+# introduce `folio synthesize` — a new CLI command that consumes the shared
+# proposal contract from docs/specs/tier4_discovery_proposal_layer_spec.md §5
+# from the clean-slate side. Second of three sub-deliverables; sub-slice 1
+# (folio-graph-generalized-proposals-v0-7-1) shipped at PR #60 / merge 3d413a9
+# on 2026-04-16 and proved the shared-contract retrofit pattern. Sub-slice 3
+# (folio-search-v0-9-0) follows in a later session.
+#
+# Pre-A INHERITED from tier4_discovery_proposal_layer_spec.md §5 (Proposal
+# Object Contract), §11 (Trust-Gated Surfacing — parent line 317 names
+# synthesize explicitly as requiring `--include-flagged`), §12 (Shared
+# Consumers), §15.6 (Shared-consumer expansion), and §15.7 (narrow-don't-
+# reinterpret). Phase A narrows those §§ into the implementation spec at
+# docs/specs/v0.8.0_folio_synthesize_spec.md. F-049 compliance: cite sections
+# by number and name, not paraphrase.
+#
+# Phase 0 carry-forward closed at commit 831a741 (2026-04-16, pre-manifest):
+# _derive_trust_status promoted from folio/graph.py to
+# folio/tracking/trust.py as public derive_trust_status. Both consumers
+# (graph, synthesize) cite the shared module. This sequencing ensures the
+# scope-lock below can forbid folio/graph.py and folio/tracking/trust.py
+# cleanly — the helper promotion is NOT part of the synthesize scope.
+#
+# Codex assigned to adversarial role per v1.2.0 must-differ-provider
+# invariant (author family = claude → adversarial family ≠ claude*).
+#
+# Adopter-only contract in effect: no bundle edits. Bundle at
+# frameworks/llm-dev-v1/ remains byte-identical to johnny-os@e40b5c3
+# (v1.2.0).
+
+manifest_version: "1.2.0"
+id: folio-synthesize-v0-8-0
+slug: folio-synthesize
+summary: "Greenfield `folio synthesize` command: a read-only structural synthesis report that consumes the §5 shared proposal contract, uses the shared `folio.tracking.trust.derive_trust_status` helper (proving the shared-consumer pattern on a new surface), honors §11 trust-gating with `--include-flagged`, and emits the shared payload-level `--json` envelope (`schema_version`, `command`) that future search and graph migration will adopt. Structural-only MVP — no LLM calls, no registry mutations; LLM-backed narrative synthesis deferred to v0.8.1. Second of three Shipping Plan §15.6 sub-slices."
+
+user_facing: true
+
+# Pre-A inheritance note (v1.2.0 schema strictness):
+# pre_a.entry {proposal|triage|validation} declares a NEW pre-A artifact.
+# This slice inherits pre-A from the ratified parent spec
+# docs/specs/tier4_discovery_proposal_layer_spec.md rev 5 — §§ 5, 11, 12,
+# 15.6, 15.7. Phase A narrows those §§ per §15.7. The pre_a block is
+# omitted (optional under schema) to avoid misclassifying inherited
+# ratification as a new proposal/triage/validation entry point.
+# F-049 compliance: §§ named not paraphrased.
+
+owners:
+  - "Jonathan Oh (ohjonathan)"
+
+scope:
+  allowed_paths:
+    # Greenfield module
+    - folio/synthesize.py
+    # CLI registration (narrow addition — see G-scope-3 line-cap)
+    - folio/cli.py
+    # Tests
+    - tests/test_synthesize.py
+    - tests/test_cli_synthesize.py
+    - tests/test_trust.py
+    # Version + changelog
+    - pyproject.toml
+    - CHANGELOG.md
+    # Spec + manifest
+    - docs/specs/v0.8.0_folio_synthesize_spec.md
+    - frameworks/manifests/folio-synthesize-v0-8-0.yaml
+    # Validation artifacts (per-phase)
+    - docs/validation/v0.8.0_spec_peer_claude-sub.md
+    - docs/validation/v0.8.0_spec_alignment_gemini.md
+    - docs/validation/v0.8.0_spec_adversarial_codex.md
+    - docs/validation/v0.8.0_spec_product_claude-sub.md
+    - docs/validation/v0.8.0_spec_canonical_verdict.md
+    - docs/validation/v0.8.0_code_peer_claude-sub.md
+    - docs/validation/v0.8.0_code_alignment_gemini.md
+    - docs/validation/v0.8.0_code_adversarial_codex.md
+    - docs/validation/v0.8.0_code_product_claude-sub.md
+    - docs/validation/v0.8.0_code_canonical_verdict.md
+    - docs/validation/v0.8.0_d4_fix_summary.md
+    - docs/validation/v0.8.0_d5_verification_gemini.md
+    - docs/validation/v0.8.0_d5_verification_codex.md
+    - docs/validation/v0.8.0_d5_verification_claude-sub.md
+    - docs/validation/v0.8.0_d6_final_approval.md
+    # Retro + supplement (Phase E)
+    - docs/retros/llm-dev-v1-adoption.md
+    - frameworks/manifests/framework-learnings-v1.1-adoption.md
+  forbidden_paths:
+    # Phase-0 helper landed at 831a741; no v0.8.0 re-edit
+    - folio/graph.py
+    - folio/tracking/trust.py
+    # Not in scope for greenfield synthesize
+    - folio/digest.py
+    - folio/enrich.py
+    - folio/links.py
+    - folio/provenance.py
+    - folio/tracking/entities.py
+    - folio/tracking/registry.py
+    - folio/tracking/sources.py
+    - folio/tracking/versions.py
+    - folio/pipeline/
+    # Parent design specs (read-only references per §15.7)
+    - docs/specs/tier4_discovery_proposal_layer_spec.md
+    - docs/specs/tier4_digest_design_spec.md
+    # Adopter-only contract
+    - frameworks/llm-dev-v1/
+    - docs/product/
+    - docs/architecture/
+    - ontos/
+    - .github/
+    - Ontos_Context_Map.md
+    - AGENTS.md
+  forbidden_symbols:
+    - "pickle.loads"
+    - "eval("
+  cardinality_assertions:
+    # F-056 mitigation: every command below dry-runs to exit-0 TODAY.
+    # At manifest-freeze time (Phase A), assertions verify invariants
+    # that hold pre-implementation. Phase C will ADD tests that make the
+    # post-implementation assertions meaningful (G-cardinality-1/2/3).
+    # F-058 mitigation: line-caps (G-scope-3) authored AFTER the test
+    # plan is frozen (at D.1 if needed; initial cap set conservatively).
+    - name: "synthesize command is registered on the Click CLI (runtime introspection)"
+      command: "python3 -c 'from folio.cli import cli; assert \"synthesize\" in cli.commands, sorted(cli.commands.keys()); print(1)'"
+      expect: "eq:1"
+    - name: "shared envelope schema_version constant exported by folio.synthesize"
+      command: "python3 -c 'from folio.synthesize import SCHEMA_VERSION; assert SCHEMA_VERSION == \"1.0\", SCHEMA_VERSION; print(1)'"
+      expect: "eq:1"
+    - name: "shared-consumer invariant: folio.synthesize uses folio.tracking.trust.derive_trust_status (identity check)"
+      command: "python3 -c 'from folio import synthesize as s; from folio.tracking import trust as t; assert s.derive_trust_status is t.derive_trust_status; print(1)'"
+      expect: "eq:1"
+    - name: "shared-consumer invariant (v0.7.1 carry-forward): folio.graph uses the shared helper"
+      command: "python3 -c 'from folio import graph as g; from folio.tracking import trust as t; assert g.derive_trust_status is t.derive_trust_status; print(1)'"
+      expect: "eq:1"
+    - name: "no LLM imports in folio/synthesize.py (v0.8.0 structural-only MVP)"
+      command: "grep -E 'from folio.llm|import folio.llm|from openai|import openai|from anthropic|import anthropic' folio/synthesize.py"
+      expect: "exit-nonzero"
+
+artifacts:
+  spec:              "docs/specs/v0.8.0_folio_synthesize_spec.md"
+  family_verdict:    "docs/validation/v0.8.0_<phase>_<role>_<family>.md"
+  canonical_verdict: "docs/validation/v0.8.0_<phase>_canonical_verdict.md"
+  product_verdict:   "docs/validation/v0.8.0_<phase>_product_<family>.md"
+  fix_summary:       "docs/validation/v0.8.0_d4_fix_summary.md"
+  verification:      "docs/validation/v0.8.0_d5_verification_<family>.md"
+  final_approval:    "docs/validation/v0.8.0_d6_final_approval.md"
+  retro:             "docs/retros/llm-dev-v1-adoption.md"
+
+# Model assignments — mirror folio-graph-generalized-proposals-v0-7-1
+# structure. v1.2.0 invariant: adversarial family must NOT share provider
+# with author (claude ≠ codex — OK). Dispatch-outage fallback per F-054/
+# F-055: if gemini or codex is unreachable at 1h retry horizon, halt ≤24h;
+# >24h escalate to 3-lens + supplementary round. codex-as-gemini swap and
+# codex-as-alignment swap are pre-authorized precedents.
+model_assignments:
+  - phase: "A"
+    assignments:
+      claude: spec-author
+  - phase: "B.1"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.1"
+    assignments:
+      claude-sub: product
+  - phase: "B.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.2"
+    assignments:
+      claude-sub: product
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude: implementation-author
+  - phase: "D.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "D.2"
+    assignments:
+      claude-sub: product
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude: fix-author
+  # v1.2.0 review-phase invariant: D.5 requires ≥3 non-author engineering
+  # families (verify-p3). Mirrors slice 7 v1.2.0 treatment.
+  - phase: "D.5"
+    assignments:
+      gemini:     verifier
+      codex:      verifier
+      claude-sub: verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      claude: retro
+
+cli_capability_matrix:
+  claude:      { shell: true, git: true,  test_runner: true,  doc_index: true  }
+  claude-sub:  { shell: true, git: true,  test_runner: true,  doc_index: true  }
+  codex:       { shell: true, git: true,  test_runner: true,  doc_index: false }
+  gemini:      { shell: true, git: false, test_runner: false, doc_index: false }
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "folio imports"
+        command: "python3 -c 'import folio'"
+        expect: "exit-0"
+      - name: "synthesize module imports"
+        command: "python3 -c 'import folio.synthesize'"
+        expect: "exit-0"
+      - name: "synthesize + scope-relevant test suites"
+        command: "python3 -m pytest tests/test_synthesize.py tests/test_cli_synthesize.py tests/test_trust.py tests/test_graph.py tests/test_graph_cli.py -q"
+        expect: "exit-0"
+      - name: "lint clean on scope paths"
+        command: "python3 -m ruff check folio/synthesize.py"
+        expect: "exit-0"
+      - name: "folio synthesize --help works (smoke)"
+        command: "python3 -m folio synthesize --help"
+        expect: "exit-0"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards:
+  - name: "Sub-slice 1 graph tests (shared-contract retrofit)"
+    command: "python3 -m pytest tests/test_graph_cli.py tests/test_graph.py -q"
+    owns_deliverable_id: "folio-graph-generalized-proposals-v0-7-1"
+  - name: "Slice 7 digest tests"
+    command: "python3 -m pytest tests/test_digest.py tests/test_cli_digest.py -q"
+    owns_deliverable_id: "folio-digest-v0-7-0"
+  - name: "Slice 6a entity rejection memory tests"
+    command: "python3 -m pytest tests/test_entities.py tests/test_cli_entities.py -q"
+    owns_deliverable_id: "entity-merge-rejection-memory-v0-6-5"
+  - name: "Slice 4 trust-gated tests"
+    command: "python3 -m pytest tests/test_links_cli.py tests/test_graph_cli.py -q"
+    owns_deliverable_id: "trust-gated-surfacing-v0-6-4"
+  - name: "Phase 0 helper-promotion tests"
+    command: "python3 -m pytest tests/test_trust.py -q"
+    owns_deliverable_id: "folio-synthesize-v0-8-0"
+
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full scope-relevant test suites pass (synthesize + trust + graph + digest regression guards)."
+    verification:
+      command: "python3 -m pytest tests/test_synthesize.py tests/test_cli_synthesize.py tests/test_trust.py tests/test_graph.py tests/test_graph_cli.py tests/test_digest.py tests/test_cli_digest.py -q"
+      expect: "exit-0"
+  - id: G-test-2
+    category: test
+    description: "Synthesize-specific tests pass (unit + CLI integration)."
+    verification:
+      command: "python3 -m pytest tests/test_synthesize.py tests/test_cli_synthesize.py -q"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "No changes to forbidden paths (baseline: Phase 0 commit 831a741; Phase 0 helper-promotion changes are the scope-lock floor, not in-slice edits)."
+    verification:
+      command: "git diff --name-only 831a741..HEAD | grep -E '^(folio/graph\\.py|folio/tracking/trust\\.py|folio/digest\\.py|folio/enrich\\.py|folio/links\\.py|folio/provenance\\.py|folio/tracking/entities\\.py|folio/tracking/registry\\.py|folio/tracking/sources\\.py|folio/tracking/versions\\.py|folio/pipeline/|docs/specs/tier4_|docs/product/|docs/architecture/|frameworks/llm-dev-v1/|AGENTS\\.md|Ontos_Context_Map\\.md)'"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "Forbidden symbols absent from scope-lock paths."
+    verification:
+      command: "grep -rE 'pickle\\.loads|eval\\(' folio/synthesize.py"
+      expect: "exit-nonzero"
+  - id: G-scope-3
+    category: scope
+    description: "folio/cli.py changes bounded to the synthesize command registration (50-line cap on added+removed; baseline 831a741 per G-scope-1 discipline; F-058 headroom mitigation applied)."
+    verification:
+      command: "git diff --numstat 831a741..HEAD -- folio/cli.py | awk '{ if ($1 > 50 || $2 > 50) exit 1 } END { print \"ok\" }'"
+      expect: "literal:ok"
+  - id: G-scope-4
+    category: scope
+    description: "No LLM imports in folio/synthesize.py (structural-only MVP invariant — §2.5 non-goal)."
+    verification:
+      command: "grep -E 'from folio.llm|import folio.llm|from openai|import openai|from anthropic|import anthropic' folio/synthesize.py"
+      expect: "exit-nonzero"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "synthesize command registered on the Click CLI."
+    verification:
+      command: "python3 -c 'from folio.cli import cli; assert \"synthesize\" in cli.commands, sorted(cli.commands.keys()); print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-2
+    category: cardinality
+    description: "Shared envelope schema_version constant exported."
+    verification:
+      command: "python3 -c 'from folio.synthesize import SCHEMA_VERSION; assert SCHEMA_VERSION == \"1.0\", SCHEMA_VERSION; print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-3
+    category: cardinality
+    description: "Shared-consumer invariant: folio.synthesize and folio.graph both use folio.tracking.trust.derive_trust_status (identity check)."
+    verification:
+      command: "python3 -c 'from folio import synthesize as s, graph as g; from folio.tracking import trust as t; assert s.derive_trust_status is t.derive_trust_status; assert g.derive_trust_status is t.derive_trust_status; print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-4
+    category: cardinality
+    description: "Shared-consumer invariant unit test passes (class-level test in tests/test_trust.py)."
+    verification:
+      command: "python3 -m pytest tests/test_trust.py::TestSharedConsumerInvariant -q"
+      expect: "exit-0"
+  - id: G-test-3
+    category: test
+    description: "Envelope shape invariants (E1-E6) pass — synthesize JSON payload shape locked."
+    verification:
+      command: "python3 -m pytest tests/test_cli_synthesize.py -k 'envelope' -q"
+      expect: "exit-0"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "B.3 canonical spec verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.8.0_spec_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "D.3 canonical code verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.8.0_code_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "Product verdicts (B.1 + D.2) exist."
+    verification:
+      command: "ls docs/validation/v0.8.0_{spec,code}_product_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:2"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "D.5 verification exists across the three non-author engineering families (codex, gemini, claude-sub)."
+    verification:
+      command: "ls docs/validation/v0.8.0_d5_verification_{codex,gemini,claude-sub}.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:3"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean."
+    verification:
+      command: "git status --porcelain | grep -v '^??'"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Feature branch ahead of main (includes Phase 0 commit + Phase A-E commits)."
+    verification:
+      command: "git rev-list --count main..HEAD"
+      expect: "gte:2"
+  - id: G-branch-3
+    category: branch
+    description: "Phase 0 helper-promotion commit is ancestor of HEAD (sequencing invariant)."
+    verification:
+      command: "git merge-base --is-ancestor 831a741 HEAD"
+      expect: "exit-0"
+
+branch_map:
+  default: "feat/folio-synthesize-v0-8-0-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/specs/tier4_discovery_proposal_layer_spec.md"
+    version: "rev 5"
+    relevance: "Pre-A anchor. §5 Proposal Object Contract (9 rows, 11 emitted keys after ID-triad split); §11 Trust-Gated Surfacing (synthesize named at line 317 as requiring --include-flagged); §12 Shared Consumers (synthesize named alongside graph, search, digest, links, entities); §15.6 Shared-consumer expansion (this slice); §15.7 Narrow-don't-reinterpret discipline."
+  - path: "docs/specs/v0.7.1_folio_graph_generalized_proposals_spec.md"
+    version: "shipped v0.7.1 (PR #60)"
+    relevance: "Sub-slice 1 of §15.6; established the shared-contract retrofit pattern. §2.2 carry-forward table is the canonical worked example. §3.2 ADV-SF6 closure commits the helper-promotion carry-forward that this sub-slice (v0.8.0) landed at Phase 0 commit 831a741. §2.2 §13 `schema_version` row defers PRD-2-R2 to this sub-slice, which closes it in §3.3 of the v0.8.0 spec."
+  - path: "docs/specs/v0.7.0_folio_digest_spec.md"
+    version: "shipped v0.7.0"
+    relevance: "Slice 7 greenfield template. Sections-implemented table, allowed/forbidden-paths pattern, and §2.5 non-goals discipline inform this slice's structure. `folio digest` is the other §12 shared consumer in active service."
+  - path: "folio/tracking/trust.py"
+    version: "post Phase 0 (commit 831a741)"
+    relevance: "Shared trust-posture helper promoted from folio/graph.py in this sub-slice's Phase 0. Defines `derive_trust_status(view) -> str`. Consumed by folio.graph (v0.7.1) and folio.synthesize (v0.8.0). The shared-consumer invariant (G-cardinality-3, G-cardinality-4) is enforced against this module."
+  - path: "folio/links.py"
+    version: "post slice 6a"
+    relevance: "Source of `collect_pending_relationship_proposals(config, scope=, include_flagged=)` and `RelationshipProposalView`. Read-only dependency; this slice does not modify links.py. The function is the shared §5 contract read-path — both folio.graph and folio.synthesize call it."
+  - path: "folio/graph.py"
+    version: "post v0.7.1 + Phase 0"
+    relevance: "Sibling shared-consumer. Read-only reference; v0.8.0 does NOT edit graph.py. The shared-consumer invariant test proves graph + synthesize call the same trust helper object."
