@@ -4,6 +4,51 @@ All notable changes to folio.love are documented here. The format loosely follow
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
 changes at minor versions are permitted but flagged explicitly.
 
+## [v0.7.1] — 2026-04-16
+
+### Breaking
+
+- **`folio graph doctor --json`**: `pending_relationship_proposal` findings now
+  carry `subject_id: null` per parent §5 semantics. The proposal identifier
+  previously stored under `subject_id` is now exposed under a new top-level
+  `proposal_id` key. Consumers that read `subject_id` for the proposal ID MUST
+  switch to `proposal_id`. The default CLI stdout rendering is preserved
+  (proposal ID still visible to operators running `folio graph doctor`).
+
+### Added
+
+- `folio graph doctor` findings for `pending_relationship_proposal` now carry
+  the §5 shared-proposal-contract fields: `proposal_type`, `source_id`,
+  `target_id`, `evidence_bundle`, `reason_summary`, `trust_status`,
+  `schema_gate_result`, `producer`, `input_fingerprint`, `lifecycle_state`,
+  plus the new `proposal_id` key (see "Breaking" above). Non-proposal findings
+  are unchanged.
+- `folio graph doctor` now emits a minimal `schema_gate_result` for
+  relationship proposals (today-computable rules: `target_registered`,
+  `supported_relation`). Default stdout annotates failures as
+  `[schema-gate: <rule>]`.
+- `folio graph doctor` default stdout annotates `[flagged]` for proposals
+  whose source or target document has `review_status: flagged`.
+- `folio graph doctor --include-flagged` — parity with `folio links`; surface
+  proposals whose source or target document is flagged.
+- `recommended_action` on pending-proposal findings now varies by
+  `trust_status` and `schema_gate_result` (four variants: baseline, flagged,
+  target-missing, unsupported-relation) instead of a single static message.
+
+### Known gaps
+
+- `input_fingerprint` is surfaced as a legacy `basis_fingerprint` alias
+  pending a future parent-spec §7 revision; the full §7 contract (normalized
+  claim identity + relation kind + producer identity) is not yet satisfied.
+- Full `evidence_bundle` rendering in default stdout (1–3 locator lines per
+  finding) is deferred to sub-slice 2+ of the Shipping Plan §15.6 expansion
+  (`folio synthesize` v0.8.0).
+- Payload-level `schema_version` field on `folio graph doctor --json` is
+  deferred to sub-slice 2+ (`--json` envelope redesign scope).
+- Schema-gate `target_registered` rule checks registry deck-ID membership
+  only; archived / deprecated / non-deck target validity is deferred to
+  validation-track follow-up slices per parent §13.
+
 ## [v0.7.0] — 2026-04-16
 
 ### Added

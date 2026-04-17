@@ -386,10 +386,28 @@ def test_graph_doctor_json_uses_fixed_finding_schema(tmp_path):
     }
     findings = payload["findings"]
     assert findings
-    assert all(
-        set(finding.keys()) == {"code", "severity", "subject_id", "detail", "recommended_action"}
-        for finding in findings
-    )
+    # v0.7.1: schema branches by finding["code"]. Pending-proposal findings carry
+    # the §5 shared-contract shape (15 keys); non-proposal findings keep the
+    # legacy 5-key shape.
+    _legacy_keys = {"code", "severity", "subject_id", "detail", "recommended_action"}
+    _proposal_extra_keys = {
+        "proposal_id",
+        "proposal_type",
+        "source_id",
+        "target_id",
+        "evidence_bundle",
+        "reason_summary",
+        "trust_status",
+        "schema_gate_result",
+        "producer",
+        "input_fingerprint",
+        "lifecycle_state",
+    }
+    for finding in findings:
+        if finding["code"] == "pending_relationship_proposal":
+            assert set(finding.keys()) == _legacy_keys | _proposal_extra_keys
+        else:
+            assert set(finding.keys()) == _legacy_keys
     assert {
         "pending_relationship_proposal",
         "orphaned_canonical_relation",
@@ -795,3 +813,270 @@ def test_graph_status_post_migration_line_150(tmp_path):
     findings = graph_doctor(FolioConfig.load(config_path))
     # No crash. Return a list of dicts (possibly empty) — not the collect_pending tuple.
     assert isinstance(findings, list)
+
+
+# -----------------------------------------------------------------------------
+# v0.7.1 — §5 shared-proposal-contract retrofit (slice 6b.1)
+# -----------------------------------------------------------------------------
+
+
+def _build_minimal_pending_library(
+    tmp_path: Path,
+    *,
+    relation: str = "draws_from",
+    target_id: str = "clienta_evidence_target",
+    target_present: bool = True,
+    flagged_target: bool = False,
+    flagged_source: bool = False,
+    basis_fingerprint: str = "sha256:pending-abc",
+) -> tuple[Path, Path, str, str]:
+    """Minimal library with one pending relationship proposal.
+
+    Returns (config_path, library, source_id, proposal_id).
+    """
+    library = tmp_path / "library"
+    library.mkdir(exist_ok=True)
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+
+    source_id = "clienta_evidence_source"
+
+    registry_entries: dict[str, dict] = {
+        source_id: _entry(source_id, "ClientA/source.md"),
+    }
+    if target_present:
+        registry_entries[target_id] = _entry(target_id, "ClientA/target.md")
+
+    _write_registry(library, registry_entries)
+
+    proposal_id = compute_relationship_proposal_id(
+        source_id=source_id,
+        relation=relation,
+        target_id=target_id,
+        basis_fingerprint=basis_fingerprint,
+    )
+
+    source_overrides: dict = {}
+    if flagged_source:
+        source_overrides["review_status"] = "flagged"
+
+    _write_note(
+        library / "ClientA" / "source.md",
+        _base_fm(
+            source_id,
+            "Source",
+            _llm_metadata={
+                "enrich": {
+                    "axes": {
+                        "relationships": {
+                            "proposals": [
+                                {
+                                    "proposal_id": proposal_id,
+                                    "relation": relation,
+                                    "target_id": target_id,
+                                    "basis_fingerprint": basis_fingerprint,
+                                    "confidence": "medium",
+                                    "signals": ["shared_topic"],
+                                    "rationale": "Both docs reference the shared framework.",
+                                    "lifecycle_state": "queued",
+                                    "producer": "enrich",
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            **source_overrides,
+        ),
+    )
+    if target_present:
+        target_overrides: dict = {}
+        if flagged_target:
+            target_overrides["review_status"] = "flagged"
+        _write_note(
+            library / "ClientA" / "target.md",
+            _base_fm(target_id, "Target", **target_overrides),
+        )
+
+    _write_entities(library, {"_schema_version": 1, "updated_at": "2026-04-01T00:00:00Z", "entities": {}})
+    return config_path, library, source_id, proposal_id
+
+
+def _doctor_json(config_path: Path, *, include_flagged: bool = False) -> dict:
+    runner = CliRunner()
+    args = ["--config", str(config_path), "graph", "doctor", "--json"]
+    if include_flagged:
+        args.append("--include-flagged")
+    result = runner.invoke(cli, args)
+    assert result.exit_code == 0, result.output
+    return json.loads(result.output)
+
+
+def _doctor_stdout(config_path: Path, *, include_flagged: bool = False) -> str:
+    runner = CliRunner()
+    args = ["--config", str(config_path), "graph", "doctor"]
+    if include_flagged:
+        args.append("--include-flagged")
+    result = runner.invoke(cli, args)
+    assert result.exit_code == 0, result.output
+    return result.output
+
+
+def _pending_finding(payload: dict) -> dict:
+    findings = payload["findings"]
+    matches = [f for f in findings if f["code"] == "pending_relationship_proposal"]
+    assert matches, f"no pending_relationship_proposal in findings: {findings}"
+    return matches[0]
+
+
+def test_graph_doctor_fixture_mandatory_contract_invariant(tmp_path):
+    """G-cardinality-1: pending-proposal findings carry all 11 shared-contract
+    keys + proposal_id. schema_gate_result shape uses key-subset semantics
+    per B2 additive-extension contract."""
+    from folio.graph import _SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS
+
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    payload = _doctor_json(config_path)
+    finding = _pending_finding(payload)
+    for key in _SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS:
+        assert key in finding, f"§5 key {key!r} missing"
+    assert "proposal_id" in finding
+    gate = finding["schema_gate_result"]
+    if gate is not None:
+        # Key-subset (not exact) per v1.2 ADV-R2-SF1 closure.
+        assert set(gate.keys()) >= {"status", "rule"}
+
+
+def test_graph_doctor_proposal_id_preserves_view_proposal_id(tmp_path):
+    """G-cardinality-2: proposal_id surfaces the view's proposal_id."""
+    config_path, _library, _source, proposal_id = _build_minimal_pending_library(tmp_path)
+    payload = _doctor_json(config_path)
+    finding = _pending_finding(payload)
+    assert finding["proposal_id"] == proposal_id
+    assert finding["subject_id"] is None  # §5 semantics
+
+
+def test_graph_doctor_proposal_type_is_relationship(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert finding["proposal_type"] == "relationship"
+
+
+def test_graph_doctor_trust_status_ok_when_not_flagged(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert finding["trust_status"] == "ok"
+
+
+def test_graph_doctor_trust_status_flagged_when_source_flagged(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path, flagged_source=True)
+    finding = _pending_finding(_doctor_json(config_path, include_flagged=True))
+    assert finding["trust_status"] == "flagged"
+
+
+def test_graph_doctor_trust_status_flagged_when_target_flagged(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path, flagged_target=True)
+    finding = _pending_finding(_doctor_json(config_path, include_flagged=True))
+    assert finding["trust_status"] == "flagged"
+
+
+def test_graph_doctor_schema_gate_target_registered_pass(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path, target_present=True)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert finding["schema_gate_result"] is None
+
+
+def test_graph_doctor_schema_gate_target_registered_fail(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path, target_present=False)
+    finding = _pending_finding(_doctor_json(config_path))
+    gate = finding["schema_gate_result"]
+    assert gate is not None
+    assert set(gate.keys()) >= {"status", "rule"}
+    assert gate["status"] == "fail"
+    assert gate["rule"] == "target_registered"
+
+
+def test_graph_doctor_evidence_bundle_is_signals_list(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert finding["evidence_bundle"] == ["shared_topic"]
+
+
+def test_graph_doctor_reason_summary_is_rationale(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert finding["reason_summary"] == "Both docs reference the shared framework."
+
+
+def test_graph_doctor_lifecycle_state_surfaced(tmp_path):
+    from folio.pipeline.enrich_data import PROPOSAL_LIFECYCLE_STATES
+
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert finding["lifecycle_state"] in PROPOSAL_LIFECYCLE_STATES
+
+
+def test_graph_doctor_legacy_keys_preserved(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    finding = _pending_finding(_doctor_json(config_path))
+    for legacy in ("code", "severity", "detail", "recommended_action"):
+        assert legacy in finding
+
+
+def test_graph_doctor_cli_json_surfaces_contract(tmp_path):
+    """P-5 closure: --json serializes every contract key."""
+    from folio.graph import _SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS
+
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    payload = _doctor_json(config_path)
+    finding = _pending_finding(payload)
+    for key in _SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS:
+        assert key in finding
+    assert "proposal_id" in finding
+
+
+def test_graph_doctor_cli_stdout_renders_proposal_id(tmp_path):
+    """G-test-3 / PRD-1 / P-1 / P-R2-2 regression guard: stdout renders
+    proposal_id, not literal 'None' or an empty string."""
+    config_path, _library, _source, proposal_id = _build_minimal_pending_library(tmp_path)
+    stdout = _doctor_stdout(config_path)
+    assert proposal_id in stdout
+    # No literal "None" subject rendering.
+    assert "pending_relationship_proposal None:" not in stdout
+    # No empty-subject rendering (space between code and colon).
+    assert "pending_relationship_proposal :" not in stdout
+
+
+def test_graph_doctor_cli_stdout_renders_flagged_annotation(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path, flagged_source=True)
+    stdout = _doctor_stdout(config_path, include_flagged=True)
+    assert "[flagged]" in stdout
+
+
+def test_graph_doctor_cli_stdout_renders_schema_gate_annotation_on_severity_line(tmp_path):
+    """ADV-R2-M1: annotation is on the severity line, not in detail."""
+    config_path, *_ = _build_minimal_pending_library(tmp_path, target_present=False)
+    stdout = _doctor_stdout(config_path)
+    assert "[schema-gate: target_registered]" in stdout
+    # Annotation lives on the same line as severity/code.
+    for line in stdout.splitlines():
+        if "pending_relationship_proposal" in line:
+            assert "[schema-gate: target_registered]" in line
+
+
+def test_graph_doctor_recommended_action_baseline_when_ok(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert finding["recommended_action"] == "Review with `folio links review` and confirm or reject it."
+
+
+def test_graph_doctor_recommended_action_notes_flagged_input(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path, flagged_source=True)
+    finding = _pending_finding(_doctor_json(config_path, include_flagged=True))
+    assert "flagged" in finding["recommended_action"]
+
+
+def test_graph_doctor_recommended_action_points_to_refresh_on_target_missing(tmp_path):
+    config_path, *_ = _build_minimal_pending_library(tmp_path, target_present=False)
+    finding = _pending_finding(_doctor_json(config_path))
+    assert "folio refresh" in finding["recommended_action"] or "folio ingest" in finding["recommended_action"]

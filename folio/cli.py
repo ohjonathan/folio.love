@@ -1981,13 +1981,30 @@ def graph_status_cmd(ctx, scope: Optional[str]):
 @click.argument("scope", required=False, default=None)
 @click.option("--json", "json_output", is_flag=True, default=False, help="Output as JSON.")
 @click.option("--limit", type=int, default=None, help="Maximum number of findings to emit.")
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Include proposals whose source or target document has `review_status: flagged`.",
+)
 @click.pass_context
-def graph_doctor_cmd(ctx, scope: Optional[str], json_output: bool, limit: Optional[int]):
-    """Emit actionable graph-health findings."""
+def graph_doctor_cmd(
+    ctx,
+    scope: Optional[str],
+    json_output: bool,
+    limit: Optional[int],
+    include_flagged: bool,
+):
+    """Emit actionable graph-health findings.
+
+    See CHANGELOG for v0.7.1 breaking change: pending-proposal findings now
+    carry the §5 shared-proposal-contract shape. Consumers reading `subject_id`
+    as proposal ID must switch to `proposal_id`.
+    """
     from .graph import _aggregate_producer_acceptance_rates, graph_doctor
 
     config = ctx.obj["config"]
-    findings = graph_doctor(config, scope=scope, limit=limit)
+    findings = graph_doctor(config, scope=scope, limit=limit, include_flagged=include_flagged)
     rates, missing_producer_count = _aggregate_producer_acceptance_rates(config, scope=scope)
 
     if json_output:
@@ -2015,8 +2032,20 @@ def graph_doctor_cmd(ctx, scope: Optional[str], json_output: bool, limit: Option
 
     if findings:
         for finding in findings:
+            subject_or_proposal = (
+                finding.get("proposal_id")
+                or finding.get("subject_id")
+                or "—"
+            )
+            severity_suffix = ""
+            if finding.get("trust_status") == "flagged":
+                severity_suffix += " [flagged]"
+            gate = finding.get("schema_gate_result")
+            if gate is not None:
+                severity_suffix += f" [schema-gate: {gate.get('rule', 'unknown')}]"
             click.echo(
-                f"[{finding['severity']}] {finding['code']} {finding['subject_id']}: {finding['detail']}"
+                f"[{finding['severity']}{severity_suffix}] {finding['code']} "
+                f"{subject_or_proposal}: {finding['detail']}"
             )
             click.echo(f"  Action: {finding['recommended_action']}")
     else:
