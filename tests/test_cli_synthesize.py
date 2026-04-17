@@ -306,16 +306,14 @@ def test_synthesize_zero_findings_with_exclusions(tmp_path):
 # ---- SYN-CLI-7 -------------------------------------------------------------
 
 def test_synthesize_invalid_scope_exits_nonzero(tmp_path):
-    # Empty library; invalid scope matches no engagement/doc. Current
-    # collect_pending_relationship_proposals does NOT raise on bad scope
-    # (it returns empty). Synthesize therefore exits 0 with 0 findings +
-    # diagnostic breadcrumb. Document actual behavior and assert the
-    # zero-findings case (CB-5) emits diagnostic.
+    # DCB-2 closure: spec §4 / §8 require exit 1 on scope-resolution failure.
+    # D.4 fix adds ScopeResolutionError from _resolve_scope() when the arg
+    # resolves to neither a registered doc ID nor any subtree path.
     config_path = _setup_empty_library(tmp_path)
     result = _invoke(config_path, ["synthesize", "nonexistent-scope"])
-    assert result.exit_code == 0
-    # CB-5 breadcrumb surfaces the ambiguity even though exit is 0
-    assert "Next:" in result.output or "Findings: 0" in result.output
+    assert result.exit_code == 1
+    assert "Error:" in result.output
+    assert "does not resolve" in result.output
 
 
 # ---- SYN-CLI-8 / SYN-CLI-9 -------------------------------------------------
@@ -378,7 +376,10 @@ def test_synthesize_zero_findings_zero_exclusions_has_diagnostic(tmp_path):
     result = _invoke(config_path, ["synthesize"])
     assert "Findings: 0" in result.output
     assert "Excluded (flagged inputs): 0" in result.output
-    assert "Next: run `folio ingest`" in result.output
+    # D2-SF-13 closure: breadcrumb orders scope-check before producers.
+    assert "Next: check that the scope resolves" in result.output
+    assert "folio ingest" in result.output
+    assert "folio enrich" in result.output
 
 
 # ---- SYN-CLI-15 / SYN-CLI-16 (MIN-1 closure) -------------------------------
@@ -471,3 +472,110 @@ def test_synthesize_limit_caps_findings(tmp_path):
     result = _invoke(config_path, ["synthesize", "--json", "--limit", "2"])
     payload = json.loads(result.output)
     assert len(payload["findings"]) == 2
+
+
+# ---- SYN-CLI-22 (D2-SF-1 closure) ------------------------------------------
+
+def test_synthesize_rejects_negative_limit(tmp_path):
+    config_path = _setup_empty_library(tmp_path)
+    result = _invoke(config_path, ["synthesize", "--limit", "-1"])
+    assert result.exit_code != 0
+    # click.IntRange emits a range-error message
+    assert "Invalid value" in result.output or "-1" in result.output
+
+
+# ---- SYN-CLI-23 (DCB-1 closure) --------------------------------------------
+
+def test_synthesize_document_id_scope_routes_via_doc_id(tmp_path):
+    config_path = _setup_library_with_one_clean_proposal(tmp_path)
+    # Source document ID from the fixture
+    result = _invoke(
+        config_path, ["synthesize", "clienta_evidence_src", "--json"]
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    # Doc-ID scope normalizes to itself in the envelope (not null).
+    assert payload["scope"] == "clienta_evidence_src"
+    # Findings should be limited to proposals whose source_id == the doc id.
+    for finding in payload["findings"]:
+        assert finding["source_id"] == "clienta_evidence_src"
+
+
+# ---- SYN-CLI-24 (DCB-2 closure) --------------------------------------------
+
+def test_synthesize_invalid_scope_exits_1_with_stderr_error(tmp_path):
+    config_path = _setup_empty_library(tmp_path)
+    result = _invoke(config_path, ["synthesize", "not-a-real-scope"])
+    assert result.exit_code == 1
+    # CliRunner captures stderr into result.output by default
+    assert "Error:" in result.output
+    assert "does not resolve to an engagement or document" in result.output
+
+
+# ---- SYN-CLI-25 (D2-SF-2 closure) ------------------------------------------
+
+def test_synthesize_empty_string_scope_is_library_wide(tmp_path):
+    config_path = _setup_empty_library(tmp_path)
+    # Explicit empty scope arg — treated as library-wide, envelope scope null.
+    result = _invoke(config_path, ["synthesize", "", "--json"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["scope"] is None
+
+
+# ---- SYN-CLI-26 (D2-SF-11 closure) -----------------------------------------
+
+def test_synthesize_flagged_source_detail_rendered(tmp_path):
+    config_path = _setup_library_with_flagged_source(tmp_path)
+    # With --include-flagged, the [flagged: source] suffix should appear.
+    result = _invoke(config_path, ["synthesize", "--include-flagged"])
+    assert result.exit_code == 0
+    assert "[flagged: source]" in result.output
+
+
+def test_synthesize_flagged_inputs_in_envelope(tmp_path):
+    config_path = _setup_library_with_flagged_source(tmp_path)
+    result = _invoke(
+        config_path, ["synthesize", "--json", "--include-flagged"]
+    )
+    payload = json.loads(result.output)
+    flagged_findings = [
+        f for f in payload["findings"] if f["trust_status"] == "flagged"
+    ]
+    assert len(flagged_findings) >= 1
+    assert "source" in flagged_findings[0]["flagged_inputs"]
+
+
+# ---- SYN-CLI-27 (D2-SF-12 closure) -----------------------------------------
+
+def test_synthesize_limit_prints_truncation_footer(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    config_path = tmp_path / "folio.yaml"
+    _make_config(config_path, library)
+    entries: dict[str, dict] = {}
+    for i in range(5):
+        src = f"clienta_evidence_src_{i}"
+        tgt = f"clienta_evidence_tgt_{i}"
+        entries[src] = _entry(src, f"ClientA/src_{i}.md")
+        entries[tgt] = _entry(tgt, f"ClientA/tgt_{i}.md")
+    _write_registry(library, entries)
+    for i in range(5):
+        src = f"clienta_evidence_src_{i}"
+        tgt = f"clienta_evidence_tgt_{i}"
+        _write_note(
+            library / "ClientA" / f"src_{i}.md",
+            _build_proposal_fm(
+                src,
+                f"Src {i}",
+                target_id=tgt,
+                basis_fingerprint=f"sha256:fp{i}",
+            ),
+        )
+        _write_note(
+            library / "ClientA" / f"tgt_{i}.md",
+            _base_fm(tgt, f"Target {i}"),
+        )
+    result = _invoke(config_path, ["synthesize", "--limit", "2"])
+    assert result.exit_code == 0
+    assert "limited to 2 of 5 total" in result.output

@@ -1962,7 +1962,7 @@ def links_reject_doc_cmd(ctx, doc_id: str, include_flagged: bool):
 )
 @click.option(
     "--limit",
-    type=int,
+    type=click.IntRange(min=0),
     default=None,
     help="Maximum number of findings to emit (default: unbounded).",
 )
@@ -1976,15 +1976,20 @@ def synthesize(ctx, scope, json_output, include_flagged, limit):
     See CHANGELOG v0.8.0 for the full contract.
     """
     from .synthesize import (
+        ScopeResolutionError,
         _render_synthesis_stdout,
         render_envelope,
         synthesize as run_synthesize,
     )
 
     config = ctx.obj["config"]
-    report = run_synthesize(
-        config, scope=scope, include_flagged=include_flagged, limit=limit
-    )
+    try:
+        report = run_synthesize(
+            config, scope=scope, include_flagged=include_flagged, limit=limit
+        )
+    except ScopeResolutionError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
     if json_output:
         click.echo(json.dumps(render_envelope(report), indent=2))
         return

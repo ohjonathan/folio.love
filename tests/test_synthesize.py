@@ -108,19 +108,50 @@ def test_synthesis_dataclass_shapes():
     assert SHARED_CONTRACT_KEYS <= finding_fields
     assert "proposal_id" in finding_fields
     assert "relation" in finding_fields
+    assert "flagged_inputs" in finding_fields  # D2-SF-11 closure
     report_fields = {f.name for f in fields(SynthesisReport)}
-    assert report_fields == {
+    # D2-SF-12 closure adds total_available + truncated (internal-only,
+    # not emitted in envelope until v0.8.1 schema bump).
+    assert report_fields >= {
         "scope",
         "findings",
         "excluded_flagged_count",
         "trust_override_active",
     }
+    assert "total_available" in report_fields
+    assert "truncated" in report_fields
 
 
 # ---- SYN-2 -----------------------------------------------------------------
 
 def test_synthesize_calls_collect_function(tmp_path):
+    # Library has one entry under ClientA to satisfy scope resolution.
     config = _make_config(tmp_path)
+    library = config.library_root
+    registry_path = library / "registry.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "_schema_version": 1,
+                "decks": {
+                    "clienta_evidence_x": {
+                        "id": "clienta_evidence_x",
+                        "title": "X",
+                        "type": "evidence",
+                        "markdown_path": "ClientA/x.md",
+                        "deck_dir": "ClientA",
+                        "source_relative_path": "deck.pptx",
+                        "source_hash": "x-hash",
+                        "version": 1,
+                        "converted": "2026-04-01T00:00:00Z",
+                        "client": "ClientA",
+                        "engagement": "DD_Q1",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     with patch(
         "folio.synthesize.collect_pending_relationship_proposals",
         return_value=([], SuppressionCounts()),
@@ -128,7 +159,10 @@ def test_synthesize_calls_collect_function(tmp_path):
         synthesize(config, scope="ClientA", include_flagged=True)
     assert collect.call_count == 1
     kwargs = collect.call_args.kwargs
+    # DCB-1 closure: subtree scopes route via `scope=`, doc IDs via `doc_id=`.
+    # "ClientA" matches the entry's deck_dir subtree, so it resolves as scope.
     assert kwargs["scope"] == "ClientA"
+    assert kwargs["doc_id"] is None
     assert kwargs["include_flagged"] is True
 
 

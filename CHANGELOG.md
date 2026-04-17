@@ -10,6 +10,10 @@ changes at minor versions are permitted but flagged explicitly.
 
 - **`folio synthesize [SCOPE]`** — new top-level command. Structural
   synthesis report of §5 proposal-linked cross-references in a scope.
+  `SCOPE` resolves to a registered document ID, an engagement subtree
+  (matching `markdown_path` or `deck_dir`), or library-wide when `-`,
+  empty string, or omitted. Invalid scope exits with code 1 and a
+  stderr error message.
   Read-only: no LLM calls, no registry mutations, no new doc artifacts.
   This is the second sub-slice of Shipping Plan §15.6 (shared-consumer
   expansion); sub-slice 1 (`folio graph` generalized proposals, v0.7.1)
@@ -25,12 +29,20 @@ changes at minor versions are permitted but flagged explicitly.
   for flagged source/target inputs. Envelope `trust_override_active`
   mirrors the flag; stdout shows "Trust override active" annotation.
 - **`folio synthesize --limit N`** — caps findings list (default
-  unbounded). `excluded_flagged_count` reflects full upstream
-  exclusion, not the post-limit slice.
-- Zero-findings + zero-exclusions case prints a `Next: run \`folio ingest\`
-  or \`folio enrich\`...` diagnostic breadcrumb so operators can
-  distinguish empty-scope from producers-haven't-run (parent §11 rule
-  5 purposive honoring).
+  unbounded; must be ≥ 0 per `click.IntRange`). `excluded_flagged_count`
+  reflects full upstream exclusion, not the post-limit slice. When
+  `--limit` truncates, stdout prints a `(limited to N of M total)`
+  footer; the envelope's `findings_truncated` flag is deferred to
+  v0.8.1 with a `schema_version` bump.
+- Zero-findings + zero-exclusions case prints a `Next: check that the
+  scope resolves, or run \`folio ingest\` / \`folio enrich\`…`
+  diagnostic breadcrumb so operators can distinguish empty-scope from
+  producers-haven't-run (parent §11 rule 5 purposive honoring).
+- Each finding in the `--json` envelope carries `flagged_inputs`
+  (a list of `"source"` / `"target"`) so auditors running with
+  `--include-flagged` can tell which document triggered the flag.
+  Stdout renders this as `[flagged: source]`, `[flagged: target]`,
+  or `[flagged: source+target]`.
 - Shared trust-posture helper `folio.tracking.trust.derive_trust_status`
   (promoted from `folio.graph._derive_trust_status` in Phase 0 commit
   `831a741`). Both `folio graph doctor` and `folio synthesize` call
