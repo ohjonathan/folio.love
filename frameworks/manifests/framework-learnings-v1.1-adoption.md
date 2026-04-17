@@ -631,3 +631,83 @@ The "converged for extension-class slices" claim from slice 7 **does NOT hold un
 ### F-054 / F-055 status
 
 First slice to exercise v1.2.0 end-to-end. Both entries describe a *previously-unobserved* friction class. Carry-forward: v1.3 T-10 (must-ship) codifies the escalation ladder; T-11 (should-ship) and T-12 (should-ship) mechanize the swap pattern so it's not operator-intervention-only. Until then, every v1.2.0 adopter slice that hits a required-family outage will need ad-hoc operator authorization of the swap.
+
+
+## Slice 6b.2 addendum (folio-synthesize-v0-8-0, 2026-04-17)
+
+Second v1.2.0 adopter slice. Greenfield new CLI command consuming the shared proposal contract (§5) established in sub-slice 1. Intended to clarify whether slice 6b.1's friction-footprint is a v1.2.0 first-contact spike or sustained behavior.
+
+### Axis 1 — Token-fill friction (no change)
+Zero entries. `pre_a` block omitted with header-comment justification (same pattern as slice 6b.1).
+
+### Axis 2 — Template gaps
+1 entry. Template 06 (meta-consolidator) has no `author-direct` variant; used F-051 surgical-fixes precedent three times (B.3, D.3, D.6). Rec: v1.3 template 06 should accept an explicit `author-direct-with-external-lens-citation` mode.
+
+### Axis 3 — Multi-family dispatch friction
+**2 NEW entries, distinct from slice 6b.1's F-054/F-055:**
+- **F-060 (High)**: codex `AGENTS.md` activation infinite loop. First dispatch idled for 30 minutes on `python3 -m ontos map` exit-1 without recovery. Workaround: explicit "SKIP AGENTS.md activation" prompt prefix. This is an ADOPTER × codex interaction, not a framework defect, but framework template 01 should include "if activation fails, skip — do NOT loop" boilerplate.
+- **F-061 (Medium)**: gemini `-p` mode emits verdict to stdout (wrapped in ```markdown fence) instead of writing to the prompt's requested file path. Three dispatches (B.1 alignment, D.2 alignment, D.5 verifier) all required author-direct `sed`-extract recovery. Distinct from F-055 (gemini CLI capability-matrix gap). Rec: capability-matrix schema should distinguish `shell: true` from `writes_files_non_interactively: true`.
+
+**F-054 / F-055 did NOT recur in this slice.** Codex (adversarial + D.5 verifier), gemini (alignment + D.5 verifier), and claude-sub (peer + product + D.5 verifier) all participated without unreachability. The slice-6b.1 rate-limit disruption was a point-in-time outage, not a structural blocker. However, F-060 / F-061 show that other gemini and codex interactions remain fragile.
+
+### Axis 4 — Verify-script accuracy
+No change. verify-adopter.sh PASSED 4/4 twice in this slice (Phase A freeze + D.6 gate). verify-d6-gate.sh PASSED 24/24 at D.6 (up from 15/15 at slice 6b.1 — more prerequisites authored per v1.2+ category discipline).
+
+### Axis 5 — Manifest/schema ergonomics
+No new entries. MIN-2 (G-scope-4 file-existence guard `test -f folio/synthesize.py && !grep…`) was a gate-authoring fix, not a schema gap.
+
+### Axis 6 — Concrete v1.3 recommendations (slice 6b.2 additions)
+
+| Tier | ID | Recommendation | Friction ref | Effort estimate |
+|------|----|----------------|--------------|----|
+| **Must-ship** | T-16 | Framework template 01 (worker session contract) Phase C clause: "If you notice a spec-vs-implementation divergence during test authoring, STOP and escalate — do NOT write a test that blesses the gap. Test-blessed divergences hide defects from reviewers." | F-062 | Doc edit: ~1 hour |
+| **Should-ship** | T-17 | Framework template 06 (meta-consolidator) accepts optional `author-direct-with-external-lens-citation` mode. When used, requires evidence-row citation of each external verdict. Distinct from external consolidation; codified with schema gate. | F-059 | Template + schema: ~2 hours |
+| **Should-ship** | T-18 | `cli_capability_matrix` schema extension: add `writes_files_non_interactively: bool`. Gemini should declare `false`; dispatcher auto-redirects stdout to file when this flag is false. | F-061 | Schema + dispatcher wrapper: ~2.5 hours |
+| **Should-ship** | T-19 | Framework template 01 "skip failing activation" boilerplate: if repo-root `AGENTS.md` references tools not callable by the invoked agent, skip activation with a logged note. Do NOT loop on the failing command. | F-060 | Doc edit: ~30 min |
+| **Should-ship** | T-20 | Adversarial template 05 "spec-vs-code triangulation" prompt: for each spec acceptance criterion, verify (a) spec requires X, (b) code does Y, (c) test asserts Z. If Y≠X and Z asserts Y instead of X, flag as BLOCK. | F-062 | Template edit: ~1 hour |
+| **Should-ship** | T-21 | Peer template 03 "test-blessed divergence audit" prompt: grep test suite for comments documenting spec-vs-code mismatches ("does NOT raise", "current behavior", "accept exit code 0 despite"). Flag any hit as potential blessed-divergence for adversarial follow-up. | F-062 | Template edit: ~1 hour |
+| **Should-ship** | T-22 | Manifest optional `consolidation_mode` field: `external` (codex meta-consolidator, default) or `author-direct-with-evidence-citation` (operator pre-authorized author-direct for B.3/D.3/D.6). verify-p3.sh validates the adversarial LENS is still non-author family even when consolidation mode is author-direct. | F-059 | Schema + verify-p3.sh: ~3 hours |
+
+### Delta retrospective (vs. slice 6b.1)
+
+| Dimension | Slice 6b.1 (v0.7.1) | **Slice 6b.2 (v0.8.0)** |
+|-----------|---------------------|-------------------------|
+| Class | Extension (retrofit) | Greenfield (new command) |
+| manifest_version | 1.2.0 (first adopter use) | 1.2.0 (second adopter use) |
+| Spec versions | v1.0→v1.1→v1.2 (two cycles) | v1.0→v1.1 (one cycle) |
+| B rounds | 2 + B.3 author-direct | 1 + B.3 author-direct (F-059) |
+| D rounds | 1 + D.3 author-direct + D.4 | 1 + D.3 author-direct + D.4 + D.6 author-direct (F-059) |
+| Blockers at B.1 R1 | 6 unique (subject_id 3-lens) | 6 canonical (CB-1 + CB-2 both 2-lens; 4 standalone) |
+| Blockers at D.2 R1 | 1 convergent (manifest path typo) | 2 canonical (DCB-2 2-lens; DCB-1 standalone) |
+| Blockers preserved | 0 | 0 |
+| Test delta | +41 | +52 |
+| D.6 gate | 15/15 | **24/24** (author-authored larger table) |
+| Friction count | 5 (F-054..F-058) | 4 (F-059..F-062) |
+| Convergence rate | 3 of 8 blockers (37.5%) | 3 of 8 blockers (37.5%) |
+
+**Critical delta answers:**
+1. **Is v1.2.0 first-contact a spike or sustained?** Partial clarity: slice-6b.1's F-054/F-055 did NOT recur; but slice-6b.2 surfaced 4 NEW friction entries (F-059..F-062), same cadence. So v1.2.0 adoption generates steady friction in a rotating mix of classes. Policy strictness is a sustained friction-rate driver, not a first-contact-only event.
+2. **Does extension vs greenfield matter?** Slice 6b.1 (extension) produced 5 entries; slice 6b.2 (greenfield) produced 4. No class difference. Class is NOT a strong predictor of friction count under v1.2.0.
+3. **Did F-051 surgical-fixes scale?** YES. Three applications in this slice (B.3 + D.3 + D.6). All held; no R2 escalation. Pattern now has 5 total applications across slices 6b.1 + 6b.2 without defect. Codification in v1.3 template 06 is low-risk.
+4. **Convergence rate stability?** Both slices show ~37% of blockers are 2-lens-convergent. That's load-bearing — the 4-lens board's value is reliably in convergent rows.
+
+### F-060 / F-061 / F-062 status
+
+**F-060** (codex AGENTS.md loop): adopter-config issue. Workaround (skip-Ontos prompt prefix) works reliably. Should be codified in repo's CLAUDE.md.
+
+**F-061** (gemini file-write in -p mode): framework-side fix needed (T-18); current adopter workaround (sed-extract) is fragile but functional.
+
+**F-062** (test-blessed divergence): Phase-C author-process issue. Framework templates (T-16, T-20, T-21) should make this harder to introduce and easier to catch. Adopter-side: Phase C authors should escalate to D.1 rather than writing blessing-tests.
+
+### Cross-slice friction trend (updated through slice 6b.2)
+
+| Class | Sl 6b.1 | **Sl 6b.2** | Trend |
+|-------|---------|-------------|-------|
+| Multi-family dispatch | 2 (F-054, F-055) | **2 (F-060, F-061)** | Sustained 2/slice under v1.2.0 (different CLIs / different failure modes) |
+| Template gap | 1 (F-057 reachability) | **1 (F-059 author-direct consolidation)** | Sustained 1/slice |
+| Manifest/schema | 1 (F-058 line-cap) | **0** | Slice-6b.1 only so far |
+| Verify-script | 1 (F-056 gate-command dry-run) | **0** | Slice-6b.1 only so far |
+| Phase-C × spec-code drift | 0 | **1 (F-062)** | First occurrence |
+| v1.3+ recs (cumulative) | T-10..T-15 | **T-16..T-22** | T-10..T-22 = 13 entries, of which 3 Must-ship, 10 Should-ship |
+
+The friction-class distribution is ROTATING across slices under v1.2.0 — different adopter slices hit different classes. Stable rate (4-5 per slice) with little class overlap between sibling slices suggests v1.3 mechanization should target the UNION of observed classes, not just the highest-recurrence ones.
