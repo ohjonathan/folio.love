@@ -520,3 +520,114 @@ The G-scope-1 gate didn't FAIL on this because the gate only checks that no FORB
 **Net effect:** Slice 7 surfaced 5 friction entries (F-049..F-053) — moderately higher than slice 4 / 6a's 2 each. **Three are NEW friction classes** (branch-state hygiene, helper-divergence disclosure, spec→impl traceability) which is signal worth noting: greenfield modules + structural revisions stress the framework's process boundaries differently from extension slices. The framework absorbed all 5 cleanly via in-session mitigation; the 6 v1.3 recommendations (T-4..T-9) feed cleanly into the next bundle revision.
 
 The "framework converged" claim from slice 6a needs a refinement after slice 7: **converged for extension-class slices; emerging-friction for greenfield-class slices on first contact**. Future greenfield slices (slice 6b shared-consumer expansion) will validate whether this is a slice-7-specific spike or a sustained pattern.
+
+---
+
+# Slice 6b.1 supplement — folio-graph-generalized-proposals-v0-7-1 (2026-04-16)
+
+First **v1.2.0 end-to-end** adopter slice (slices 1–7 all ran under v1.0.0/1.1.x manifests). Extension-class retrofit of `folio/graph.py` + `folio/cli.py` to consume §5 shared-proposal-contract. Spec v1.0 → v1.1 → v1.2 (two surgical revisions); two orchestrator-direct closures (B.3, D.3); 15/15 D.6 gate.
+
+### 1. Token-fill friction
+
+**No new findings.** v1.2.0 schema handles token-fills identically to v1.1.x. `pre_a` block omitted (spec v1.2 schema requires `entry ∈ {proposal, triage, validation}` — "inherited" not a valid entry; the block is optional so omission is clean).
+
+### 2. Template gaps
+
+**Orchestrator-direct R(N+1) closure pattern (v1.3 T-5) exercised twice successfully.** B.3 orchestrator-direct closure (2 convergent surgical blockers → v1.2 → B.3 Pass), D.3 orchestrator-direct closure (1 convergent surgical blocker → D.4 → D.3 Needs-Fixes-then-cleared). Both held; neither bit back at subsequent rounds. **Validates T-5 for surgical revisions;** slice 7's caveat ("structural revisions need fresh-adversarial") did not apply here because every v1.1→v1.2 closure was surgical (rule rename, scope-note addition, test-path fix, etc).
+
+**New template gap: reviewer-prompt reachability audit (F-057).** Peer/adversarial/alignment review all missed that the `supported_relation` gate rule is unreachable end-to-end (today's producer path filters upstream). Product-lens direct-run caught it at D.2. Reviewer templates don't prompt reviewers to audit whether a new validation rule can actually fire under today's emission paths.
+
+**v1.3 recommendation (should-ship):** Add "reachability audit" prompt to Template 03 (peer) and Template 05 (adversarial) for validation-layer rule additions. One-line: "For each new rule, cite one test case that today's emission path CAN produce that will trigger this rule. If none exists, document as forward-compat in CHANGELOG." Would have surfaced F-057 at B.1, not D.2.
+
+### 3. Multi-family dispatch friction
+
+**Single-provider outage × v1.2.0 must-differ-provider = hard block (F-054 / F-055 — NEW friction class).** Under v1.1.x, gemini rate-limit was F-014 (slow but workable). Under v1.2.0, the strict ≥3 non-author engineering family floor + must-differ-provider invariant means a single-provider outage eliminates the entire lens — there's no in-family substitute. Gemini was 429-rate-limited throughout B.1/B.2/D.2; its CLI separately lacked shell+write tools at D.5. Operator-authorized codex-as-alignment (B.1/B.2/D.2) and codex-as-gemini (D.5) swap pattern salvaged the slice, but the board ran with 2 distinct non-author engineering families instead of 3.
+
+**Codex-as-X swap pattern is a workable *ad-hoc* fallback.** Codex carried both adversarial and alignment lenses as separate sessions successfully for this slice — findings were substantive and didn't duplicate. But this is single-slice evidence; the swap pattern should not be the permanent answer.
+
+**v1.3 recommendations (should-ship):**
+
+1. **Escalation ladder codification.** Document in `framework.md § P3`: "If a required reviewer family is unreachable, escalation is: (a) retry after 1h; (b) halt ≤24h; (c) after 24h, document in spec §6 risk table + run with available lenses + supplementary round when family recovers." Proven workable.
+2. **Optional manifest `reviewer_family_substitutes[]` field.** Allow adopters to pre-declare swap authorizations: `{"primary":"gemini","substitute":"codex","lens":"alignment","condition":"primary unavailable >1h"}`. Mechanizes what was ad-hoc here.
+3. **P3 should distinguish "unavailable" vs "declined."** Today's verify-p3.sh flags a missing family assignment as non-compliant advisory-only — but "gemini crashed" and "gemini refused to review" look identical. Add a dispatch-state field so the P3 reasoning can differentiate.
+
+**Capability-matrix × role-assignment mismatch (F-055, MEDIUM severity).** Manifest `cli_capability_matrix.gemini = { shell: false, git: false, test_runner: false, doc_index: false }` already acknowledges gemini's limitations. But the manifest separately assigns `gemini: verifier` at D.5 — a role that REQUIRES `test_runner: true` + `shell: true`. The capability matrix is advisory, not enforced. Verify-p3.sh should cross-check role assignments against capability matrix and refuse incompatible dispatches at manifest-validation time.
+
+### 4. Verify-script accuracy
+
+**Manifest gate-command dry-run gap (F-056, HIGH severity, direct-run, 2-lens convergence).** Two out of 12 manifest cardinality-gate commands pointed at nonexistent test paths (`tests/test_graph.py::<T>` when the tests actually lived in `tests/test_graph_cli.py`). Verify-adopter.sh passed 4/4 checks on the manifest — schema + P3 + gate-categories + artifact-paths all green — but the gate commands themselves would FAIL at D.6 because pytest couldn't collect the named tests. Adversarial codex + alignment codex-as-alignment both caught this at D.2 via direct pytest invocation; neither spec review nor code self-review noticed (static-inspection only).
+
+**v1.3 recommendation (should-ship):** Add `verify-gate-commands.sh` (or extend verify-adopter.sh) to actually EXECUTE each `cardinality_assertions[].command` and each `gate_prerequisites[].verification.command` at manifest-validation time. Commands may exit non-zero in a legitimate way (e.g., `gte:1` checks on pre-implementation branches) — in those cases they should run and report status without asserting the full expect clause; purely-command-is-runnable is the minimum check. Would catch F-056 at Phase 0 instead of D.2.
+
+**Ruff-module-vs-CLI mismatch (phase-C smoke check).** Manifest smoke_check `python3 -m ruff check folio/graph.py` failed in operator's environment because ruff is installed as a standalone CLI via Python 3.9 but not as a module for the system `python3` (3.14). Not a D.6 gate, just a phase-C smoke — but flagged by codex + codex-as-gemini D.5 verifiers as environmental friction. Adopter-side fix: manifest should use `ruff check ...` (standalone CLI) instead of `python3 -m ruff check ...`, OR adopter bootstrap should install ruff into the active python's pip.
+
+### 5. Manifest/schema ergonomics
+
+**Scope-lock line-cap authoring friction (F-058, MEDIUM severity).** G-scope-3 authored at 25 lines during Phase 0, before the Phase-A test plan was fully specified. Phase C discovery: the `--include-flagged` flag addition needed to exercise flagged-annotation tests (spec §4 tests 22, 25) pushed `folio/cli.py` diff to 33 lines. D.1 manifest tweak raised the cap to 40 (surgical). Signals a broader authoring sequence issue: line-cap gates should be set AFTER the test plan is locked.
+
+**v1.3 recommendation (polish):** Adopter guidance for manifest authoring: (a) author `G-scope-N` line-cap gates after Phase-A test plan is frozen, OR (b) include 50-100% headroom when authoring pre-test-plan. (c) Each `G-scope-N` gate should carry a rationale string so future adopters understand what the cap is bounding. Today the gate description is the line number only — no authoring context.
+
+**Manifest `pre_a.entry` strict enum vs inheritance.** v1.2.0 schema tightened `pre_a.entry ∈ {proposal, triage, validation}` — no "inherited" literal. This slice's manifest omits `pre_a` entirely (the block is optional) and documents inheritance in a header comment. Works but is slightly awkward: an adopter inheriting from a ratified parent spec has no way to positively declare the inheritance in structured form. The header comment is the workaround. Minor; noted.
+
+### 6. Concrete v1.3 recommendations (additions to slice 6a's T-1..T-3 and slice 7's T-4..T-9)
+
+| Tier | ID | Recommendation | Friction ref | Effort estimate |
+|------|----|----------------|--------------|----|
+| **Must-ship** | T-10 | Dispatch-infrastructure escalation ladder in `framework.md § P3`: 1h retry → ≤24h halt → >24h documented 3-lens fallback + supplementary round. | F-054 | Doc edit: ~1 hour |
+| **Should-ship** | T-11 | Optional manifest `reviewer_family_substitutes[]` field: pre-declare operator-authorized family swaps (primary/substitute/lens/condition). | F-054 / F-055 | Schema + verify-p3.sh: ~3 hours |
+| **Should-ship** | T-12 | `verify-p3.sh` cross-checks role assignments against `cli_capability_matrix[<FAMILY>]`. Dispatching `gemini: verifier` when `gemini.test_runner=false` should fail P3 at manifest-validation time. | F-055 | verify-p3.sh addition: ~1.5 hours |
+| **Should-ship** | T-13 | `verify-gate-commands.sh` (or verify-adopter extension): actually execute each manifest gate command at validation time. Today verify-adopter catches schema shape but not command executability. | F-056 | New verifier script: ~2 hours |
+| **Should-ship** | T-14 | Reviewer templates (03 peer, 05 adversarial) add "rule-reachability audit" prompt for validation-layer rule additions. Forces author to cite one triggering test case before landing the rule. | F-057 | Template edit: ~1 hour |
+| Polish | T-15 | Manifest authoring guidance: `G-scope-N` line-cap gates should be authored post-test-plan OR with 50-100% headroom pre-test-plan. Each `G-scope-N` carries a rationale string. | F-058 | Doc edit: ~30 min |
+
+### Delta retrospective (vs. slices 1-7)
+
+| Dimension | Slice 4 | Slice 6a | Slice 7 (v0.7.0) | **Slice 6b.1 (v0.7.1)** |
+|-----------|---------|----------|------------------|-------------------------|
+| Class | Extension | Extension | Greenfield | Extension (retrofit) |
+| manifest_version | 1.0.0/1.1.0 | 1.1.0 | 1.1.0 | **1.2.0** (first adopter use) |
+| Pre-A | Inherited | Inherited | Inherited | Inherited (block omitted; header-comment workaround) |
+| Spec versions | v1.0→v1.1→v1.2 | v1.0→v1.1→v1.2 | v1.0→v1.1→v1.2 | **v1.0→v1.1→v1.2** |
+| B rounds | 2 | 2 + R3 ortho | 2 + R3 ortho | **2 + B.3 ortho (surgical)** |
+| D rounds | 1 + D.4 | 1 + D.4 | 1 + D.4 | **1 + D.3 ortho + D.4** |
+| Blockers at B.1 R1 | 4 | 2 | 2 | **6 unique (subject_id 3-lens)** |
+| Blockers at B.2 R2 | — | — | — | **2 convergent on §3.3** |
+| Blockers at D.2 R1 | 2 | 0 | 1 | **1 convergent (manifest path typo)** |
+| Blockers preserved | 0 | 0 | 0 | **0** |
+| Test delta | +27 | +23 | +79 | **+41** (19 unit + 22 CLI + 1 migrated) |
+| D.6 gate | 12/12 | 12/12 | 12/12 | **15/15** (v1.2.0 adds 3 gates) |
+| Orchestrator-direct closures | 0 | 1 (B.3 R3) | 1 (B.3 R3) → bit at D.2 | **2 (B.3 + D.3) — both held** |
+| Friction count | 2 | 2 | 5 | **5 (F-054..F-058)** |
+| New friction classes | Author hygiene | Manifest/schema (glob), Verify-script (ontos) | Branch-state; Helper-divergence; Spec→Impl traceability | **Dispatch × v1.2 policy; Capability-matrix×role; Manifest gate-command dry-run; Rule-reachability review-lens; Scope-lock line-cap authoring sequence** |
+
+**Critical delta questions (this slice):**
+
+1. **Did the orchestrator-direct R(N+1) pattern hold?** **Yes — both instances (B.3, D.3) held through the next phase.** The slice-7 cautionary note ("safe for surgical, risky for structural") was observed — this slice's revisions were all surgical. v1.3 T-5 codification is correct.
+2. **How does v1.2.0 strictness interact with real-world dispatch fragility?** **Poorly on first contact.** The must-differ-provider + ≥3 family floor converts single-provider rate limits into hard-blocking friction. The codex-as-X swap pattern is a workable fallback but requires operator authorization mid-slice — NOT mechanizable today. v1.3 must-ship T-10 (escalation ladder), should-ship T-11 (manifest substitutes), should-ship T-12 (capability-matrix pre-check).
+3. **Does extension-class v1.2.0 adoption surface as much friction as greenfield-class slice 7?** **Same count (5 each), different classes.** Slice 7's friction concentrated in author-process (branch-state, helper-divergence, spec→impl traceability). Slice 6b.1's friction concentrates in dispatch-infrastructure × v1.2.0 policy interaction (F-054/F-055 are the heavyweight entries). Extension slices under v1.2.0 are NOT automatically lower-friction than greenfield slices — the policy strictness is the dominant variable.
+
+### Cross-slice friction trend (updated through slice 6b.1)
+
+| Class | Sl 1 | Sl 2 | PROV-1 | Sl 3 | Sl 4 | Sl 6a | Sl 7 | **Sl 6b.1** | Trend |
+|-------|------|------|--------|------|------|-------|------|-------------|-------|
+| Token-fill | 6 | 0 | 0 | 0 | 0 | 0 | 0 | **0** | Stable-clean |
+| Template gap | 3 | 1 | 0 | 1 | 0 | 0 | 1 | **1 (reachability audit)** | Low, recurring differently each slice |
+| Multi-family dispatch | 2 | 0 | 0 | 0 | 1 | 0 | 1 | **2 (F-054 + F-055)** | **Rising under v1.2.0** |
+| Verify-script | 1 | 0 | 0 | 0 | 1 | 1 | 1 | **1 (gate-command dry-run)** | Stable |
+| Manifest/schema | 0 | 1 | 0 | 0 | 0 | 1 | 1 | **1 (line-cap authoring)** | Stable |
+| Branch-state hygiene | — | — | — | — | — | — | 1 | **0** | Slice-7 only so far |
+| Helper-divergence disclosure | — | — | — | — | — | — | 1 | **0** | Slice-7 only so far |
+| Spec→Impl traceability | — | — | — | — | — | — | 1 | **0** | Slice-7 only so far |
+| **NEW: Dispatch × v1.2 policy** | — | — | — | — | — | — | — | **2 (F-054, F-055)** | First occurrence — v1.2.0 adopter |
+| **NEW: Manifest gate-command dry-run** | — | — | — | — | — | — | — | **1 (F-056)** | First occurrence |
+| **NEW: Review-lens reachability audit** | — | — | — | — | — | — | — | **1 (F-057)** | First occurrence |
+| **NEW: Scope-lock line-cap authoring** | — | — | — | — | — | — | — | **1 (F-058)** | First occurrence |
+| v1.3+ recs | — | — | — | — | — | T-1..T-3 | T-4..T-9 | **T-10..T-15** | Accumulating cleanly |
+
+**Net effect:** Slice 6b.1 surfaced 5 friction entries (F-054..F-058), matching slice 7. **All 5 are NEW friction classes or sub-classes not present in prior slices.** Dispatch × v1.2 policy is the dominant class (2 entries) — this is the big signal from first v1.2.0 adoption. The framework absorbed all 5 via in-session mitigation (codex-as-X swaps, surgical spec revisions, manifest tweaks), but mechanization is necessary for v1.3.
+
+The "converged for extension-class slices" claim from slice 7 **does NOT hold under v1.2.0** — this slice is extension-class and produced 5 friction entries, same cadence as greenfield slice 7. Refinement: **framework is converged for extension-class slices under v1.1.x; v1.2.0 first-contact surfaces a distinct friction footprint centered on dispatch × policy interaction.** Future v1.2.0 slices (sub-slice 2 / sub-slice 3) will clarify whether this is a first-contact spike or sustained.
+
+### F-054 / F-055 status
+
+First slice to exercise v1.2.0 end-to-end. Both entries describe a *previously-unobserved* friction class. Carry-forward: v1.3 T-10 (must-ship) codifies the escalation ladder; T-11 (should-ship) and T-12 (should-ship) mechanize the swap pattern so it's not operator-intervention-only. Until then, every v1.2.0 adopter slice that hits a required-family outage will need ad-hoc operator authorization of the swap.
