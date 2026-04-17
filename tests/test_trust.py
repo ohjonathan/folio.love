@@ -48,15 +48,23 @@ class TestDeriveTrustStatus:
 
 
 class TestSharedConsumerInvariant:
-    """Prove that folio.graph imports the shared helper (single source of truth).
-
-    This test will be extended in Phase C to also assert that folio.synthesize
-    imports the same helper, proving the shared-consumer contract across both
-    v0.7.1 graph and v0.8.0 synthesize.
-    """
+    """Both v0.7.1 graph and v0.8.0 synthesize call the same trust helper
+    object — the shared-consumer uniformity proof."""
 
     def test_graph_module_uses_shared_helper(self):
         from folio import graph as graph_mod
         from folio.tracking import trust as trust_mod
 
         assert graph_mod.derive_trust_status is trust_mod.derive_trust_status
+
+    def test_synthesize_module_uses_shared_helper(self):
+        from folio import synthesize as synth_mod
+        from folio.tracking import trust as trust_mod
+
+        assert synth_mod.derive_trust_status is trust_mod.derive_trust_status
+
+    def test_graph_and_synthesize_share_identical_helper_object(self):
+        from folio import graph as graph_mod
+        from folio import synthesize as synth_mod
+
+        assert graph_mod.derive_trust_status is synth_mod.derive_trust_status
