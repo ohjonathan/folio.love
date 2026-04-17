@@ -541,6 +541,25 @@ def test_no_forbidden_symbols_in_module():
             for kw in node.keywords:
                 if kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
                     assert False, "forbidden subprocess call with shell=True"
+            # DCB-4 completeness (codex D.5): Path.match / Path.glob on any
+            # object. The heuristic: any `.match()` or `.glob()` call on an
+            # attribute whose receiver is NOT `re` (already banned above)
+            # nor `regex` (already banned above). This bans pathlib.Path's
+            # pattern-matching surface outright; if a future slice needs
+            # Path.match legitimately, it must update this test and justify.
+            if isinstance(func, ast.Attribute) and func.attr in forbidden_path_attrs:
+                receiver = func.value
+                receiver_name = None
+                if isinstance(receiver, ast.Name):
+                    receiver_name = receiver.id
+                elif isinstance(receiver, ast.Attribute):
+                    receiver_name = receiver.attr
+                if receiver_name not in {"re", "regex"}:
+                    assert False, (
+                        f"forbidden Path-style call: .{func.attr}() — "
+                        f"pathlib.Path pattern-matching surface is banned in "
+                        f"folio/search.py per spec §2.3 (DCB-4 carry-forward)."
+                    )
 
     # (c) Subscript access on globals()/locals() — ast.Subscript with
     # value being a Call to Name('globals') or Name('locals').
