@@ -25,12 +25,76 @@ logger = logging.getLogger(__name__)
 
 
 class ScopeOrCommandGroup(click.Group):
-    """Click group that accepts either a subcommand or a bare scope argument."""
+    """Click group that accepts either a subcommand or a bare scope argument.
+
+    v1.2 extension (folio-enrich-diagnose CB-2 closure): handles BOTH
+    bare-positional-first (`folio enrich ClientA`) AND option-before-scope
+    (`folio enrich --dry-run ClientA`) forms by walking args, recognizing
+    Click option-with-value pairs, and rewriting the FIRST non-option,
+    non-subcommand token as `--scope X` regardless of position.
+
+    v1.3 extension (folio-enrich-diagnose CB-2 final closure): once a
+    registered subcommand token is encountered, the parser passes the
+    subcommand token AND all remaining tokens verbatim — no further
+    `--scope` rewrites. Prevents subcommand positional args from being
+    rewritten to group-level `--scope`.
+    """
 
     def parse_args(self, ctx, args):
-        if args and not args[0].startswith("-") and self.get_command(ctx, args[0]) is None:
-            args = ["--scope", args[0], *args[1:]]
-        return super().parse_args(ctx, args)
+        # Determine which group-level options take a value (so their value
+        # token is not mistaken for a positional scope).
+        value_taking_short = set()
+        value_taking_long = set()
+        for param in self.params:
+            if isinstance(param, click.Option) and not param.is_flag and not param.count:
+                for opt in param.opts:
+                    if opt.startswith("--"):
+                        value_taking_long.add(opt)
+                    elif opt.startswith("-"):
+                        value_taking_short.add(opt)
+
+        new_args: list[str] = []
+        rewrote = False
+        skip_next = False
+        saw_subcommand = False
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if saw_subcommand:
+                # v1.3 closure: pass subcommand args verbatim (do NOT rewrite
+                # the subcommand's positional scope to group-level --scope).
+                new_args.extend(args[i:])
+                break
+            if skip_next:
+                new_args.append(arg)
+                skip_next = False
+                i += 1
+                continue
+            if arg.startswith("-"):
+                new_args.append(arg)
+                opt_name = arg.split("=", 1)[0]
+                if "=" not in arg and (
+                    opt_name in value_taking_long or opt_name in value_taking_short
+                ):
+                    skip_next = True
+                i += 1
+                continue
+            # Non-option token
+            if rewrote:
+                new_args.append(arg)
+                i += 1
+                continue
+            if self.get_command(ctx, arg) is not None:
+                # Registered subcommand; pass through and stop rewriting.
+                new_args.append(arg)
+                saw_subcommand = True
+                i += 1
+            else:
+                # Treat as scope. Rewrite to --scope X.
+                new_args.extend(["--scope", arg])
+                rewrote = True
+                i += 1
+        return super().parse_args(ctx, new_args)
 
 
 def _matches_scope(path: str, scope: str) -> bool:
@@ -1125,8 +1189,8 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
         sys.exit(1)
 
 
-@cli.command()
-@click.argument("scope", required=False, default=None)
+@cli.group(cls=ScopeOrCommandGroup, invoke_without_command=True)
+@click.option("--scope", default=None, hidden=True)
 @click.option("--dry-run", is_flag=True, default=False,
               help="Show what would happen without writing files or calling LLM APIs.")
 @click.option("--llm-profile", default=None,
@@ -1137,6 +1201,8 @@ def refresh(ctx, scope: Optional[str], convert_all: bool):
 def enrich(ctx, scope, dry_run, llm_profile, force):
     """Enrich existing evidence and interaction notes with tags, entities, and relationships.
 
+    Subcommands: diagnose (read-only enrichability health check).
+
     Examples:
 
         folio enrich
@@ -1146,7 +1212,14 @@ def enrich(ctx, scope, dry_run, llm_profile, force):
         folio enrich ClientA/DD_Q1_2026 --dry-run
 
         folio enrich --llm-profile anthropic_sonnet --force
+
+        folio enrich diagnose ClientA/DD_Q1_2026
+
+        folio enrich diagnose --json --limit 50
     """
+    if ctx.invoked_subcommand is not None:
+        return  # delegate to subcommand (e.g. `enrich diagnose`)
+
     config = ctx.obj["config"]
 
     from .enrich import enrich_batch
@@ -1172,8 +1245,131 @@ def enrich(ctx, scope, dry_run, llm_profile, force):
         logger.exception("Enrich fatal error")
         sys.exit(1)
 
+    # PROD-SF-006: enrich → diagnose breadcrumb when notes stalled.
+    if result.protected + result.conflicted > 0:
+        scope_token = scope if scope else ""
+        tip = f"  Tip: run `folio enrich diagnose {scope_token}`".rstrip()
+        click.echo(tip + " to see why these notes stalled.")
+
     if result.failed > 0:
         sys.exit(1)
+
+
+# v1.0.0 diagnose CLI: BEGIN  (CB-4 firewall marker)
+@enrich.command("diagnose")
+@click.argument("scope", required=False, default=None)
+@click.option("--json", "json_output", is_flag=True, default=False,
+              help="Emit findings as a JSON envelope (schema_version 1.0).")
+@click.option("--limit", type=click.IntRange(min=1), default=None,
+              help="Cap rendered findings (post-sort). Default unbounded.")
+@click.pass_context
+def enrich_diagnose_cmd(ctx, scope, json_output, limit):
+    """Identify evidence and interaction notes whose managed sections cannot be safely updated by `folio enrich`.
+
+    Read-only diagnostic — never writes notes, frontmatter, or registry.
+
+    Examples:
+
+        folio enrich diagnose
+
+        folio enrich diagnose ClientA/DD_Q1_2026
+
+        folio enrich diagnose ClientA/DD_Q1_2026 --limit 10
+
+        folio enrich diagnose --json
+
+        folio enrich diagnose --json --limit 25
+
+    Notes: Findings on flagged notes are annotated with `[flagged]` inside
+    the severity bracket (e.g., `[error [flagged]]`). Diagnose surfaces
+    flagged notes by design — it is a diagnostic surface, not a discovery
+    surface; the discovery-surface flag for including flagged inputs (used
+    by sibling commands like `folio digest` and `folio search`) does not
+    apply to diagnose.
+    """
+    config = ctx.obj["config"]
+    from .enrich import diagnose_notes, ScopeResolutionError
+    try:
+        result = diagnose_notes(config, scope=scope, limit=limit)
+    except ScopeResolutionError as e:
+        click.echo(f"✗ {e}")
+        sys.exit(1)
+    except ValueError as e:
+        click.echo(f"✗ Configuration error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"✗ Fatal error: {e}")
+        logger.exception("Enrich diagnose fatal error")
+        sys.exit(1)
+
+    if json_output:
+        click.echo(_render_diagnose_json(result))
+    else:
+        _render_diagnose_text(result, click.echo)
+# v1.0.0 diagnose CLI: END  (CB-4 firewall marker)
+
+
+def _render_diagnose_text(result, echo) -> None:
+    """Render DiagnoseResult as human-readable text per spec §4.3."""
+    if not result.findings:
+        echo("No enrichment hygiene findings.")
+        return
+
+    for finding in result.findings:
+        suffix = " [flagged]" if finding.trust_status == "flagged" else ""
+        echo(
+            f"[{finding.severity}{suffix}] {finding.code} "
+            f"{finding.subject_id}: {finding.detail}"
+        )
+        echo(f"  Action: {finding.recommended_action}")
+
+    if result.truncated:
+        # Compute unfiltered count for the (showing N of M) hint.
+        unfiltered = result.summary.total
+        echo(f"... (showing {unfiltered} of more; raise --limit to see more)")
+
+    by_severity: dict[str, int] = {"error": 0, "warning": 0, "info": 0}
+    for f in result.findings:
+        by_severity[f.severity] = by_severity.get(f.severity, 0) + 1
+    parts = []
+    for sev in ("error", "warning", "info"):
+        if by_severity.get(sev):
+            parts.append(f"{by_severity[sev]} {sev}")
+    flagged_part = (
+        f" ({result.summary.flagged_total} flagged)"
+        if result.summary.flagged_total
+        else ""
+    )
+    echo("")
+    echo(f"{result.summary.total} findings{flagged_part}: " + ", ".join(parts) + ".")
+
+
+def _render_diagnose_json(result) -> str:
+    """Render DiagnoseResult as the §7 JSON envelope (schema_version 1.0)."""
+    payload = {
+        "schema_version": result.schema_version,
+        "command": result.command,
+        "scope": result.scope,
+        "limit": result.limit,
+        "findings": [
+            {
+                "code": f.code,
+                "severity": f.severity,
+                "subject_id": f.subject_id,
+                "detail": f.detail,
+                "recommended_action": f.recommended_action,
+                "trust_status": f.trust_status,
+            }
+            for f in result.findings
+        ],
+        "summary": {
+            "total": result.summary.total,
+            "by_code": dict(result.summary.by_code),
+            "flagged_total": result.summary.flagged_total,
+        },
+        "truncated": result.truncated,
+    }
+    return json.dumps(payload, indent=2)
 
 
 @cli.group(cls=ScopeOrCommandGroup, invoke_without_command=True)
