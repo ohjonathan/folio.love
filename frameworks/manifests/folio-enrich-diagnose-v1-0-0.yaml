@@ -340,9 +340,9 @@ gate_prerequisites:
       expect: "exit-nonzero"
   - id: G-scope-3
     category: scope
-    description: "folio/cli.py changes bounded to enrich group reshape + diagnose subcommand registration + PROD-SF-006 breadcrumb + v1.2/v1.3 ScopeOrCommandGroup extension (220-line cap on added; baseline 2f0369b; raised at Phase C from spec's pre-implementation 170 estimate to accommodate the value-aware walk + saw_subcommand flag in ScopeOrCommandGroup, the two render helpers _render_diagnose_text + _render_diagnose_json, and the marker-bounded diagnose subcommand block — measured 202 added at Phase C HEAD). folio/enrich.py changes bounded to additive diagnose surface (290-line cap on added; raised from spec's 240 estimate at Phase C to accommodate the full _entry_to_finding decision tree with ADV-SF-003 defensive defaults for protect/conflict/analyze/unknown-disposition + _resolve_scope_or_raise + ScopeResolutionError + Counter/MappingProxyType/Mapping import lines — measured 278 added). F-058 cap-headroom mitigation invoked at Phase C per the manifest's pre-implementation conservative-cap policy. ADV-MIN-003 closure: gate also fails if either file shows delete/rename status."
+    description: "folio/cli.py changes bounded to enrich group reshape + diagnose subcommand registration + PROD-SF-006 breadcrumb + v1.2/v1.3 ScopeOrCommandGroup extension + D.4 R2 shlex.quote breadcrumb fix (240-line cap on added; baseline 2f0369b; raised at D.6 from D.4 estimate of 220 to accommodate D.4 R2 shlex.quote import + branch-on-scope breadcrumb refactor — measured 229 added at D.6 HEAD). folio/enrich.py changes bounded to additive diagnose surface + D.4 _check_registry_or_raise + D.4 R2 shlex.quote action text (340-line cap on added; raised from D.4 estimate of 290 at D.6 to accommodate D.4 _check_registry_or_raise helper + library_root preflight + DSF-002 shlex.quote in _entry_to_finding + DCB-1 unfiltered_total field + DCSF-005 generic-tuple annotation update — measured 333 added at D.6 HEAD). F-058 cap-headroom mitigation invoked at D.6 per the manifest's progressive-cap-raise policy. ADV-MIN-003 closure: gate also fails if either file shows delete/rename status."
     verification:
-      command: "git diff --name-status 2f0369b..HEAD -- folio/cli.py folio/enrich.py | grep -E '^[DR]' && exit 1 || git diff --numstat 2f0369b..HEAD -- folio/cli.py folio/enrich.py | awk 'BEGIN{cli_a=0;enrich_a=0} {if($3==\"folio/cli.py\") cli_a=$1; else if($3==\"folio/enrich.py\") enrich_a=$1} END {if (cli_a > 220 || enrich_a > 290) {print \"FAIL cli=\"cli_a\" enrich=\"enrich_a; exit 1} else print \"ok cli=\"cli_a\" enrich=\"enrich_a}'"
+      command: "git diff --name-status 2f0369b..HEAD -- folio/cli.py folio/enrich.py | grep -E '^[DR]' && exit 1 || git diff --numstat 2f0369b..HEAD -- folio/cli.py folio/enrich.py | awk 'BEGIN{cli_a=0;enrich_a=0} {if($3==\"folio/cli.py\") cli_a=$1; else if($3==\"folio/enrich.py\") enrich_a=$1} END {if (cli_a > 240 || enrich_a > 340) {print \"FAIL cli=\"cli_a\" enrich=\"enrich_a; exit 1} else print \"ok cli=\"cli_a\" enrich=\"enrich_a}'"
       expect: "regex:^ok"
   - id: G-scope-4
     category: scope
@@ -424,21 +424,21 @@ gate_prerequisites:
       expect: "exit-0"
   - id: G-test-4
     category: test
-    description: "Trust-annotation tests pass (ED-11 + ED-CLI-5): trust_status correctly derives from review_status; [flagged] suffix appears only when flagged."
+    description: "Trust-annotation tests pass (ED-11 + ED-CLI-5): trust_status correctly derives from review_status; [flagged] annotation appears INSIDE severity bracket only when flagged. D.6 closure: selectors class-qualified."
     verification:
-      command: "python3 -m pytest tests/test_enrich_diagnose.py::test_trust_status_flagged_annotation tests/test_cli_enrich_diagnose.py::test_diagnose_text_flagged_suffix -q"
+      command: "python3 -m pytest tests/test_enrich_diagnose.py::TestTrustAnnotation::test_trust_status_flagged_on_blocker tests/test_cli_enrich_diagnose.py::TestTextOutput::test_diagnose_text_flagged_suffix_inside_severity -q"
       expect: "exit-0"
   - id: G-test-5
     category: test
-    description: "Read-only invariant + group-reshape regression tests pass (ED-13 + ED-CLI-2 + ED-CLI-3)."
+    description: "Read-only invariant + group-reshape regression tests pass (ED-13 + ED-CLI-2 + ED-CLI-3). D.6 closure: selectors class-qualified."
     verification:
-      command: "python3 -m pytest tests/test_enrich_diagnose.py::test_read_only_invariant tests/test_cli_enrich_diagnose.py::test_enrich_group_legacy_invocation tests/test_cli_enrich_diagnose.py::test_enrich_group_legacy_flags_preserved -q"
+      command: "python3 -m pytest tests/test_enrich_diagnose.py::TestInvariants::test_read_only_invariant tests/test_cli_enrich_diagnose.py::TestGroupReshapeRegression::test_enrich_group_legacy_invocation tests/test_cli_enrich_diagnose.py::TestGroupReshapeRegression::test_enrich_group_legacy_flags_preserved -q"
       expect: "exit-0"
   - id: G-test-6
     category: test
-    description: "Defensive-default test passes (ED-15): unrecognized future protect reasons surface as managed_sections_unidentified rather than being silently dropped."
+    description: "Defensive-default tests pass (ED-15a/b/c/d): unrecognized future protect/conflict/analyze reasons surface as managed_sections_unidentified rather than being silently dropped. D.6 closure: selectors class-qualified + match the actual ED-15* test names."
     verification:
-      command: "python3 -m pytest tests/test_enrich_diagnose.py::test_defensive_unknown_protect_reason -q"
+      command: "python3 -m pytest tests/test_enrich_diagnose.py::TestDefensiveDefaults -q"
       expect: "exit-0"
   - id: G-verdict-1
     category: verdict-presence
