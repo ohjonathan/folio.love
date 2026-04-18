@@ -956,3 +956,138 @@ Bundle delta absorbed (54 files changed):
 All existing folio manifests (v1.1.0 / v1.1.1) remain valid unchanged. Next slice manifest should declare `manifest_version: "1.2.0"` to unlock fast-path + new schema fields.
 
 Resync PR: opened after this retro append.
+
+---
+
+## Slice 6b.3 — `folio search` v0.9.0 (Phase E retrospective)
+
+**Deliverable:** `folio-search-v0-9-0` at commit `90b6d75` on branch `feat/folio-search-v0-9-0-C-author-claude`. Sub-slice 3 of Shipping Plan §15.6 (shared-consumer expansion) — the final sub-slice. This merge closes §15.6 and completes Slice 6b.
+
+**Pattern:** greenfield + first minor-version bump of the shared `--json` envelope (`schema_version: "1.0"` → `"1.1"` via addition of `query` top-level key) + proof of the shared-consumer invariant at N=3 surfaces (`folio.graph`, `folio.synthesize`, `folio.search`).
+
+### Slice 6b.3 closure (Phase E summary)
+
+| Metric | Value |
+|---|---|
+| Phases executed | A, B.1 (one round, 4-lens), B.3 (author-direct per F-059), C, D.2 (one round, 4-lens), D.3 (author-direct per F-059), D.4, D.5 (three verifiers — codex FAIL on DCB-4 closed via addendum), D.6 (author-direct per F-059), E |
+| Phase A spec versions | v1.0 → v1.1 (single revision cycle; surgical closure of 4 B.1 blockers + 5 CSF convergent should-fix + 13 single-lens should-fix) |
+| Blockers raised (B.1 R1) | 4 canonical (CB-1 codex standalone; CB-2 codex standalone core behavior; CB-3 codex+peer 2-lens; CB-4 peer standalone code-reality) |
+| Blockers raised (D.2 R1) | 0 — 5 canonical D.2 should-fix (DCB-1..5) consolidated, including DCB-1 3-LENS convergence (codex+peer+product) on producer zero-match hint |
+| Blockers preserved at ship | **0** (all 4 B.1 CBs closed via v1.1 spec + all 5 DCBs closed via D.4 + DCB-4 addendum) |
+| Should-fix raised | 16 B.1 + 16 D.2 = 32 (many convergences; several accepted-as-is with documented disposition) |
+| Test count delta | +75 new tests (41 unit SRC-1..SRC-41 + 2 new DCB closures SRC-42, SRC-43 + 31 CLI SRC-CLI-1..SRC-CLI-31 + 2 new DCB CLI closures SRC-CLI-32, SRC-CLI-33 + 2 shared-consumer invariants in test_trust.py for N=3) |
+| Full scope + regression suite at ship | 276 passed (sub-slice 2 shipped at 1913 passed; slice 6b.3 adds +75 new plus cross-surface regression coverage) |
+| D.6 gate result | **21/21 PASSED** (all gate_prerequisites green; working tree clean; branch 5 commits ahead of main) |
+| Adopter-only contract | honored — zero bundle edits; forbidden-path diff returned `NONE` |
+| v1.2.0 features exercised | must-differ-provider (codex adversarial + codex D.5 verifier + codex D.6 final-approval; claude-sub peer + product non-adversarial; gemini alignment), verify-p3 (3-family D.5; codex FAIL surfaced via addendum then closed), manifest_version 1.2.0 fast-path |
+
+#### What worked
+
+1. **Operator-confirmed product shape pre-B.1** (via AskUserQuestion) — locked QUERY substring semantics, `--producer`-only filter, and schema_version "1.1" story before manifest/spec draft. Zero B.1 blockers on product-shape reinterpretation.
+2. **F-051 surgical-fixes fast-path held for a THIRD consecutive sub-slice.** v0.7.1 B.3, v0.8.0 B.3+D.3, and v0.9.0 B.3+D.3 all consolidated directly via v1.1 spec revision + D.4 surgical fix without R2 escalation. Pattern is durable.
+3. **3-lens convergence appeared at D.2** (DCB-1 producer-hint bug caught by codex + peer + product independently). Consistent with the sub-slice 2 observation: convergent blockers are the most important signal. 3-lens convergence is particularly load-bearing — three independent lenses reaching the same fact is near-certain defect.
+4. **First minor-version bump of the shared envelope went cleanly.** Synthesize §3.3 versioning policy ("Producers MUST bump minor when adding a top-level key") exercised in production for the first time via `query` additive → schema_version 1.0→1.1. Gemini alignment APPROVED with no blockers; policy compliance was unambiguous.
+5. **D.5 codex FAIL on DCB-4 caught real test-completeness gap.** `forbidden_path_attrs` was defined but never used in the AST walk — a regression guard that would silently allow future Path.match/glob calls. Codex spotted it; surgical addendum (13 LOC) closed it without rework. Validates the 3-family verify-p3 discipline.
+
+#### What broke
+
+1. **Branch-state drift mid-Phase-A (F-063).** After `git checkout main && git checkout -b feat/folio-search-v0-9-0-C-author-claude`, the `docs/v1.3-framework-input` branch somehow remained the effective HEAD for the Phase A commit. Non-destructive recovery via `git branch -f` + `git rebase --onto main` worked, but the root cause of the drift is unclear — possibly interleaved Bash commands or a confused shell state. Low severity (author-correctable) but worth surfacing.
+2. **Permission gate denied `claude --dangerously-skip-permissions` for subagent dispatch (F-064).** Sub-slice 2 used direct `claude -p` CLI dispatches for peer + product reviews. In this slice's session, the `--dangerously-skip-permissions` flag was denied by permission mode, forcing a route through the integrated `Agent` subagent tool. The Agent-tool route worked cleanly but created a different invocation surface per-role — codex/gemini via CLI, claude-sub via Agent. Medium severity for session-mode variability.
+3. **G-scope-3 line-cap tightness for a richer CLI surface (F-065).** Synthesize's 50-line cap held because synthesize had only 3 flags + optional positional. Search has 5 flags + required positional + QUERY callback + IntRange validator + v0.9.1 foreshadow in docstring → ~89 lines. F-058 headroom mitigation invoked mid-slice (cap raised 50→100). Defensible, but the pattern suggests line-caps should be authored AFTER the CLI footprint is sketched, not at manifest-freeze time.
+4. **D.5 verifier surfaced a test-completeness regression gap (F-066).** Codex's "defined but never used" finding on `forbidden_path_attrs` was a legitimate regression-prevention gap — the AST walk would have silently missed future Path.match/glob additions. Surgical post-D.5 addendum closed it (13 LOC + 3-line justification). This is a NEW failure mode not seen in sub-slices 1 or 2: "defined-but-unused" test infrastructure.
+
+#### New friction classes (this slice)
+
+| ID | Severity | Class | Title | v1.3 target |
+|---|---|---|---|---|
+| F-063 | Low | Author × git state drift | Phase A commit landed on wrong branch despite explicit `checkout -b`; non-destructive recovery required | Adopter CLAUDE.md boilerplate: "After creating a feature branch, verify `git branch --show-current` immediately before the first commit." Framework template 01 Phase A pre-authoring check. |
+| F-064 | Medium | Adopter × session-mode × CLI dispatch | `claude --dangerously-skip-permissions` for peer/product subagent dispatch denied by permission gate; Agent tool routing worked as fallback | Framework capability-matrix: `subagent_dispatch_mode: cli-flag \| agent-tool \| mcp-task`. Document the trade-offs (agent-tool preserves permission gates; CLI-flag is faster but requires authorization). |
+| F-065 | Low | Manifest × line-cap drift | G-scope-3 synthesize-tuned cap (50) too tight for search's richer CLI surface; F-058 headroom invoked mid-slice | Template 02 (manifest): propose a two-tier cap — "tight cap" for synthesize-like CLI registrations, "rich cap" for those with callbacks + IntRange + multiple flags. Or: move line-caps to D.1 authoring window after CLI footprint is sketched. |
+| F-066 | Medium | D.5 verifier × test-completeness gap | Codex caught `forbidden_path_attrs` defined but never used in AST walk; surgical addendum required post-D.5 | Peer-review template (template 03) Phase C should include: "For every `forbidden_*` / `expected_*` collection defined in a test, grep the same test for a usage site. Flag any unused." Also: verify-d6-gate.sh could add a "defined-but-unused" regression scanner. |
+
+F-054..F-062 from prior sub-slices are closed signal; this slice did not re-encounter them (the codex-as-X swap pattern did not need invocation — codex, gemini, and claude-sub all participated in every dispatch without outage). F-059 author-direct consolidation pattern was invoked at B.3, D.3, and D.6 under wall-clock pressure (consistent with sub-slice 2 precedent).
+
+#### F-063 / F-064 / F-065 / F-066 status
+
+- **F-063** is a one-off author oversight; codifying the `git branch --show-current` check in adopter CLAUDE.md is sufficient.
+- **F-064** is a session-mode variability issue that affects any future sub-slice dispatched from an interactive permission-gated session. Agent-tool routing is a clean fallback; framework documentation should make this a first-class alternative rather than a workaround.
+- **F-065** is a manifest-authoring ergonomics issue; v1.3 template updates can address it cheaply.
+- **F-066** is the most substantive — it's a general test-quality pattern ("forbidden-set defined but never enforced" is a broader anti-pattern than just AST walks). v1.3 should add an automated scanner.
+
+---
+
+## Slice 6b rollup — §15.6 shared-consumer expansion complete
+
+Sub-slices 1 + 2 + 3 collectively close Shipping Plan §15.6 (shared-consumer expansion) and complete Slice 6b. This section aggregates cumulative metrics, friction classes, and v1.3 recommendations across all three.
+
+### Cumulative metrics
+
+| Metric | Sub-slice 1 (v0.7.1 graph) | Sub-slice 2 (v0.8.0 synthesize) | Sub-slice 3 (v0.9.0 search) | **Cumulative** |
+|---|---|---|---|---|
+| Pattern | Retrofit on existing command | Greenfield + shared-envelope design + Phase 0 helper promotion | Greenfield + first minor-version bump of shared envelope | — |
+| PR / merge | PR #60 / 3d413a9 | PR #65 / 741f0b6 | pending at 90b6d75 | 3 merges |
+| Spec revisions | v1.0 → v1.2 (2 cycles; CB-2 closure required B.1 R2) | v1.0 → v1.1 (single cycle, F-051 fast-path) | v1.0 → v1.1 (single cycle, F-051 fast-path) | 4 revisions total |
+| B.1 canonical blockers raised | 5 | 6 | 4 | **15** |
+| D.2 canonical blockers raised | 3 | 2 | 0 (5 should-fix instead) | **5** |
+| D.5 verifier failures closed pre-ship | 0 | 0 | 1 (DCB-4 via addendum) | **1** |
+| Preserved blockers at ship | 0 | 0 | 0 | **0** |
+| Total tests added | +28 (graph) | +52 (synthesize) | +75 (search) | **+155 tests** |
+| Phase 0 helpers promoted | `_derive_trust_status` (identified for sub-slice 2) | `_derive_trust_status` → `folio.tracking.trust.derive_trust_status` (landed at 831a741) | None (sub-slice 3 is pure consumer) | 1 helper |
+| Shared-envelope evolution | Pre-envelope (no schema_version / command) | `"1.0"` baseline designed | `"1.1"` first minor bump via `query` additive | 2 envelope generations |
+| Shared-consumer invariant N | N=2 (graph + trust.py helper, via ADV-SF6 target) | N=2 (graph + synthesize, helper promoted) | **N=3 (graph + synthesize + search)** | Pattern proven at three |
+
+### Cumulative friction classes (F-054..F-066)
+
+| ID | Slice | Severity | Class | v1.3 target |
+|---|---|---|---|---|
+| F-054 | 6b.1 | Medium | Dispatch-blocking single-provider outage | Framework dispatch-outage fallback ladder (documented in memory) |
+| F-055 | 6b.1 | Medium | Capability-matrix `shell:false` semantics | Schema distinguishes `shell` from `can_execute_non_interactively` |
+| F-056 | 6b.1 | Low | `cardinality_assertions` pre-impl ambiguity | Manifest schema clarifies gate-time vs freeze-time semantics |
+| F-057 | 6b.1 | Low | Carry-forward table formatting | Template 02 example block |
+| F-058 | 6b.1 | Low | Line-cap timing | D.1 authoring window for scope-line-caps |
+| F-059 | 6b.2 | Medium | Author-direct consolidation mode | Manifest `consolidation_mode` field + template 06 variant |
+| F-060 | 6b.2 | **High** | Codex AGENTS.md activation infinite loop | Adopter AGENTS.md install-check + framework template 01 "skip failing activation" boilerplate |
+| F-061 | 6b.2 | Medium | Gemini `-p` file-write semantics | Capability-matrix `output_mode: stdout-only` + dispatcher auto-redirect |
+| F-062 | 6b.2 | Medium | Test-blessed spec-vs-code divergence | Framework template 01 "don't bless the gap" + peer/adversarial "test-blessed divergence audit" prompts |
+| F-063 | 6b.3 | Low | Phase A branch-state drift | Adopter CLAUDE.md `git branch --show-current` check |
+| F-064 | 6b.3 | Medium | Subagent dispatch permission gate | Framework capability-matrix `subagent_dispatch_mode` declaration |
+| F-065 | 6b.3 | Low | CLI line-cap tuning drift | Two-tier cap proposal OR D.1-window authoring |
+| F-066 | 6b.3 | Medium | D.5 verifier test-completeness gap | Peer template 03 "unused collection detector" + verify-d6-gate.sh scanner |
+
+**Severity distribution:** 1 high (F-060 codex activation), 6 medium (F-054/F-055/F-059/F-061/F-062/F-064/F-066), 6 low (F-056/F-057/F-058/F-063/F-065). Zero critical — the framework survived three full lifecycle runs at manifest v1.2.0 without a framework-side crash.
+
+### v1.3 recommendations (T-10..T-18)
+
+Consolidated from the three sub-slice retros:
+
+- **T-10** (from F-054, 6b.1): Dispatch-outage fallback ladder promoted from memory to framework template 06 "dispatch resilience." Specifies 1h retry → ≤24h halt → >24h 3-lens + supplementary round. **Rollup priority:** HIGH — this is an existing pattern being formalized.
+- **T-11** (F-055, 6b.1): Capability-matrix schema adds `can_execute_non_interactively` alongside `shell`. Distinguishes "has a shell" from "can run commands without a terminal." **Rollup priority:** MEDIUM.
+- **T-12** (F-056, 6b.1): Manifest schema clarifies `cardinality_assertions` vs `gate_prerequisites` — the former is declarative, the latter runtime-enforced. **Rollup priority:** LOW (reworded comment in sub-slice 3 v1.1 per CB-1 is a concrete example).
+- **T-13** (F-058 + F-065, 6b.1+6b.3): Line-cap authoring window moves from manifest-freeze (Phase A) to D.1 (post-test-plan). Or adds a two-tier cap declaration (`tight_cap` / `rich_cap`). **Rollup priority:** LOW-MEDIUM.
+- **T-14** (F-059, 6b.2+6b.3): Manifest `consolidation_mode: external-consolidator | author-direct` field with evidence-citation discipline for author-direct. Template 06 author-direct variant. **Rollup priority:** MEDIUM — invoked in both 6b.2 and 6b.3.
+- **T-15** (F-060, 6b.2): Adopter-side codex AGENTS.md activation skip boilerplate. **Rollup priority:** HIGH — F-060 is the only high-severity friction class.
+- **T-16** (F-061, 6b.2): Gemini dispatcher wrapper with auto-redirect from stdout. `output_mode: stdout-only` capability declaration. **Rollup priority:** MEDIUM.
+- **T-17** (F-062, 6b.2): Template 01 Phase C "don't bless the gap" + peer/adversarial "test-blessed divergence audit" prompts. **Rollup priority:** MEDIUM.
+- **T-18** (F-064 + F-066, 6b.3): Capability-matrix `subagent_dispatch_mode` + peer-template "unused collection detector" + verify-d6-gate.sh "defined-but-unused" scanner. **Rollup priority:** MEDIUM.
+
+### Slice 6b closure — §15.6 complete
+
+Shipping Plan §15.6 (`docs/specs/tier4_discovery_proposal_layer_spec.md` rev 5 lines 457-465) named three shared-consumer surfaces:
+
+> "as `folio synthesize` (v0.8.0), `folio search` (v0.9.0), and generalized `folio graph` proposals ship, each consumes the shared proposal contract from § 5 and inherits rejection memory, lifecycle states, and trust gating landed in slices 1–5"
+
+All three have now shipped with identical shared-contract consumption (§5 all 11 keys emitted per finding, §11 trust-gating rules 1-5 honored, §12 uniformity proven at N=3 via `is`-identity test). Rejection memory (§10.1), lifecycle states (§6), and trust gating (§11) all inherited as specified.
+
+§15.6 closes on merge of `90b6d75`. Slice 6b is complete.
+
+### What §15.6's completion changes
+
+- **Shared-consumer pattern scales to N=3.** Future surfaces that consume §5 proposals have a clear template (synthesize's §3 structure, now refined by search's §3.6 Unicode + CB-2 closures).
+- **Shared envelope has one real minor bump in production.** `schema_version` 1.0→1.1 via search's `query` additive. The versioning policy (synthesize §3.3) is no longer theoretical.
+- **Next natural slices:**
+  1. `render_envelope` hoist to `folio/_shared_envelope.py` (touches graph + synthesize + search together; closes the "acceptable duplication, lift-later" disposition).
+  2. Graph `--json` envelope migration from pre-envelope state to schema_version "1.0" or "1.1" (still divergent surface after slice 6b).
+  3. Entity-merge / diagram-archetype `proposal_type` dispatch when producers ship.
+  4. Multi-lifecycle collector extension (for search over rejected / accepted / suppressed proposals) — requires crossing `folio/links.py`.
+
+None of these were part of §15.6; they are follow-ups for the next planning cycle.

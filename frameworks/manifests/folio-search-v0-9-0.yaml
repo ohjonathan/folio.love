@@ -1,0 +1,437 @@
+# Deliverable manifest: folio-search-v0-9-0
+#
+# Greenfield deliverable (Shipping Plan §15.6 Slice 6b sub-slice 3 of 3 —
+# FINAL sub-slice; this merge closes §15.6 shared-consumer expansion and
+# completes Slice 6b). Introduces `folio search` — a new CLI command that
+# consumes the shared §5 proposal contract from
+# docs/specs/tier4_discovery_proposal_layer_spec.md from the clean-slate side.
+# Proves the shared-consumer pattern holds at N=3 surfaces (graph v0.7.1,
+# synthesize v0.8.0, search v0.9.0).
+#
+# Sub-slice lineage:
+#   - Sub-slice 1 (folio-graph-generalized-proposals-v0-7-1) shipped at
+#     PR #60 / merge 3d413a9 on 2026-04-16 — retrofit pattern on existing
+#     command; established _derive_trust_status (private) + shared-contract
+#     consumer signature on graph.
+#   - Sub-slice 2 (folio-synthesize-v0-8-0) shipped at PR #65 / merge
+#     741f0b6 on 2026-04-17 — greenfield pattern on new command; promoted
+#     _derive_trust_status to folio.tracking.trust.derive_trust_status
+#     (Phase 0, commit 831a741) and designed the shared payload-level
+#     `--json` envelope (schema_version 1.0, command, 6 top-level keys).
+#   - Sub-slice 3 (this deliverable) — greenfield pattern on a new command
+#     with operator-confirmed product shape: required QUERY positional,
+#     casefold-substring match, `--producer` as only structured filter,
+#     envelope bumped to schema_version "1.1" via addition of `query`
+#     top-level key (first minor-version increment of the shared envelope;
+#     compliant with synthesize §3.3 versioning policy).
+#
+# Pre-A INHERITED from tier4_discovery_proposal_layer_spec.md rev 5 §§ 5
+# (Proposal Object Contract), 11 (Trust-Gated Surfacing), 12 (Shared
+# Consumers — search row), 15.6 (Shared-consumer expansion — search row),
+# 15.7 (narrow-don't-reinterpret). Phase A narrows those §§ into the
+# implementation spec at docs/specs/v0.9.0_folio_search_spec.md. F-049
+# compliance: cite sections by number and name, not paraphrase.
+#
+# NO Phase 0 prep required this slice. All carry-forwards landed in
+# sub-slices 1 and 2:
+#   - Shared trust helper: folio.tracking.trust.derive_trust_status exists
+#     at commit 831a741 (sub-slice 2 Phase 0); search consumes it verbatim.
+#   - Shared envelope contract: synthesize §3.3 established the canonical
+#     shape (schema_version, command, scope, trust_override_active,
+#     excluded_flagged_count, findings) — search extends it with a 7th
+#     top-level `query` key, bumping to "1.1" per the versioning policy.
+# G-scope-1 baselines at main@741f0b6 (parent commit; NO Phase 0 floor in
+# this slice — Phase A is the first commit).
+#
+# Codex assigned to adversarial role per v1.2.0 must-differ-provider
+# invariant (author family = claude → adversarial family ≠ claude*).
+#
+# Adopter-only contract in effect: no bundle edits. Bundle at
+# frameworks/llm-dev-v1/ remains byte-identical to johnny-os@e40b5c3
+# (v1.2.0).
+
+manifest_version: "1.2.0"
+id: folio-search-v0-9-0
+slug: folio-search
+summary: "Greenfield `folio search` command: a read-only QUERY lens over the pending proposal queue that consumes the §5 shared proposal contract, uses the shared `folio.tracking.trust.derive_trust_status` helper (proving the shared-consumer pattern at N=3 surfaces), honors §11 trust-gating with `--include-flagged`, and emits the shared payload-level `--json` envelope at `schema_version: \"1.1\"` (first minor-version bump) with a new `query` top-level key. Substring + casefold matching against 6 text fields (source_id, target_id, relation, producer, reason_summary, evidence_bundle elements); `--producer` as the single structured filter flag in v0.9.0. Regex/ranking/semantic search and multi-lifecycle scope deferred to v0.9.1+. Third of three Shipping Plan §15.6 sub-slices; this merge closes §15.6 and completes Slice 6b."
+
+user_facing: true
+
+# Pre-A inheritance note (v1.2.0 schema strictness):
+# pre_a.entry {proposal|triage|validation} declares a NEW pre-A artifact.
+# This slice inherits pre-A from the ratified parent spec
+# docs/specs/tier4_discovery_proposal_layer_spec.md rev 5 — §§ 5, 11, 12,
+# 15.6, 15.7. Phase A narrows those §§ per §15.7. The pre_a block is
+# omitted (optional under schema) to avoid misclassifying inherited
+# ratification as a new proposal/triage/validation entry point.
+# F-049 compliance: §§ named not paraphrased.
+
+owners:
+  - "Jonathan Oh (ohjonathan)"
+
+scope:
+  allowed_paths:
+    # Greenfield module
+    - folio/search.py
+    # CLI registration (narrow addition — see G-scope-3 line-cap)
+    - folio/cli.py
+    # Tests
+    - tests/test_search.py
+    - tests/test_cli_search.py
+    - tests/test_trust.py
+    # Version + changelog
+    - pyproject.toml
+    - CHANGELOG.md
+    # Spec + manifest
+    - docs/specs/v0.9.0_folio_search_spec.md
+    - frameworks/manifests/folio-search-v0-9-0.yaml
+    # Validation artifacts (per-phase)
+    - docs/validation/v0.9.0_spec_peer_claude-sub.md
+    - docs/validation/v0.9.0_spec_alignment_gemini.md
+    - docs/validation/v0.9.0_spec_adversarial_codex.md
+    - docs/validation/v0.9.0_spec_product_claude-sub.md
+    - docs/validation/v0.9.0_spec_canonical_verdict.md
+    - docs/validation/v0.9.0_code_peer_claude-sub.md
+    - docs/validation/v0.9.0_code_alignment_gemini.md
+    - docs/validation/v0.9.0_code_adversarial_codex.md
+    - docs/validation/v0.9.0_code_product_claude-sub.md
+    - docs/validation/v0.9.0_code_canonical_verdict.md
+    - docs/validation/v0.9.0_d4_fix_summary.md
+    - docs/validation/v0.9.0_d5_verification_gemini.md
+    - docs/validation/v0.9.0_d5_verification_codex.md
+    - docs/validation/v0.9.0_d5_verification_claude-sub.md
+    - docs/validation/v0.9.0_d6_final_approval.md
+    # Retro + supplement (Phase E)
+    - docs/retros/llm-dev-v1-adoption.md
+    - frameworks/manifests/framework-learnings-v1.1-adoption.md
+  forbidden_paths:
+    # Sibling shared-consumer surfaces (read-only references; zero edits)
+    - folio/graph.py
+    - folio/synthesize.py
+    # Shared helper (landed in sub-slice 2 Phase 0 at 831a741)
+    - folio/tracking/trust.py
+    # Shared collector + §5 read path
+    - folio/links.py
+    # Not in scope for greenfield search
+    - folio/digest.py
+    - folio/enrich.py
+    - folio/provenance.py
+    - folio/tracking/entities.py
+    - folio/tracking/registry.py
+    - folio/tracking/sources.py
+    - folio/tracking/versions.py
+    - folio/pipeline/
+    # Parent design specs (read-only references per §15.7)
+    - docs/specs/tier4_discovery_proposal_layer_spec.md
+    - docs/specs/tier4_digest_design_spec.md
+    # Sibling slice specs (read-only references)
+    - docs/specs/v0.7.1_folio_graph_generalized_proposals_spec.md
+    - docs/specs/v0.8.0_folio_synthesize_spec.md
+    # Adopter-only contract
+    - frameworks/llm-dev-v1/
+    - docs/product/
+    - docs/architecture/
+    - ontos/
+    - .github/
+    - Ontos_Context_Map.md
+    - AGENTS.md
+  forbidden_symbols:
+    - "pickle.loads"
+    - "eval("
+  cardinality_assertions:
+    # CB-1 (B.3 canonical verdict — codex ADV-B1-001 closure, v1.1):
+    # These commands are POST-IMPLEMENTATION runtime identity checks.
+    # Pre-Phase-C (before folio/search.py exists) they correctly FAIL;
+    # that failure is expected behavior, not a manifest defect. They
+    # RUN at D.6 gate time (mirrored into gate_prerequisites as
+    # G-cardinality-1..4 for gate enforcement); their presence here is
+    # declarative — documenting the invariants the slice commits to.
+    # F-056 mitigation (runtime enforcement) lives in gate_prerequisites.
+    # F-058 mitigation: line-caps (G-scope-3) authored conservatively; can
+    # expand at D.1 if headroom is needed.
+    - name: "search command is registered on the Click CLI (runtime introspection)"
+      command: "python3 -c 'from folio.cli import cli; assert \"search\" in cli.commands, sorted(cli.commands.keys()); print(1)'"
+      expect: "eq:1"
+    - name: "shared envelope schema_version constant exported by folio.search (bumped to 1.1)"
+      command: "python3 -c 'from folio.search import SCHEMA_VERSION; assert SCHEMA_VERSION == \"1.1\", SCHEMA_VERSION; print(1)'"
+      expect: "eq:1"
+    - name: "shared envelope command constant exported by folio.search"
+      command: "python3 -c 'from folio.search import COMMAND_NAME; assert COMMAND_NAME == \"search\", COMMAND_NAME; print(1)'"
+      expect: "eq:1"
+    - name: "shared-consumer invariant (N=3): folio.search uses folio.tracking.trust.derive_trust_status (identity check)"
+      command: "python3 -c 'from folio import search as s; from folio.tracking import trust as t; assert s.derive_trust_status is t.derive_trust_status; print(1)'"
+      expect: "eq:1"
+    - name: "shared-consumer invariant (sub-slice 2 carry-forward): folio.synthesize uses the shared helper"
+      command: "python3 -c 'from folio import synthesize as s; from folio.tracking import trust as t; assert s.derive_trust_status is t.derive_trust_status; print(1)'"
+      expect: "eq:1"
+    - name: "shared-consumer invariant (sub-slice 1 carry-forward): folio.graph uses the shared helper"
+      command: "python3 -c 'from folio import graph as g; from folio.tracking import trust as t; assert g.derive_trust_status is t.derive_trust_status; print(1)'"
+      expect: "eq:1"
+    - name: "no direct LLM imports in folio/search.py (v0.9.0 structural-only MVP; MIN-2 file-existence-guarded)"
+      command: "test -f folio/search.py && ! grep -E 'from folio.llm|import folio.llm|from openai|import openai|from anthropic|import anthropic' folio/search.py"
+      expect: "exit-0"
+
+artifacts:
+  spec:              "docs/specs/v0.9.0_folio_search_spec.md"
+  family_verdict:    "docs/validation/v0.9.0_<phase>_<role>_<family>.md"
+  canonical_verdict: "docs/validation/v0.9.0_<phase>_canonical_verdict.md"
+  product_verdict:   "docs/validation/v0.9.0_<phase>_product_<family>.md"
+  fix_summary:       "docs/validation/v0.9.0_d4_fix_summary.md"
+  verification:      "docs/validation/v0.9.0_d5_verification_<family>.md"
+  final_approval:    "docs/validation/v0.9.0_d6_final_approval.md"
+  retro:             "docs/retros/llm-dev-v1-adoption.md"
+
+# Model assignments — mirror folio-synthesize-v0-8-0 structure.
+# v1.2.0 invariant: adversarial family must NOT share provider with author
+# (claude ≠ codex — OK). Dispatch-outage fallback per F-054/F-055/F-059:
+# if gemini or codex is unreachable at 1h retry horizon, halt ≤24h;
+# >24h escalate to 3-lens + supplementary round. codex-as-gemini swap and
+# codex-as-alignment swap are pre-authorized precedents.
+model_assignments:
+  - phase: "A"
+    assignments:
+      claude: spec-author
+  - phase: "B.1"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.1"
+    assignments:
+      claude-sub: product
+  - phase: "B.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.2"
+    assignments:
+      claude-sub: product
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude: implementation-author
+  - phase: "D.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "D.2"
+    assignments:
+      claude-sub: product
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude: fix-author
+  # v1.2.0 review-phase invariant: D.5 requires ≥3 non-author engineering
+  # families (verify-p3). Mirrors sub-slices 1+2 v1.2.0 treatment.
+  - phase: "D.5"
+    assignments:
+      gemini:     verifier
+      codex:      verifier
+      claude-sub: verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      claude: retro
+
+cli_capability_matrix:
+  claude:      { shell: true, git: true,  test_runner: true,  doc_index: true  }
+  claude-sub:  { shell: true, git: true,  test_runner: true,  doc_index: true  }
+  codex:       { shell: true, git: true,  test_runner: true,  doc_index: false }
+  gemini:      { shell: true, git: false, test_runner: false, doc_index: false }
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "folio imports"
+        command: "python3 -c 'import folio'"
+        expect: "exit-0"
+      - name: "search module imports"
+        command: "python3 -c 'import folio.search'"
+        expect: "exit-0"
+      - name: "search + scope-relevant test suites"
+        command: "python3 -m pytest tests/test_search.py tests/test_cli_search.py tests/test_trust.py tests/test_synthesize.py tests/test_cli_synthesize.py tests/test_graph.py tests/test_graph_cli.py -q"
+        expect: "exit-0"
+      - name: "lint clean on scope paths"
+        command: "python3 -m ruff check folio/search.py"
+        expect: "exit-0"
+      - name: "folio search --help works (smoke)"
+        command: "python3 -m folio search --help"
+        expect: "exit-0"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards:
+  - name: "Sub-slice 2 synthesize tests (shared-contract greenfield)"
+    command: "python3 -m pytest tests/test_synthesize.py tests/test_cli_synthesize.py -q"
+    owns_deliverable_id: "folio-synthesize-v0-8-0"
+  - name: "Sub-slice 1 graph tests (shared-contract retrofit)"
+    command: "python3 -m pytest tests/test_graph.py tests/test_graph_cli.py -q"
+    owns_deliverable_id: "folio-graph-generalized-proposals-v0-7-1"
+  - name: "Shared trust-helper tests (Phase 0 landing from sub-slice 2)"
+    command: "python3 -m pytest tests/test_trust.py -q"
+    owns_deliverable_id: "folio-synthesize-v0-8-0"
+  - name: "Slice 7 digest tests"
+    command: "python3 -m pytest tests/test_digest.py tests/test_cli_digest.py -q"
+    owns_deliverable_id: "folio-digest-v0-7-0"
+  - name: "Slice 6a entity rejection memory tests"
+    command: "python3 -m pytest tests/test_entities.py tests/test_cli_entities.py -q"
+    owns_deliverable_id: "entity-merge-rejection-memory-v0-6-5"
+  - name: "Slice 4 trust-gated tests"
+    command: "python3 -m pytest tests/test_links_cli.py tests/test_graph_cli.py -q"
+    owns_deliverable_id: "trust-gated-surfacing-v0-6-4"
+
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full scope-relevant test suites pass (search + synthesize + graph + trust + digest regression guards)."
+    verification:
+      command: "python3 -m pytest tests/test_search.py tests/test_cli_search.py tests/test_synthesize.py tests/test_cli_synthesize.py tests/test_trust.py tests/test_graph.py tests/test_graph_cli.py tests/test_digest.py tests/test_cli_digest.py -q"
+      expect: "exit-0"
+  - id: G-test-2
+    category: test
+    description: "Search-specific tests pass (unit + CLI integration)."
+    verification:
+      command: "python3 -m pytest tests/test_search.py tests/test_cli_search.py -q"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "No changes to forbidden paths (baseline: main@741f0b6; NO Phase 0 floor in this slice — Phase A is the first commit)."
+    verification:
+      command: "git diff --name-only 741f0b6..HEAD | grep -E '^(folio/graph\\.py|folio/synthesize\\.py|folio/tracking/trust\\.py|folio/links\\.py|folio/digest\\.py|folio/enrich\\.py|folio/provenance\\.py|folio/tracking/entities\\.py|folio/tracking/registry\\.py|folio/tracking/sources\\.py|folio/tracking/versions\\.py|folio/pipeline/|docs/specs/tier4_|docs/specs/v0\\.7\\.1_|docs/specs/v0\\.8\\.0_|docs/product/|docs/architecture/|frameworks/llm-dev-v1/|AGENTS\\.md|Ontos_Context_Map\\.md)'"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "Forbidden symbols absent from scope-lock paths."
+    verification:
+      command: "grep -rE 'pickle\\.loads|eval\\(' folio/search.py"
+      expect: "exit-nonzero"
+  - id: G-scope-3
+    category: scope
+    description: "folio/cli.py changes bounded to the search command registration (100-line cap on added; baseline 741f0b6). F-058 headroom mitigation invoked at Phase C: search's CLI surface is larger than synthesize's (required QUERY callback, an additional --producer option, IntRange validator, foreshadow-v0.9.1 tip in docstring) → needs ~90 lines vs synthesize's ~40. Cap raised from the v0.8.0 template's 50 to 100. This is spec-side expansion, not scope creep: no new file paths, no forbidden-path edits, same command footprint."
+    verification:
+      command: "git diff --numstat 741f0b6..HEAD -- folio/cli.py | awk '{ if ($1 > 100 || $2 > 100) exit 1 } END { print \"ok\" }'"
+      expect: "literal:ok"
+  - id: G-scope-4
+    category: scope
+    description: "No direct LLM imports in folio/search.py (MVP invariant — §2.5 non-goal). MIN-2: file-existence guard prevents false pass when the module is absent."
+    verification:
+      command: "test -f folio/search.py && ! grep -E 'from folio.llm|import folio.llm|from openai|import openai|from anthropic|import anthropic' folio/search.py"
+      expect: "exit-0"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "search command registered on the Click CLI."
+    verification:
+      command: "python3 -c 'from folio.cli import cli; assert \"search\" in cli.commands, sorted(cli.commands.keys()); print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-2
+    category: cardinality
+    description: "Shared envelope schema_version constant exported and bumped to 1.1."
+    verification:
+      command: "python3 -c 'from folio.search import SCHEMA_VERSION; assert SCHEMA_VERSION == \"1.1\", SCHEMA_VERSION; print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-3
+    category: cardinality
+    description: "Shared-consumer invariant at N=3 (graph + synthesize + search all use folio.tracking.trust.derive_trust_status; identity check)."
+    verification:
+      command: "python3 -c 'from folio import search as se, synthesize as sy, graph as g; from folio.tracking import trust as t; assert se.derive_trust_status is t.derive_trust_status and sy.derive_trust_status is t.derive_trust_status and g.derive_trust_status is t.derive_trust_status; print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-4
+    category: cardinality
+    description: "Shared-consumer invariant unit test passes (class-level test in tests/test_trust.py)."
+    verification:
+      command: "python3 -m pytest tests/test_trust.py::TestSharedConsumerInvariant -q"
+      expect: "exit-0"
+  - id: G-test-3
+    category: test
+    description: "Envelope shape invariants (E1-E8 per spec §3.3) pass — producer-side exact key assertion includes the new `query` top-level key; schema_version==\"1.1\" verified end-to-end."
+    verification:
+      command: "python3 -m pytest tests/test_cli_search.py -k 'envelope or query_roundtrip' -q"
+      expect: "exit-0"
+  - id: G-test-4
+    category: test
+    description: "Query-matching semantics pass: casefold substring across 6 text fields; evidence_bundle any-element rule; non-searchable fields excluded from match."
+    verification:
+      command: "python3 -m pytest tests/test_search.py -k 'match or casefold or evidence_bundle or non_searchable' -q"
+      expect: "exit-0"
+  - id: G-test-5
+    category: test
+    description: "Producer filter + include-flagged + limit semantics + SuppressionCounts routing regression (CB-1 carry-forward from sub-slice 2)."
+    verification:
+      command: "python3 -m pytest tests/test_search.py -k 'producer_filter or include_flagged or limit or excluded_count_ignores_rejection_memory or called_once_per_view or no_transitive_llm or no_registry_or_doc_mutations' -q"
+      expect: "exit-0"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "B.3 canonical spec verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.9.0_spec_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "D.3 canonical code verdict exists."
+    verification:
+      command: "test -f docs/validation/v0.9.0_code_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "Product verdicts (B.1 + D.2) exist."
+    verification:
+      command: "ls docs/validation/v0.9.0_spec_product_claude-sub.md docs/validation/v0.9.0_code_product_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:2"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "D.5 verification exists across the three non-author engineering families (codex, gemini, claude-sub)."
+    verification:
+      command: "ls docs/validation/v0.9.0_d5_verification_codex.md docs/validation/v0.9.0_d5_verification_gemini.md docs/validation/v0.9.0_d5_verification_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:3"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean."
+    verification:
+      command: "git status --porcelain | grep -v '^??'"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Feature branch ahead of main."
+    verification:
+      command: "git rev-list --count main..HEAD"
+      expect: "gte:1"
+
+branch_map:
+  default: "feat/folio-search-v0-9-0-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/specs/tier4_discovery_proposal_layer_spec.md"
+    version: "rev 5"
+    relevance: "Pre-A anchor. §5 Proposal Object Contract (9 rows, 11 emitted keys after ID-triad split); §11 Trust-Gated Surfacing (rules 1-5 apply to search by the same discipline synthesize honors); §12 Shared Consumers (search named alongside graph, synthesize, digest, links, entities); §15.6 Shared-consumer expansion (this is the final sub-slice; §15.6 closes on merge); §15.7 Narrow-don't-reinterpret discipline."
+  - path: "docs/specs/v0.7.1_folio_graph_generalized_proposals_spec.md"
+    version: "shipped v0.7.1 (PR #60)"
+    relevance: "Sub-slice 1 of §15.6. Established shared-contract retrofit pattern on an existing command; identified _derive_trust_status as the shared-helper candidate (ADV-SF6)."
+  - path: "docs/specs/v0.8.0_folio_synthesize_spec.md"
+    version: "shipped v0.8.0 (PR #65)"
+    relevance: "Sub-slice 2 of §15.6; direct template for this sub-slice. §3.3 established the shared payload-level `--json` envelope at schema_version 1.0 with 6 required top-level keys and the semver-esque versioning policy. This sub-slice extends to schema_version 1.1 via the `query` additive, exercising the policy. §6 mapping of §5 keys is reused verbatim. §3.2 shared-consumer contract wiring (direct helper call, not alias) is reused verbatim. §3.1 public surface, §3.4 CLI contract, §3.5 stdout renderer, §9 test plan structure all serve as templates."
+  - path: "docs/specs/v0.7.0_folio_digest_spec.md"
+    version: "shipped v0.7.0"
+    relevance: "Slice 7 greenfield template. Sections-implemented table, allowed/forbidden-paths pattern, and §2.5 non-goals discipline inform this slice's structure."
+  - path: "folio/tracking/trust.py"
+    version: "post sub-slice 2 Phase 0 (commit 831a741)"
+    relevance: "Shared trust-posture helper. Defines `derive_trust_status(view) -> str`. Consumed by folio.graph (v0.7.1), folio.synthesize (v0.8.0), and folio.search (v0.9.0). The 3-way shared-consumer invariant (G-cardinality-3, G-cardinality-4) is enforced against this module."
+  - path: "folio/links.py"
+    version: "post sub-slice 2 (no edits since 831a741)"
+    relevance: "Source of `collect_pending_relationship_proposals(config, scope=, doc_id=, include_flagged=)` and `RelationshipProposalView`. Read-only dependency; this slice does not modify links.py. Hard-filters to `lifecycle_state == \"queued\"` at line 252 — this scopes v0.9.0 to queued proposals only; multi-lifecycle search is an explicit §2.5 non-goal (would require collector extension crossing this forbidden path)."
+  - path: "folio/graph.py"
+    version: "post v0.7.1 + sub-slice 2 Phase 0"
+    relevance: "Sibling shared-consumer. Read-only reference; v0.9.0 does NOT edit graph.py. The shared-consumer invariant test proves graph + synthesize + search call the same trust helper object. `_SHARED_PROPOSAL_CONTRACT_EMITTED_KEYS` at graph.py:30-42 is the canonical 11-key reference for search's envelope E6 invariant."
+  - path: "folio/synthesize.py"
+    version: "post v0.8.0"
+    relevance: "Sibling shared-consumer. Read-only reference; v0.9.0 does NOT edit synthesize.py. `render_envelope` at synthesize.py:187-206 is the canonical shape reference; search mints its own `render_envelope` at schema_version \"1.1\" (acceptable duplication pending future hoist — see spec §3.3 disposition)."

@@ -1996,6 +1996,97 @@ def synthesize(ctx, scope, json_output, include_flagged, limit):
     _render_synthesis_stdout(report)
 
 
+@cli.command()
+@click.argument("query", required=True, callback=lambda ctx, p, v: _search_validate_query(ctx, p, v))
+@click.option(
+    "--scope",
+    type=str,
+    default=None,
+    help="Restrict search to an engagement subtree or document ID. Omit or pass '-' for library-wide.",
+)
+@click.option(
+    "--producer",
+    type=str,
+    default=None,
+    help="Restrict to findings emitted by this exact producer name (case-sensitive).",
+)
+@click.option(
+    "--include-flagged",
+    is_flag=True,
+    default=False,
+    help="Include proposals whose source or target document has `review_status: flagged`.",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    help="Emit the shared payload-level envelope as JSON (schema_version 1.1).",
+)
+@click.option(
+    "--limit",
+    type=click.IntRange(min=0),
+    default=None,
+    help="Maximum number of findings to emit (non-negative integer; default: unbounded). 0 emits zero findings but still reports counts.",
+)
+@click.pass_context
+def search(ctx, query, scope, producer, include_flagged, json_output, limit):
+    """Search pending relationship proposals by QUERY substring (v0.9.0 structural MVP).
+
+    QUERY is matched case-insensitively against six text fields on each
+    pending proposal: source_id, target_id, relation, producer,
+    reason_summary, and any element of evidence_bundle. Matching is a
+    plain substring check via NFC + str.casefold(); regex and semantic
+    search are not available in v0.9.0 (planned for v0.9.1+).
+
+    Tip: QUERY matches `relation` too, so `folio search draws_from` will
+    match every draws_from-typed proposal in scope (~1/6 of the queue).
+    Use `--scope ENGAGEMENT` to narrow.
+
+    Read-only: no LLM calls, no registry mutations. Emits the shared
+    payload-level --json envelope at schema_version 1.1 with a new
+    `query` top-level key (first minor-version bump of the shared
+    envelope; see CHANGELOG v0.9.0).
+    """
+    from .search import (
+        ScopeResolutionError,
+        _render_search_stdout,
+        render_envelope,
+        search as run_search,
+    )
+
+    config = ctx.obj["config"]
+    try:
+        report = run_search(
+            config,
+            query=query,
+            scope=scope,
+            producer=producer,
+            include_flagged=include_flagged,
+            limit=limit,
+        )
+    except ScopeResolutionError as exc:
+        click.echo(
+            f"Error: {exc} Try `folio graph status` for an engagement "
+            f"overview, or inspect `<library>/registry.json` for valid "
+            f"document IDs.",
+            err=True,
+        )
+        ctx.exit(1)
+        return
+    if json_output:
+        click.echo(json.dumps(render_envelope(report), indent=2))
+        return
+    _render_search_stdout(report)
+
+
+def _search_validate_query(ctx, param, value):
+    """Thin wrapper delegating to folio.search._validate_query (lazy import)."""
+    from .search import _validate_query
+
+    return _validate_query(ctx, param, value)
+
+
 @cli.group()
 @click.pass_context
 def graph(ctx):

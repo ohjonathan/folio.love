@@ -48,8 +48,9 @@ class TestDeriveTrustStatus:
 
 
 class TestSharedConsumerInvariant:
-    """Both v0.7.1 graph and v0.8.0 synthesize call the same trust helper
-    object — the shared-consumer uniformity proof."""
+    """All three consumers — v0.7.1 graph, v0.8.0 synthesize, v0.9.0 search
+    — call the same trust helper object. The shared-consumer uniformity
+    proof at N=3 (load-bearing for parent §12)."""
 
     def test_graph_module_uses_shared_helper(self):
         from folio import graph as graph_mod
@@ -63,8 +64,29 @@ class TestSharedConsumerInvariant:
 
         assert synth_mod.derive_trust_status is trust_mod.derive_trust_status
 
+    def test_search_module_uses_shared_helper(self):
+        # NEW in v0.9.0: sub-slice 3 extends the invariant to N=3 surfaces.
+        from folio import search as search_mod
+        from folio.tracking import trust as trust_mod
+
+        assert search_mod.derive_trust_status is trust_mod.derive_trust_status
+
     def test_graph_and_synthesize_share_identical_helper_object(self):
         from folio import graph as graph_mod
         from folio import synthesize as synth_mod
 
         assert graph_mod.derive_trust_status is synth_mod.derive_trust_status
+
+    def test_all_three_consumers_share_identical_helper_object(self):
+        # NEW in v0.9.0: the 3-way identity check. If any consumer re-
+        # exports via alias, lazy-import shim, or monkeypatched override,
+        # this will fail. Load-bearing for parent §12 uniformity.
+        from folio import graph as graph_mod
+        from folio import synthesize as synth_mod
+        from folio import search as search_mod
+
+        assert (
+            graph_mod.derive_trust_status
+            is synth_mod.derive_trust_status
+            is search_mod.derive_trust_status
+        )
