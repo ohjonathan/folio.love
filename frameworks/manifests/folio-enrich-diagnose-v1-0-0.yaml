@@ -1,0 +1,486 @@
+# Deliverable manifest: folio-enrich-diagnose-v1-0-0
+#
+# First slice of Tier-4 Roadmap row #4 ("Graph quality layer") — sub-item
+# A only. Introduces `folio enrich diagnose` per parent enrich spec §7.7
+# rev 5 (a read-only diagnostic surface for managed-section hygiene
+# blockers). Sub-items B (trust-aware graph behavior across Tier-4
+# discovery surfaces) and C (relation-schema validation) are EXPLICIT
+# non-goals reserved for follow-on slices in the same roadmap row.
+#
+# Version v1.0.0 — first major-version-threshold crossing in the
+# folio.love adopter chain. Marks the parent §7.7 contract as shipped.
+#
+# Pre-A INHERITED from parent specs:
+#   - docs/specs/folio_enrich_spec.md §7.7 ("`folio enrich diagnose`"
+#     contract): command shape, eligibility predicate, minimum finding
+#     classes (3), fixed-schema 5-key inner finding shape, read-only
+#     guarantee, exit semantics.
+#   - docs/product/04_Implementation_Roadmap.md §"Week 26-27" line
+#     569-570 (`folio enrich diagnose [scope] [--json] [--limit N]`
+#     identifies notes whose managed sections cannot be safely updated).
+# Phase A (this slice) narrows §7.7 into the implementation spec at
+# docs/specs/v1.0.0_folio_enrich_diagnose_spec.md. F-049 compliance:
+# §§ cited by number and name, not paraphrased.
+#
+# NO Phase 0 prep required this slice. Diagnose is a thin filter +
+# renderer over the existing `plan_enrichment` predicate (already shipped
+# at folio/enrich.py:233-342). All consumed surfaces are at their main
+# state at branch-point 2f0369b.
+#
+# Operator-confirmed product shape (Phase-A AskUserQuestion 2026-04-17):
+#   1. Trust posture: ANNOTATION-ONLY. Per-finding `trust_status` key
+#      (read directly from frontmatter); NO default exclusion of flagged
+#      notes; NO `--include-flagged` flag; NO direct call to the slice-4
+#      shared helper `folio.tracking.trust.derive_trust_status`. This is
+#      the firewall against sub-item B (which owns blanket flagged-input
+#      exclusion across Tier-4 discovery surfaces). G-scope-5 enforces.
+#   2. Envelope shape: FRESH note-level envelope at schema_version "1.0".
+#      NOT the v0.9.0 shared-consumer envelope (which is for relationship-
+#      proposal consumers — graph / synthesize / search). Diagnose
+#      operates on notes, not proposals. Spec §7.4 disclaims reuse.
+#
+# Codex assigned to adversarial role per v1.2.0 must-differ-provider
+# invariant (author family = claude → adversarial family ≠ claude*).
+# Dispatch-outage fallback per F-054/F-055/F-059: if gemini or codex is
+# unreachable at 1h retry horizon, halt ≤24h; >24h escalate to 3-lens +
+# supplementary round.
+#
+# Adopter-only contract in effect: no bundle edits. Bundle at
+# frameworks/llm-dev-v1/ remains byte-identical to johnny-os@e40b5c3
+# (v1.2.0).
+
+manifest_version: "1.2.0"
+id: folio-enrich-diagnose-v1-0-0
+slug: folio-enrich-diagnose
+summary: "Read-only `folio enrich diagnose [scope] [--json] [--limit N]` surface — first slice of Tier-4 Roadmap row #4 (Graph quality layer), sub-item A only. Identifies registry-managed notes whose managed sections cannot be safely updated by `folio enrich`, surfacing the (disposition, reason) tuples computed by the existing `_determine_disposition` predicate as stable finding codes per parent enrich spec §7.7. Six finding codes (frontmatter_unreadable, managed_sections_unidentified, protected_by_curation_level, protected_by_review_status, managed_body_conflict, enrich_status_stale) with deterministic severity (error/warning/info), sorted (severity desc, subject_id asc), trust-annotated per finding (annotation-only — no default exclusion of flagged notes, no --include-flagged flag). Fresh JSON envelope at schema_version 1.0 with seven top-level keys. Reshapes `folio/cli.py` `enrich` command into a click group with `invoke_without_command=True` (preserves existing `folio enrich [scope]` invocation). Strict firewall against sub-item B (no `derive_trust_status`, no `--include-flagged`); enforced by G-scope-5 grep gate."
+
+user_facing: true
+
+# Pre-A inheritance note (v1.2.0 schema strictness):
+# pre_a.entry {proposal|triage|validation} declares a NEW pre-A artifact.
+# This slice inherits pre-A from two upstream sources:
+#   (a) docs/specs/folio_enrich_spec.md §7.7 — the ratified parent
+#       contract for `folio enrich diagnose` (rev 5).
+#   (b) docs/product/04_Implementation_Roadmap.md §"Week 26-27" — the
+#       roadmap commitment that scopes sub-item A vs B vs C.
+# Phase A narrows both into the implementation spec. The pre_a block is
+# omitted (optional under schema) to avoid misclassifying inherited
+# ratification as a new proposal/triage/validation entry point.
+# F-049 compliance: §§ named not paraphrased.
+
+owners:
+  - "Jonathan Oh (ohjonathan)"
+
+scope:
+  allowed_paths:
+    # Module additions (additive — existing plan_enrichment / enrich_batch / _determine_disposition unchanged)
+    - folio/enrich.py
+    # CLI group reshape + new subcommand
+    - folio/cli.py
+    # New tests
+    - tests/test_enrich_diagnose.py
+    - tests/test_cli_enrich_diagnose.py
+    # ONE regression test added to existing enrich tests (group-reshape regression)
+    - tests/test_enrich.py
+    # Version + changelog
+    - pyproject.toml
+    - CHANGELOG.md
+    # Spec + manifest
+    - docs/specs/v1.0.0_folio_enrich_diagnose_spec.md
+    - frameworks/manifests/folio-enrich-diagnose-v1-0-0.yaml
+    # Ontos auto-regen (F-048)
+    - Ontos_Context_Map.md
+    # Validation artifacts (per-phase)
+    - docs/validation/v1.0.0_spec_peer_claude-sub.md
+    - docs/validation/v1.0.0_spec_alignment_gemini.md
+    - docs/validation/v1.0.0_spec_adversarial_codex.md
+    - docs/validation/v1.0.0_spec_product_claude-sub.md
+    - docs/validation/v1.0.0_spec_canonical_verdict.md
+    - docs/validation/v1.0.0_code_peer_claude-sub.md
+    - docs/validation/v1.0.0_code_alignment_gemini.md
+    - docs/validation/v1.0.0_code_adversarial_codex.md
+    - docs/validation/v1.0.0_code_product_claude-sub.md
+    - docs/validation/v1.0.0_code_canonical_verdict.md
+    - docs/validation/v1.0.0_d4_fix_summary.md
+    - docs/validation/v1.0.0_d5_verification_gemini.md
+    - docs/validation/v1.0.0_d5_verification_codex.md
+    - docs/validation/v1.0.0_d5_verification_claude-sub.md
+    - docs/validation/v1.0.0_d6_final_approval.md
+    # Retro + supplement (Phase E)
+    - docs/retros/llm-dev-v1-adoption.md
+    - frameworks/manifests/framework-learnings-v1.1-adoption.md
+  forbidden_paths:
+    # Sub-item B firewall — DIAGNOSE MUST NOT CONSUME the slice-4 trust
+    # helper. The helper takes a RelationshipProposalView, not a note;
+    # crossing this path implies pre-merging A and B scopes.
+    - folio/tracking/trust.py
+    # Sibling shared-consumer surfaces — read-only references; zero edits
+    - folio/graph.py
+    - folio/synthesize.py
+    - folio/search.py
+    - folio/links.py
+    # Out of scope for diagnose
+    - folio/digest.py
+    - folio/provenance.py
+    - folio/tracking/entities.py
+    - folio/tracking/registry.py
+    - folio/tracking/sources.py
+    - folio/tracking/versions.py
+    - folio/pipeline/
+    # Parent + sibling specs (read-only references per §15.7 narrow-don't-reinterpret)
+    - docs/specs/folio_enrich_spec.md
+    - docs/specs/tier4_discovery_proposal_layer_spec.md
+    - docs/specs/tier4_digest_design_spec.md
+    - docs/specs/v0.6.4_trust_gated_surfacing_spec.md
+    - docs/specs/v0.7.0_folio_digest_spec.md
+    - docs/specs/v0.7.1_folio_graph_generalized_proposals_spec.md
+    - docs/specs/v0.8.0_folio_synthesize_spec.md
+    - docs/specs/v0.9.0_folio_search_spec.md
+    # Adopter-only contract
+    - frameworks/llm-dev-v1/
+    - docs/product/
+    - docs/architecture/
+    - ontos/
+    - .github/
+    - AGENTS.md
+  forbidden_symbols:
+    - "pickle.loads"
+    - "eval("
+    - "exec("
+  cardinality_assertions:
+    # These commands are POST-IMPLEMENTATION runtime identity checks.
+    # Pre-Phase-C (before folio/enrich.py changes ship) several will
+    # correctly FAIL — that failure is expected behavior, not a manifest
+    # defect. Gate-time enforcement lives in gate_prerequisites
+    # (G-cardinality-1..6). Their presence here is declarative —
+    # documenting the invariants the slice commits to.
+    # F-056 mitigation (runtime enforcement) lives in gate_prerequisites.
+    # F-058 mitigation: line-caps (G-scope-3) authored conservatively.
+    - name: "enrich is a click group (post-reshape) with `diagnose` subcommand registered"
+      command: "python3 -c 'from folio.cli import cli; assert \"enrich\" in cli.commands and hasattr(cli.commands[\"enrich\"], \"commands\") and \"diagnose\" in cli.commands[\"enrich\"].commands; print(1)'"
+      expect: "eq:1"
+    - name: "DIAGNOSE_SCHEMA_VERSION constant exported by folio.enrich"
+      command: "python3 -c 'from folio.enrich import DIAGNOSE_SCHEMA_VERSION; assert DIAGNOSE_SCHEMA_VERSION == \"1.0\", DIAGNOSE_SCHEMA_VERSION; print(1)'"
+      expect: "eq:1"
+    - name: "DIAGNOSE_COMMAND_NAME constant exported by folio.enrich"
+      command: "python3 -c 'from folio.enrich import DIAGNOSE_COMMAND_NAME; assert DIAGNOSE_COMMAND_NAME == \"enrich diagnose\", DIAGNOSE_COMMAND_NAME; print(1)'"
+      expect: "eq:1"
+    - name: "diagnose_notes function importable from folio.enrich"
+      command: "python3 -c 'from folio.enrich import diagnose_notes; assert callable(diagnose_notes); print(1)'"
+      expect: "eq:1"
+    - name: "Sub-item B firewall: zero references to derive_trust_status or include-flagged in folio/enrich.py (the diagnose code path)"
+      command: "! grep -nE 'derive_trust_status|include[-_]flagged' folio/enrich.py"
+      expect: "exit-0"
+    - name: "No new direct LLM imports in folio/enrich.py (existing imports allowed; this assertion checks that no new openai/anthropic-style import was added in this slice)"
+      command: "! grep -nE 'from openai|import openai|from anthropic|import anthropic' folio/enrich.py"
+      expect: "exit-0"
+
+artifacts:
+  spec:              "docs/specs/v1.0.0_folio_enrich_diagnose_spec.md"
+  family_verdict:    "docs/validation/v1.0.0_<phase>_<role>_<family>.md"
+  canonical_verdict: "docs/validation/v1.0.0_<phase>_canonical_verdict.md"
+  product_verdict:   "docs/validation/v1.0.0_<phase>_product_<family>.md"
+  fix_summary:       "docs/validation/v1.0.0_d4_fix_summary.md"
+  verification:      "docs/validation/v1.0.0_d5_verification_<family>.md"
+  final_approval:    "docs/validation/v1.0.0_d6_final_approval.md"
+  retro:             "docs/retros/llm-dev-v1-adoption.md"
+
+# Model assignments — mirror folio-search-v0-9-0 structure.
+# v1.2.0 invariant: adversarial family must NOT share provider with author
+# (claude ≠ codex — OK). Dispatch-outage fallback per F-054/F-055/F-059:
+# if gemini or codex is unreachable at 1h retry horizon, halt ≤24h;
+# >24h escalate to 3-lens + supplementary round. codex-as-gemini swap and
+# codex-as-alignment swap are pre-authorized precedents.
+model_assignments:
+  - phase: "A"
+    assignments:
+      claude: spec-author
+  - phase: "B.1"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.1"
+    assignments:
+      claude-sub: product
+  - phase: "B.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "B.2"
+    assignments:
+      claude-sub: product
+  - phase: "B.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "C"
+    assignments:
+      claude: implementation-author
+  - phase: "D.2"
+    assignments:
+      codex:      adversarial
+      gemini:     alignment
+      claude-sub: peer
+  - phase: "D.2"
+    assignments:
+      claude-sub: product
+  - phase: "D.3"
+    assignments:
+      codex: meta-consolidator
+  - phase: "D.4"
+    assignments:
+      claude: fix-author
+  # v1.2.0 review-phase invariant: D.5 requires ≥3 non-author engineering
+  # families (verify-p3). Mirrors v0.7.1 / v0.8.0 / v0.9.0 treatment.
+  - phase: "D.5"
+    assignments:
+      gemini:     verifier
+      codex:      verifier
+      claude-sub: verifier
+  - phase: "D.6"
+    assignments:
+      codex: final-approval
+  - phase: "E"
+    assignments:
+      claude: retro
+
+cli_capability_matrix:
+  claude:      { shell: true, git: true,  test_runner: true,  doc_index: true  }
+  claude-sub:  { shell: true, git: true,  test_runner: true,  doc_index: true  }
+  codex:       { shell: true, git: true,  test_runner: true,  doc_index: false }
+  gemini:      { shell: true, git: false, test_runner: false, doc_index: false }
+
+smoke_checks:
+  - phase: "C"
+    checks:
+      - name: "folio imports"
+        command: "python3 -c 'import folio'"
+        expect: "exit-0"
+      - name: "folio.enrich imports"
+        command: "python3 -c 'import folio.enrich'"
+        expect: "exit-0"
+      - name: "diagnose + scope-relevant test suites"
+        command: "python3 -m pytest tests/test_enrich_diagnose.py tests/test_cli_enrich_diagnose.py tests/test_enrich.py tests/test_enrich_integration.py tests/test_enrich_data.py -q"
+        expect: "exit-0"
+      - name: "lint clean on scope paths"
+        command: "python3 -m ruff check folio/enrich.py folio/cli.py"
+        expect: "exit-0"
+      - name: "folio enrich diagnose --help works (smoke)"
+        command: "python3 -m folio enrich diagnose --help"
+        expect: "exit-0"
+      - name: "folio enrich --help still works post group reshape (smoke regression)"
+        command: "python3 -m folio enrich --help"
+        expect: "exit-0"
+  - phase: "D.6"
+    checks:
+      - name: "branch ahead of main"
+        command: "git rev-list --count main..HEAD"
+        expect: "gte:1"
+
+regression_guards:
+  - name: "Existing enrich test suite (post group reshape)"
+    command: "python3 -m pytest tests/test_enrich.py tests/test_enrich_integration.py tests/test_enrich_data.py tests/test_enrich_scale.py -q"
+    owns_deliverable_id: "folio-enrich-pr-c-baseline"
+  - name: "Slice 6b.3 search tests"
+    command: "python3 -m pytest tests/test_search.py tests/test_cli_search.py -q"
+    owns_deliverable_id: "folio-search-v0-9-0"
+  - name: "Slice 6b.2 synthesize tests"
+    command: "python3 -m pytest tests/test_synthesize.py tests/test_cli_synthesize.py -q"
+    owns_deliverable_id: "folio-synthesize-v0-8-0"
+  - name: "Slice 6b.1 graph tests"
+    command: "python3 -m pytest tests/test_graph.py tests/test_graph_cli.py -q"
+    owns_deliverable_id: "folio-graph-generalized-proposals-v0-7-1"
+  - name: "Shared trust-helper tests"
+    command: "python3 -m pytest tests/test_trust.py -q"
+    owns_deliverable_id: "folio-synthesize-v0-8-0"
+  - name: "Slice 7 digest tests"
+    command: "python3 -m pytest tests/test_digest.py tests/test_cli_digest.py -q"
+    owns_deliverable_id: "folio-digest-v0-7-0"
+  - name: "Slice 6a entity rejection memory tests"
+    command: "python3 -m pytest tests/test_entities.py tests/test_cli_entities.py -q"
+    owns_deliverable_id: "entity-merge-rejection-memory-v0-6-5"
+  - name: "Slice 4 trust-gated tests"
+    command: "python3 -m pytest tests/test_links_cli.py tests/test_graph_cli.py -q"
+    owns_deliverable_id: "trust-gated-surfacing-v0-6-4"
+
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: "Full scope-relevant test suites pass (diagnose + existing enrich + sibling Tier-4 surfaces + slice 4/6a/7 regression)."
+    verification:
+      command: "python3 -m pytest tests/test_enrich_diagnose.py tests/test_cli_enrich_diagnose.py tests/test_enrich.py tests/test_enrich_integration.py tests/test_enrich_data.py tests/test_search.py tests/test_cli_search.py tests/test_synthesize.py tests/test_cli_synthesize.py tests/test_graph.py tests/test_graph_cli.py tests/test_trust.py tests/test_digest.py tests/test_cli_digest.py tests/test_entities.py tests/test_cli_entities.py tests/test_links_cli.py -q"
+      expect: "exit-0"
+  - id: G-test-2
+    category: test
+    description: "Diagnose-specific tests pass (unit + CLI integration)."
+    verification:
+      command: "python3 -m pytest tests/test_enrich_diagnose.py tests/test_cli_enrich_diagnose.py -q"
+      expect: "exit-0"
+  - id: G-scope-1
+    category: scope
+    description: "No changes to forbidden paths (baseline: main@2f0369b — branch-point of feat/folio-enrich-diagnose-v1-0-0-C-author-claude)."
+    verification:
+      command: "git diff --name-only 2f0369b..HEAD | grep -E '^(folio/tracking/trust\\.py|folio/graph\\.py|folio/synthesize\\.py|folio/search\\.py|folio/links\\.py|folio/digest\\.py|folio/provenance\\.py|folio/tracking/entities\\.py|folio/tracking/registry\\.py|folio/tracking/sources\\.py|folio/tracking/versions\\.py|folio/pipeline/|docs/specs/folio_enrich_spec\\.md|docs/specs/tier4_|docs/specs/v0\\.6\\.4_|docs/specs/v0\\.7\\.0_|docs/specs/v0\\.7\\.1_|docs/specs/v0\\.8\\.0_|docs/specs/v0\\.9\\.0_|docs/product/|docs/architecture/|frameworks/llm-dev-v1/|AGENTS\\.md)'"
+      expect: "exit-nonzero"
+  - id: G-scope-2
+    category: scope
+    description: "Forbidden symbols absent from scope-lock paths."
+    verification:
+      command: "grep -rE 'pickle\\.loads|eval\\(|exec\\(' folio/enrich.py folio/cli.py | grep -vE '^\\s*#|^\\s*\"\"\"|^\\s*\\*'"
+      expect: "exit-nonzero"
+  - id: G-scope-3
+    category: scope
+    description: "folio/cli.py changes bounded to enrich group reshape + diagnose subcommand registration (140-line cap on added; baseline 2f0369b). Group reshape (~20 lines reframe of existing enrich command into a group with pass-through guard) + diagnose subcommand wiring (~70 lines) + text/JSON renderer helpers (~50 lines). folio/enrich.py changes bounded to additive diagnose surface (180-line cap on added)."
+    verification:
+      command: "git diff --numstat 2f0369b..HEAD -- folio/cli.py folio/enrich.py | awk 'BEGIN{cli_a=0;enrich_a=0} {if($3==\"folio/cli.py\") cli_a=$1; else if($3==\"folio/enrich.py\") enrich_a=$1} END {if (cli_a > 140 || enrich_a > 180) {print \"FAIL cli=\"cli_a\" enrich=\"enrich_a; exit 1} else print \"ok cli=\"cli_a\" enrich=\"enrich_a}'"
+      expect: "regex:^ok"
+  - id: G-scope-4
+    category: scope
+    description: "No new direct LLM imports in folio/enrich.py (existing transitive imports via folio.config / folio.llm allowed; new openai/anthropic-style imports forbidden)."
+    verification:
+      command: "! grep -nE 'from openai|import openai|from anthropic|import anthropic' folio/enrich.py"
+      expect: "exit-0"
+  - id: G-scope-5
+    category: scope
+    description: "Sub-item B firewall: zero references to derive_trust_status or include-flagged in folio/enrich.py. Diagnose annotation reads frontmatter directly; the slice-4 helper applies to RelationshipProposalView (not notes), and the --include-flagged flag is operator-confirmed out of scope. Crossing this path implies pre-merging A and B."
+    verification:
+      command: "! grep -nE 'derive_trust_status|include[-_]flagged' folio/enrich.py"
+      expect: "exit-0"
+  - id: G-cardinality-1
+    category: cardinality
+    description: "enrich is a click group (post-reshape) and diagnose is a registered subcommand."
+    verification:
+      command: "python3 -c 'from folio.cli import cli; assert \"enrich\" in cli.commands and hasattr(cli.commands[\"enrich\"], \"commands\") and \"diagnose\" in cli.commands[\"enrich\"].commands; print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-2
+    category: cardinality
+    description: "DIAGNOSE_SCHEMA_VERSION constant is exported and equals \"1.0\"."
+    verification:
+      command: "python3 -c 'from folio.enrich import DIAGNOSE_SCHEMA_VERSION; assert DIAGNOSE_SCHEMA_VERSION == \"1.0\", DIAGNOSE_SCHEMA_VERSION; print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-3
+    category: cardinality
+    description: "DIAGNOSE_COMMAND_NAME constant is exported and equals \"enrich diagnose\"."
+    verification:
+      command: "python3 -c 'from folio.enrich import DIAGNOSE_COMMAND_NAME; assert DIAGNOSE_COMMAND_NAME == \"enrich diagnose\", DIAGNOSE_COMMAND_NAME; print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-4
+    category: cardinality
+    description: "diagnose_notes function importable and callable."
+    verification:
+      command: "python3 -c 'from folio.enrich import diagnose_notes; assert callable(diagnose_notes); print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-5
+    category: cardinality
+    description: "DiagnoseFinding / DiagnoseResult / DiagnoseSummary are frozen dataclasses with the spec §3.1 field order."
+    verification:
+      command: "python3 -c 'from folio.enrich import DiagnoseFinding, DiagnoseResult, DiagnoseSummary; from dataclasses import fields; assert all(f.name == n for f, n in zip(fields(DiagnoseFinding), [\"code\", \"severity\", \"subject_id\", \"detail\", \"recommended_action\", \"trust_status\"])); assert all(f.name == n for f, n in zip(fields(DiagnoseResult), [\"schema_version\", \"command\", \"scope\", \"limit\", \"findings\", \"summary\", \"truncated\"])); assert all(f.name == n for f, n in zip(fields(DiagnoseSummary), [\"total\", \"by_code\", \"flagged_total\"])); print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-6
+    category: cardinality
+    description: "Envelope shape contract: top-level keys exactly match spec §7.2 (json roundtrip on healthy library returns the 7 keys in §7.2 order)."
+    verification:
+      command: "python3 -m pytest tests/test_cli_enrich_diagnose.py::test_diagnose_json_envelope_keys -q"
+      expect: "exit-0"
+  - id: G-test-3
+    category: test
+    description: "Disposition-coverage tests pass: each of the 6 finding codes is exhaustively covered (ED-1..6 in spec §8.1)."
+    verification:
+      command: "python3 -m pytest tests/test_enrich_diagnose.py -k 'protect_frontmatter_unreadable or protect_managed_sections_unidentified or protect_curation_level or protect_review_status or conflict_managed_body_fingerprint or analyze_stale' -q"
+      expect: "exit-0"
+  - id: G-test-4
+    category: test
+    description: "Trust-annotation tests pass (ED-11 + ED-CLI-5): trust_status correctly derives from review_status; [flagged] suffix appears only when flagged."
+    verification:
+      command: "python3 -m pytest tests/test_enrich_diagnose.py::test_trust_status_flagged_annotation tests/test_cli_enrich_diagnose.py::test_diagnose_text_flagged_suffix -q"
+      expect: "exit-0"
+  - id: G-test-5
+    category: test
+    description: "Read-only invariant + group-reshape regression tests pass (ED-13 + ED-CLI-2 + ED-CLI-3)."
+    verification:
+      command: "python3 -m pytest tests/test_enrich_diagnose.py::test_read_only_invariant tests/test_cli_enrich_diagnose.py::test_enrich_group_legacy_invocation tests/test_cli_enrich_diagnose.py::test_enrich_group_legacy_flags_preserved -q"
+      expect: "exit-0"
+  - id: G-test-6
+    category: test
+    description: "Defensive-default test passes (ED-15): unrecognized future protect reasons surface as managed_sections_unidentified rather than being silently dropped."
+    verification:
+      command: "python3 -m pytest tests/test_enrich_diagnose.py::test_defensive_unknown_protect_reason -q"
+      expect: "exit-0"
+  - id: G-verdict-1
+    category: verdict-presence
+    description: "B.3 canonical spec verdict exists."
+    verification:
+      command: "test -f docs/validation/v1.0.0_spec_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-2
+    category: verdict-presence
+    description: "D.3 canonical code verdict exists."
+    verification:
+      command: "test -f docs/validation/v1.0.0_code_canonical_verdict.md"
+      expect: "exit-0"
+  - id: G-verdict-3
+    category: verdict-presence
+    description: "Product verdicts (B.1 + D.2) exist."
+    verification:
+      command: "ls docs/validation/v1.0.0_spec_product_claude-sub.md docs/validation/v1.0.0_code_product_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:2"
+  - id: G-blocker-1
+    category: blocker-closure
+    description: "D.5 verification exists across the three non-author engineering families (codex, gemini, claude-sub)."
+    verification:
+      command: "ls docs/validation/v1.0.0_d5_verification_codex.md docs/validation/v1.0.0_d5_verification_gemini.md docs/validation/v1.0.0_d5_verification_claude-sub.md 2>/dev/null | wc -l | tr -d ' '"
+      expect: "gte:3"
+  - id: G-branch-1
+    category: branch
+    description: "Working tree clean."
+    verification:
+      command: "git status --porcelain | grep -v '^??'"
+      expect: "empty"
+  - id: G-branch-2
+    category: branch
+    description: "Feature branch ahead of main."
+    verification:
+      command: "git rev-list --count main..HEAD"
+      expect: "gte:1"
+  - id: G-d6-1
+    category: verdict-presence
+    description: "D.6 final-approval verdict exists."
+    verification:
+      command: "test -f docs/validation/v1.0.0_d6_final_approval.md"
+      expect: "exit-0"
+
+branch_map:
+  default: "feat/folio-enrich-diagnose-v1-0-0-<PHASE_ID>-<ROLE>-<FAMILY>"
+
+references:
+  - path: "docs/specs/folio_enrich_spec.md"
+    version: "rev 5"
+    relevance: "Pre-A anchor. §7.7 (`folio enrich diagnose`) defines the contract this slice narrows: command shape, eligibility predicate, three minimum finding classes (managed_sections_unidentified, protected_by_curation_level, protected_by_review_status), 5-key inner finding schema, read-only guarantee, exit semantics. §9 (`_llm_metadata.enrich`) defines the `status: stale` enum value that this slice surfaces as `enrich_status_stale`. Forbidden path; read-only reference per §15.7 narrow-don't-reinterpret."
+  - path: "docs/product/04_Implementation_Roadmap.md"
+    version: "current"
+    relevance: "Pre-A anchor. §\"Week 26-27: Graph Quality Layer\" lines 569-578 split the row #4 work into sub-items A (this slice — folio enrich diagnose), B (trust-aware graph behavior across Tier-4 surfaces; deferred), C (relation-schema validation; deferred). §\"Implementation Order\" line 545 lists row #4 status as Pending. Forbidden path; read-only reference."
+  - path: "folio/enrich.py"
+    version: "post v0.9.0 (no edits since slice 6b.3 merge)"
+    relevance: "PRIMARY IMPLEMENTATION TARGET. `_determine_disposition` at lines 345-415 is the disposition oracle whose output diagnose surfaces. `plan_enrichment` at lines 233-342 is the entry point diagnose calls (with force=False, dry_run=True). `EnrichPlanEntry` dataclass at lines 204-214 is the per-note shape diagnose iterates. Diagnose adds DIAGNOSE_SCHEMA_VERSION, DIAGNOSE_COMMAND_NAME, DiagnoseFinding, DiagnoseSummary, DiagnoseResult, diagnose_notes, _entry_to_finding, _finding_sort_key — all additive. Existing functions are NOT modified."
+  - path: "folio/cli.py"
+    version: "post v0.9.0"
+    relevance: "GROUP RESHAPE TARGET. Existing `enrich` at line 1128 is a flat @cli.command(); this slice converts to @cli.group(cls=ScopeOrCommandGroup, invoke_without_command=True) following the proven pattern at folio/cli.py:1179-1234 (`folio digest`). Adds @enrich.command(\"diagnose\") subcommand following the @graph.command(\"doctor\") pattern at folio/cli.py:2090-2189 for --json envelope output. `_render_diagnose_text` and `_render_diagnose_json` helpers added near the diagnose subcommand."
+  - path: "folio/tracking/trust.py"
+    version: "post sub-slice 2 Phase 0 (commit 831a741)"
+    relevance: "FORBIDDEN PATH. The slice-4 shared helper `derive_trust_status(view) -> str` operates on a RelationshipProposalView (which has a `.flagged_inputs` set marking which proposal endpoint is flagged). Notes have no such attribute. Diagnose reads `entry.existing_fm.get(\"review_status\") == \"flagged\"` directly — no helper call. G-scope-5 grep firewall enforces zero references in folio/enrich.py."
+  - path: "docs/specs/v0.9.0_folio_search_spec.md"
+    version: "shipped v0.9.0 (PR #67)"
+    relevance: "Most recent v1.2.0 spec template. §3 module structure shape, §7 envelope discipline, §8 (Test Plan organization) all serve as templates. Diagnose envelope is INTENTIONALLY NOT the v0.9.0 shared envelope — diagnose operates on notes, not proposals (spec §7.4 disclaims reuse)."
+  - path: "docs/specs/v0.7.0_folio_digest_spec.md"
+    version: "shipped v0.7.0 (PR #58)"
+    relevance: "Greenfield CLI subcommand precedent. Group reshape pattern at folio/cli.py:1179-1234 originated here. Typed dataclass result (DigestResult) precedent for DiagnoseResult."
+  - path: "docs/specs/v0.6.4_trust_gated_surfacing_spec.md"
+    version: "shipped v0.6.4"
+    relevance: "Slice-4 trust-gated surfacing. Discovery-surface pattern (default-exclude + --include-flagged + disclosure + no-silent-empty + posture annotation). EXPLICITLY NOT INHERITED here — diagnose is a diagnostic surface, not a discovery surface; only the posture-annotation rule (rule 5) applies. Spec §6 documents the firewall reasoning."
+  - path: "docs/specs/v0.8.0_folio_synthesize_spec.md"
+    version: "shipped v0.8.0 (PR #65)"
+    relevance: "Established the shared payload-level `--json` envelope versioning policy (§3.3): \"Producers MUST bump minor when adding a top-level key.\" Diagnose adopts the same versioning policy for its own envelope (fresh schema_version 1.0; future minor bumps follow this rule). SF-108 closure (named-tuple regression — DiagnoseFinding uses named dataclass fields, not positional tuples) carries forward into ED-14 test."
+  - path: "frameworks/manifests/folio-search-v0-9-0.yaml"
+    version: "shipped v0.9.0"
+    relevance: "Manifest template. model_assignments, cli_capability_matrix, smoke_checks, regression_guards, gate_prerequisites shape all mirror this manifest. Differences: this slice has no shared-consumer invariant (diagnose envelope is fresh); G-scope-5 firewall against derive_trust_status is unique to this slice; G-scope-3 line caps are higher (140/180 vs 100/n/a) because group reshape requires more headroom."
