@@ -364,9 +364,9 @@ gate_prerequisites:
       expect: "exit-0"
   - id: G-scope-7
     category: scope
-    description: "Sub-item B firewall (c) — CB-4 closure: runtime --help check. `folio enrich diagnose --help` output does not contain the literal '--include-flagged'. ED-CLI-19 mirror."
+    description: "Sub-item B firewall (c) — CB-4 closure: runtime --help check. `folio enrich diagnose --help` output does not contain the literal '--include-flagged'. ED-CLI-19 mirror. D.5 codex closure: shell negation moved to command head (was `cmd | ! grep` which is invalid POSIX — `!` only negates at the start of a pipeline)."
     verification:
-      command: "python3 -m folio enrich diagnose --help | ! grep -F -- '--include-flagged'"
+      command: "! python3 -m folio enrich diagnose --help | grep -F -- '--include-flagged'"
       expect: "exit-0"
   - id: G-cardinality-1
     category: cardinality
@@ -406,9 +406,9 @@ gate_prerequisites:
       expect: "eq:1"
   - id: G-cardinality-6
     category: cardinality
-    description: "Envelope shape contract: top-level keys exactly match spec §7.2 (json roundtrip on healthy library returns the 7 keys in §7.2 order)."
+    description: "Envelope shape contract: top-level keys exactly match spec §7.2 (json roundtrip on healthy library returns the 7 keys in §7.2 order). D.5 closure (claude-sub D.5 finding): test selector uses class-qualified path; the bare function name was returning 0 collected tests."
     verification:
-      command: "python3 -m pytest tests/test_cli_enrich_diagnose.py::test_diagnose_json_envelope_keys -q"
+      command: "python3 -m pytest tests/test_cli_enrich_diagnose.py::TestJsonEnvelope::test_diagnose_json_envelope_keys -q"
       expect: "exit-0"
   - id: G-test-3
     category: test
