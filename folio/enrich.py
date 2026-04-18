@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import re
+import shlex
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -1940,14 +1941,21 @@ class DiagnoseSummary:
 
 @dataclass(frozen=True)
 class DiagnoseResult:
-    """Top-level result of a diagnose run; mirrors §7 envelope shape."""
+    """Top-level result of a diagnose run; mirrors §7 envelope shape.
+
+    DCB-1 closure (D.4 fix): unfiltered_total carries the pre-truncation
+    finding count so the text renderer can emit "showing N of M" per
+    spec §4.3 (was emitting "showing N of more" in v1.3 because the
+    renderer had no source of truth for M).
+    """
     schema_version: str
     command: str
     scope: Optional[str]
     limit: Optional[int]
-    findings: tuple
+    findings: tuple[DiagnoseFinding, ...]
     summary: DiagnoseSummary
     truncated: bool
+    unfiltered_total: int
 
 
 def _finding_sort_key(f: DiagnoseFinding) -> tuple[int, str, str]:
@@ -1958,13 +1966,48 @@ def _finding_sort_key(f: DiagnoseFinding) -> tuple[int, str, str]:
     return (-_SEVERITY_RANK[f.severity], f.code, f.subject_id)
 
 
+def _check_registry_or_raise(config: FolioConfig) -> None:
+    """DCB-2 closure (D.4 fix): unconditional registry health check.
+
+    Runs BEFORE scope resolution and unconditionally for library-wide
+    scope=None. Honors parent §7.7 fatal-on-unreadable-registry without
+    being bypassed on library-wide invocation.
+
+    DSF-003 closure: also fails fast when library_root does not exist
+    or is not a directory (was producing "Registry bootstrapped: 0
+    entries / No findings" — false-clean on a misconfigured root).
+
+    Raises ScopeResolutionError on:
+      - library_root nonexistent or not a directory (DSF-003)
+      - registry.json present but flagged _corrupt (DCB-2)
+    Does NOT raise when registry.json is simply missing (empty library
+    is a valid healthy state).
+    """
+    library_root = config.library_root.resolve()
+    if not library_root.exists() or not library_root.is_dir():
+        raise ScopeResolutionError(
+            f"Library root {library_root} does not exist or is not a "
+            f"directory. Investigate the config before re-running diagnose."
+        )
+    registry_path = library_root / "registry.json"
+    if not registry_path.exists():
+        return
+    data = registry_mod.load_registry(registry_path)
+    if data.get("_corrupt"):
+        raise ScopeResolutionError(
+            f"Registry at {registry_path} is corrupt and cannot be parsed safely. "
+            f"Investigate manually before re-running diagnose."
+        )
+
+
 def _resolve_scope_or_raise(config: FolioConfig, scope: str) -> None:
-    """CB-3 scope-resolution preflight.
+    """CB-3 scope-resolution preflight (post _check_registry_or_raise).
 
     Verify scope matches at least one registered deck. Raises
     ScopeResolutionError if scope is non-empty and no deck's deck_dir or
     markdown_path satisfies the scope-prefix predicate. Library-wide
-    scope (None) bypasses this check entirely.
+    scope (None) bypasses this check entirely (DCB-2 closure: the
+    library-wide health check is now done by _check_registry_or_raise).
     """
     library_root = config.library_root.resolve()
     registry_path = library_root / "registry.json"
@@ -2047,10 +2090,15 @@ def _entry_to_finding(entry: EnrichPlanEntry) -> Optional[DiagnoseFinding]:
         if reason == "managed body fingerprint mismatch":
             code = "managed_body_conflict"
             severity = "error"
+            # DSF-002 closure (D.4): shlex.quote subject_id to prevent
+            # shell-injection if a malicious deck_id contains backticks
+            # or other shell metacharacters that an operator might
+            # copy-paste into a shell.
+            quoted = shlex.quote(subject_id)
             action = (
                 f"Managed body content has been edited by hand. Reconcile "
-                f"manually, then re-run with `folio enrich --force "
-                f"{subject_id}` to overwrite."
+                f"manually, then re-run with `folio enrich --force {quoted}` "
+                f"to overwrite."
             )
         else:
             code = "managed_sections_unidentified"
@@ -2059,9 +2107,11 @@ def _entry_to_finding(entry: EnrichPlanEntry) -> Optional[DiagnoseFinding]:
     elif disposition == "analyze" and reason == "stale":
         code = "enrich_status_stale"
         severity = "info"
+        # DSF-002 closure (D.4): shlex.quote subject_id (see managed_body_conflict above).
+        quoted = shlex.quote(subject_id)
         action = (
             f"Enrich state is stale (source was re-ingested or refreshed). "
-            f"Re-run `folio enrich {subject_id}` to refresh."
+            f"Re-run `folio enrich {quoted}` to refresh."
         )
     elif disposition == "analyze" and reason != "eligible":
         code = "managed_sections_unidentified"
@@ -2120,6 +2170,10 @@ def diagnose_notes(
             evidence/interaction deck (CB-3 closure).
         ValueError: limit is not None and limit < 1 (ADV-SF-004 closure).
     """
+    # DCB-2 / DSF-003 closure (D.4): unconditional registry + library_root
+    # health check, runs BEFORE scope resolution and for library-wide too.
+    _check_registry_or_raise(config)
+
     if scope is not None:
         _resolve_scope_or_raise(config, scope)
 
@@ -2159,4 +2213,5 @@ def diagnose_notes(
         findings=rendered,
         summary=summary,
         truncated=len(rendered) < unfiltered_count,
+        unfiltered_total=unfiltered_count,  # DCB-1 closure (D.4)
     )

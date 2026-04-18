@@ -1246,9 +1246,17 @@ def enrich(ctx, scope, dry_run, llm_profile, force):
         sys.exit(1)
 
     # PROD-SF-006: enrich → diagnose breadcrumb when notes stalled.
+    # DSF-002 closure (D.4): shlex.quote scope to prevent shell-injection
+    #   if a malicious scope token contains backticks etc.
+    # PROD-DSF-001 closure (D.4): branch on scope presence to avoid the
+    #   trailing-space-inside-backticks rendering when scope=None.
     if result.protected + result.conflicted > 0:
-        scope_token = scope if scope else ""
-        tip = f"  Tip: run `folio enrich diagnose {scope_token}`".rstrip()
+        import shlex
+        if scope:
+            quoted = shlex.quote(scope)
+            tip = f"  Tip: run `folio enrich diagnose {quoted}`"
+        else:
+            tip = "  Tip: run `folio enrich diagnose`"
         click.echo(tip + " to see why these notes stalled.")
 
     if result.failed > 0:
@@ -1310,7 +1318,11 @@ def enrich_diagnose_cmd(ctx, scope, json_output, limit):
 
 
 def _render_diagnose_text(result, echo) -> None:
-    """Render DiagnoseResult as human-readable text per spec §4.3."""
+    """Render DiagnoseResult as human-readable text per spec §4.3.
+
+    DCB-1 closure (D.4): emits "showing N of M" using result.unfiltered_total.
+    DCSF-1 / PROD-DSF-002 closure (D.4): pluralization-aware summary line.
+    """
     if not result.findings:
         echo("No enrichment hygiene findings.")
         return
@@ -1324,28 +1336,42 @@ def _render_diagnose_text(result, echo) -> None:
         echo(f"  Action: {finding.recommended_action}")
 
     if result.truncated:
-        # Compute unfiltered count for the (showing N of M) hint.
-        unfiltered = result.summary.total
-        echo(f"... (showing {unfiltered} of more; raise --limit to see more)")
+        # DCB-1 closure: emit actual unfiltered total (M), not "more".
+        echo(
+            f"... (showing {result.summary.total} of {result.unfiltered_total}; "
+            f"raise --limit to see more)"
+        )
 
     by_severity: dict[str, int] = {"error": 0, "warning": 0, "info": 0}
     for f in result.findings:
         by_severity[f.severity] = by_severity.get(f.severity, 0) + 1
     parts = []
     for sev in ("error", "warning", "info"):
-        if by_severity.get(sev):
-            parts.append(f"{by_severity[sev]} {sev}")
+        n = by_severity.get(sev, 0)
+        if n:
+            # PROD-DSF-002 / PEER-DSF-004 closure: per-severity pluralization.
+            parts.append(f"{n} {sev}{'s' if n != 1 else ''}")
     flagged_part = (
         f" ({result.summary.flagged_total} flagged)"
         if result.summary.flagged_total
         else ""
     )
+    # PROD-DSF-002 closure: total pluralization.
+    total_noun = "finding" if result.summary.total == 1 else "findings"
     echo("")
-    echo(f"{result.summary.total} findings{flagged_part}: " + ", ".join(parts) + ".")
+    echo(
+        f"{result.summary.total} {total_noun}{flagged_part}: "
+        + ", ".join(parts)
+        + "."
+    )
 
 
 def _render_diagnose_json(result) -> str:
-    """Render DiagnoseResult as the §7 JSON envelope (schema_version 1.0)."""
+    """Render DiagnoseResult as the §7 JSON envelope (schema_version 1.0).
+
+    DCB-1 closure (D.4): summary.unfiltered_total exposed in the JSON
+    envelope so consumers can compute the truncation gap (M - N).
+    """
     payload = {
         "schema_version": result.schema_version,
         "command": result.command,
@@ -1366,6 +1392,7 @@ def _render_diagnose_json(result) -> str:
             "total": result.summary.total,
             "by_code": dict(result.summary.by_code),
             "flagged_total": result.summary.flagged_total,
+            "unfiltered_total": result.unfiltered_total,
         },
         "truncated": result.truncated,
     }

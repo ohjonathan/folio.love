@@ -461,9 +461,10 @@ class TestInvariants:
             "recommended_action", "trust_status",
         ]
         result_fields = [f.name for f in fields(DiagnoseResult)]
+        # DCB-1 closure (D.4): unfiltered_total added as 8th field.
         assert result_fields == [
             "schema_version", "command", "scope", "limit",
-            "findings", "summary", "truncated",
+            "findings", "summary", "truncated", "unfiltered_total",
         ]
         summary_fields = [f.name for f in fields(DiagnoseSummary)]
         assert summary_fields == ["total", "by_code", "flagged_total"]

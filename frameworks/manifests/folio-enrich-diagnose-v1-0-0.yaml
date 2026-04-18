@@ -394,9 +394,9 @@ gate_prerequisites:
       expect: "eq:1"
   - id: G-cardinality-5
     category: cardinality
-    description: "DiagnoseFinding / DiagnoseResult / DiagnoseSummary are frozen dataclasses with the spec §3.1 field order. ADV-SF-005 closure: tightened from zip(...) to exact-list equality so extra trailing fields cannot slip past the gate."
+    description: "DiagnoseFinding / DiagnoseResult / DiagnoseSummary are frozen dataclasses with the spec §3.1 field order. ADV-SF-005 closure: tightened from zip(...) to exact-list equality. DCB-1 closure (D.4): DiagnoseResult gains 8th field unfiltered_total to enable truncation footer 'showing N of M'."
     verification:
-      command: "python3 -c 'from folio.enrich import DiagnoseFinding, DiagnoseResult, DiagnoseSummary; from dataclasses import fields; assert [f.name for f in fields(DiagnoseFinding)] == [\"code\", \"severity\", \"subject_id\", \"detail\", \"recommended_action\", \"trust_status\"]; assert [f.name for f in fields(DiagnoseResult)] == [\"schema_version\", \"command\", \"scope\", \"limit\", \"findings\", \"summary\", \"truncated\"]; assert [f.name for f in fields(DiagnoseSummary)] == [\"total\", \"by_code\", \"flagged_total\"]; print(1)'"
+      command: "python3 -c 'from folio.enrich import DiagnoseFinding, DiagnoseResult, DiagnoseSummary; from dataclasses import fields; assert [f.name for f in fields(DiagnoseFinding)] == [\"code\", \"severity\", \"subject_id\", \"detail\", \"recommended_action\", \"trust_status\"]; assert [f.name for f in fields(DiagnoseResult)] == [\"schema_version\", \"command\", \"scope\", \"limit\", \"findings\", \"summary\", \"truncated\", \"unfiltered_total\"]; assert [f.name for f in fields(DiagnoseSummary)] == [\"total\", \"by_code\", \"flagged_total\"]; print(1)'"
       expect: "eq:1"
   - id: G-cardinality-7
     category: cardinality
