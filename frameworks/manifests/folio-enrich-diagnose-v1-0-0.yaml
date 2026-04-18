@@ -168,9 +168,18 @@ scope:
     - name: "diagnose_notes function importable from folio.enrich"
       command: "python3 -c 'from folio.enrich import diagnose_notes; assert callable(diagnose_notes); print(1)'"
       expect: "eq:1"
-    - name: "Sub-item B firewall: zero references to derive_trust_status or include-flagged in folio/enrich.py (the diagnose code path)"
+    - name: "Sub-item B firewall (a): zero references to derive_trust_status or include-flagged in folio/enrich.py (the diagnose code path)"
       command: "! grep -nE 'derive_trust_status|include[-_]flagged' folio/enrich.py"
       expect: "exit-0"
+    - name: "Sub-item B firewall (b) — CB-4 closure: zero references to include-flagged or derive_trust_status inside the marker-bounded v1.0.0 diagnose CLI block in folio/cli.py (existing --include-flagged on digest/search/graph doctor/synthesize lives OUTSIDE the marker block)"
+      command: "! awk '/^# v1\\.0\\.0 diagnose CLI: BEGIN/,/^# v1\\.0\\.0 diagnose CLI: END/' folio/cli.py | grep -nE 'include[-_]flagged|derive_trust_status'"
+      expect: "exit-0"
+    - name: "Diagnose --help does not expose --include-flagged (runtime CB-4 enforcement via ED-CLI-19)"
+      command: "python3 -m folio enrich diagnose --help | ! grep -F -- '--include-flagged'"
+      expect: "exit-0"
+    - name: "ScopeResolutionError exported by folio.enrich (CB-3 closure)"
+      command: "python3 -c 'from folio.enrich import ScopeResolutionError; assert issubclass(ScopeResolutionError, Exception); print(1)'"
+      expect: "eq:1"
     - name: "No new direct LLM imports in folio/enrich.py (existing imports allowed; this assertion checks that no new openai/anthropic-style import was added in this slice)"
       command: "! grep -nE 'from openai|import openai|from anthropic|import anthropic' folio/enrich.py"
       expect: "exit-0"
@@ -331,9 +340,9 @@ gate_prerequisites:
       expect: "exit-nonzero"
   - id: G-scope-3
     category: scope
-    description: "folio/cli.py changes bounded to enrich group reshape + diagnose subcommand registration (140-line cap on added; baseline 2f0369b). Group reshape (~20 lines reframe of existing enrich command into a group with pass-through guard) + diagnose subcommand wiring (~70 lines) + text/JSON renderer helpers (~50 lines). folio/enrich.py changes bounded to additive diagnose surface (180-line cap on added)."
+    description: "folio/cli.py changes bounded to enrich group reshape + diagnose subcommand registration + PROD-SF-006 breadcrumb (170-line cap on added; baseline 2f0369b; raised from 140 in v1.1 to accommodate breadcrumb). folio/enrich.py changes bounded to additive diagnose surface (240-line cap on added; raised from 180 in v1.1 to accommodate _resolve_scope_or_raise + ScopeResolutionError + extended _entry_to_finding for ADV-SF-003 defensive defaults). ADV-MIN-003 closure: gate also fails if either file shows delete/rename status (D / R prefix in name-status)."
     verification:
-      command: "git diff --numstat 2f0369b..HEAD -- folio/cli.py folio/enrich.py | awk 'BEGIN{cli_a=0;enrich_a=0} {if($3==\"folio/cli.py\") cli_a=$1; else if($3==\"folio/enrich.py\") enrich_a=$1} END {if (cli_a > 140 || enrich_a > 180) {print \"FAIL cli=\"cli_a\" enrich=\"enrich_a; exit 1} else print \"ok cli=\"cli_a\" enrich=\"enrich_a}'"
+      command: "git diff --name-status 2f0369b..HEAD -- folio/cli.py folio/enrich.py | grep -E '^[DR]' && exit 1 || git diff --numstat 2f0369b..HEAD -- folio/cli.py folio/enrich.py | awk 'BEGIN{cli_a=0;enrich_a=0} {if($3==\"folio/cli.py\") cli_a=$1; else if($3==\"folio/enrich.py\") enrich_a=$1} END {if (cli_a > 170 || enrich_a > 240) {print \"FAIL cli=\"cli_a\" enrich=\"enrich_a; exit 1} else print \"ok cli=\"cli_a\" enrich=\"enrich_a}'"
       expect: "regex:^ok"
   - id: G-scope-4
     category: scope
@@ -343,9 +352,21 @@ gate_prerequisites:
       expect: "exit-0"
   - id: G-scope-5
     category: scope
-    description: "Sub-item B firewall: zero references to derive_trust_status or include-flagged in folio/enrich.py. Diagnose annotation reads frontmatter directly; the slice-4 helper applies to RelationshipProposalView (not notes), and the --include-flagged flag is operator-confirmed out of scope. Crossing this path implies pre-merging A and B."
+    description: "Sub-item B firewall (a): zero references to derive_trust_status or include-flagged in folio/enrich.py. Diagnose annotation reads frontmatter directly; the slice-4 helper applies to RelationshipProposalView (not notes), and the --include-flagged flag is operator-confirmed out of scope. Crossing this path implies pre-merging A and B."
     verification:
       command: "! grep -nE 'derive_trust_status|include[-_]flagged' folio/enrich.py"
+      expect: "exit-0"
+  - id: G-scope-6
+    category: scope
+    description: "Sub-item B firewall (b) — CB-4 closure: zero references to include-flagged or derive_trust_status inside the marker-bounded v1.0.0 diagnose CLI block in folio/cli.py. Existing --include-flagged on digest/search/graph doctor/synthesize lives OUTSIDE the markers and is allowed. The marker bounds the scope of the firewall to ONLY the new diagnose code path."
+    verification:
+      command: "! awk '/^# v1\\.0\\.0 diagnose CLI: BEGIN/,/^# v1\\.0\\.0 diagnose CLI: END/' folio/cli.py | grep -nE 'include[-_]flagged|derive_trust_status'"
+      expect: "exit-0"
+  - id: G-scope-7
+    category: scope
+    description: "Sub-item B firewall (c) — CB-4 closure: runtime --help check. `folio enrich diagnose --help` output does not contain the literal '--include-flagged'. ED-CLI-19 mirror."
+    verification:
+      command: "python3 -m folio enrich diagnose --help | ! grep -F -- '--include-flagged'"
       expect: "exit-0"
   - id: G-cardinality-1
     category: cardinality
@@ -373,9 +394,15 @@ gate_prerequisites:
       expect: "eq:1"
   - id: G-cardinality-5
     category: cardinality
-    description: "DiagnoseFinding / DiagnoseResult / DiagnoseSummary are frozen dataclasses with the spec §3.1 field order."
+    description: "DiagnoseFinding / DiagnoseResult / DiagnoseSummary are frozen dataclasses with the spec §3.1 field order. ADV-SF-005 closure: tightened from zip(...) to exact-list equality so extra trailing fields cannot slip past the gate."
     verification:
-      command: "python3 -c 'from folio.enrich import DiagnoseFinding, DiagnoseResult, DiagnoseSummary; from dataclasses import fields; assert all(f.name == n for f, n in zip(fields(DiagnoseFinding), [\"code\", \"severity\", \"subject_id\", \"detail\", \"recommended_action\", \"trust_status\"])); assert all(f.name == n for f, n in zip(fields(DiagnoseResult), [\"schema_version\", \"command\", \"scope\", \"limit\", \"findings\", \"summary\", \"truncated\"])); assert all(f.name == n for f, n in zip(fields(DiagnoseSummary), [\"total\", \"by_code\", \"flagged_total\"])); print(1)'"
+      command: "python3 -c 'from folio.enrich import DiagnoseFinding, DiagnoseResult, DiagnoseSummary; from dataclasses import fields; assert [f.name for f in fields(DiagnoseFinding)] == [\"code\", \"severity\", \"subject_id\", \"detail\", \"recommended_action\", \"trust_status\"]; assert [f.name for f in fields(DiagnoseResult)] == [\"schema_version\", \"command\", \"scope\", \"limit\", \"findings\", \"summary\", \"truncated\"]; assert [f.name for f in fields(DiagnoseSummary)] == [\"total\", \"by_code\", \"flagged_total\"]; print(1)'"
+      expect: "eq:1"
+  - id: G-cardinality-7
+    category: cardinality
+    description: "ScopeResolutionError exported by folio.enrich (CB-3 closure)."
+    verification:
+      command: "python3 -c 'from folio.enrich import ScopeResolutionError; assert issubclass(ScopeResolutionError, Exception); print(1)'"
       expect: "eq:1"
   - id: G-cardinality-6
     category: cardinality
@@ -388,6 +415,12 @@ gate_prerequisites:
     description: "Disposition-coverage tests pass: each of the 6 finding codes is exhaustively covered (ED-1..6 in spec §8.1)."
     verification:
       command: "python3 -m pytest tests/test_enrich_diagnose.py -k 'protect_frontmatter_unreadable or protect_managed_sections_unidentified or protect_curation_level or protect_review_status or conflict_managed_body_fingerprint or analyze_stale' -q"
+      expect: "exit-0"
+  - id: G-test-7
+    category: test
+    description: "v1.1 closure tests pass: defensive-default fallbacks for protect/conflict/analyze (ED-15a/b/c/d), function-level limit validation (ED-21), invalid scope + corrupt registry exit-1 (ED-22, ED-23, ED-CLI-21, ED-CLI-22), enrich→diagnose breadcrumb (ED-CLI-20a/b), --include-flagged absent from --help (ED-CLI-19), MappingProxyType immutability (ED-24), recommended_action substitutions (ED-25, ED-26), flagged-alone omitted (ED-27)."
+    verification:
+      command: "python3 -m pytest tests/test_enrich_diagnose.py tests/test_cli_enrich_diagnose.py -k 'defensive_unknown or limit_validation or invalid_scope or corrupt_registry or breadcrumb or expose_include_flagged or immutable_mapping or recommended_action or review_status_flagged_alone' -q"
       expect: "exit-0"
   - id: G-test-4
     category: test
