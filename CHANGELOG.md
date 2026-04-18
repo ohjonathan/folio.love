@@ -1,8 +1,37 @@
 # Changelog
 
 All notable changes to folio.love are documented here. The format loosely follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio is pre-1.0, so breaking
-changes at minor versions are permitted but flagged explicitly.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); folio crosses to v1.0.0 with
+the `folio enrich diagnose` slice, which closes a roadmap-named, formerly-Tier-4-deferred
+deliverable per parent enrich spec §7.7. Subsequent breaking changes follow standard semver.
+
+## [v1.0.0] — 2026-04-17
+
+### Added
+
+- **`folio enrich diagnose [SCOPE] [--json] [--limit N]`** — new read-only diagnostic subcommand under the `enrich` group. Identifies registry-managed evidence and interaction notes whose managed sections cannot be safely updated by `folio enrich`. Surfaces the (disposition, reason) tuples computed by the existing `_determine_disposition` predicate as six stable finding codes (`frontmatter_unreadable`, `managed_sections_unidentified`, `protected_by_curation_level`, `protected_by_review_status`, `managed_body_conflict`, `enrich_status_stale`) with deterministic severity (error/warning/info). Sorted three-level: `(severity_rank desc, code asc, subject_id asc)` — within a severity tier, findings group by code. Trust-annotated per finding (annotation-only — no default exclusion of flagged notes, no `--include-flagged` flag); `[flagged]` marker rendered INSIDE the severity bracket per graph-doctor parity. Fresh JSON envelope at `schema_version: "1.0"` with seven top-level keys: `schema_version`, `command`, `scope`, `limit`, `findings`, `summary`, `truncated`. Each finding carries the parent §7.7 fixed schema (5 keys: `code`, `severity`, `subject_id`, `detail`, `recommended_action`) plus an additive `trust_status` key.
+- **First slice of Tier-4 Roadmap row #4 (Graph quality layer), sub-item A.** Sub-items B (trust-aware graph behavior across Tier-4 surfaces) and C (relation-schema validation) are explicit non-goals reserved for follow-on slices. Strict firewall against sub-item B enforced by manifest gates G-scope-5 / G-scope-6 / G-scope-7 (no `derive_trust_status` import, no `--include-flagged` in marker-bounded diagnose CLI block, no `--include-flagged` in `folio enrich diagnose --help` output).
+- **Enrich → diagnose breadcrumb.** When `folio enrich [scope]` returns a result with `result.protected + result.conflicted > 0`, the CLI emits `Tip: run 'folio enrich diagnose <scope>' to see why these notes stalled.` Closes the discovery path for new operators (PROD-SF-006).
+- **`ScopeResolutionError`** exported by `folio.enrich`. Raised by `diagnose_notes` (and indirectly by `_resolve_scope_or_raise`) when a non-None scope matches no registered evidence/interaction deck OR when registry.json is corrupt. CLI catches and exits 1 — honors parent §7.7 fatal-on-invalid-scope semantics.
+
+### Changed
+
+- **`folio enrich`** is now a `@cli.group(cls=ScopeOrCommandGroup, invoke_without_command=True)` with a hidden `--scope` option (mirrors the digest precedent). Existing `folio enrich [scope] [--dry-run] [--llm-profile P] [--force]` invocation continues to work unchanged. Option-before-scope forms (`folio enrich --dry-run ClientA`, `--llm-profile X ClientA`, `--force ClientA`) are now supported via the v1.2 `ScopeOrCommandGroup.parse_args` extension (value-aware walk that handles option-with-value pairs). Subcommand routing (e.g., `folio enrich diagnose ClientA`) is preserved via the v1.3 `saw_subcommand` flag (subcommand args pass through verbatim — no `--scope` rewrite).
+- **`ScopeOrCommandGroup.parse_args`** in `folio/cli.py:27-99` is extended (additive — no breaking changes to existing siblings `digest`, `synthesize`, `search`). The extension makes option-before-scope forms work for ALL group consumers, not just enrich.
+
+### Operator notes
+
+- `folio enrich diagnose` is read-only — never writes notes, frontmatter, or registry.
+- A scope that matches no registered deck is treated as fatal (exit 1). This is intentional: a typo on a diagnostic command should surface the typo, not silently report "everything is healthy."
+- For flagged-note enumeration (not flagged-note diagnosis), use the slice-4 discovery surfaces (`folio links review --include-flagged`, etc.) — diagnose is a diagnostic surface, not a discovery surface.
+- The `enrich diagnose` subcommand's `<scope>` is a positional arg; the parent `enrich` group accepts a hidden `--scope` option. This asymmetry exists because `ScopeOrCommandGroup` rewrites bare positional tokens into `--scope X` for the group, but subcommand args pass through verbatim (v1.3 `saw_subcommand` extension).
+
+### Carry-forwards
+
+- `folio status --flagged` (or equivalent flagged-note enumeration surface) — diagnose explicitly does NOT enumerate flagged notes (only annotates them on findings); the right surface for flagged enumeration is a follow-on slice.
+- `folio demote` / `folio unflag` remediation commands — diagnose's recommended_action text currently points operators at manual frontmatter editing because no command path exists today. Future v1.x slices may add these surfaces.
+- `summary.by_code_unfiltered` envelope key — additive minor-bump candidate when `--limit` truncates and operators want library-census counts.
+- Parent enrich spec §7.7 wording amendment ("fixed schema" → "minimum schema") to formally authorize the additive `trust_status` per-finding key. Tracked as a doc-maintenance pass.
 
 ## [v0.9.0] — 2026-04-17
 

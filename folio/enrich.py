@@ -11,10 +11,13 @@ import hashlib
 import json
 import logging
 import re
+import shlex
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from types import MappingProxyType
+from typing import Mapping, Optional
 
 import yaml
 
@@ -1883,3 +1886,332 @@ def enrich_batch(
     )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# v1.0.0 diagnose surface (folio enrich diagnose)
+# Tier-4 Roadmap row #4 sub-item A. Read-only enrichability hygiene check.
+# Surfaces (disposition, reason) tuples from _determine_disposition as
+# stable finding codes. See docs/specs/v1.0.0_folio_enrich_diagnose_spec.md
+# and docs/specs/folio_enrich_spec.md §7.7 for the contract.
+# ---------------------------------------------------------------------------
+
+DIAGNOSE_SCHEMA_VERSION = "1.0"
+DIAGNOSE_COMMAND_NAME = "enrich diagnose"
+
+_SEVERITY_RANK = {"error": 3, "warning": 2, "info": 1}
+
+
+class ScopeResolutionError(Exception):
+    """Raised when --scope does not resolve to any registered deck.
+
+    CB-3 closure: parent §7.7 says invalid scope is fatal exit non-zero.
+    Diagnose treats a non-None scope that matches zero decks as fatal
+    (typo guard).
+    """
+
+
+@dataclass(frozen=True)
+class DiagnoseFinding:
+    """A single enrichability blocker for a registry-managed note.
+
+    Field order mirrors parent spec §7.7 fixed schema (5 keys), then
+    trails the additive trust_status key per operator-confirmed product
+    shape (annotation-only trust posture; see spec §6 firewall).
+    """
+    code: str
+    severity: str
+    subject_id: str
+    detail: str
+    recommended_action: str
+    trust_status: str
+
+
+@dataclass(frozen=True)
+class DiagnoseSummary:
+    """Aggregate counters for the run, surfaced in the §7 envelope.
+
+    by_code is wrapped in MappingProxyType for value-level immutability
+    (frozen-dataclass guarantee extends to dict values; PEER-MIN-003).
+    """
+    total: int
+    by_code: Mapping[str, int]
+    flagged_total: int
+
+
+@dataclass(frozen=True)
+class DiagnoseResult:
+    """Top-level result of a diagnose run; mirrors §7 envelope shape.
+
+    DCB-1 closure (D.4 fix): unfiltered_total carries the pre-truncation
+    finding count so the text renderer can emit "showing N of M" per
+    spec §4.3 (was emitting "showing N of more" in v1.3 because the
+    renderer had no source of truth for M).
+    """
+    schema_version: str
+    command: str
+    scope: Optional[str]
+    limit: Optional[int]
+    findings: tuple[DiagnoseFinding, ...]
+    summary: DiagnoseSummary
+    truncated: bool
+    unfiltered_total: int
+
+
+def _finding_sort_key(f: DiagnoseFinding) -> tuple[int, str, str]:
+    """Three-level sort key (CSF-1):
+    severity desc (worst first), then code asc (group within tier),
+    then subject_id asc (tie-break alphabetic).
+    """
+    return (-_SEVERITY_RANK[f.severity], f.code, f.subject_id)
+
+
+def _check_registry_or_raise(config: FolioConfig) -> None:
+    """DCB-2 closure (D.4 fix): unconditional registry health check.
+
+    Runs BEFORE scope resolution and unconditionally for library-wide
+    scope=None. Honors parent §7.7 fatal-on-unreadable-registry without
+    being bypassed on library-wide invocation.
+
+    DSF-003 closure: also fails fast when library_root does not exist
+    or is not a directory (was producing "Registry bootstrapped: 0
+    entries / No findings" — false-clean on a misconfigured root).
+
+    Raises ScopeResolutionError on:
+      - library_root nonexistent or not a directory (DSF-003)
+      - registry.json present but flagged _corrupt (DCB-2)
+    Does NOT raise when registry.json is simply missing (empty library
+    is a valid healthy state).
+    """
+    library_root = config.library_root.resolve()
+    if not library_root.exists() or not library_root.is_dir():
+        raise ScopeResolutionError(
+            f"Library root {library_root} does not exist or is not a "
+            f"directory. Investigate the config before re-running diagnose."
+        )
+    registry_path = library_root / "registry.json"
+    if not registry_path.exists():
+        return
+    data = registry_mod.load_registry(registry_path)
+    if data.get("_corrupt"):
+        raise ScopeResolutionError(
+            f"Registry at {registry_path} is corrupt and cannot be parsed safely. "
+            f"Investigate manually before re-running diagnose."
+        )
+
+
+def _resolve_scope_or_raise(config: FolioConfig, scope: str) -> None:
+    """CB-3 scope-resolution preflight (post _check_registry_or_raise).
+
+    Verify scope matches at least one registered deck. Raises
+    ScopeResolutionError if scope is non-empty and no deck's deck_dir or
+    markdown_path satisfies the scope-prefix predicate. Library-wide
+    scope (None) bypasses this check entirely (DCB-2 closure: the
+    library-wide health check is now done by _check_registry_or_raise).
+    """
+    library_root = config.library_root.resolve()
+    registry_path = library_root / "registry.json"
+    if not registry_path.exists():
+        return
+    data = registry_mod.load_registry(registry_path)
+    if data.get("_corrupt"):
+        raise ScopeResolutionError(
+            f"Registry at {registry_path} is corrupt and cannot be parsed safely. "
+            f"Investigate manually before re-running diagnose."
+        )
+    for entry_data in data.get("decks", {}).values():
+        if not isinstance(entry_data, dict):
+            continue
+        entry = registry_mod.entry_from_dict(entry_data)
+        if entry.type not in ("evidence", "interaction"):
+            continue
+        if (_matches_scope(entry.markdown_path, scope) or
+                _matches_scope(entry.deck_dir, scope)):
+            return
+    raise ScopeResolutionError(
+        f"Scope '{scope}' did not match any registered evidence or interaction "
+        f"deck. Run 'folio status' to list registered scopes."
+    )
+
+
+def _entry_to_finding(entry: EnrichPlanEntry) -> Optional[DiagnoseFinding]:
+    """Map an EnrichPlanEntry to a DiagnoseFinding, or None if healthy.
+
+    Defensive defaults (ADV-SF-003): future protect / conflict / non-
+    eligible analyze reasons surface as managed_sections_unidentified
+    rather than silently disappearing. Future disposition values not in
+    {protect, conflict, analyze, skip} return None and emit a warning.
+    """
+    disposition = entry.disposition
+    reason = entry.reason
+    subject_id = entry.entry.id
+
+    if disposition == "protect":
+        if reason == "frontmatter unreadable":
+            code = "frontmatter_unreadable"
+            severity = "error"
+            action = (
+                "Frontmatter cannot be parsed; restore the YAML block "
+                "manually before re-running enrich."
+            )
+        elif reason == "managed sections not identifiable":
+            code = "managed_sections_unidentified"
+            severity = "warning"
+            action = (
+                "Verify the note's `## Slide N` / `### Analysis` / "
+                "`## Related` / `## Entities Mentioned` headings are intact "
+                "and not nested inside fenced code blocks."
+            )
+        elif reason.startswith("curation_level="):
+            code = "protected_by_curation_level"
+            severity = "warning"
+            action = (
+                "Body protection is intentional. To allow enrich to modify "
+                "this note, edit the note's `curation_level` frontmatter "
+                "field to a lower tier (L1 or L0) — no command demotion path "
+                "exists today. Otherwise accept that enrich will not modify "
+                "this note."
+            )
+        elif reason.startswith("review_status="):
+            code = "protected_by_review_status"
+            severity = "warning"
+            action = (
+                "Body protection is intentional. To allow enrich to modify "
+                "this note, edit the note's `review_status` frontmatter "
+                "field back to `clean` (no `folio unflag` command exists "
+                "today). Otherwise accept that enrich will not modify this "
+                "note."
+            )
+        else:
+            code = "managed_sections_unidentified"
+            severity = "warning"
+            action = f"Unrecognized protect reason: {reason}. Investigate manually."
+    elif disposition == "conflict":
+        if reason == "managed body fingerprint mismatch":
+            code = "managed_body_conflict"
+            severity = "error"
+            # DSF-002 closure (D.4): shlex.quote subject_id to prevent
+            # shell-injection if a malicious deck_id contains backticks
+            # or other shell metacharacters that an operator might
+            # copy-paste into a shell.
+            quoted = shlex.quote(subject_id)
+            action = (
+                f"Managed body content has been edited by hand. Reconcile "
+                f"manually, then re-run with `folio enrich --force {quoted}` "
+                f"to overwrite."
+            )
+        else:
+            code = "managed_sections_unidentified"
+            severity = "warning"
+            action = f"Unrecognized conflict reason: {reason}. Investigate manually."
+    elif disposition == "analyze" and reason == "stale":
+        code = "enrich_status_stale"
+        severity = "info"
+        # DSF-002 closure (D.4): shlex.quote subject_id (see managed_body_conflict above).
+        quoted = shlex.quote(subject_id)
+        action = (
+            f"Enrich state is stale (source was re-ingested or refreshed). "
+            f"Re-run `folio enrich {quoted}` to refresh."
+        )
+    elif disposition == "analyze" and reason != "eligible":
+        code = "managed_sections_unidentified"
+        severity = "warning"
+        action = f"Unrecognized analyze reason: {reason}. Investigate manually."
+    elif disposition in ("analyze", "skip"):
+        return None
+    else:
+        import warnings
+        warnings.warn(
+            f"Unrecognized disposition '{disposition}' for entry {subject_id}; "
+            f"omitting from diagnose findings. Future enrich changes may need "
+            f"diagnose updates.",
+            RuntimeWarning,
+        )
+        return None
+
+    review_status = entry.existing_fm.get("review_status", "clean")
+    trust_status = "flagged" if review_status == "flagged" else "ok"
+
+    return DiagnoseFinding(
+        code=code,
+        severity=severity,
+        subject_id=subject_id,
+        detail=reason,
+        recommended_action=action,
+        trust_status=trust_status,
+    )
+
+
+def diagnose_notes(
+    config: FolioConfig,
+    *,
+    scope: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> DiagnoseResult:
+    """Run the read-only enrichability hygiene check.
+
+    Identifies registry-managed evidence and interaction notes whose
+    managed sections cannot be safely updated by `folio enrich`. Surfaces
+    the (disposition, reason) tuples computed by _determine_disposition
+    as stable finding codes per parent enrich spec §7.7.
+
+    Args:
+        config: FolioConfig
+        scope: Optional scope prefix (deck_dir / markdown_path). None =
+            library-wide.
+        limit: Optional cap on rendered findings (post-sort). Must be >= 1
+            or None.
+
+    Returns:
+        DiagnoseResult with the §7 envelope shape.
+
+    Raises:
+        ScopeResolutionError: scope is non-None and matches no registered
+            evidence/interaction deck (CB-3 closure).
+        ValueError: limit is not None and limit < 1 (ADV-SF-004 closure).
+    """
+    # DCB-2 / DSF-003 closure (D.4): unconditional registry + library_root
+    # health check, runs BEFORE scope resolution and for library-wide too.
+    _check_registry_or_raise(config)
+
+    if scope is not None:
+        _resolve_scope_or_raise(config, scope)
+
+    if limit is not None and limit < 1:
+        raise ValueError(f"limit must be >= 1 or None; got {limit!r}")
+
+    plan = plan_enrichment(
+        config, scope=scope, force=False, dry_run=True,
+    )
+
+    raw_findings: list[DiagnoseFinding] = []
+    for entry in plan:
+        finding = _entry_to_finding(entry)
+        if finding is not None:
+            raw_findings.append(finding)
+
+    raw_findings.sort(key=_finding_sort_key)
+
+    unfiltered_count = len(raw_findings)
+    if limit is not None:
+        rendered = tuple(raw_findings[:limit])
+    else:
+        rendered = tuple(raw_findings)
+
+    by_code_dict = dict(sorted(Counter(f.code for f in rendered).items()))
+    summary = DiagnoseSummary(
+        total=len(rendered),
+        by_code=MappingProxyType(by_code_dict),
+        flagged_total=sum(1 for f in rendered if f.trust_status == "flagged"),
+    )
+
+    return DiagnoseResult(
+        schema_version=DIAGNOSE_SCHEMA_VERSION,
+        command=DIAGNOSE_COMMAND_NAME,
+        scope=scope,
+        limit=limit,
+        findings=rendered,
+        summary=summary,
+        truncated=len(rendered) < unfiltered_count,
+        unfiltered_total=unfiltered_count,  # DCB-1 closure (D.4)
+    )
