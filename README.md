@@ -255,11 +255,15 @@ The entity registry is stored as `entities.json` alongside `registry.json` in th
 
 ### `folio ingest`
 
-Ingest a transcript or notes file into a structured interaction note.
+Ingest a transcript or notes file into a structured interaction note. Supported
+inputs are `.txt`, `.md`, `.vtt`, and `.srt`.
 
 ```bash
 # Basic ingest
 folio ingest transcript.md --type expert_interview --date 2026-03-21
+
+# Native meeting transcript export
+folio ingest meeting.vtt --type internal_sync --date 2026-03-21
 
 # With full metadata
 folio ingest ./transcripts/cto_interview.md \
@@ -294,7 +298,7 @@ folio ingest ./transcripts/cto_interview.md \
 | `--llm-profile` | Override the configured LLM profile for this run |
 | `--note`, `-n` | Version note |
 
-The output is a structured Markdown interaction note containing: a summary, key findings (claims, data points, decisions, open questions), extracted entities as Obsidian wikilinks, grounded quotes with confidence scores, and a collapsed raw transcript. If LLM analysis is unavailable, a degraded note is written with visible warning flags.
+The output is a structured Markdown interaction note containing: a summary, key findings (claims, data points, decisions, open questions), extracted entities as Obsidian wikilinks, grounded quotes with confidence scores, and a collapsed raw transcript. VTT and SRT sources are normalized by stripping cue numbers, headers, cue settings, and caption markup while preserving timestamps and speaker labels where present. If LLM analysis is unavailable, a degraded note is written with visible warning flags.
 
 Re-ingesting the same source file increments the version rather than creating a duplicate. Identity is resolved by source path, then by content hash.
 
@@ -586,9 +590,9 @@ Each stage is independent and testable. LLM analysis results are cached per-slid
 ### Interaction Ingestion (`folio ingest`)
 
 ```
-Input (.txt/.md transcript)
+Input (.txt/.md/.vtt/.srt transcript)
   │
-  ├─ Normalize ──→ Strip frontmatter, normalize whitespace
+  ├─ Normalize ──→ Strip frontmatter/caption markup, normalize timestamps + whitespace
   │
   ├─ Analysis ───→ LLM extraction: summary, findings, entities, quotes
   │                 Confidence scoring + source-text validation

@@ -30,11 +30,16 @@ from .pipeline.interaction_analysis import (
     analyze_interaction_text,
     normalize_source_text,
 )
+from .pipeline.transcript_formats import (
+    TRANSCRIPT_FORMAT_EXTENSIONS,
+    normalize_transcript_text,
+)
 from .tracking.entities import EntityRegistryError
 from .tracking import registry, sources, versions
 from .tracking.registry import RegistryEntry
 
-_SUPPORTED_EXTENSIONS = {".md", ".txt"}
+SUPPORTED_INGEST_EXTENSIONS = frozenset({".md", ".txt"}) | TRANSCRIPT_FORMAT_EXTENSIONS
+_SUPPORTED_EXTENSIONS_LABEL = ".txt, .md, .vtt, and .srt"
 _TARGET_REINGEST_ERROR = "Use --target <existing-note.md> to disambiguate."
 _TITLE_H1_RE = re.compile(r"(?m)^#\s+(.+?)\s*$")
 logger = logging.getLogger(__name__)
@@ -98,9 +103,11 @@ def ingest_source(
         raise IngestError(f"Event date cannot be in the future: {event_date.isoformat()}")
     if not source_path.exists():
         raise FileNotFoundError(f"Source file not found: {source_path}")
-    if source_path.suffix.lower() not in _SUPPORTED_EXTENSIONS:
+    source_extension = source_path.suffix.lower()
+    if source_extension not in SUPPORTED_INGEST_EXTENSIONS:
         raise IngestError(
-            f"Unsupported source extension '{source_path.suffix}'. v0.5.0 supports .txt and .md only."
+            f"Unsupported source extension '{source_path.suffix}'. "
+            f"folio ingest supports {_SUPPORTED_EXTENSIONS_LABEL} transcript sources."
         )
     if duration_minutes is not None and duration_minutes <= 0:
         raise IngestError("--duration-minutes must be a positive integer")
@@ -113,10 +120,10 @@ def ingest_source(
     library_root = config.library_root.resolve()
     registry_data = _load_registry_data(library_root)
 
-    raw_source_text = source_path.read_text()
-    normalized_source_body = normalize_source_text(
+    raw_source_text = source_path.read_text(encoding="utf-8-sig")
+    normalized_source_body = _normalize_ingest_source_text(
         raw_source_text,
-        strip_markdown_frontmatter=source_path.suffix.lower() == ".md",
+        source_extension=source_extension,
     )
     source_hash = sources.compute_file_hash(source_path)
 
@@ -301,6 +308,15 @@ def ingest_source(
         version=version_info.version,
         review_status=analysis_result.review_status,
         llm_status=analysis_result.llm_status,
+    )
+
+
+def _normalize_ingest_source_text(raw_source_text: str, *, source_extension: str) -> str:
+    if source_extension in TRANSCRIPT_FORMAT_EXTENSIONS:
+        return normalize_transcript_text(raw_source_text, source_extension)
+    return normalize_source_text(
+        raw_source_text,
+        strip_markdown_frontmatter=source_extension == ".md",
     )
 
 

@@ -33,6 +33,14 @@ def _ingest_result(*, llm_status: str = "executed", review_status: str = "clean"
 
 
 class TestIngestCommand:
+    def test_ingest_help_lists_supported_transcript_formats(self):
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["ingest", "--help"])
+
+        assert result.exit_code == 0
+        assert ".txt, .md, .vtt, .srt" in result.output
+
     @patch("folio.cli.ingest_source")
     def test_ingest_forwards_options(self, mock_ingest_source, tmp_path):
         library = tmp_path / "library"
@@ -263,7 +271,7 @@ class TestIngestCommand:
         )
 
         assert result.exit_code != 0
-        assert "supports .txt and .md only" in result.output
+        assert "supports .txt, .md, .vtt, and .srt transcript sources" in result.output
 
     def test_ingest_rejects_missing_source_file(self, tmp_path):
         library = tmp_path / "library"

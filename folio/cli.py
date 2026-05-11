@@ -17,7 +17,13 @@ import click
 
 from .config import FolioConfig
 from .converter import FolioConverter, PPTX_EXTENSIONS
-from .ingest import IngestAmbiguityError, IngestError, IngestSubtypeMismatchError, ingest_source
+from .ingest import (
+    SUPPORTED_INGEST_EXTENSIONS,
+    IngestAmbiguityError,
+    IngestError,
+    IngestSubtypeMismatchError,
+    ingest_source,
+)
 from .pipeline.images import ImageExtractionError
 from .llm.runtime import EndpointNotAllowedError
 
@@ -485,7 +491,7 @@ def ingest(
     llm_profile: str,
     note: str,
 ):
-    """Ingest a transcript or notes file into an interaction note."""
+    """Ingest a transcript or notes file (.txt, .md, .vtt, .srt) into an interaction note."""
     if event_date.date() > datetime.now().date():
         raise click.BadParameter("--date cannot be in the future", param_hint="--date")
 
@@ -958,7 +964,7 @@ def scan(ctx, scope: Optional[str]):
     scanned = 0
 
     from .converter import PPTX_EXTENSIONS
-    scan_extensions = PPTX_EXTENSIONS | {".pdf", ".txt", ".md"}
+    scan_extensions = PPTX_EXTENSIONS | {".pdf"} | SUPPORTED_INGEST_EXTENSIONS
 
     for src_config, resolved_root in config.resolve_source_roots():
         if not resolved_root.exists():

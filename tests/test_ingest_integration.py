@@ -223,6 +223,85 @@ class TestIngestIntegration:
         assert "source_type" not in entry
 
     @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_vtt_normalizes_cues_and_preserves_raw_source_provenance(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "meeting_export.vtt"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("meeting_export.vtt"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="internal_sync",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        analyzed_text = mock_analyze.call_args.args[0]
+        assert "WEBVTT" not in analyzed_text
+        assert "-->" not in analyzed_text
+        assert "[00:00:01.200 - 00:00:04.000] Jane Smith: We reduced downtime from 12 hours to 2 hours." in analyzed_text
+        assert "[00:00:08.000 - 00:00:10.250] Speaker 3: Incident triage still needs cleaner ownership." in analyzed_text
+
+        from folio.tracking.sources import compute_file_hash
+
+        fm = _parse_frontmatter(result.output_path)
+        assert fm["source_transcript"].endswith("meeting_export.vtt")
+        assert fm["source_hash"] == compute_file_hash(source)
+
+        body = result.output_path.read_text()
+        raw_transcript = body.split("> [!quote]- Raw Transcript", 1)[1]
+        assert "> [00:00:05.000 - 00:00:07.500] Johnny Oh: ServiceNow remained the operational backbone." in raw_transcript
+
+        registry = json.loads((library / "registry.json").read_text())
+        entry = registry["decks"][result.interaction_id]
+        assert entry["source_relative_path"].endswith("meeting_export.vtt")
+        assert "source_type" not in entry
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_srt_normalizes_cues_and_preserves_raw_source_provenance(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "meeting_export.srt"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("meeting_export.srt"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="internal_sync",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        analyzed_text = mock_analyze.call_args.args[0]
+        assert "-->" not in analyzed_text
+        assert "[00:00:01.200 - 00:00:04.000] Jane Smith: We reduced downtime from 12 hours to 2 hours." in analyzed_text
+        assert "[00:00:05.000 - 00:00:07.500] Johnny Oh: Add a reporting checkpoint." in analyzed_text
+
+        from folio.tracking.sources import compute_file_hash
+
+        fm = _parse_frontmatter(result.output_path)
+        assert fm["source_transcript"].endswith("meeting_export.srt")
+        assert fm["source_hash"] == compute_file_hash(source)
+
+        body = result.output_path.read_text()
+        raw_transcript = body.split("> [!quote]- Raw Transcript", 1)[1]
+        assert "> [00:00:08.000 - 00:00:10.250] ServiceNow remained the operational backbone." in raw_transcript
+
+        registry = json.loads((library / "registry.json").read_text())
+        entry = registry["decks"][result.interaction_id]
+        assert entry["source_relative_path"].endswith("meeting_export.srt")
+        assert "source_type" not in entry
+
+    @patch("folio.ingest.analyze_interaction_text")
     def test_ingest_without_entity_registry_preserves_extracted_names(self, mock_analyze, tmp_path):
         library = _make_library(tmp_path)
         source = tmp_path / "transcripts" / "test_transcript_entities.txt"

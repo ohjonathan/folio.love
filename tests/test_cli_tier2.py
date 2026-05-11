@@ -190,12 +190,14 @@ class TestScanCommand:
         assert "New: 1" in result.output
 
     def test_scan_finds_text_sources(self, tmp_path):
-        """Scan should include .txt and .md source files."""
+        """Scan should include text and transcript-native source files."""
         library = tmp_path / "library"
         library.mkdir(parents=True)
         sources_dir = tmp_path / "client_materials"
         _make_source(sources_dir / "ClientA" / "notes.txt", "Transcript note")
         _make_source(sources_dir / "ClientA" / "analysis.md", "# Heading\n\nBody")
+        _make_source(sources_dir / "ClientA" / "meeting.vtt", "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHello")
+        _make_source(sources_dir / "ClientA" / "meeting.srt", "1\n00:00:01,000 --> 00:00:02,000\nHello")
 
         save_registry(library / "registry.json", {"_schema_version": 1, "decks": {}})
 
@@ -208,7 +210,7 @@ class TestScanCommand:
         runner = CliRunner()
         result = runner.invoke(cli, ["--config", str(config_path), "scan"])
         assert result.exit_code == 0
-        assert "New: 2" in result.output
+        assert "New: 4" in result.output
 
 
 # ---------------------------------------------------------------------------
