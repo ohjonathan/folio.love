@@ -1,0 +1,17 @@
+manifest_version: 1
+
+workspace:
+  id: folio-love
+  name: folio.love
+  kind: personal
+  isolation_tier: medium
+
+entities:
+  - id: folio-love-repo
+    name: folio.love
+    type: repo
+    domain: dev
+    lifecycle: active
+    maturity: usable
+    risk_tier: sandbox
+    repo_path: /Users/jonathanoh/workspaces/folio.love
