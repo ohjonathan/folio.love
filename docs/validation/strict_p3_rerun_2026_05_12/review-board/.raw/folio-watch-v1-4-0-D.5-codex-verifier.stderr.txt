@@ -1,0 +1,1681 @@
+2026-05-12T22:07:09.545827Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:09.548039Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:09.561637Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:09.561834Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+OpenAI Codex v0.125.0 (research preview)
+--------
+workdir: /Users/jonathanoh/workspaces/folio.love
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/jonathanoh/.codex/memories]
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019e1e3a-c9d1-7882-91bf-0ed2af245018
+--------
+user
+You are the codex external verifier for llm-dev strict-P3 Phase D.5, deliverable folio-watch-v1-4-0.
+
+Do not run Ontos. Do not run a broad test suite. Verify D.3/D.4 against the implementation and focused tests. Slice summary: folder watcher routing, archive, and failure quarantine.
+
+Use these files:
+- docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+- docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+- frameworks/manifests/folio-watch-v1-4-0.yaml
+- folio/watch.py
+- folio/cli.py
+- tests/test_watch.py
+
+Focused validation command reported by orchestrator:
+- ./.venv/bin/python -m pytest tests/test_watch.py -q
+
+Artifact target: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+
+Artifact contract:
+- Write the markdown artifact to the artifact target above.
+- Do not edit any repository file except the artifact target.
+- The artifact must be at least 700 characters.
+- It must begin with this exact YAML frontmatter:
+---
+deliverable_id: folio-watch-v1-4-0
+phase: D.5
+role: verifier
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+- Include a top-level heading and a section named exactly "## Verdict" containing approve, request changes, reject, or concur.
+- If verification finds a remaining release issue, use "request changes" and cite file paths. Otherwise use "approve".
+
+2026-05-12T22:07:11.405460Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:11.405906Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:11.411634Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:11.411678Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T22:07:12.162154Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:12.162349Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:12.163755Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:12.163785Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’ll verify only the requested slice: compare D.3/D.4 claims to the watcher implementation and focused tests, then run the single reported pytest command. I won’t run Ontos or touch anything except the requested verifier artifact.
+exec
+/bin/zsh -lc "sed -n '1,220p' docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '1,240p' docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-watch-v1-4-0-d4-fix-summary
+deliverable_id: folio-watch-v1-4-0
+phase: D.4
+role: fix-author
+family: claude-opus
+status: completed
+---
+
+# Phase D.4 Fix Summary: folio-watch-v1-4-0
+
+Implemented failure quarantine by moving failed source files into `_failed/` and keeping an error log alongside the quarantined file. Updated watcher tests to assert quarantine and no repeated processing on a second pass.
+
+ succeeded in 0ms:
+---
+id: folio-watch-v1-4-0-d3-canonical-verdict
+deliverable_id: folio-watch-v1-4-0
+phase: D.3
+role: meta-consolidator
+family: codex
+status: completed
+---
+
+# Phase D.3 Canonical Verdict: folio-watch-v1-4-0
+
+## Verdict
+approve
+
+## Consolidation
+D.2 Codex and Gemini reviews identified missing failure quarantine. The watcher now moves failed source files into `_failed/`, writes error logs alongside them, and tests confirm the failed source is not reprocessed by a later watch pass. Both reviewers approved the round-2 fix.
+
+## Evidence
+- `folio/watch.py` moves failed files with collision-safe `_unique_destination`.
+- `tests/test_watch.py` asserts the failed file leaves the active directory, appears in `_failed/`, and a second run has no work.
+- Focused tests passed as part of the 108-test rerun.
+
+exec
+/bin/zsh -lc "sed -n '1,260p' frameworks/manifests/folio-watch-v1-4-0.yaml" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+manifest_version: 1.6.0
+id: folio-watch-v1-4-0
+slug: folio-watch
+summary: Add serial folder watch/drop-zone ingestion with extension routing, stable-size waits, success archive, failure quarantine, dry-run, and once mode.
+pre_a:
+  entry: triage
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+lifecycle_mode: framework lifecycle
+owners:
+- Jonathan Oh (ohjonathan)
+scope:
+  allowed_paths:
+  - AGENTS.md
+  - Ontos_Context_Map.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d6_final_approval.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_e_retro.md
+  - docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_chat_log.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_prompt.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_report.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_session_log.md
+  - folio/cli.py
+  - folio/watch.py
+  - frameworks/manifests/folio-watch-v1-4-0.yaml
+  - tests/test_watch.py
+  allowed_path_patterns:
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-*.yaml
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-*.txt
+  composition_targets: []
+  forbidden_paths:
+  - .env
+  - tests/validation/.env
+  - frameworks/llm-dev-v1/
+  forbidden_symbols:
+  - API_KEY=
+  - OPENAI_API_KEY=
+  - ANTHROPIC_API_KEY=
+  - GEMINI_API_KEY=
+  cardinality_assertions:
+  - name: folio-watch-v1-4-0 focused contract anchors exist
+    command: test -f folio/watch.py && rg -n "stable|_failed|dry_run|once|archive" folio/watch.py tests/test_watch.py
+    expect: exit-0
+artifacts:
+  spec: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+  family_verdict: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-<phase>-<family>-<role>.md
+  canonical_verdict: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_<phase>_canonical_verdict.md
+  fix_summary: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+  verification: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-<family>-verifier.md
+  final_approval: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d6_final_approval.md
+  retro: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_e_retro.md
+  triage_report: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+model_assignments:
+- phase: A
+  assignments:
+    claude-opus: spec-author
+- phase: B.1
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: B.3
+  assignments:
+    codex: meta-consolidator
+- phase: C
+  assignments:
+    claude-opus: implementation-author
+- phase: D.2
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: D.3
+  assignments:
+    codex: meta-consolidator
+- phase: D.4
+  assignments:
+    claude-opus: fix-author
+- phase: D.5
+  assignments:
+    codex: verifier
+    gemini: verifier
+    claude-sonnet: verifier
+- phase: D.6
+  assignments:
+    claude-opus: final-approval
+- phase: E
+  assignments:
+    claude-opus: retro
+cli_capability_matrix:
+  claude-opus:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sonnet:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  gemini:
+    shell: false
+    git: false
+    test_runner: false
+    doc_index: true
+    evidence_cap: static-inspection
+    fallback_models:
+    - gemini-3.1-pro-preview
+    - gemini-2.5-pro
+    - gemini-2.5-flash
+    writes_files_non_interactively: false
+smoke_checks:
+- phase: C
+  checks:
+  - name: folio-watch-v1-4-0 focused tests pass
+    command: ./.venv/bin/python -m pytest tests/test_watch.py -q
+    expect: exit-0
+- phase: D.6
+  checks:
+  - name: folio-watch-v1-4-0 strict lifecycle verifies
+    command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-watch-v1-4-0.yaml
+    expect: exit-0
+regression_guards: []
+lifecycle_receipt_inventory_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-lifecycle-receipts.yaml
+gate_prerequisites:
+- id: G-test-1
+  category: test
+  description: Focused slice tests pass.
+  verification:
+    command: ./.venv/bin/python -m pytest tests/test_watch.py -q
+    expect: exit-0
+- id: G-scope-1
+  category: scope
+  description: Slice validation artifacts are rooted in the strict-P3 rerun directory.
+  verification:
+    command: test -d docs/validation/strict_p3_rerun_2026_05_12/review-board
+    expect: exit-0
+- id: G-cardinality-1
+  category: cardinality
+  description: Slice contract anchors exist in code/tests.
+  verification:
+    command: test -f folio/watch.py && rg -n "stable|_failed|dry_run|once|archive" folio/watch.py tests/test_watch.py
+    expect: exit-0
+- id: G-verdict-1
+  category: verdict-presence
+  description: D.5 verifier artifacts from three families exist.
+  verification:
+    command: ls docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-*-verifier.md 2>/dev/null | wc -l
+    expect: eq:3
+- id: G-blocker-1
+  category: blocker-closure
+  description: No unresolved blocker marker remains in D.3 canonical verdict.
+  verification:
+    command: test -f docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md && ! rg -n "UNRESOLVED|BLOCKER|REQUEST CHANGES" docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+    expect: exit-0
+- id: G-branch-1
+  category: branch
+  description: Strict rerun branch is active.
+  verification:
+    command: git rev-parse --abbrev-ref HEAD | rg "^codex/github-issues-closeout-strict-p3-rerun$"
+    expect: exit-0
+tracker:
+  path: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_tracker.md
+  columns:
+  - phase
+  - owner
+  - status
+  - artifact
+  - evidence
+  - timestamp
+branch_map:
+  default: codex/github-issues-closeout-strict-p3-rerun
+references:
+- path: https://github.com/ohjonathan/folio.love/issues/62
+  version: '2026-05-12'
+  relevance: Source scope for folio-watch-v1-4-0
+sibling_deliverable_ids: []
+review_rounds: []
+self_review_caveats: []
+consolidation_mode: external
+reviewer_family_substitutes: []
+
+exec
+/bin/zsh -lc "sed -n '1,320p' folio/watch.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Folder-based auto-ingestion for Folio."""
+
+from __future__ import annotations
+
+import shutil
+import time
+import traceback
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+from .config import FolioConfig
+from .converter import DOCUMENT_EXTENSIONS, PPTX_EXTENSIONS, FolioConverter
+from .correspondence import EMAIL_EXTENSIONS, ingest_email
+from .ingest import SUPPORTED_INGEST_EXTENSIONS, ingest_source
+
+CONVERT_EXTENSIONS = PPTX_EXTENSIONS | DOCUMENT_EXTENSIONS | {".pdf"}
+WATCHABLE_EXTENSIONS = CONVERT_EXTENSIONS | SUPPORTED_INGEST_EXTENSIONS
+
+
+@dataclass(frozen=True)
+class WatchFileResult:
+    source_path: Path
+    action: str
+    outcome: str
+    output_path: Path | None = None
+    error: str | None = None
+
+
+def run_watch_once(
+    config: FolioConfig,
+    directory: Path,
+    *,
+    dry_run: bool = False,
+    quiet: bool = False,
+    emit: Callable[[str], None] | None = None,
+    stability_seconds: float | None = None,
+) -> list[WatchFileResult]:
+    """Process the current contents of a watched directory once."""
+
+    directory = Path(directory).resolve()
+    if not directory.exists() or not directory.is_dir():
+        raise ValueError(f"Watch directory not found: {directory}")
+    watch_config = _match_watch_config(config, directory)
+    stable_seconds = (
+        stability_seconds
+        if stability_seconds is not None
+        else float(watch_config.get("stability_seconds", 3))
+    )
+    results: list[WatchFileResult] = []
+    for source_path in _iter_watch_files(directory):
+        action = route_file(source_path)
+        if action == "skip":
+            result = WatchFileResult(source_path=source_path, action=action, outcome="skipped")
+            results.append(result)
+            _emit(emit, quiet, f"⊘ {source_path.name} (unsupported)")
+            continue
+        if dry_run:
+            result = WatchFileResult(source_path=source_path, action=action, outcome="dry_run")
+            results.append(result)
+            _emit(emit, quiet, f"dry-run: {source_path.name} → {action}")
+            continue
+        try:
+            _wait_for_stable_size(source_path, stable_seconds)
+            output_path = _process_file(config, source_path, action)
+            _archive_success(source_path, directory, watch_config)
+            result = WatchFileResult(
+                source_path=source_path,
+                action=action,
+                outcome="success",
+                output_path=output_path,
+            )
+            _emit(emit, quiet, f"✓ {source_path.name} → {action}")
+        except Exception as exc:
+            failed_path = _write_failure(source_path, directory, exc)
+            result = WatchFileResult(
+                source_path=source_path,
+                action=action,
+                outcome="failed",
+                output_path=failed_path,
+                error=str(exc),
+            )
+            _emit(emit, False, f"✗ {source_path.name}: {exc}")
+        results.append(result)
+    return results
+
+
+def run_watch_loop(
+    config: FolioConfig,
+    directory: Path,
+    *,
+    dry_run: bool = False,
+    quiet: bool = False,
+    interval_seconds: float = 3,
+    emit: Callable[[str], None] | None = None,
+) -> None:
+    """Run a simple polling watcher until interrupted."""
+
+    while True:
+        run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+        time.sleep(interval_seconds)
+
+
+def route_file(path: Path) -> str:
+    """Return the pipeline action for a path."""
+
+    suffix = Path(path).suffix.lower()
+    if suffix in EMAIL_EXTENSIONS:
+        return "ingest_email"
+    if suffix in CONVERT_EXTENSIONS:
+        return "convert"
+    if suffix in SUPPORTED_INGEST_EXTENSIONS:
+        return "ingest"
+    return "skip"
+
+
+def _process_file(config: FolioConfig, source_path: Path, action: str) -> Path:
+    if action == "convert":
+        return FolioConverter(config).convert(source_path=source_path).output_path
+    if action == "ingest_email":
+        return ingest_email(config, source_path=source_path).output_path
+    if action == "ingest":
+        return ingest_source(config, source_path=source_path).output_path
+    raise ValueError(f"Unsupported watch action: {action}")
+
+
+def _iter_watch_files(directory: Path) -> list[Path]:
+    results = []
+    for child in sorted(directory.iterdir()):
+        if child.name in {"_archive", "_failed"}:
+            continue
+        if child.is_file():
+            results.append(child)
+    return results
+
+
+def _wait_for_stable_size(path: Path, seconds: float) -> None:
+    if seconds <= 0:
+        return
+    previous = path.stat().st_size
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+        current = path.stat().st_size
+        if current != previous:
+            previous = current
+            deadline = time.monotonic() + seconds
+
+
+def _archive_success(source_path: Path, directory: Path, watch_config: dict) -> None:
+    after = watch_config.get("after_process") if isinstance(watch_config, dict) else None
+    action = "archive"
+    destination = directory / "_archive"
+    if isinstance(after, dict):
+        action = str(after.get("action", "archive"))
+        if after.get("to"):
+            destination = Path(str(after["to"])).expanduser()
+    if action == "leave":
+        return
+    if action == "delete":
+        source_path.unlink(missing_ok=True)
+        return
+    destination.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(source_path), str(_unique_destination(destination / source_path.name)))
+
+
+def _write_failure(source_path: Path, directory: Path, exc: Exception) -> Path:
+    failed_dir = directory / "_failed"
+    failed_dir.mkdir(parents=True, exist_ok=True)
+    failed_source_path = _unique_destination(failed_dir / source_path.name)
+    if source_path.exists():
+        shutil.move(str(source_path), str(failed_source_path))
+    error_path = _unique_destination(failed_dir / f"{failed_source_path.name}.error.log")
+    error_path.write_text(
+        f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}",
+        encoding="utf-8",
+    )
+    return failed_source_path
+
+
+def _unique_destination(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    for index in range(1, 10_000):
+        candidate = path.with_name(f"{stem}-{index}{suffix}")
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError(f"Could not find unique destination for {path}")
+
+
+def _match_watch_config(config: FolioConfig, directory: Path) -> dict:
+    for item in config.watch:
+        raw_path = item.get("path")
+        if not raw_path:
+            continue
+        configured = Path(str(raw_path)).expanduser()
+        if not configured.is_absolute() and config.config_dir is not None:
+            configured = config.config_dir / configured
+        try:
+            if configured.resolve() == directory.resolve():
+                return item
+        except OSError:
+            continue
+    return {}
+
+
+def _emit(emit: Callable[[str], None] | None, quiet: bool, message: str) -> None:
+    if quiet and not message.startswith("✗"):
+        return
+    if emit:
+        emit(message)
+
+exec
+/bin/zsh -lc "sed -n '1,280p' folio/cli.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""CLI interface for Folio."""
+
+import hashlib
+import json
+import logging
+import os
+import re
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+import click
+
+from .config import FolioConfig
+from .converter import DOCUMENT_EXTENSIONS, FolioConverter, PPTX_EXTENSIONS
+from .correspondence import CorrespondenceIngestError, ingest_email
+from .ingest import (
+    SUPPORTED_INGEST_EXTENSIONS,
+    IngestAmbiguityError,
+    IngestError,
+    IngestSubtypeMismatchError,
+    ingest_source,
+)
+from .pipeline.images import ImageExtractionError
+from .llm.runtime import EndpointNotAllowedError
+from .watch import run_watch_loop, run_watch_once
+
+logger = logging.getLogger(__name__)
+
+
+class ScopeOrCommandGroup(click.Group):
+    """Click group that accepts either a subcommand or a bare scope argument.
+
+    v1.2 extension (folio-enrich-diagnose CB-2 closure): handles BOTH
+    bare-positional-first (`folio enrich ClientA`) AND option-before-scope
+    (`folio enrich --dry-run ClientA`) forms by walking args, recognizing
+    Click option-with-value pairs, and rewriting the FIRST non-option,
+    non-subcommand token as `--scope X` regardless of position.
+
+    v1.3 extension (folio-enrich-diagnose CB-2 final closure): once a
+    registered subcommand token is encountered, the parser passes the
+    subcommand token AND all remaining tokens verbatim — no further
+    `--scope` rewrites. Prevents subcommand positional args from being
+    rewritten to group-level `--scope`.
+    """
+
+    def parse_args(self, ctx, args):
+        # Determine which group-level options take a value (so their value
+        # token is not mistaken for a positional scope).
+        value_taking_short = set()
+        value_taking_long = set()
+        for param in self.params:
+            if isinstance(param, click.Option) and not param.is_flag and not param.count:
+                for opt in param.opts:
+                    if opt.startswith("--"):
+                        value_taking_long.add(opt)
+                    elif opt.startswith("-"):
+                        value_taking_short.add(opt)
+
+        new_args: list[str] = []
+        rewrote = False
+        skip_next = False
+        saw_subcommand = False
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if saw_subcommand:
+                # v1.3 closure: pass subcommand args verbatim (do NOT rewrite
+                # the subcommand's positional scope to group-level --scope).
+                new_args.extend(args[i:])
+                break
+            if skip_next:
+                new_args.append(arg)
+                skip_next = False
+                i += 1
+                continue
+            if arg.startswith("-"):
+                new_args.append(arg)
+                opt_name = arg.split("=", 1)[0]
+                if "=" not in arg and (
+                    opt_name in value_taking_long or opt_name in value_taking_short
+                ):
+                    skip_next = True
+                i += 1
+                continue
+            # Non-option token
+            if rewrote:
+                new_args.append(arg)
+                i += 1
+                continue
+            if self.get_command(ctx, arg) is not None:
+                # Registered subcommand; pass through and stop rewriting.
+                new_args.append(arg)
+                saw_subcommand = True
+                i += 1
+            else:
+                # Treat as scope. Rewrite to --scope X.
+                new_args.extend(["--scope", arg])
+                rewrote = True
+                i += 1
+        return super().parse_args(ctx, new_args)
+
+
+def _matches_scope(path: str, scope: str) -> bool:
+    """Check if a path falls under a scope prefix using segment boundaries.
+
+    Normalizes with trailing '/' to prevent prefix collisions:
+    'ClientA' must not match 'ClientA2/deck'.
+    """
+    norm_scope = scope.rstrip("/") + "/"
+    return path == scope or path.startswith(norm_scope)
+
+
+# Enrich/provenance relationship fields for D12/PR D passthrough
+_ENRICH_RELATIONSHIP_FIELDS = (
+    "depends_on", "draws_from", "impacts",
+    "relates_to", "supersedes", "instantiates",
+)
+
+_ENRICH_FINGERPRINT_FIELDS = (
+    "input_fingerprint", "managed_body_fingerprint",
+    "entity_resolution_fingerprint", "relationship_context_fingerprint",
+)
+
+
+def _extract_enrich_passthrough(fm: dict) -> dict | None:
+    """Extract enrich/provenance passthrough fields from existing frontmatter.
+
+    Returns a dict suitable for ``preserved_enrich_fields`` parameter,
+    or None if nothing to preserve.
+    """
+    if not isinstance(fm, dict):
+        return None
+
+    result: dict = {}
+
+    # Preserve canonical relationship fields (human-owned)
+    for field_name in _ENRICH_RELATIONSHIP_FIELDS:
+        if field_name in fm:
+            result[field_name] = fm[field_name]
+
+    if "provenance_links" in fm:
+        result["provenance_links"] = fm["provenance_links"]
+
+    # Preserve _llm_metadata.enrich / provenance / links
+    llm_meta = fm.get("_llm_metadata")
+    if isinstance(llm_meta, dict):
+        metadata: dict = {}
+        if isinstance(llm_meta.get("enrich"), dict):
+            metadata["enrich"] = dict(llm_meta["enrich"])
+        if isinstance(llm_meta.get("provenance"), dict):
+            metadata["provenance"] = dict(llm_meta["provenance"])
+        if isinstance(llm_meta.get("links"), dict):
+            metadata["links"] = dict(llm_meta["links"])
+        if metadata:
+            result["_llm_metadata"] = metadata
+
+    if not result:
+        return None
+
+    return result
+
+
+def _mark_enrich_stale(preserved: dict) -> None:
+    """Mark enrich/provenance metadata stale when source hash changes.
+
+    Clears enrich fingerprints/proposals and provenance pair cache while
+    preserving human-owned canonical relationships and links.
+    """
+    enrich = preserved.get("_llm_metadata", {}).get("enrich")
+    if enrich:
+        enrich["status"] = "stale"
+
+        # Clear fingerprints
+        for fp_field in _ENRICH_FINGERPRINT_FIELDS:
+            enrich.pop(fp_field, None)
+
+        # Clear relationship proposals
+        axes = enrich.get("axes")
+        if isinstance(axes, dict):
+            relationships = axes.get("relationships")
+            if isinstance(relationships, dict):
+                relationships.pop("proposals", None)
+
+    provenance = preserved.get("_llm_metadata", {}).get("provenance")
+    if isinstance(provenance, dict):
+        pairs = provenance.get("pairs")
+        if isinstance(pairs, dict):
+            for pair in pairs.values():
+                if not isinstance(pair, dict):
+                    continue
+                pair.pop("pair_fingerprint", None)
+                pair.pop("repair_error", None)
+                pair.pop("repair_error_detail", None)
+                pair.pop("re_evaluate_requested", None)
+                proposals = pair.get("proposals")
+                if isinstance(proposals, list):
+                    for proposal in proposals:
+                        if not isinstance(proposal, dict):
+                            continue
+                        state = proposal.get("lifecycle_state")
+                        if state is None:
+                            state = proposal.get("status")
+                        if state in ("queued", "pending_human_confirmation"):
+                            proposal["lifecycle_state"] = "stale_pending"
+
+
+# Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
+_RESTART_CADENCE = 15
+
+_HASH_CHUNK_SIZE = 65536
+
+
+def _content_hash(path: Path) -> str:
+    """Streaming SHA-256 of file contents (64 KB chunks)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while True:
+            chunk = fh.read(_HASH_CHUNK_SIZE)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _split_csv_values(value: Optional[str]) -> list[str] | None:
+    """Split a comma-separated option into a trimmed, deduplicated list."""
+    if not value:
+        return None
+
+    values: list[str] = []
+    seen: set[str] = set()
+    for raw in value.split(","):
+        cleaned = raw.strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(cleaned)
+    return values or None
+
+
+# AppleScript error codes are 4-digit negative numbers following "error number"
+# or "error (" patterns.  We anchor to these patterns to avoid false matches
+# on arbitrary negative numbers in unrelated error messages.
+_APPLESCRIPT_ERROR_RE = re.compile(r"error\s+(?:number\s+)?(-\d{4,})")
+
+
+def _configure_logging(verbose: bool) -> None:
+    """Configure CLI logging without adding new user-facing flags."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(message)s" if not verbose else "%(name)s: %(message)s",
+    )
+    third_party_loggers = (
+        "pdfminer",
+        "pdfplumber",
+        "PIL",
+        "PIL.PngImagePlugin",
+    )
+    third_party_level = logging.WARNING if verbose else logging.NOTSET
+    for logger_name in third_party_loggers:
+        logging.getLogger(logger_name).setLevel(third_party_level)
+
+
+@dataclass
+class BatchOutcome:
+    """Per-file batch outcome record."""
+    file_name: str
+    renderer: str
+    duration: float
+    outcome: str  # success | applescript_<code> | timeout | unknown
+    slide_count: int = 0
+
+exec
+/bin/zsh -lc "sed -n '1,360p' tests/test_watch.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Tests for folder-based watch routing."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from click.testing import CliRunner
+
+from folio.cli import cli
+from folio.config import FolioConfig
+from folio.watch import route_file, run_watch_once
+
+
+def test_route_file_by_extension():
+    assert route_file("deck.pptx") == "convert"
+    assert route_file("doc.docx") == "convert"
+    assert route_file("thread.eml") == "ingest_email"
+    assert route_file("meeting.vtt") == "ingest"
+    assert route_file("image.png") == "skip"
+
+
+def test_watch_once_dry_run_routes_without_moving(tmp_path):
+    source = tmp_path / "meeting.vtt"
+    source.write_text("WEBVTT\n")
+    messages: list[str] = []
+
+    results = run_watch_once(
+        FolioConfig(library_root=tmp_path / "library"),
+        tmp_path,
+        dry_run=True,
+        emit=messages.append,
+    )
+
+    assert results[0].action == "ingest"
+    assert results[0].outcome == "dry_run"
+    assert source.exists()
+    assert "dry-run" in messages[0]
+
+
+def test_watch_once_archives_success(tmp_path):
+    source = tmp_path / "deck.docx"
+    source.write_bytes(b"docx")
+    output = tmp_path / "library" / "deck.md"
+
+    with patch(
+        "folio.watch.FolioConverter.convert",
+        return_value=SimpleNamespace(output_path=output),
+    ) as mock_convert:
+        results = run_watch_once(
+            FolioConfig(library_root=tmp_path / "library"),
+            tmp_path,
+            stability_seconds=0,
+        )
+
+    assert results[0].outcome == "success"
+    assert mock_convert.call_args.kwargs["source_path"] == source
+    assert not source.exists()
+    assert (tmp_path / "_archive" / "deck.docx").exists()
+
+
+def test_watch_once_writes_failure_log(tmp_path):
+    source = tmp_path / "thread.eml"
+    source.write_text("not really an email")
+
+    with patch("folio.watch.ingest_email", side_effect=RuntimeError("boom")):
+        results = run_watch_once(
+            FolioConfig(library_root=tmp_path / "library"),
+            tmp_path,
+            stability_seconds=0,
+        )
+
+    assert results[0].outcome == "failed"
+    assert results[0].output_path == tmp_path / "_failed" / "thread.eml"
+    logs = list((tmp_path / "_failed").glob("thread.eml.error.log*"))
+    assert logs
+    assert "boom" in logs[0].read_text()
+    assert not source.exists()
+    assert (tmp_path / "_failed" / "thread.eml").exists()
+
+    with patch("folio.watch.ingest_email", side_effect=RuntimeError("boom")):
+        rerun_results = run_watch_once(
+            FolioConfig(library_root=tmp_path / "library"),
+            tmp_path,
+            stability_seconds=0,
+        )
+
+    assert rerun_results == []
+
+
+def test_watch_cli_once_dry_run(tmp_path):
+    config_path = tmp_path / "folio.yaml"
+    config_path.write_text(f"library_root: {tmp_path / 'library'}\n")
+    (tmp_path / "meeting.txt").write_text("Meeting notes")
+
+    result = CliRunner().invoke(
+        cli,
+        ["--config", str(config_path), "watch", str(tmp_path), "--once", "--dry-run"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "dry-run" in result.output
+
+2026-05-12T22:07:26.210608Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:26.212281Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:26.223339Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:26.223489Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The D.3/D.4 artifacts are narrow: the remaining point to verify is that failures are quarantined out of the active watch directory, not just logged. I’ve confirmed the watcher has explicit `_failed` and `_archive` exclusion paths; next I’m checking the CLI wiring and then running the focused test file.
+exec
+/bin/zsh -lc 'test -f docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+ exited 1 in 0ms:
+exec
+/bin/zsh -lc 'rg -n "watch|run_watch_once|run_watch_loop|once|dry-run|_archive|_failed" folio/cli.py folio/watch.py tests/test_watch.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+folio/watch.py:30:def run_watch_once(
+folio/watch.py:39:    """Process the current contents of a watched directory once."""
+folio/watch.py:44:    watch_config = _match_watch_config(config, directory)
+folio/watch.py:48:        else float(watch_config.get("stability_seconds", 3))
+folio/watch.py:51:    for source_path in _iter_watch_files(directory):
+folio/watch.py:61:            _emit(emit, quiet, f"dry-run: {source_path.name} → {action}")
+folio/watch.py:66:            _archive_success(source_path, directory, watch_config)
+folio/watch.py:88:def run_watch_loop(
+folio/watch.py:97:    """Run a simple polling watcher until interrupted."""
+folio/watch.py:100:        run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+folio/watch.py:124:    raise ValueError(f"Unsupported watch action: {action}")
+folio/watch.py:127:def _iter_watch_files(directory: Path) -> list[Path]:
+folio/watch.py:130:        if child.name in {"_archive", "_failed"}:
+folio/watch.py:150:def _archive_success(source_path: Path, directory: Path, watch_config: dict) -> None:
+folio/watch.py:151:    after = watch_config.get("after_process") if isinstance(watch_config, dict) else None
+folio/watch.py:153:    destination = directory / "_archive"
+folio/watch.py:168:    failed_dir = directory / "_failed"
+folio/watch.py:193:def _match_watch_config(config: FolioConfig, directory: Path) -> dict:
+folio/watch.py:194:    for item in config.watch:
+tests/test_watch.py:1:"""Tests for folder-based watch routing."""
+tests/test_watch.py:12:from folio.watch import route_file, run_watch_once
+tests/test_watch.py:23:def test_watch_once_dry_run_routes_without_moving(tmp_path):
+tests/test_watch.py:28:    results = run_watch_once(
+tests/test_watch.py:38:    assert "dry-run" in messages[0]
+tests/test_watch.py:41:def test_watch_once_archives_success(tmp_path):
+tests/test_watch.py:47:        "folio.watch.FolioConverter.convert",
+tests/test_watch.py:50:        results = run_watch_once(
+tests/test_watch.py:59:    assert (tmp_path / "_archive" / "deck.docx").exists()
+tests/test_watch.py:62:def test_watch_once_writes_failure_log(tmp_path):
+tests/test_watch.py:66:    with patch("folio.watch.ingest_email", side_effect=RuntimeError("boom")):
+tests/test_watch.py:67:        results = run_watch_once(
+tests/test_watch.py:74:    assert results[0].output_path == tmp_path / "_failed" / "thread.eml"
+tests/test_watch.py:75:    logs = list((tmp_path / "_failed").glob("thread.eml.error.log*"))
+tests/test_watch.py:79:    assert (tmp_path / "_failed" / "thread.eml").exists()
+tests/test_watch.py:81:    with patch("folio.watch.ingest_email", side_effect=RuntimeError("boom")):
+tests/test_watch.py:82:        rerun_results = run_watch_once(
+tests/test_watch.py:91:def test_watch_cli_once_dry_run(tmp_path):
+tests/test_watch.py:98:        ["--config", str(config_path), "watch", str(tmp_path), "--once", "--dry-run"],
+tests/test_watch.py:102:    assert "dry-run" in result.output
+folio/cli.py:30:from .watch import run_watch_loop, run_watch_once
+folio/cli.py:40:    (`folio enrich --dry-run ClientA`) forms by walking args, recognizing
+folio/cli.py:44:    v1.3 extension (folio-enrich-diagnose CB-2 final closure): once a
+folio/cli.py:604:@cli.command("watch")
+folio/cli.py:606:@click.option("--once", is_flag=True, default=False, help="Process current files once and exit.")
+folio/cli.py:607:@click.option("--dry-run", is_flag=True, default=False, help="Show routing without running pipelines or moving files.")
+folio/cli.py:610:def watch_command(ctx, directory: Path, once: bool, dry_run: bool, quiet: bool):
+folio/cli.py:615:        if once:
+folio/cli.py:616:            run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+folio/cli.py:618:        run_watch_loop(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+folio/cli.py:759:            # Retry-once for unexpected -9074 in dedicated session
+folio/cli.py:1293:@click.option("--dry-run", is_flag=True, default=False,
+folio/cli.py:1311:        folio enrich ClientA/DD_Q1_2026 --dry-run
+folio/cli.py:1609:@click.option("--dry-run", is_flag=True, default=False,
+
+exec
+/bin/zsh -lc 'git status --short docs/validation/strict_p3_rerun_2026_05_12/review-board folio/watch.py folio/cli.py tests/test_watch.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+ M folio/cli.py
+?? docs/validation/strict_p3_rerun_2026_05_12/review-board/
+?? folio/watch.py
+?? tests/test_watch.py
+
+2026-05-12T22:07:32.142111Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:32.142332Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:32.144047Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:32.144076Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "nl -ba folio/cli.py | sed -n '592,625p'" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "nl -ba folio/watch.py | sed -n '1,220p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   592	            note=note,
+   593	            as_new_entry=as_new_entry,
+   594	        )
+   595	    except (FileNotFoundError, CorrespondenceIngestError) as exc:
+   596	        click.echo(f"✗ Ingest failed: {exc}", err=True)
+   597	        sys.exit(1)
+   598	    click.echo(f"✓ {source.name}")
+   599	    click.echo(f"  {result.output_path}")
+   600	    status = "Skipped" if result.skipped else "Version"
+   601	    click.echo(f"  {status}: {result.version} | ID: {result.correspondence_id} | Review: {result.review_status}")
+   602	
+   603	
+   604	@cli.command("watch")
+   605	@click.argument("directory", type=click.Path(exists=True, file_okay=False, path_type=Path))
+   606	@click.option("--once", is_flag=True, default=False, help="Process current files once and exit.")
+   607	@click.option("--dry-run", is_flag=True, default=False, help="Show routing without running pipelines or moving files.")
+   608	@click.option("--quiet", is_flag=True, default=False, help="Suppress per-file success output.")
+   609	@click.pass_context
+   610	def watch_command(ctx, directory: Path, once: bool, dry_run: bool, quiet: bool):
+   611	    """Watch a directory and route new files into Folio."""
+   612	    config = ctx.obj["config"]
+   613	    emit = click.echo
+   614	    try:
+   615	        if once:
+   616	            run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+   617	            return
+   618	        run_watch_loop(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+   619	    except KeyboardInterrupt:
+   620	        return
+   621	    except Exception as exc:
+   622	        click.echo(f"✗ Watch failed: {exc}", err=True)
+   623	        if ctx.obj.get("verbose"):
+   624	            import traceback
+   625	            traceback.print_exc()
+
+ succeeded in 0ms:
+     1	"""Folder-based auto-ingestion for Folio."""
+     2	
+     3	from __future__ import annotations
+     4	
+     5	import shutil
+     6	import time
+     7	import traceback
+     8	from dataclasses import dataclass
+     9	from pathlib import Path
+    10	from typing import Callable
+    11	
+    12	from .config import FolioConfig
+    13	from .converter import DOCUMENT_EXTENSIONS, PPTX_EXTENSIONS, FolioConverter
+    14	from .correspondence import EMAIL_EXTENSIONS, ingest_email
+    15	from .ingest import SUPPORTED_INGEST_EXTENSIONS, ingest_source
+    16	
+    17	CONVERT_EXTENSIONS = PPTX_EXTENSIONS | DOCUMENT_EXTENSIONS | {".pdf"}
+    18	WATCHABLE_EXTENSIONS = CONVERT_EXTENSIONS | SUPPORTED_INGEST_EXTENSIONS
+    19	
+    20	
+    21	@dataclass(frozen=True)
+    22	class WatchFileResult:
+    23	    source_path: Path
+    24	    action: str
+    25	    outcome: str
+    26	    output_path: Path | None = None
+    27	    error: str | None = None
+    28	
+    29	
+    30	def run_watch_once(
+    31	    config: FolioConfig,
+    32	    directory: Path,
+    33	    *,
+    34	    dry_run: bool = False,
+    35	    quiet: bool = False,
+    36	    emit: Callable[[str], None] | None = None,
+    37	    stability_seconds: float | None = None,
+    38	) -> list[WatchFileResult]:
+    39	    """Process the current contents of a watched directory once."""
+    40	
+    41	    directory = Path(directory).resolve()
+    42	    if not directory.exists() or not directory.is_dir():
+    43	        raise ValueError(f"Watch directory not found: {directory}")
+    44	    watch_config = _match_watch_config(config, directory)
+    45	    stable_seconds = (
+    46	        stability_seconds
+    47	        if stability_seconds is not None
+    48	        else float(watch_config.get("stability_seconds", 3))
+    49	    )
+    50	    results: list[WatchFileResult] = []
+    51	    for source_path in _iter_watch_files(directory):
+    52	        action = route_file(source_path)
+    53	        if action == "skip":
+    54	            result = WatchFileResult(source_path=source_path, action=action, outcome="skipped")
+    55	            results.append(result)
+    56	            _emit(emit, quiet, f"⊘ {source_path.name} (unsupported)")
+    57	            continue
+    58	        if dry_run:
+    59	            result = WatchFileResult(source_path=source_path, action=action, outcome="dry_run")
+    60	            results.append(result)
+    61	            _emit(emit, quiet, f"dry-run: {source_path.name} → {action}")
+    62	            continue
+    63	        try:
+    64	            _wait_for_stable_size(source_path, stable_seconds)
+    65	            output_path = _process_file(config, source_path, action)
+    66	            _archive_success(source_path, directory, watch_config)
+    67	            result = WatchFileResult(
+    68	                source_path=source_path,
+    69	                action=action,
+    70	                outcome="success",
+    71	                output_path=output_path,
+    72	            )
+    73	            _emit(emit, quiet, f"✓ {source_path.name} → {action}")
+    74	        except Exception as exc:
+    75	            failed_path = _write_failure(source_path, directory, exc)
+    76	            result = WatchFileResult(
+    77	                source_path=source_path,
+    78	                action=action,
+    79	                outcome="failed",
+    80	                output_path=failed_path,
+    81	                error=str(exc),
+    82	            )
+    83	            _emit(emit, False, f"✗ {source_path.name}: {exc}")
+    84	        results.append(result)
+    85	    return results
+    86	
+    87	
+    88	def run_watch_loop(
+    89	    config: FolioConfig,
+    90	    directory: Path,
+    91	    *,
+    92	    dry_run: bool = False,
+    93	    quiet: bool = False,
+    94	    interval_seconds: float = 3,
+    95	    emit: Callable[[str], None] | None = None,
+    96	) -> None:
+    97	    """Run a simple polling watcher until interrupted."""
+    98	
+    99	    while True:
+   100	        run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+   101	        time.sleep(interval_seconds)
+   102	
+   103	
+   104	def route_file(path: Path) -> str:
+   105	    """Return the pipeline action for a path."""
+   106	
+   107	    suffix = Path(path).suffix.lower()
+   108	    if suffix in EMAIL_EXTENSIONS:
+   109	        return "ingest_email"
+   110	    if suffix in CONVERT_EXTENSIONS:
+   111	        return "convert"
+   112	    if suffix in SUPPORTED_INGEST_EXTENSIONS:
+   113	        return "ingest"
+   114	    return "skip"
+   115	
+   116	
+   117	def _process_file(config: FolioConfig, source_path: Path, action: str) -> Path:
+   118	    if action == "convert":
+   119	        return FolioConverter(config).convert(source_path=source_path).output_path
+   120	    if action == "ingest_email":
+   121	        return ingest_email(config, source_path=source_path).output_path
+   122	    if action == "ingest":
+   123	        return ingest_source(config, source_path=source_path).output_path
+   124	    raise ValueError(f"Unsupported watch action: {action}")
+   125	
+   126	
+   127	def _iter_watch_files(directory: Path) -> list[Path]:
+   128	    results = []
+   129	    for child in sorted(directory.iterdir()):
+   130	        if child.name in {"_archive", "_failed"}:
+   131	            continue
+   132	        if child.is_file():
+   133	            results.append(child)
+   134	    return results
+   135	
+   136	
+   137	def _wait_for_stable_size(path: Path, seconds: float) -> None:
+   138	    if seconds <= 0:
+   139	        return
+   140	    previous = path.stat().st_size
+   141	    deadline = time.monotonic() + seconds
+   142	    while time.monotonic() < deadline:
+   143	        time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+   144	        current = path.stat().st_size
+   145	        if current != previous:
+   146	            previous = current
+   147	            deadline = time.monotonic() + seconds
+   148	
+   149	
+   150	def _archive_success(source_path: Path, directory: Path, watch_config: dict) -> None:
+   151	    after = watch_config.get("after_process") if isinstance(watch_config, dict) else None
+   152	    action = "archive"
+   153	    destination = directory / "_archive"
+   154	    if isinstance(after, dict):
+   155	        action = str(after.get("action", "archive"))
+   156	        if after.get("to"):
+   157	            destination = Path(str(after["to"])).expanduser()
+   158	    if action == "leave":
+   159	        return
+   160	    if action == "delete":
+   161	        source_path.unlink(missing_ok=True)
+   162	        return
+   163	    destination.mkdir(parents=True, exist_ok=True)
+   164	    shutil.move(str(source_path), str(_unique_destination(destination / source_path.name)))
+   165	
+   166	
+   167	def _write_failure(source_path: Path, directory: Path, exc: Exception) -> Path:
+   168	    failed_dir = directory / "_failed"
+   169	    failed_dir.mkdir(parents=True, exist_ok=True)
+   170	    failed_source_path = _unique_destination(failed_dir / source_path.name)
+   171	    if source_path.exists():
+   172	        shutil.move(str(source_path), str(failed_source_path))
+   173	    error_path = _unique_destination(failed_dir / f"{failed_source_path.name}.error.log")
+   174	    error_path.write_text(
+   175	        f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}",
+   176	        encoding="utf-8",
+   177	    )
+   178	    return failed_source_path
+   179	
+   180	
+   181	def _unique_destination(path: Path) -> Path:
+   182	    if not path.exists():
+   183	        return path
+   184	    stem = path.stem
+   185	    suffix = path.suffix
+   186	    for index in range(1, 10_000):
+   187	        candidate = path.with_name(f"{stem}-{index}{suffix}")
+   188	        if not candidate.exists():
+   189	            return candidate
+   190	    raise RuntimeError(f"Could not find unique destination for {path}")
+   191	
+   192	
+   193	def _match_watch_config(config: FolioConfig, directory: Path) -> dict:
+   194	    for item in config.watch:
+   195	        raw_path = item.get("path")
+   196	        if not raw_path:
+   197	            continue
+   198	        configured = Path(str(raw_path)).expanduser()
+   199	        if not configured.is_absolute() and config.config_dir is not None:
+   200	            configured = config.config_dir / configured
+   201	        try:
+   202	            if configured.resolve() == directory.resolve():
+   203	                return item
+   204	        except OSError:
+   205	            continue
+   206	    return {}
+   207	
+   208	
+   209	def _emit(emit: Callable[[str], None] | None, quiet: bool, message: str) -> None:
+   210	    if quiet and not message.startswith("✗"):
+   211	        return
+   212	    if emit:
+   213	        emit(message)
+
+exec
+/bin/zsh -lc "nl -ba tests/test_watch.py | sed -n '1,130p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	"""Tests for folder-based watch routing."""
+     2	
+     3	from __future__ import annotations
+     4	
+     5	from types import SimpleNamespace
+     6	from unittest.mock import patch
+     7	
+     8	from click.testing import CliRunner
+     9	
+    10	from folio.cli import cli
+    11	from folio.config import FolioConfig
+    12	from folio.watch import route_file, run_watch_once
+    13	
+    14	
+    15	def test_route_file_by_extension():
+    16	    assert route_file("deck.pptx") == "convert"
+    17	    assert route_file("doc.docx") == "convert"
+    18	    assert route_file("thread.eml") == "ingest_email"
+    19	    assert route_file("meeting.vtt") == "ingest"
+    20	    assert route_file("image.png") == "skip"
+    21	
+    22	
+    23	def test_watch_once_dry_run_routes_without_moving(tmp_path):
+    24	    source = tmp_path / "meeting.vtt"
+    25	    source.write_text("WEBVTT\n")
+    26	    messages: list[str] = []
+    27	
+    28	    results = run_watch_once(
+    29	        FolioConfig(library_root=tmp_path / "library"),
+    30	        tmp_path,
+    31	        dry_run=True,
+    32	        emit=messages.append,
+    33	    )
+    34	
+    35	    assert results[0].action == "ingest"
+    36	    assert results[0].outcome == "dry_run"
+    37	    assert source.exists()
+    38	    assert "dry-run" in messages[0]
+    39	
+    40	
+    41	def test_watch_once_archives_success(tmp_path):
+    42	    source = tmp_path / "deck.docx"
+    43	    source.write_bytes(b"docx")
+    44	    output = tmp_path / "library" / "deck.md"
+    45	
+    46	    with patch(
+    47	        "folio.watch.FolioConverter.convert",
+    48	        return_value=SimpleNamespace(output_path=output),
+    49	    ) as mock_convert:
+    50	        results = run_watch_once(
+    51	            FolioConfig(library_root=tmp_path / "library"),
+    52	            tmp_path,
+    53	            stability_seconds=0,
+    54	        )
+    55	
+    56	    assert results[0].outcome == "success"
+    57	    assert mock_convert.call_args.kwargs["source_path"] == source
+    58	    assert not source.exists()
+    59	    assert (tmp_path / "_archive" / "deck.docx").exists()
+    60	
+    61	
+    62	def test_watch_once_writes_failure_log(tmp_path):
+    63	    source = tmp_path / "thread.eml"
+    64	    source.write_text("not really an email")
+    65	
+    66	    with patch("folio.watch.ingest_email", side_effect=RuntimeError("boom")):
+    67	        results = run_watch_once(
+    68	            FolioConfig(library_root=tmp_path / "library"),
+    69	            tmp_path,
+    70	            stability_seconds=0,
+    71	        )
+    72	
+    73	    assert results[0].outcome == "failed"
+    74	    assert results[0].output_path == tmp_path / "_failed" / "thread.eml"
+    75	    logs = list((tmp_path / "_failed").glob("thread.eml.error.log*"))
+    76	    assert logs
+    77	    assert "boom" in logs[0].read_text()
+    78	    assert not source.exists()
+    79	    assert (tmp_path / "_failed" / "thread.eml").exists()
+    80	
+    81	    with patch("folio.watch.ingest_email", side_effect=RuntimeError("boom")):
+    82	        rerun_results = run_watch_once(
+    83	            FolioConfig(library_root=tmp_path / "library"),
+    84	            tmp_path,
+    85	            stability_seconds=0,
+    86	        )
+    87	
+    88	    assert rerun_results == []
+    89	
+    90	
+    91	def test_watch_cli_once_dry_run(tmp_path):
+    92	    config_path = tmp_path / "folio.yaml"
+    93	    config_path.write_text(f"library_root: {tmp_path / 'library'}\n")
+    94	    (tmp_path / "meeting.txt").write_text("Meeting notes")
+    95	
+    96	    result = CliRunner().invoke(
+    97	        cli,
+    98	        ["--config", str(config_path), "watch", str(tmp_path), "--once", "--dry-run"],
+    99	    )
+   100	
+   101	    assert result.exit_code == 0, result.output
+   102	    assert "dry-run" in result.output
+
+2026-05-12T22:07:40.002624Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:40.002867Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:40.004682Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:40.004710Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The CLI `watch` command routes `--once`, `--dry-run`, and `--quiet` into the watcher as expected. The focused tests cover extension routing, dry-run behavior, success archival, and the failure-quarantine rerun case.
+exec
+/bin/zsh -lc './.venv/bin/python -m pytest tests/test_watch.py -q' in /Users/jonathanoh/workspaces/folio.love
+2026-05-12T22:07:42.842806Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:42.843028Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:42.844738Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:42.844773Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+ succeeded in 299ms:
+.....                                                                    [100%]
+5 passed in 0.09s
+
+codex
+The focused pytest command passed: `5 passed in 0.09s`. I’m writing the D.5 verifier artifact now, limited to the requested review-board path.
+apply patch
+patch: completed
+/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..17a58042dcd0761d7bee4d3c4f707b784e36cc68
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+@@ -0,0 +1,49 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex Verifier: folio-watch-v1-4-0
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified the strict-P3 Phase D.5 slice for `folio-watch-v1-4-0` against the requested D.3/D.4 materials, manifest, implementation, CLI wiring, and focused watch tests. I did not run Ontos and did not run a broad test suite.
++
++## Evidence
++
++- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md`; it records D.3 approval after the failure quarantine fix and identifies `_failed/` quarantine plus no reprocessing on a later pass as the closure evidence.
++- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md`; it states D.4 moved failed source files into `_failed/`, kept an error log beside the quarantined file, and updated watcher tests.
++- Reviewed `frameworks/manifests/folio-watch-v1-4-0.yaml`; the focused gate command for this slice is `./.venv/bin/python -m pytest tests/test_watch.py -q`.
++- Inspected `folio/watch.py`. `run_watch_once` routes each active file, waits for stable size before processing, archives successful files through `_archive_success`, and calls `_write_failure` on exceptions. `_write_failure` creates `_failed/`, moves the failed source to a collision-safe destination, writes a collision-safe `.error.log`, and returns the quarantined source path. `_iter_watch_files` excludes `_archive` and `_failed`, so quarantined failures are not picked up by a later watch pass.
++- Inspected `folio/cli.py`. The `watch` command wires `--once`, `--dry-run`, and `--quiet` to `run_watch_once` or `run_watch_loop` without bypassing the watcher quarantine/archive behavior.
++- Inspected `tests/test_watch.py`. The focused tests cover extension routing, dry-run non-move behavior, success archival, and the D.4 failure quarantine path, including a second `run_watch_once` call that returns no work after the failed file is moved into `_failed/`.
++
++## Direct Run
++
++Command:
++
++```sh
++./.venv/bin/python -m pytest tests/test_watch.py -q
++```
++
++Result: exit code 0.
++
++Output summary:
++
++```text
++.....                                                                    [100%]
++5 passed in 0.09s
++```
++
++## Release Assessment
++
++I found no remaining release issue in the requested folder watcher routing, archive, and failure quarantine slice. The D.3/D.4 claims match the implementation and the focused tests pass with direct execution.
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..17a58042dcd0761d7bee4d3c4f707b784e36cc68
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+@@ -0,0 +1,49 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex Verifier: folio-watch-v1-4-0
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified the strict-P3 Phase D.5 slice for `folio-watch-v1-4-0` against the requested D.3/D.4 materials, manifest, implementation, CLI wiring, and focused watch tests. I did not run Ontos and did not run a broad test suite.
++
++## Evidence
++
++- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md`; it records D.3 approval after the failure quarantine fix and identifies `_failed/` quarantine plus no reprocessing on a later pass as the closure evidence.
++- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md`; it states D.4 moved failed source files into `_failed/`, kept an error log beside the quarantined file, and updated watcher tests.
++- Reviewed `frameworks/manifests/folio-watch-v1-4-0.yaml`; the focused gate command for this slice is `./.venv/bin/python -m pytest tests/test_watch.py -q`.
++- Inspected `folio/watch.py`. `run_watch_once` routes each active file, waits for stable size before processing, archives successful files through `_archive_success`, and calls `_write_failure` on exceptions. `_write_failure` creates `_failed/`, moves the failed source to a collision-safe destination, writes a collision-safe `.error.log`, and returns the quarantined source path. `_iter_watch_files` excludes `_archive` and `_failed`, so quarantined failures are not picked up by a later watch pass.
++- Inspected `folio/cli.py`. The `watch` command wires `--once`, `--dry-run`, and `--quiet` to `run_watch_once` or `run_watch_loop` without bypassing the watcher quarantine/archive behavior.
++- Inspected `tests/test_watch.py`. The focused tests cover extension routing, dry-run non-move behavior, success archival, and the D.4 failure quarantine path, including a second `run_watch_once` call that returns no work after the failed file is moved into `_failed/`.
++
++## Direct Run
++
++Command:
++
++```sh
++./.venv/bin/python -m pytest tests/test_watch.py -q
++```
++
++Result: exit code 0.
++
++Output summary:
++
++```text
++.....                                                                    [100%]
++5 passed in 0.09s
++```
++
++## Release Assessment
++
++I found no remaining release issue in the requested folder watcher routing, archive, and failure quarantine slice. The D.3/D.4 claims match the implementation and the focused tests pass with direct execution.
+
+2026-05-12T22:07:53.896035Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:53.896242Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:53.897788Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:53.897813Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '1,220p' docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+deliverable_id: folio-watch-v1-4-0
+phase: D.5
+role: verifier
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+
+# D.5 Codex Verifier: folio-watch-v1-4-0
+
+## Verdict
+
+approve
+
+## Scope
+
+Verified the strict-P3 Phase D.5 slice for `folio-watch-v1-4-0` against the requested D.3/D.4 materials, manifest, implementation, CLI wiring, and focused watch tests. I did not run Ontos and did not run a broad test suite.
+
+## Evidence
+
+- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md`; it records D.3 approval after the failure quarantine fix and identifies `_failed/` quarantine plus no reprocessing on a later pass as the closure evidence.
+- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md`; it states D.4 moved failed source files into `_failed/`, kept an error log beside the quarantined file, and updated watcher tests.
+- Reviewed `frameworks/manifests/folio-watch-v1-4-0.yaml`; the focused gate command for this slice is `./.venv/bin/python -m pytest tests/test_watch.py -q`.
+- Inspected `folio/watch.py`. `run_watch_once` routes each active file, waits for stable size before processing, archives successful files through `_archive_success`, and calls `_write_failure` on exceptions. `_write_failure` creates `_failed/`, moves the failed source to a collision-safe destination, writes a collision-safe `.error.log`, and returns the quarantined source path. `_iter_watch_files` excludes `_archive` and `_failed`, so quarantined failures are not picked up by a later watch pass.
+- Inspected `folio/cli.py`. The `watch` command wires `--once`, `--dry-run`, and `--quiet` to `run_watch_once` or `run_watch_loop` without bypassing the watcher quarantine/archive behavior.
+- Inspected `tests/test_watch.py`. The focused tests cover extension routing, dry-run non-move behavior, success archival, and the D.4 failure quarantine path, including a second `run_watch_once` call that returns no work after the failed file is moved into `_failed/`.
+
+## Direct Run
+
+Command:
+
+```sh
+./.venv/bin/python -m pytest tests/test_watch.py -q
+```
+
+Result: exit code 0.
+
+Output summary:
+
+```text
+.....                                                                    [100%]
+5 passed in 0.09s
+```
+
+## Release Assessment
+
+I found no remaining release issue in the requested folder watcher routing, archive, and failure quarantine slice. The D.3/D.4 claims match the implementation and the focused tests pass with direct execution.
+
+exec
+/bin/zsh -lc 'wc -c docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    2522 docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+
+exec
+/bin/zsh -lc 'git status --short docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md folio/watch.py folio/cli.py tests/test_watch.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+ M folio/cli.py
+?? docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+?? folio/watch.py
+?? tests/test_watch.py
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..17a58042dcd0761d7bee4d3c4f707b784e36cc68
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+@@ -0,0 +1,49 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex Verifier: folio-watch-v1-4-0
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified the strict-P3 Phase D.5 slice for `folio-watch-v1-4-0` against the requested D.3/D.4 materials, manifest, implementation, CLI wiring, and focused watch tests. I did not run Ontos and did not run a broad test suite.
++
++## Evidence
++
++- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md`; it records D.3 approval after the failure quarantine fix and identifies `_failed/` quarantine plus no reprocessing on a later pass as the closure evidence.
++- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md`; it states D.4 moved failed source files into `_failed/`, kept an error log beside the quarantined file, and updated watcher tests.
++- Reviewed `frameworks/manifests/folio-watch-v1-4-0.yaml`; the focused gate command for this slice is `./.venv/bin/python -m pytest tests/test_watch.py -q`.
++- Inspected `folio/watch.py`. `run_watch_once` routes each active file, waits for stable size before processing, archives successful files through `_archive_success`, and calls `_write_failure` on exceptions. `_write_failure` creates `_failed/`, moves the failed source to a collision-safe destination, writes a collision-safe `.error.log`, and returns the quarantined source path. `_iter_watch_files` excludes `_archive` and `_failed`, so quarantined failures are not picked up by a later watch pass.
++- Inspected `folio/cli.py`. The `watch` command wires `--once`, `--dry-run`, and `--quiet` to `run_watch_once` or `run_watch_loop` without bypassing the watcher quarantine/archive behavior.
++- Inspected `tests/test_watch.py`. The focused tests cover extension routing, dry-run non-move behavior, success archival, and the D.4 failure quarantine path, including a second `run_watch_once` call that returns no work after the failed file is moved into `_failed/`.
++
++## Direct Run
++
++Command:
++
++```sh
++./.venv/bin/python -m pytest tests/test_watch.py -q
++```
++
++Result: exit code 0.
++
++Output summary:
++
++```text
++.....                                                                    [100%]
++5 passed in 0.09s
++```
++
++## Release Assessment
++
++I found no remaining release issue in the requested folder watcher routing, archive, and failure quarantine slice. The D.3/D.4 claims match the implementation and the focused tests pass with direct execution.
+
+2026-05-12T22:07:59.441987Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:07:59.442209Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:07:59.443871Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:07:59.443896Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Completed D.5 verification and wrote the artifact:
+
+[folio-watch-v1-4-0-D.5-codex-verifier.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md)
+
+Verdict: `approve`.
+
+Focused validation run passed:
+
+```text
+./.venv/bin/python -m pytest tests/test_watch.py -q
+5 passed in 0.09s
+```
+
+I did not run Ontos or a broad test suite, and I only created the requested artifact.
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..17a58042dcd0761d7bee4d3c4f707b784e36cc68
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+@@ -0,0 +1,49 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex Verifier: folio-watch-v1-4-0
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified the strict-P3 Phase D.5 slice for `folio-watch-v1-4-0` against the requested D.3/D.4 materials, manifest, implementation, CLI wiring, and focused watch tests. I did not run Ontos and did not run a broad test suite.
++
++## Evidence
++
++- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md`; it records D.3 approval after the failure quarantine fix and identifies `_failed/` quarantine plus no reprocessing on a later pass as the closure evidence.
++- Reviewed `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md`; it states D.4 moved failed source files into `_failed/`, kept an error log beside the quarantined file, and updated watcher tests.
++- Reviewed `frameworks/manifests/folio-watch-v1-4-0.yaml`; the focused gate command for this slice is `./.venv/bin/python -m pytest tests/test_watch.py -q`.
++- Inspected `folio/watch.py`. `run_watch_once` routes each active file, waits for stable size before processing, archives successful files through `_archive_success`, and calls `_write_failure` on exceptions. `_write_failure` creates `_failed/`, moves the failed source to a collision-safe destination, writes a collision-safe `.error.log`, and returns the quarantined source path. `_iter_watch_files` excludes `_archive` and `_failed`, so quarantined failures are not picked up by a later watch pass.
++- Inspected `folio/cli.py`. The `watch` command wires `--once`, `--dry-run`, and `--quiet` to `run_watch_once` or `run_watch_loop` without bypassing the watcher quarantine/archive behavior.
++- Inspected `tests/test_watch.py`. The focused tests cover extension routing, dry-run non-move behavior, success archival, and the D.4 failure quarantine path, including a second `run_watch_once` call that returns no work after the failed file is moved into `_failed/`.
++
++## Direct Run
++
++Command:
++
++```sh
++./.venv/bin/python -m pytest tests/test_watch.py -q
++```
++
++Result: exit code 0.
++
++Output summary:
++
++```text
++.....                                                                    [100%]
++5 passed in 0.09s
++```
++
++## Release Assessment
++
++I found no remaining release issue in the requested folder watcher routing, archive, and failure quarantine slice. The D.3/D.4 claims match the implementation and the focused tests pass with direct execution.
+
+2026-05-12T22:08:08.414196Z ERROR codex_core::session: failed to record rollout items: thread 019e1e3a-c9d1-7882-91bf-0ed2af245018 not found
+2026-05-12T22:08:08.419527Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 840: No such process (os error 3)
+tokens used
+51,416
+2026-05-12T22:08:08.477046Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 839: No such process (os error 3)

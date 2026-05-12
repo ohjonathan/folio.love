@@ -1,0 +1,3 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md`.
+
+**Verdict: approve.** The spec and manifest are clean — no stale evidence reuse, acceptance criteria are testable, the manifest's gate prerequisites and smoke checks are consistent with the spec, and the evidence boundary is correctly anchored to the 2026-05-12 live triage. One non-blocking observation: `folio/pipeline/provenance_analysis.py` is mentioned in issue #70 as a suggested change site but is absent from the spec's implementation surface list; the C-phase author should consult the issue body directly to decide whether to extend the provenance walk there.

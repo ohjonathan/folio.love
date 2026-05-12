@@ -11,6 +11,7 @@ from typing import Any, Optional
 import yaml as yaml_lib
 
 from .config import FolioConfig, LLMProfile
+from .defaults import resolve_convert_metadata
 from .llm.types import FallbackProfileSpec
 from .llm.types import ProviderRuntimeSettings
 from .naming import humanize_token, sanitize_token
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Shared constant for PPTX/PPT extensions — used by cli.py too.
 PPTX_EXTENSIONS = frozenset({".pptx", ".ppt"})
+DOCUMENT_EXTENSIONS = frozenset({".docx"})
 
 # P1b: Slide types that skip diagram extraction when framework is absent.
 _SKIP_DIAGRAM_TYPES = frozenset({"data", "appendix", "title"})
@@ -124,7 +126,7 @@ class FolioConverter:
         llm_profile: Optional[str] = None,
         preserved_enrich_fields: Optional[dict] = None,
     ) -> ConversionResult:
-        """Convert a single PPTX/PDF to Folio markdown.
+        """Convert a single PPTX/PDF/DOCX to Folio markdown.
 
         Args:
             source_path: Path to the source file.
@@ -145,6 +147,29 @@ class FolioConverter:
         source_path = Path(source_path).resolve()
         if not source_path.exists():
             raise FileNotFoundError(f"Source file not found: {source_path}")
+        resolved_metadata = resolve_convert_metadata(
+            self.config,
+            source_path=source_path,
+            client=client,
+            engagement=engagement,
+            target=target,
+        )
+        client = resolved_metadata.client
+        engagement = resolved_metadata.engagement
+        target = resolved_metadata.target
+        if source_path.suffix.lower() in DOCUMENT_EXTENSIONS:
+            return self._convert_document(
+                source_path=source_path,
+                note=note,
+                client=client,
+                engagement=engagement,
+                target=target,
+                subtype=subtype,
+                industry=industry,
+                extra_tags=extra_tags,
+                llm_profile=llm_profile,
+                preserved_enrich_fields=preserved_enrich_fields,
+            )
 
         deck_name = _sanitize_name(source_path.stem)
         logger.info("Converting: %s", source_path.name)
@@ -725,6 +750,182 @@ class FolioConverter:
             cache_stats=combined_stats,
         )
 
+    def _convert_document(
+        self,
+        *,
+        source_path: Path,
+        note: Optional[str],
+        client: Optional[str],
+        engagement: Optional[str],
+        target: Optional[Path],
+        subtype: str,
+        industry: Optional[list[str]],
+        extra_tags: Optional[list[str]],
+        llm_profile: Optional[str],
+        preserved_enrich_fields: Optional[dict],
+    ) -> ConversionResult:
+        """Convert a DOCX as a document-oriented single evidence note."""
+
+        deck_name = _sanitize_name(source_path.stem)
+        logger.info("Converting document: %s", source_path.name)
+
+        inferred_client, inferred_engagement = self._infer_from_source_root(
+            source_path, client, engagement
+        )
+        effective_client = client if client is not None else inferred_client
+        effective_engagement = engagement if engagement is not None else inferred_engagement
+
+        deck_dir = self._resolve_target(
+            source_path, deck_name, effective_client, effective_engagement, target
+        )
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        markdown_path = deck_dir / f"{deck_name}.md"
+        existing_fm = _read_existing_frontmatter(markdown_path)
+
+        if isinstance(existing_fm, dict) and existing_fm.get("id"):
+            deck_id = existing_fm["id"]
+        else:
+            deck_id = _generate_id(
+                client=effective_client,
+                engagement=effective_engagement,
+                deck_name=deck_name,
+            )
+
+        document_text = text.extract_document_text(source_path)
+        slide_texts = {1: document_text}
+        source_info = sources.compute_source_info(source_path, markdown_path)
+        version_info = versions.compute_version(
+            deck_dir=deck_dir,
+            source_hash=source_info.file_hash,
+            source_path=source_info.relative_path,
+            slide_count=1,
+            new_texts=slide_texts,
+            note=note,
+        )
+        history_path = deck_dir / "version_history.json"
+        version_history = versions.load_version_history(history_path)
+
+        analysis_item = analysis.SlideAnalysis(
+            slide_type="document",
+            framework="none",
+            visual_description="Document-oriented DOCX text extraction.",
+            key_data="",
+            main_insight="Document converted as one full-text evidence note.",
+            evidence=[
+                {
+                    "claim": "Document text extracted with MarkItDown.",
+                    "quote": _evidence_excerpt(document_text.full_text),
+                    "element_type": "body",
+                    "confidence": "high",
+                    "validated": True,
+                }
+            ],
+        )
+        analyses = {1: analysis_item}
+        profile = self.config.llm.resolve_profile(llm_profile, task="convert")
+        llm_meta = {
+            "convert": {
+                "requested_profile": llm_profile or profile.name,
+                "profile": profile.name,
+                "provider": None,
+                "model": None,
+                "fallback_used": False,
+                "mixed_providers": False,
+                "status": "skipped",
+                "reason": "document_text_extraction",
+                "pass1": {"status": "skipped", "reason": "document_text_extraction"},
+                "pass2": {"status": "skipped", "reason": "document_text_extraction"},
+            }
+        }
+        fm = frontmatter.generate(
+            title=_title_from_name(deck_name),
+            deck_id=deck_id,
+            source_relative_path=source_info.relative_path,
+            source_hash=source_info.file_hash,
+            source_type="document",
+            version_info=version_info,
+            analyses=analyses,
+            subtype=subtype,
+            client=effective_client,
+            engagement=effective_engagement,
+            industry=industry,
+            extra_tags=extra_tags,
+            existing_frontmatter=existing_fm,
+            llm_metadata=llm_meta,
+            review_status="clean",
+            review_flags=[],
+            extraction_confidence=1.0,
+            preserved_enrich_fields=preserved_enrich_fields,
+        )
+        md_content = _assemble_document_markdown(
+            title=_title_from_name(deck_name),
+            frontmatter=fm,
+            source_display_path=source_info.relative_path,
+            version_info=version_info,
+            document_text=document_text.full_text,
+            version_history=version_history,
+        )
+        tmp_md = markdown_path.with_suffix(".md.tmp")
+        tmp_md.write_text(md_content)
+        tmp_md.rename(markdown_path)
+
+        library_root = self.config.library_root.resolve()
+        try:
+            md_rel = str(markdown_path.relative_to(library_root)).replace("\\", "/")
+            deck_dir_rel = str(deck_dir.relative_to(library_root)).replace("\\", "/")
+        except ValueError:
+            logger.debug(
+                "Output %s is outside library_root %s — skipping registry upsert",
+                deck_dir,
+                library_root,
+            )
+        else:
+            reg_authority = "captured"
+            reg_curation = "L0"
+            if isinstance(existing_fm, dict):
+                prev_auth = existing_fm.get("authority")
+                if isinstance(prev_auth, str) and prev_auth:
+                    reg_authority = prev_auth
+                prev_curation = existing_fm.get("curation_level")
+                if isinstance(prev_curation, str) and prev_curation:
+                    reg_curation = prev_curation
+            now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            registry.upsert_entry(
+                library_root / "registry.json",
+                registry.RegistryEntry(
+                    id=deck_id,
+                    title=_title_from_name(deck_name),
+                    markdown_path=md_rel,
+                    deck_dir=deck_dir_rel,
+                    source_relative_path=source_info.relative_path,
+                    source_hash=source_info.file_hash,
+                    source_type="document",
+                    version=version_info.version,
+                    converted=now_str,
+                    modified=now_str,
+                    client=effective_client,
+                    engagement=effective_engagement,
+                    authority=reg_authority,
+                    curation_level=reg_curation,
+                    staleness_status="current",
+                    review_status="clean",
+                    review_flags=[],
+                    extraction_confidence=1.0,
+                    grounding_summary=frontmatter._compute_grounding_summary(analyses),
+                ),
+            )
+
+        logger.info("  ✓ Converted: %s (v%d, document)", markdown_path.name, version_info.version)
+        return ConversionResult(
+            output_path=markdown_path,
+            slide_count=1,
+            version=version_info.version,
+            changes=version_info.changes,
+            deck_id=deck_id,
+            renderer_used="document-text",
+            cache_stats=None,
+        )
+
     def _resolve_target(
         self,
         source_path: Path,
@@ -811,9 +1012,62 @@ def _detect_source_type(source_path: Path) -> str:
     ext = source_path.suffix.lower()
     if ext in (".pptx", ".ppt"):
         return "deck"
+    if ext in DOCUMENT_EXTENSIONS:
+        return "document"
     if ext != ".pdf":
         logger.warning("Unrecognized extension '%s', defaulting source_type to 'pdf'", ext)
     return "pdf"
+
+
+def _assemble_document_markdown(
+    *,
+    title: str,
+    frontmatter: str,
+    source_display_path: str,
+    version_info: versions.VersionInfo,
+    document_text: str,
+    version_history: list[dict],
+) -> str:
+    lines = [
+        frontmatter,
+        "",
+        f"# {title}",
+        "",
+        f"**Source:** `{source_display_path}`  ",
+        f"**Version:** {version_info.version} | **Converted:** {version_info.timestamp[:10]}  ",
+        "**Status:** ✓ Current",
+        "",
+    ]
+    if version_info.version > 1 and version_info.changes.has_changes:
+        lines.append(markdown._format_changes(version_info))
+        lines.append("")
+    lines.extend(
+        [
+            "---",
+            "",
+            "## Evidence Note",
+            "",
+            "- Document text extracted with MarkItDown.",
+            "- source_type: document",
+            "- slide_count: 1 (compatibility unit)",
+            "",
+            "## Document Text",
+            "",
+        ]
+    )
+    for line in document_text.splitlines():
+        lines.append(line)
+    lines.append("")
+    if version_history:
+        lines.append(markdown._format_version_history(version_history))
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _evidence_excerpt(value: str, max_chars: int = 500) -> str:
+    text_value = re.sub(r"\s+", " ", value).strip()
+    if len(text_value) <= max_chars:
+        return text_value
+    return text_value[: max_chars - 3].rstrip() + "..."
 
 
 def _sanitize_name(name: str) -> str:

@@ -1,0 +1,9 @@
+Done. Wrote the D.5 verifier artifact at [folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md:1).
+
+Verdict: `approve`.
+
+Validation run: `./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q`
+
+Result: `7 passed in 0.11s`.
+
+I did not run Ontos, did not run a broad suite, and did not edit any other repository file.

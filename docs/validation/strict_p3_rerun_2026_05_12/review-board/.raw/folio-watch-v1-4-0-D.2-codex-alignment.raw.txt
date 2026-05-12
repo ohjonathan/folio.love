@@ -1,0 +1,9 @@
+Wrote the D.2 alignment artifact here:
+
+[folio-watch-v1-4-0-D.2-codex-alignment.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md)
+
+Verdict: `request changes`.
+
+Focused validation passed: `./.venv/bin/python -m pytest tests/test_watch.py -q` -> `5 passed in 0.08s`.
+
+Primary blocker: failed source files are not quarantined into `_failed/`; only an error log is written, leaving the failed input in the active watch directory for repeated processing.

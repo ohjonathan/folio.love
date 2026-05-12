@@ -1,0 +1,11 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer.md`.
+
+**Verdict: request changes**
+
+All 16 tests pass and the cardinality gate is clean, but there is one implementation blocker:
+
+**`folio/config.py:529`** — the loop-local variable `defaults` clobbers the `DefaultsConfig` object that was assigned at line 521. When any `providers:` block is present in `folio.yaml`, line 554 passes a `ProviderRuntimeSettings` object as `defaults=` to `FolioConfig`, causing an `AttributeError` at the first call to `resolve_ingest_metadata` or `resolve_convert_metadata`. The bug is invisible to the current test suite because no test loads a config file that has both `defaults:` and `providers:` sections simultaneously.
+
+Required fixes:
+1. Rename `defaults` to `prov_defaults` (or similar) inside the providers loop in `config.py:529–538`.
+2. Add a test in `test_config_defaults.py` that exercises `FolioConfig.load()` with both blocks present and asserts `config.defaults.client` is the expected string.

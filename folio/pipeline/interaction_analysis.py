@@ -13,6 +13,7 @@ from typing import Any, Optional
 from ..llm import ProviderInput, RateLimiter, execute_with_retry, get_provider
 from ..llm.runtime import EndpointNotAllowedError
 from ..llm.types import FallbackProfileSpec, ProviderRuntimeSettings
+from .speaker_analytics import SpeakerStats
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ _ALLOWED_ELEMENT_TYPES = {
     "data_point",
     "decision",
     "question",
+    "action",
 }
 _CONFIDENCE_SCORES = {
     "high": 1.0,
@@ -91,12 +93,12 @@ Return exactly one JSON object and no surrounding prose. Use exactly this schema
 {{
   "summary": "<2-5 paragraph summary>",
   "tags": ["<short tags>"],
-  "findings": {{
+    "findings": {{
     "claims": [
       {{
         "statement": "<claim>",
         "quote": "<supporting quote>",
-        "element_type": "<statement|response|data_point|decision|question>",
+        "element_type": "<statement|response|data_point|decision|question|action>",
         "confidence": "<high|medium|low>",
         "speaker": "<speaker if known>",
         "timestamp": "<timestamp if available>",
@@ -105,7 +107,20 @@ Return exactly one JSON object and no surrounding prose. Use exactly this schema
     ],
     "data_points": [],
     "decisions": [],
-    "open_questions": []
+    "open_questions": [],
+    "action_items": [
+      {{
+        "statement": "<who will do what>",
+        "quote": "<supporting quote>",
+        "element_type": "action",
+        "confidence": "<high|medium|low>",
+        "speaker": "<speaker if known>",
+        "timestamp": "<timestamp if available>",
+        "attribution": "<attribution if available>",
+        "owner": "<owner if identifiable>",
+        "due": "<ISO date or natural-language due window if identifiable>"
+      }}
+    ]
   }},
   "entities": {{
     "people": [],
@@ -116,7 +131,7 @@ Return exactly one JSON object and no surrounding prose. Use exactly this schema
   "notable_quotes": [
     {{
       "quote": "<direct quote>",
-      "element_type": "<statement|response|data_point|decision|question>",
+      "element_type": "<statement|response|data_point|decision|question|action>",
       "confidence": "<high|medium|low>",
       "speaker": "<speaker if known>",
       "timestamp": "<timestamp if available>"
@@ -128,6 +143,7 @@ Return exactly one JSON object and no surrounding prose. Use exactly this schema
 Rules:
 - Ground every finding in the provided source text.
 - Every finding must carry a supporting quote.
+- Put commitments, follow-ups, asks, owners, and due windows in action_items instead of decisions.
 - Use unresolved entity names only; do not invent IDs.
 - {subtype_hint}
 """
@@ -141,7 +157,7 @@ END_SOURCE_TEXT
 
 _REDUCE_SYSTEM_PROMPT = """You are merging chunk-level interaction analyses into one final interaction note.
 
-Return exactly one JSON object with the same schema as before. Deduplicate repeated claims and quotes. Preserve grounded wording from the chunk analyses. Do not invent facts outside the provided chunk analyses.
+Return exactly one JSON object with the same schema as before. Deduplicate repeated claims and quotes. Deduplicate action_items by owner plus statement when available. Preserve grounded wording from the chunk analyses. Do not invent facts outside the provided chunk analyses.
 """
 
 _REDUCE_USER_PROMPT_TEMPLATE = """BEGIN_CHUNK_ANALYSES
@@ -162,6 +178,8 @@ class InteractionFinding:
     timestamp: Optional[str] = None
     attribution: Optional[str] = None
     validated: bool = False
+    owner: Optional[str] = None
+    due: Optional[str] = None
 
 
 @dataclass
@@ -194,6 +212,7 @@ class InteractionAnalysisResult:
     data_points: list[InteractionFinding] = field(default_factory=list)
     decisions: list[InteractionFinding] = field(default_factory=list)
     open_questions: list[InteractionFinding] = field(default_factory=list)
+    action_items: list[InteractionFinding] = field(default_factory=list)
     notable_quotes: list[InteractionQuote] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     review_status: str = "clean"
@@ -205,6 +224,7 @@ class InteractionAnalysisResult:
     provider_name: str | None = None
     model_name: str | None = None
     fallback_used: bool = False
+    speaker_stats: SpeakerStats | None = None
 
     def all_findings(self) -> list[InteractionFinding]:
         return [
@@ -212,6 +232,7 @@ class InteractionAnalysisResult:
             *self.data_points,
             *self.decisions,
             *self.open_questions,
+            *self.action_items,
         ]
 
 
@@ -506,6 +527,7 @@ def _coerce_result(
         data_points=_coerce_findings(findings.get("data_points"), normalized_text),
         decisions=_coerce_findings(findings.get("decisions"), normalized_text),
         open_questions=_coerce_findings(findings.get("open_questions"), normalized_text),
+        action_items=_coerce_findings(findings.get("action_items"), normalized_text),
         notable_quotes=_coerce_quotes(payload.get("notable_quotes"), normalized_text),
         warnings=[str(item).strip() for item in payload.get("warnings", []) if str(item).strip()],
         pass_strategy=pass_strategy,
@@ -573,6 +595,8 @@ def _coerce_findings(value: Any, normalized_text: str) -> list[InteractionFindin
                 timestamp=_clean_optional(item.get("timestamp")),
                 attribution=_clean_optional(item.get("attribution")),
                 validated=_validate_quote(quote, normalized_text),
+                owner=_clean_optional(item.get("owner")),
+                due=_clean_optional(item.get("due")),
             )
         )
     return findings

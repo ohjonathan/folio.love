@@ -1,0 +1,10 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-claude-sonnet-verifier-r2.md`.
+
+**Verdict: approve**
+
+The compatibility fix is correct. The two key functions work together cleanly:
+
+- `_should_flag_speaker_analytics_unavailable` (`ingest.py:405`) returns `True` only for `.vtt`/`.srt` extensions or `.txt`/`.md` content with embedded timestamp/speaker patterns; plain prose returns `False`.
+- `_apply_speaker_analytics_state` (`ingest.py:391`) short-circuits when `mark_unavailable=False`, leaving `review_status` and `review_flags` untouched — preserving existing clean/degraded statuses for ordinary notes.
+
+Integration test `test_ingest_provider_failure_writes_degraded_note` is the clearest confirmation: a degraded `client_meeting.txt` note exits with `review_flags == ["analysis_unavailable"]` only, with no `speaker_analytics_unavailable` appended. Minor gap noted: no unit-level tests for `mark_unavailable=False` or the `_should_flag` function in isolation, but not a release stopper given integration coverage and the 2100-pass test suite.

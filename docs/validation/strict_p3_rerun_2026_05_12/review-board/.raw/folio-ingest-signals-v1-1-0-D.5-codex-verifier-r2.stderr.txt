@@ -1,0 +1,1771 @@
+2026-05-12T22:13:36.846598Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:13:36.847715Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:13:36.851526Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:13:36.851595Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+OpenAI Codex v0.125.0 (research preview)
+--------
+workdir: /Users/jonathanoh/workspaces/folio.love
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/jonathanoh/.codex/memories]
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019e1e40-b1b9-7c00-a4c1-222a29dff6c4
+--------
+user
+You are the codex external verifier for llm-dev strict-P3 Phase D.5, deliverable folio-ingest-signals-v1-1-0, round 2.
+
+Verify the post-D.5 compatibility fix: `speaker_analytics_unavailable` is now applied only when transcript-like inputs are expected to have speaker analytics but none can be computed, while ordinary clean/free-form notes preserve existing clean/degraded statuses.
+
+Use these files:
+- folio/ingest.py
+- tests/test_speaker_analytics.py
+- tests/test_ingest_integration.py
+- docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_D.3_canonical_verdict.md
+- docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_d4_fix_summary.md
+
+Full validation reported by orchestrator:
+- ./.venv/bin/python -m pytest tests -q => 2100 passed, 6 skipped
+
+Artifact target: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+
+Artifact contract:
+- Write the markdown artifact to the artifact target above.
+- Do not edit any repository file except the artifact target.
+- The artifact must be at least 700 characters.
+---
+deliverable_id: folio-ingest-signals-v1-1-0
+phase: D.5
+role: verifier
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+Include a top-level heading and a section named exactly "## Verdict" containing approve, request changes, reject, or concur.
+
+2026-05-12T22:13:38.476086Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:13:38.476346Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:13:38.478232Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:13:38.478262Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T22:13:39.154684Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:13:39.154865Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:13:39.156194Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:13:39.156223Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’ll load the project context first, then verify only the requested compatibility fix and write the single review artifact.
+exec
+/bin/zsh -lc 'ontos map' in /Users/jonathanoh/workspaces/folio.love
+2026-05-12T22:13:46.565978Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:13:46.566157Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:13:46.567474Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:13:46.567495Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+ exited 1 in 235ms:
+Warning: Invalid doc status 'generated'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'approved'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc type 'review'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment-r3' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment-r3.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment-r3.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.5-claude-sonnet-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.5-claude-sonnet-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.5-claude-sonnet-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.5-codex-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.5-codex-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.5-codex-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.5-gemini-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.5-gemini-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.5-gemini-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment-r2.md.
+Warning: Invalid doc status 'failed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.5-claude-sonnet-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-claude-sonnet-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.5-claude-sonnet-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.5-codex-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.5-gemini-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-gemini-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.5-gemini-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.5-claude-sonnet-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-claude-sonnet-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.5-claude-sonnet-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.5-codex-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.5-gemini-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-gemini-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.5-gemini-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-codex-alignment.md.
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.5-claude-sonnet-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.5-claude-sonnet-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.5-claude-sonnet-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.5-codex-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.5-codex-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.5-codex-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.5-gemini-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.5-gemini-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.5-gemini-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2.md.
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.5-claude-sonnet-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-claude-sonnet-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.5-claude-sonnet-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.5-codex-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.5-codex-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.5-gemini-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-gemini-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.5-gemini-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.2-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.2-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.5-claude-sonnet-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-claude-sonnet-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.5-claude-sonnet-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.5-codex-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.5-codex-verifier.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.5-gemini-verifier' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-gemini-verifier.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.5-gemini-verifier.md.
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+
+codex
+`ontos map` is present but exits nonzero because of existing duplicate document IDs and metadata warnings in validation docs. I’m trying the module form too, then I’ll read the existing context map without editing it.
+exec
+/bin/zsh -lc 'python3 -m ontos map' in /Users/jonathanoh/workspaces/folio.love
+ exited 1 in 0ms:
+/opt/homebrew/opt/python@3.14/bin/python3.14: No module named ontos
+
+2026-05-12T22:13:50.743871Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:13:50.744159Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:13:50.746344Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:13:50.746377Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The module fallback is unavailable, so activation is proceeding from the checked-in `Ontos_Context_Map.md`. I’ll also check whether this repo’s llm-dev wrapper needs its doctor step for this verification.
+exec
+/bin/zsh -lc "test -f .llm-dev/config.yaml && printf 'present\\n' || printf 'absent\\n'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+present
+
+exec
+/bin/zsh -lc "sed -n '1,140p' Ontos_Context_Map.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: ontos_context_map
+type: reference
+status: generated
+ontos_map_version: 2
+generated_by: ontos map
+generated_at: 2026-05-10 18:57:42
+---
+
+# folio.love Tiered Context Map
+
+> Auto-generated by Ontos 3.0
+> Last updated: 2026-05-10 18:57:42
+
+This document provides a tiered index of the knowledge graph for AI orientation.
+- **Tier 1: Essential Context**: (~2k tokens) Project summary, recent work, and architecture.
+- **Tier 2: Document Index**: Full list of all tracked documents.
+- **Tier 3: Full Graph Details**: Dependency trees, timelines, and health metrics.
+
+## Tier 1: Essential Context
+
+### Project Summary
+- **Name:** folio.love
+- **Doc Count:** 416
+- **Last Updated:** 2026-05-11 01:57:42 UTC
+
+### Recent Activity
+| Log | Status | Summary |
+|-----|--------|---------|
+| log_20260510_root-cleanup | active | No summary |
+| log_20260510_folio-love-vtt-srt-transcript-ingest | active | No summary |
+| log_20260417_v1-0-0-spec-canonical-verdict-r3 | active | No summary |
+| ... and 81 more logs | | |
+
+### Key Documents
+- `doc_02_product_requirements_document` (7 dependents) — docs/product/02_Product_Requirements_Document.md
+- `doc_04_implementation_roadmap` (7 dependents) — docs/product/04_Implementation_Roadmap.md
+- `folio_ontology_architecture` (6 dependents) — docs/architecture/Folio_Ontology_Architecture.md
+
+### Critical Paths
+- **Docs Root:** `docs/`
+- **Logs:** `docs/logs/`
+
+---
+
+## Tier 2: Document Index
+
+
+
+## Documents
+
+| Path | ID | Type | Status |
+|------|-----|------|--------|
+| docs/architecture/Folio_Ontology_Architecture.md | `folio_ontology_architecture` | unknown | active |
+| docs/archive/ontos/Ontos_Context_Map.md | `ontos_context_map` | reference | unknown |
+| docs/archive/reviews/README.md | `archived_review_artifacts` | reference | active |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review.md | `PRD_PhaseB_B1_Adversarial_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R2.md | `PRD_PhaseB_B1_Adversarial_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R3.md | `PRD_PhaseB_B1_Adversarial_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R4.md | `PRD_PhaseB_B1_Adversarial_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R5.md | `PRD_PhaseB_B1_Adversarial_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review.md | `PRD_PhaseB_B1_Alignment_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R2.md | `PRD_PhaseB_B1_Alignment_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R3.md | `PRD_PhaseB_B1_Alignment_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R4.md | `PRD_PhaseB_B1_Alignment_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R5.md | `PRD_PhaseB_B1_Alignment_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review.md | `PRD_PhaseB_B1_Peer_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R2.md | `PRD_PhaseB_B1_Peer_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R3.md | `PRD_PhaseB_B1_Peer_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R4.md | `PRD_PhaseB_B1_Peer_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R5.md | `PRD_PhaseB_B1_Peer_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation.md | `PRD_PhaseB_B2_Consolidation` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R2.md | `PRD_PhaseB_B2_Consolidation_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R3.md | `PRD_PhaseB_B2_Consolidation_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R4.md | `PRD_PhaseB_B2_Consolidation_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R5.md | `PRD_PhaseB_B2_Consolidation_R5` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Adversarial_Review.md | `PRE_B1_Adversarial_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Alignment_Review.md | `PRE_B1_Alignment_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Peer_Review.md | `PRE_B1_Peer_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B2_Consolidation.md | `PRE_B2_Consolidation` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B2_Consolidation_R2.md | `PRE_B2_Consolidation_R2` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Adversarial_Product.md | `Folio_Tier4_ProposalReview_R1_Adversarial_Product` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Alignment_Technical.md | `Folio_Tier4_ProposalReview_R1_Alignment_Technical` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Consolidated.md | `Folio_Tier4_ProposalReview_R1_Consolidated` | unknown | unknown |
+| docs/framework-adoption.md | `framework-adoption` | unknown | unknown |
+| docs/guides/agentic_setup.md | `agentic_setup` | unknown | unknown |
+| docs/guides/managed_mac_workflow.md | `managed_mac_workflow` | unknown | unknown |
+| docs/logs/2026-03-02_doc-cleanup-and-ontos-init-for-folio-love.md | `log_20260302_doc-cleanup-and-ontos-init-for-folio-love` | log | active |
+| docs/logs/2026-03-02_source-grounding-multi-pass-extraction-pipeline.md | `log_20260302_source-grounding-multi-pass-extraction-pipeline` | log | active |
+| docs/logs/2026-03-06_analysis-caching-hardening-b1-b3-g1-g4-s1-s2.md | `log_20260306_analysis-caching-hardening-b1-b3-g1-g4-s1-s2` | log | active |
+| docs/logs/2026-03-06_analysis-caching-spec-review.md | `log_20260306_analysis-caching-spec-review` | log | active |
+| docs/logs/2026-03-06_frontmatter-v2-completeness.md | `log_20260306_frontmatter-v2-completeness` | log | active |
+| docs/logs/2026-03-06_frontmatter-v2-spec-review-reviewer1.md | `log_20260306_frontmatter-v2-spec-review-reviewer1` | log | active |
+| docs/logs/2026-03-06_merge-pull-request-2-from-ohjonathan-feat-core-ex.md | `log_20260306_merge-pull-request-2-from-ohjonathan-feat-core-ex` | log | active |
+| docs/logs/2026-03-06_version-tracking-code-review-pr5.md | `2026-03-06_version-tracking-code-review-pr5` | unknown | unknown |
+| docs/logs/2026-03-06_version-tracking-hardening-g1-g8-b1-b3.md | `log_20260306_version-tracking-hardening-g1-g8-b1-b3` | log | active |
+| docs/logs/2026-03-07_docs-multi-provider-docs-alignment-and-merge.md | `log_20260307_docs-multi-provider-docs-alignment-and-merge` | log | active |
+| docs/logs/2026-03-07_managed-laptop-pdf-fallback.md | `log_20260307_managed-laptop-pdf-fallback` | log | active |
+| docs/logs/2026-03-07_pr-8-multi-provider-llm-support-code-review-resolu.md | `log_20260307_pr-8-multi-provider-llm-support-code-review-resolu` | log | active |
+| docs/logs/2026-03-08_pr-10-pptx-renderer-reliability-fix-open-a-two-ste.md | `log_20260308_pr-10-pptx-renderer-reliability-fix-open-a-two-ste` | log | active |
+| docs/logs/2026-03-08_tier1-validation-rerun-prompt-refresh.md | `log_20260308_tier1-validation-rerun-prompt-refresh` | log | active |
+| docs/logs/2026-03-09_pr-12-tier1-rerun-validation-and-merge-readiness.md | `log_20260309_pr-12-tier1-rerun-validation-and-merge-readiness` | log | active |
+| docs/logs/2026-03-13_docs-validation-tighten-tier-2-closeout-criteria.md | `log_20260313_docs-validation-tighten-tier-2-closeout-criteria` | log | active |
+| docs/logs/2026-03-14_docs-test-standardize-pytest-commands-to-venv-b.md | `log_20260314_fr700-reviewability-integration` | log | active |
+| docs/logs/2026-03-14_feat-diagrams-deterministic-page-inspection-with.md | `log_20260314_feat-diagrams-deterministic-page-inspection-with` | log | active |
+| docs/logs/2026-03-14_pr-1-page-inspection-implementation-prompt.md | `log_20260314_pr-1-page-inspection-implementation-prompt` | log | active |
+| docs/logs/2026-03-14_pr-1-som-validation-runbook-and-doc-handoff.md | `log_20260314_pr-1-som-validation-runbook-and-doc-handoff` | log | active |
+| docs/logs/2026-03-14_rewrite-grounding-multipass-prompt.md | `log_20260314_rewrite-grounding-multipass-prompt` | log | active |
+| docs/logs/2026-03-14_source-of-truth-doc-naming-and-docs-sync.md | `log_20260314_source-of-truth-doc-naming-and-docs-sync` | log | active |
+| docs/logs/2026-03-15_add-25-regression-tests-for-type-gate-highlights.md | `log_20260315_pr22-diagram-extraction-tier2-fixes` | log | complete |
+| docs/logs/2026-03-15_add-pr-2-prompts-session-logs-and-update-context.md | `log_20260315_add-pr-2-prompts-session-logs-and-update-context` | log | active |
+| docs/logs/2026-03-15_clean-stray-files-add-tmp-and-output-to-gitign.md | `log_20260315_clean-stray-files-add-tmp-and-output-to-gitign` | log | complete |
+| docs/logs/2026-03-15_fix-p1-frontmatter-fence-must-be-unindented-fi.md | `log_20260315_fix-p1-frontmatter-fence-must-be-unindented-fi` | log | active |
+| docs/logs/2026-03-15_fix-rendering-address-round-3-review-all-block.md | `log_20260315_fix-rendering-address-round-3-review-all-block` | log | active |
+| docs/logs/2026-03-15_fix-rendering-normalize-unrecognized-directions.md | `log_20260315_fix-rendering-normalize-unrecognized-directions` | log | active |
+| docs/logs/2026-03-15_fix-rendering-round-4-fix-4-semantic-renderer.md | `log_20260315_fix-rendering-round-4-fix-4-semantic-renderer` | log | active |
+| docs/logs/2026-03-15_obsidian-mermaid-transclusion-test-runbook.md | `log_20260315_obsidian-mermaid-transclusion-test-runbook` | log | active |
+| docs/logs/2026-03-15_pr-20-reviewer-3-adversarial-review.md | `log_20260315_pr-20-reviewer-3-adversarial-review` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-1-merge-readiness-rerun.md | `log_20260315_pr-21-reviewer-1-merge-readiness-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-2-alignment-review-rerun-head-4c4e5.md | `log_20260315_pr-21-reviewer-2-alignment-review-rerun-head-4c4e5` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-2-alignment-review-rerun.md | `log_20260315_pr-21-reviewer-2-alignment-review-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-3-adversarial-review-rerun.md | `log_20260315_pr-21-reviewer-3-adversarial-review-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-3-adversarial-review.md | `log_20260315_pr-21-reviewer-3-adversarial-review` | log | active |
+| docs/logs/2026-03-15_pr-23-reviewer-2-alignment-review.md | `log_20260315_pr-23-reviewer-2-alignment-review` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer1-peer-review-rerun-head-6a83d3a.md | `log_20260315_pr23-reviewer1-peer-review-rerun-head-6a83d3a` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer1-peer-review.md | `log_20260315_pr23-reviewer1-peer-review` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer3-adversarial-review-rerun-head-172c51a.md | `log_20260315_pr23-reviewer3-adversarial-review-rerun-head-172c51a` | log | active |
+| docs/logs/2026-03-16_update-diagram-extraction-checklist-with-pr-6-comp.md | `log_20260316_update-diagram-extraction-checklist-with-pr-6-comp` | log | active |
+| docs/logs/2026-03-21_cap-diagram-max-tokens-at-32768-proposal-ceiling.md | `log_20260321_cap-diagram-max-tokens-at-32768-proposal-ceiling` | log | active |
+| docs/logs/2026-03-21_maintain-ontos-configuration-and-graph-health.md | `log_20260321_maintain-ontos-configuration-and-graph-health` | log | active |
+| docs/logs/2026-03-21_test-perf-close-residual-test-coverage-frozen.md | `log_20260321_performance-patch-pr30-review` | log | complete |
+| docs/logs/2026-03-22_add-entity-registry-pr-a-prompt.md | `log_20260322_entity-registry-pr-a-implementation-and-review` | log | active |
+| docs/logs/2026-03-22_bump-version-to-0-2-0-and-add-pypi-publish-workflo.md | `log_20260322_pypi-v020-release-prep` | log | complete |
+| docs/logs/2026-03-22_entity-system-kickoff-spec-approved.md | `log_20260322_entity-system-kickoff-spec-approved` | log | complete |
+| docs/logs/2026-03-22_feat-ingest-resolve-remaining-review-items.md | `log_20260322_feat-ingest-resolve-remaining-review-items` | log | active |
+| docs/logs/2026-03-22_merge-pull-request-32-from-ohjonathan-feature-v0.md | `log_20260322_merge-pull-request-32-from-ohjonathan-feature-v0` | log | active |
+| docs/logs/2026-03-22_platform-model-comparison-validation-prompt.md | `log_20260322_platform-model-comparison-validation-prompt` | log | active |
+| docs/logs/2026-03-22_pr-35-ingest-time-entity-resolution.md | `log_20260322_pr-35-ingest-time-entity-resolution` | log | complete |
+| docs/logs/2026-03-22_tier-3-ingest-kickoff-spec-approved-and-merged.md | `log_20260322_tier-3-ingest-kickoff-spec-approved-and-merged` | log | complete |
+| docs/logs/2026-03-27_docs-product-address-pr-review-feedback.md | `log_20260327_docs-product-address-pr-review-feedback` | log | active |
+
+2026-05-12T22:13:54.734319Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:13:54.734571Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:13:54.736489Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:13:54.736520Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Loaded Tier 1 from `Ontos_Context_Map.md`; the checked-in map reports `folio.love`, doc count 416, with docs under `docs/` and logs under `docs/logs/`. `.llm-dev/config.yaml` is present, so I’m running the repo wrapper doctor before the verifier pass.
+exec
+/bin/zsh -lc 'scripts/llm-dev doctor' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+llm-dev doctor
+  repo:               /Users/jonathanoh/workspaces/folio.love
+  config:             .llm-dev/config.yaml
+  framework_path:     .llm-dev/framework
+  framework_ref:      df39e6e3de47b2b5a970b99aa1580c1463dd97e0
+  framework_repo_url: https://github.com/ohjonathan/llm-dev-framework.git
+  PASS command: git
+  PASS command: bash
+  PASS command: python3
+  PASS command: check-jsonschema
+  PASS framework checkout: .llm-dev/framework
+  PASS framework scripts (verify-adopter.sh, day-one.sh)
+  PASS worker CLI: claude
+  PASS worker CLI: codex
+  PASS worker CLI: gemini
+llm-dev doctor: PASS
+
+2026-05-12T22:13:57.921932Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:13:57.922171Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:13:57.923808Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:13:57.923834Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+`llm-dev doctor` passes. I’m narrowing the review to the requested signal path: where `speaker_analytics_unavailable` is emitted, the tests that pin it, and the D.3/D.4 validation context.
+exec
+/bin/zsh -lc "sed -n '1,220p' docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_D.3_canonical_verdict.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-ingest-signals-v1-1-0-d3-canonical-verdict
+deliverable_id: folio-ingest-signals-v1-1-0
+phase: D.3
+role: meta-consolidator
+family: codex
+status: completed
+---
+
+# Phase D.3 Canonical Verdict: folio-ingest-signals-v1-1-0
+
+## Verdict
+approve
+
+## Consolidation
+D.2 implementation reviews approved the action-item and speaker-analytics implementation after Gemini's malformed first artifact was superseded by a valid same-family round-2 artifact. Codex noted one future hardening edge around malformed action item element types, but did not treat it as a current release stop.
+
+## Evidence
+- `InteractionAnalysisResult.all_findings()` includes `action_items`, so ingest grounding counts actions.
+- `folio/ingest.py` computes deterministic speaker stats before LLM analysis and applies `speaker_analytics_unavailable` only for transcript-like inputs where analytics are expected but unavailable, preserving existing clean/free-form note behavior.
+- `folio/pipeline/speaker_analytics.py` supports alias canonicalization.
+- Focused tests passed as part of the 108-test rerun.
+
+exec
+/bin/zsh -lc "sed -n '1,220p' docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_d4_fix_summary.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-ingest-signals-v1-1-0-d4-fix-summary
+deliverable_id: folio-ingest-signals-v1-1-0
+phase: D.4
+role: fix-author
+family: claude-opus
+status: completed
+---
+
+# Phase D.4 Fix Summary: folio-ingest-signals-v1-1-0
+
+Implemented the B.1/D.2 scope refinements: action items are included in validation summaries; speaker analytics now merge confirmed person aliases from the entity registry; and transcript-like inputs receive `speaker_analytics_unavailable` when analytics are expected but unavailable. The ingest path deliberately does not mark ordinary clean/free-form notes as flagged solely because they lack speaker timing. Added focused tests for alias merging and no-speaker degradation, plus full-suite compatibility checks.
+
+exec
+/bin/zsh -lc 'rg -n "speaker_analytics_unavailable|speaker_analytics|transcript|clean|degraded" folio/ingest.py tests/test_speaker_analytics.py tests/test_ingest_integration.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+tests/test_ingest_integration.py:67:    review_status: str = "clean",
+tests/test_ingest_integration.py:116:        review_flags=[] if review_status == "clean" else ["analysis_unavailable"],
+tests/test_ingest_integration.py:152:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:176:        assert result.review_status == "clean"
+tests/test_ingest_integration.py:177:        assert result.degraded is False
+tests/test_ingest_integration.py:186:        assert fm["source_transcript"].endswith("expert_interview.md")
+tests/test_ingest_integration.py:192:        assert fm["review_status"] == "clean"
+tests/test_ingest_integration.py:228:        source = tmp_path / "transcripts" / "meeting_export.vtt"
+tests/test_ingest_integration.py:248:        assert "[00:00:08.000 - 00:00:10.250] Speaker 3: Incident triage still needs cleaner ownership." in analyzed_text
+tests/test_ingest_integration.py:253:        assert fm["source_transcript"].endswith("meeting_export.vtt")
+tests/test_ingest_integration.py:257:        raw_transcript = body.split("> [!quote]- Raw Transcript", 1)[1]
+tests/test_ingest_integration.py:258:        assert "> [00:00:05.000 - 00:00:07.500] Johnny Oh: ServiceNow remained the operational backbone." in raw_transcript
+tests/test_ingest_integration.py:268:        source = tmp_path / "transcripts" / "meeting_export.srt"
+tests/test_ingest_integration.py:292:        assert fm["source_transcript"].endswith("meeting_export.srt")
+tests/test_ingest_integration.py:296:        raw_transcript = body.split("> [!quote]- Raw Transcript", 1)[1]
+tests/test_ingest_integration.py:297:        assert "> [00:00:08.000 - 00:00:10.250] ServiceNow remained the operational backbone." in raw_transcript
+tests/test_ingest_integration.py:307:        source = tmp_path / "transcripts" / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:309:        shutil.copy2(_root_fixture("test_transcript_entities.txt"), source)
+tests/test_ingest_integration.py:340:        source = tmp_path / "transcripts" / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:342:        shutil.copy2(_root_fixture("test_transcript_entities.txt"), source)
+tests/test_ingest_integration.py:377:        source = tmp_path / "transcripts" / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:379:        shutil.copy2(_root_fixture("test_transcript_entities.txt"), source)
+tests/test_ingest_integration.py:417:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:462:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:499:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:547:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:552:        first_analysis = _analysis_result(review_status="clean")
+tests/test_ingest_integration.py:573:        assert first_fm["review_status"] == "clean"
+tests/test_ingest_integration.py:606:        source = tmp_path / "transcripts" / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:608:        shutil.copy2(_root_fixture("test_transcript_entities.txt"), source)
+tests/test_ingest_integration.py:638:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:668:        assert fm["source_transcript"].endswith("expert_interview.md")
+tests/test_ingest_integration.py:706:        assert fm["source_transcript"].endswith("expert_interview.md")
+tests/test_ingest_integration.py:714:        source_a = tmp_path / "transcripts" / "one.txt"
+tests/test_ingest_integration.py:715:        source_b = tmp_path / "transcripts" / "two.txt"
+tests/test_ingest_integration.py:716:        source_c = tmp_path / "transcripts" / "three.txt"
+tests/test_ingest_integration.py:719:            path.write_text("Shared transcript body.")
+tests/test_ingest_integration.py:727:            (note_a, "../../../transcripts/one.txt", "clienta_ddq126_meeting_20260321_alpha"),
+tests/test_ingest_integration.py:728:            (note_b, "../../../transcripts/two.txt", "clienta_ddq126_meeting_20260321_beta"),
+tests/test_ingest_integration.py:740:                "review_status: clean\n"
+tests/test_ingest_integration.py:743:                f"source_transcript: {source_rel}\n"
+tests/test_ingest_integration.py:764:                        source_relative_path="../../../transcripts/one.txt",
+tests/test_ingest_integration.py:776:                        source_relative_path="../../../transcripts/two.txt",
+tests/test_ingest_integration.py:800:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:835:        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:875:        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:913:        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:952:        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:987:        source = ROOT_FIXTURE_DIR / "test_transcript_entities.txt"
+tests/test_ingest_integration.py:1042:    def test_ingest_provider_failure_writes_degraded_note(self, mock_analyze, tmp_path):
+tests/test_ingest_integration.py:1044:        source = tmp_path / "transcripts" / "client_meeting.txt"
+tests/test_ingest_integration.py:1059:        assert result.degraded is True
+tests/test_ingest_integration.py:1074:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:1108:    def test_ingest_strips_markdown_frontmatter_from_raw_transcript(self, mock_analyze, tmp_path):
+tests/test_ingest_integration.py:1110:        source = tmp_path / "transcripts" / "markdown_with_frontmatter.md"
+tests/test_ingest_integration.py:1168:    def test_ingest_whitespace_only_source_writes_degraded_note(self, tmp_path):
+tests/test_ingest_integration.py:1170:        source = tmp_path / "transcripts" / "whitespace_only.txt"
+tests/test_ingest_integration.py:1185:        assert result.degraded is True
+tests/test_ingest_integration.py:1195:        source = tmp_path / "transcripts" / "expert_interview.md"
+tests/test_ingest_integration.py:1213:                        source_relative_path="../../../transcripts/expert_interview.md",
+folio/ingest.py:35:from .pipeline.speaker_analytics import SpeakerStats, compute_speaker_stats
+folio/ingest.py:36:from .pipeline.transcript_formats import (
+folio/ingest.py:38:    normalize_transcript_text,
+folio/ingest.py:62:    def degraded(self) -> bool:
+folio/ingest.py:102:    """Convert a transcript or notes file into an interaction note."""
+folio/ingest.py:111:            f"folio ingest supports {_SUPPORTED_EXTENSIONS_LABEL} transcript sources."
+folio/ingest.py:218:        analysis_result = _degraded_analysis_result(
+folio/ingest.py:221:    _apply_speaker_analytics_state(
+folio/ingest.py:224:        mark_unavailable=_should_flag_speaker_analytics_unavailable(
+folio/ingest.py:292:        source_transcript=source_info.relative_path,
+folio/ingest.py:310:        raw_transcript=normalized_source_body,
+folio/ingest.py:359:        return normalize_transcript_text(raw_source_text, source_extension)
+folio/ingest.py:385:            cleaned = alias.strip()
+folio/ingest.py:386:            if cleaned:
+folio/ingest.py:387:                aliases[cleaned.lower()] = canonical
+folio/ingest.py:391:def _apply_speaker_analytics_state(
+folio/ingest.py:400:    if "speaker_analytics_unavailable" not in analysis_result.review_flags:
+folio/ingest.py:401:        analysis_result.review_flags.append("speaker_analytics_unavailable")
+folio/ingest.py:405:def _should_flag_speaker_analytics_unavailable(
+folio/ingest.py:466:        cleaned = value.strip()
+folio/ingest.py:467:        key = cleaned.lower()
+folio/ingest.py:468:        if cleaned and key not in seen:
+folio/ingest.py:470:            normalized.append(cleaned)
+folio/ingest.py:731:def _degraded_analysis_result(message: str) -> InteractionAnalysisResult:
+tests/test_speaker_analytics.py:8:from folio.ingest import _apply_speaker_analytics_state
+tests/test_speaker_analytics.py:10:from folio.pipeline.speaker_analytics import compute_speaker_stats, parse_turns
+tests/test_speaker_analytics.py:20:        source_path="transcripts/interview.txt",
+tests/test_speaker_analytics.py:48:def test_compute_speaker_stats_from_timestamp_header_transcript():
+tests/test_speaker_analytics.py:88:        review_status="clean",
+tests/test_speaker_analytics.py:100:            source_transcript="../../../transcripts/interview.txt",
+tests/test_speaker_analytics.py:141:    result = InteractionAnalysisResult(summary="Free-form note.", review_status="clean")
+tests/test_speaker_analytics.py:143:    _apply_speaker_analytics_state(result, None)
+tests/test_speaker_analytics.py:147:    assert result.review_flags == ["speaker_analytics_unavailable"]
+
+2026-05-12T22:14:07.674187Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:14:07.674432Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:14:07.676213Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:14:07.676242Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Loaded: `ontos_context_map`, `folio-ingest-signals-v1-1-0-d3-canonical-verdict`, `folio-ingest-signals-v1-1-0-d4-fix-summary`. The prior verdict and fix summary both frame this as a compatibility check, so I’m now reading the exact guard and its coverage.
+exec
+/bin/zsh -lc "sed -n '391,435p' folio/ingest.py" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '180,245p' folio/ingest.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+def _apply_speaker_analytics_state(
+    analysis_result: InteractionAnalysisResult,
+    speaker_stats: SpeakerStats | None,
+    *,
+    mark_unavailable: bool = True,
+) -> None:
+    analysis_result.speaker_stats = speaker_stats
+    if speaker_stats is not None or not mark_unavailable:
+        return
+    if "speaker_analytics_unavailable" not in analysis_result.review_flags:
+        analysis_result.review_flags.append("speaker_analytics_unavailable")
+    analysis_result.review_status = "flagged"
+
+
+def _should_flag_speaker_analytics_unavailable(
+    normalized_source_body: str,
+    *,
+    source_extension: str,
+) -> bool:
+    if source_extension in TRANSCRIPT_FORMAT_EXTENSIONS:
+        return True
+    return bool(
+        re.search(
+            r"(?m)^(?:\[?\d{1,2}:\d{2}(?::\d{2})?|Speaker\s+\d+\s*:)",
+            normalized_source_body,
+        )
+    )
+
+
+def _warn_ignored_reingest_metadata_overrides(
+    *,
+    existing_frontmatter: Optional[dict],
+    requested_client: Optional[str],
+    requested_engagement: Optional[str],
+    requested_participants: Optional[list[str]],
+    preserved_metadata: dict[str, Optional[str] | list[str] | None],
+) -> None:
+    if not isinstance(existing_frontmatter, dict):
+        return
+
+    preserved_client = preserved_metadata.get("client")
+    if requested_client is not None and requested_client != preserved_client:
+        logger.warning(
+            "Ignoring re-ingest client override '%s'; preserving existing value '%s'.",
+            requested_client,
+
+ succeeded in 0ms:
+        source_hash=source_hash,
+        subtype=subtype,
+        event_date=event_date,
+        client=client,
+        engagement=engagement,
+        title=resolved_title,
+        identity=identity,
+    )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    source_info = sources.compute_source_info(source_path, markdown_path)
+    source_recording_relative = None
+    if source_recording is not None:
+        source_recording_relative = sources.compute_source_info(
+            source_recording,
+            markdown_path,
+        ).relative_path
+
+    profile = config.llm.resolve_profile(llm_profile, task="ingest")
+    fallback_profiles = config.llm.get_fallbacks(override=llm_profile, task="ingest")
+    fallback_specs = [
+        (fb.provider, fb.model, fb.api_key_env, fb.base_url_env)
+        for fb in fallback_profiles
+    ]
+
+    try:
+        analysis_result = analyze_interaction_text(
+            normalized_source_body,
+            subtype,
+            provider_name=profile.provider,
+            model=profile.model,
+            api_key_env=profile.api_key_env,
+            base_url_env=profile.base_url_env,
+            fallback_profiles=fallback_specs,
+            all_provider_settings=config.providers,
+        )
+    except EndpointNotAllowedError as exc:
+        analysis_result = _degraded_analysis_result(
+            f"LLM analysis did not run: {exc}",
+        )
+    _apply_speaker_analytics_state(
+        analysis_result,
+        speaker_stats,
+        mark_unavailable=_should_flag_speaker_analytics_unavailable(
+            normalized_source_body,
+            source_extension=source_extension,
+        ),
+    )
+
+    try:
+        resolution_result = resolve_interaction_entities(
+            entities_path=entities_path,
+            extracted_entities=analysis_result.entities,
+            source_text=normalized_source_body,
+            provider_name=profile.provider,
+            model=profile.model,
+            api_key_env=profile.api_key_env,
+            base_url_env=profile.base_url_env,
+            fallback_profiles=fallback_specs,
+            all_provider_settings=config.providers,
+        )
+    except (EntityRegistryError, OSError) as exc:
+        raise IngestError(f"Entity resolution failed: {exc}") from exc
+
+    analysis_result.entities = resolution_result.entities
+
+exec
+/bin/zsh -lc "sed -n '120,170p' tests/test_speaker_analytics.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+
+def test_speaker_stats_merge_existing_entity_aliases():
+    stats = compute_speaker_stats(
+        "\n".join(
+            [
+                "00:00:00 J. Oh",
+                "alpha beta",
+                "00:00:02 Jonathan Oh",
+                "gamma delta epsilon",
+            ]
+        ),
+        speaker_aliases={"j. oh": "Jonathan Oh"},
+    )
+
+    assert stats is not None
+    assert stats.speaker_count == 1
+    assert stats.total_words == 5
+    assert stats.per_speaker["Jonathan Oh"].turn_count == 2
+
+
+def test_missing_speaker_stats_sets_review_flag_without_llm_dependency():
+    result = InteractionAnalysisResult(summary="Free-form note.", review_status="clean")
+
+    _apply_speaker_analytics_state(result, None)
+
+    assert result.speaker_stats is None
+    assert result.review_status == "flagged"
+    assert result.review_flags == ["speaker_analytics_unavailable"]
+
+exec
+/bin/zsh -lc "sed -n '1160,1225p' tests/test_ingest_integration.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+            title="Interview Notes",
+        )
+
+        assert first.output_path.parent != second.output_path.parent
+        assert first.output_path.parent.name.startswith("2026-03-21_interview_")
+        assert second.output_path.parent.name.startswith("2026-03-21_interview_")
+        assert first.output_path.parent.name != second.output_path.parent.name
+
+    def test_ingest_whitespace_only_source_writes_degraded_note(self, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "whitespace_only.txt"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("whitespace_only.txt"), source)
+
+        config = FolioConfig(library_root=library)
+
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype="internal_sync",
+            event_date=date(2026, 3, 21),
+            client="ClientA",
+            engagement="DD Q1 2026",
+        )
+
+        assert result.degraded is True
+        fm = _parse_frontmatter(result.output_path)
+        assert fm["review_status"] == "flagged"
+        assert fm["review_flags"] == ["analysis_unavailable"]
+        assert fm["extraction_confidence"] is None
+        assert "Analysis Unavailable" in result.output_path.read_text()
+
+    @patch("folio.ingest.analyze_interaction_text")
+    def test_ingest_rejects_stale_registry_match_with_missing_markdown(self, mock_analyze, tmp_path):
+        library = _make_library(tmp_path)
+        source = tmp_path / "transcripts" / "expert_interview.md"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_fixture("expert_interview.md"), source)
+
+        config = FolioConfig(library_root=library)
+        mock_analyze.return_value = _analysis_result()
+
+        from folio.tracking.sources import compute_file_hash
+
+        source_hash = compute_file_hash(source)
+        save_registry(
+            library / "registry.json",
+            {
+                "_schema_version": 1,
+                "decks": {
+                    "test_interaction_20260310_call": _sample_interaction_registry_entry(
+                        markdown_path="Client/interactions/call/missing.md",
+                        deck_dir="Client/interactions/call",
+                        source_relative_path="../../../transcripts/expert_interview.md",
+                        source_hash=source_hash,
+                        subtype="expert_interview",
+                    ),
+                },
+            },
+        )
+
+        with pytest.raises(IngestError, match="missing or unreadable"):
+            ingest_source(
+                config,
+                source_path=source,
+                subtype="expert_interview",
+
+2026-05-12T22:14:13.468881Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:14:13.469174Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:14:13.471271Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:14:13.471304Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc 'rg -n -C 4 "speaker_analytics_unavailable|_should_flag_speaker_analytics_unavailable|ordinary|free-form|no-speaker|speaker stats" tests/test_speaker_analytics.py tests/test_ingest_integration.py folio/ingest.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+folio/ingest.py-220-        )
+folio/ingest.py-221-    _apply_speaker_analytics_state(
+folio/ingest.py-222-        analysis_result,
+folio/ingest.py-223-        speaker_stats,
+folio/ingest.py:224:        mark_unavailable=_should_flag_speaker_analytics_unavailable(
+folio/ingest.py-225-            normalized_source_body,
+folio/ingest.py-226-            source_extension=source_extension,
+folio/ingest.py-227-        ),
+folio/ingest.py-228-    )
+--
+folio/ingest.py-396-) -> None:
+folio/ingest.py-397-    analysis_result.speaker_stats = speaker_stats
+folio/ingest.py-398-    if speaker_stats is not None or not mark_unavailable:
+folio/ingest.py-399-        return
+folio/ingest.py:400:    if "speaker_analytics_unavailable" not in analysis_result.review_flags:
+folio/ingest.py:401:        analysis_result.review_flags.append("speaker_analytics_unavailable")
+folio/ingest.py-402-    analysis_result.review_status = "flagged"
+folio/ingest.py-403-
+folio/ingest.py-404-
+folio/ingest.py:405:def _should_flag_speaker_analytics_unavailable(
+folio/ingest.py-406-    normalized_source_body: str,
+folio/ingest.py-407-    *,
+folio/ingest.py-408-    source_extension: str,
+folio/ingest.py-409-) -> bool:
+--
+tests/test_speaker_analytics.py-143-    _apply_speaker_analytics_state(result, None)
+tests/test_speaker_analytics.py-144-
+tests/test_speaker_analytics.py-145-    assert result.speaker_stats is None
+tests/test_speaker_analytics.py-146-    assert result.review_status == "flagged"
+tests/test_speaker_analytics.py:147:    assert result.review_flags == ["speaker_analytics_unavailable"]
+
+2026-05-12T22:14:16.289028Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:14:16.289256Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:14:16.290963Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:14:16.291074Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '1,130p' tests/test_speaker_analytics.py" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '330,390p' folio/ingest.py" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '120,180p' folio/ingest.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Tests for deterministic speaker analytics."""
+
+from __future__ import annotations
+
+import yaml
+
+from folio.output.frontmatter import generate_interaction
+from folio.ingest import _apply_speaker_analytics_state
+from folio.pipeline.interaction_analysis import InteractionAnalysisResult
+from folio.pipeline.speaker_analytics import compute_speaker_stats, parse_turns
+from folio.tracking.registry import RegistryEntry
+from folio.tracking.versions import ChangeSet, VersionInfo
+
+
+def _version_info() -> VersionInfo:
+    return VersionInfo(
+        version=1,
+        timestamp="2026-04-24T12:00:00Z",
+        source_hash="abc123def456",
+        source_path="transcripts/interview.txt",
+        note=None,
+        slide_count=1,
+        changes=ChangeSet(added=[1]),
+    )
+
+
+def _parse_frontmatter(fm: str) -> dict:
+    return yaml.safe_load(fm.split("---", 2)[1].strip())
+
+
+def test_parse_turns_merges_adjacent_caption_cues_for_same_speaker():
+    text = "\n".join(
+        [
+            "[00:00:00.000 - 00:00:02.000] Alice Lee: First cue.",
+            "[00:00:02.000 - 00:00:04.000] Alice Lee: Second cue.",
+            "[00:00:04.000 - 00:00:07.000] Bob Chen: Other words here.",
+        ]
+    )
+
+    turns = parse_turns(text)
+
+    assert len(turns) == 2
+    assert turns[0].speaker == "Alice Lee"
+    assert turns[0].text == "First cue. Second cue."
+    assert turns[0].end_seconds == 4.0
+
+
+def test_compute_speaker_stats_from_timestamp_header_transcript():
+    text = "\n".join(
+        [
+            "00:00:00 Alice Lee",
+            "alpha beta gamma",
+            "00:00:03 Bob Chen",
+            "one two three four five",
+            "00:00:09 Alice Lee",
+            "delta epsilon",
+        ]
+    )
+
+    stats = compute_speaker_stats(text)
+
+    assert stats is not None
+    assert stats.total_words == 10
+    assert stats.total_duration_seconds == 10
+    assert stats.speaker_count == 2
+    assert stats.balance_score == 1.0
+    assert stats.dominant_speaker == "Alice Lee"
+    assert stats.per_speaker["Alice Lee"].word_count == 5
+    assert stats.per_speaker["Alice Lee"].turn_count == 2
+    assert stats.per_speaker["Bob Chen"].longest_turn_words == 5
+    assert stats.per_speaker["Bob Chen"].longest_turn_timestamp == "00:00:03"
+
+
+def test_speaker_stats_frontmatter_and_registry_summary():
+    stats = compute_speaker_stats(
+        "\n".join(
+            [
+                "00:00:00 Alice Lee",
+                "alpha beta gamma",
+                "00:00:03 Bob Chen",
+                "one two three four five",
+            ]
+        )
+    )
+    assert stats is not None
+    result = InteractionAnalysisResult(
+        summary="Structured interview.",
+        review_status="clean",
+        review_flags=[],
+        speaker_stats=stats,
+    )
+
+    fm = _parse_frontmatter(
+        generate_interaction(
+            interaction_id="client_interview_20260424_alice_bob",
+            title="Alice Bob Interview",
+            subtype="expert_interview",
+            event_date="2026-04-24",
+            version_info=_version_info(),
+            source_transcript="../../../transcripts/interview.txt",
+            source_hash="abc123def456",
+            analysis_result=result,
+        )
+    )
+
+    assert fm["speakers"]["alice_lee"]["word_count"] == 3
+    assert fm["total_words"] == 8
+    assert fm["speaker_summary"]["dominant_speaker"] == "Bob Chen"
+
+    entry = RegistryEntry(
+        id="client_interview_20260424_alice_bob",
+        title="Alice Bob Interview",
+        markdown_path="interactions/alice_bob.md",
+        deck_dir="interactions",
+        type="interaction",
+        speaker_summary=stats.to_summary(),
+    )
+    assert entry.to_dict()["speaker_summary"]["speaker_count"] == 2
+
+
+def test_speaker_stats_merge_existing_entity_aliases():
+    stats = compute_speaker_stats(
+        "\n".join(
+            [
+                "00:00:00 J. Oh",
+                "alpha beta",
+                "00:00:02 Jonathan Oh",
+                "gamma delta epsilon",
+            ]
+        ),
+
+ succeeded in 0ms:
+            raise FileNotFoundError(f"Source recording not found: {source_recording}")
+
+    try:
+        resolved_metadata = resolve_ingest_metadata(
+            config,
+            source_path=source_path,
+            client=client,
+            engagement=engagement,
+            subtype=subtype,
+            event_date=event_date,
+            participants=participants,
+            target=target,
+        )
+    except DefaultResolutionError as exc:
+        raise IngestError(str(exc)) from exc
+    client = resolved_metadata.client
+    engagement = resolved_metadata.engagement
+    subtype = resolved_metadata.subtype
+    event_date = resolved_metadata.event_date
+    participants = resolved_metadata.participants
+    target = resolved_metadata.target
+    if event_date > date.today():
+        raise IngestError(f"Event date cannot be in the future: {event_date.isoformat()}")
+
+    explicit_target_md, target_dir_override = _resolve_target(target)
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+    registry_data = _load_registry_data(library_root)
+
+    raw_source_text = source_path.read_text(encoding="utf-8-sig")
+    normalized_source_body = _normalize_ingest_source_text(
+        raw_source_text,
+        source_extension=source_extension,
+    )
+    speaker_stats = compute_speaker_stats(
+        normalized_source_body,
+        speaker_aliases=_load_speaker_aliases(entities_path),
+    )
+    source_hash = sources.compute_file_hash(source_path)
+
+    identity = _resolve_existing_identity(
+        library_root=library_root,
+        registry_data=registry_data,
+        source_path=source_path,
+        source_hash=source_hash,
+        subtype=subtype,
+        explicit_target_md=explicit_target_md,
+        target_dir_override=target_dir_override,
+    )
+
+    resolved_title = _resolve_title(
+        explicit_title=title,
+        normalized_source_body=normalized_source_body,
+        source_stem=source_path.stem,
+    )
+
+    interaction_id, output_dir, markdown_path = _resolve_output_identity(
+        library_root=library_root,
+        registry_data=registry_data,
+        source_path=source_path,
+        source_hash=source_hash,
+
+ succeeded in 0ms:
+                modified=version_info.timestamp,
+                client=preserved_metadata["client"],
+                engagement=preserved_metadata["engagement"],
+                authority=identity.existing_frontmatter.get("authority") if identity.existing_frontmatter else "captured",
+                curation_level=identity.existing_frontmatter.get("curation_level") if identity.existing_frontmatter else "L0",
+                staleness_status="current",
+                review_status=analysis_result.review_status,
+                review_flags=list(analysis_result.review_flags),
+                extraction_confidence=analysis_result.extraction_confidence,
+                grounding_summary=analysis_result.grounding_summary,
+                speaker_summary=(
+                    analysis_result.speaker_stats.to_summary()
+                    if analysis_result.speaker_stats
+                    else None
+                ),
+            ),
+        )
+
+    return IngestResult(
+        interaction_id=interaction_id,
+        output_path=markdown_path,
+        version=version_info.version,
+        review_status=analysis_result.review_status,
+        llm_status=analysis_result.llm_status,
+    )
+
+
+def _normalize_ingest_source_text(raw_source_text: str, *, source_extension: str) -> str:
+    if source_extension in TRANSCRIPT_FORMAT_EXTENSIONS:
+        return normalize_transcript_text(raw_source_text, source_extension)
+    return normalize_source_text(
+        raw_source_text,
+        strip_markdown_frontmatter=source_extension == ".md",
+    )
+
+
+def _load_speaker_aliases(entities_path: Path) -> dict[str, str]:
+    """Build a lowercased speaker alias map from confirmed person entities."""
+
+    if not entities_path.exists():
+        return {}
+    try:
+        entity_registry = EntityRegistry(entities_path)
+        entity_registry.load()
+    except EntityRegistryError as exc:
+        logger.warning("Speaker analytics skipped entity aliases: %s", exc)
+        return {}
+
+    aliases: dict[str, str] = {}
+    for _entity_type, _key, entry in entity_registry.iter_entities(entity_type="person"):
+        canonical = entry.canonical_name.strip()
+        if not canonical or entry.needs_confirmation:
+            continue
+        aliases[canonical.lower()] = canonical
+        for alias in entry.aliases or []:
+            cleaned = alias.strip()
+            if cleaned:
+                aliases[cleaned.lower()] = canonical
+    return aliases
+
+
+
+exec
+/bin/zsh -lc "sed -n '1,130p' tests/test_ingest_integration.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Integration tests for `folio ingest` orchestration."""
+
+from __future__ import annotations
+
+import json
+import shutil
+from datetime import date
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+import yaml
+
+from folio.config import FolioConfig
+from folio.entity_import import import_csv
+from folio.ingest import IngestAmbiguityError, IngestError, IngestSubtypeMismatchError, ingest_source
+from folio.llm.runtime import EndpointNotAllowedError
+from folio.pipeline.interaction_analysis import InteractionAnalysisResult, InteractionFinding, InteractionQuote
+from folio.tracking.entities import EntityRegistry
+from folio.tracking.registry import save_registry
+
+
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "ingest"
+ROOT_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+def _fixture(name: str) -> Path:
+    return FIXTURE_DIR / name
+
+
+def _root_fixture(name: str) -> Path:
+    return ROOT_FIXTURE_DIR / name
+
+
+def _make_library(tmp_path: Path) -> Path:
+    library = tmp_path / "library"
+    library.mkdir(parents=True, exist_ok=True)
+    return library
+
+
+def _sample_interaction_registry_entry(**overrides) -> dict:
+    defaults = {
+        "id": "test_interaction_20260310_call",
+        "title": "Test Call",
+        "markdown_path": "TestClient/interactions/call/call.md",
+        "deck_dir": "TestClient/interactions/call",
+        "source_relative_path": "../../../sources/call.txt",
+        "source_hash": "abc123def456",
+        "source_type": None,
+        "version": 1,
+        "converted": "2026-03-10T02:15:00Z",
+        "modified": "2026-03-10T02:15:00Z",
+        "client": "TestClient",
+        "authority": "captured",
+        "curation_level": "L0",
+        "staleness_status": "current",
+        "type": "interaction",
+        "subtype": "expert_interview",
+    }
+    defaults.update(overrides)
+    return defaults
+
+
+def _analysis_result(
+    *,
+    llm_status: str = "executed",
+    review_status: str = "clean",
+    tags: list[str] | None = None,
+    entities: dict[str, list[str]] | None = None,
+    provider_name: str | None = "anthropic",
+    model_name: str | None = "claude-sonnet-4-20250514",
+    fallback_used: bool = False,
+) -> InteractionAnalysisResult:
+    return InteractionAnalysisResult(
+        summary="The team described a successful operational change and a follow-up dependency.",
+        tags=tags or ["expert-interview", "operations"],
+        entities=entities or {
+            "people": ["Jane Smith", "Johnny Oh"],
+            "departments": ["Engineering"],
+            "systems": ["ServiceNow"],
+            "processes": ["Incident Triage"],
+        },
+        claims=[
+            InteractionFinding(
+                statement="The team reduced downtime materially.",
+                quote="We reduced downtime from 12 hours to 2 hours in one quarter.",
+                element_type="data_point",
+                confidence="high",
+                speaker="Jane Smith",
+                validated=True,
+            )
+        ],
+        data_points=[],
+        decisions=[
+            InteractionFinding(
+                statement="The team agreed to add a reporting checkpoint.",
+                quote="Add a reporting checkpoint.",
+                element_type="decision",
+                confidence="medium",
+                speaker="Johnny Oh",
+                validated=True,
+            )
+        ],
+        open_questions=[],
+        notable_quotes=[
+            InteractionQuote(
+                quote="We reduced downtime from 12 hours to 2 hours in one quarter.",
+                element_type="statement",
+                confidence="high",
+                speaker="Jane Smith",
+                validated=True,
+            )
+        ],
+        warnings=[],
+        review_status=review_status,
+        review_flags=[] if review_status == "clean" else ["analysis_unavailable"],
+        extraction_confidence=0.87 if llm_status == "executed" else None,
+        grounding_summary={
+            "total_claims": 2,
+            "high_confidence": 1,
+            "medium_confidence": 1,
+            "low_confidence": 0,
+            "validated": 2,
+            "unvalidated": 0,
+        },
+        pass_strategy="single_pass",
+        llm_status=llm_status,
+        provider_name=provider_name,
+        model_name=model_name,
+        fallback_used=fallback_used,
+
+2026-05-12T22:14:21.195435Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:14:21.195743Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:14:21.197953Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:14:21.197986Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The guard is in `folio/ingest.py`: transcript format extensions always expect analytics, and non-transcript text only expects them when it looks timestamped or speaker-labeled. I’m going to run focused tests with pytest cache disabled, plus a tiny direct probe of the clean/free-form path.
+exec
+/bin/zsh -lc 'git status --short' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+ M folio/cli.py
+ M folio/config.py
+ M folio/converter.py
+ M folio/ingest.py
+ M folio/output/frontmatter.py
+ M folio/output/interaction_markdown.py
+ M folio/pipeline/interaction_analysis.py
+ M folio/pipeline/text.py
+ M folio/tracking/registry.py
+ M tests/test_cli_ingest.py
+ M tests/test_frontmatter.py
+?? docs/validation/strict_p3_rerun_2026_05_12/
+?? folio/correspondence.py
+?? folio/defaults.py
+?? folio/pipeline/speaker_analytics.py
+?? folio/watch.py
+?? frameworks/llm-dev-strict-p3
+?? frameworks/manifests/folio-config-defaults-v1-2-0.yaml
+?? frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml
+?? frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml
+?? frameworks/manifests/folio-github-closeout-v1-0-0.yaml
+?? frameworks/manifests/folio-ingest-signals-v1-1-0.yaml
+?? frameworks/manifests/folio-watch-v1-4-0.yaml
+?? tests/test_cli_correspondence.py
+?? tests/test_config_defaults.py
+?? tests/test_correspondence_ingest.py
+?? tests/test_docx_conversion.py
+?? tests/test_interaction_actions.py
+?? tests/test_speaker_analytics.py
+?? tests/test_watch.py
+
+exec
+/bin/zsh -lc 'PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m pytest tests/test_speaker_analytics.py tests/test_ingest_integration.py -q -p no:cacheprovider' in /Users/jonathanoh/workspaces/folio.love
+2026-05-12T22:14:32.617158Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:14:32.618982Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:14:32.636254Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:14:32.636377Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+ succeeded in 696ms:
+...............................                                          [100%]
+31 passed in 0.19s
+
+exec
+/bin/zsh -lc "PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python - <<'PY'
+from folio.ingest import _apply_speaker_analytics_state, _should_flag_speaker_analytics_unavailable
+from folio.pipeline.interaction_analysis import InteractionAnalysisResult
+
+cases = [
+    (\"clean_freeform_md\", \"These are ordinary cleaned interview notes without turns.\", \".md\", \"clean\", []),
+    (\"degraded_freeform_txt\", \"Provider failed after ordinary notes.\", \".txt\", \"flagged\", [\"analysis_unavailable\"]),
+    (\"timestamp_txt\", \"00:00 Alice\\nHello there.\", \".txt\", \"clean\", []),
+    (\"transcript_vtt\", \"WEBVTT\\n\\nhello without speaker\", \".vtt\", \"clean\", []),
+]
+for name, text, ext, status, flags in cases:
+    should = _should_flag_speaker_analytics_unavailable(text, source_extension=ext)
+    result = InteractionAnalysisResult(summary=name, review_status=status, review_flags=list(flags))
+    _apply_speaker_analytics_state(result, None, mark_unavailable=should)
+    print(f\"{name}: should={should} status={result.review_status} flags={result.review_flags}\")
+PY" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+clean_freeform_md: should=False status=clean flags=[]
+degraded_freeform_txt: should=False status=flagged flags=['analysis_unavailable']
+timestamp_txt: should=True status=flagged flags=['speaker_analytics_unavailable']
+transcript_vtt: should=True status=flagged flags=['speaker_analytics_unavailable']
+
+2026-05-12T22:14:43.367014Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:14:43.367236Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:14:43.368928Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:14:43.368957Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The focused pytest run passed: 31 tests in the two requested test files. The direct probe also showed clean/free-form `.md` stays `clean` with no flags, degraded free-form `.txt` keeps only `analysis_unavailable`, and transcript-like inputs receive `speaker_analytics_unavailable`.
+exec
+/bin/zsh -lc "test -e docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md && sed -n '1,220p' docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md || true" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'ls -ld docs/validation/strict_p3_rerun_2026_05_12/review-board' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+drwxr-xr-x@ 93 jonathanoh  staff  2976 May 12 15:09 docs/validation/strict_p3_rerun_2026_05_12/review-board
+
+2026-05-12T22:14:48.586815Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:14:48.587115Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:14:48.589392Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:14:48.589428Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’m writing the verifier artifact now. It will record the focused test run, the direct probe output, the code/doc evidence, and an approval verdict.
+apply patch
+patch: completed
+/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..dacc181697e26aba5c566c0368882316c74cf83b
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+@@ -0,0 +1,52 @@
++---
++deliverable_id: folio-ingest-signals-v1-1-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex Verifier R2: folio-ingest-signals-v1-1-0
++
++## Verdict
++approve
++
++## Scope
++This verifier pass reviewed the post-D.5 compatibility fix for `speaker_analytics_unavailable`. The intended behavior is that transcript-like sources still receive the unavailable-speaker-analytics flag when deterministic speaker analytics cannot be computed, while ordinary clean/free-form notes preserve their preexisting clean or degraded review state.
++
++Reviewed files:
++- `folio/ingest.py`
++- `tests/test_speaker_analytics.py`
++- `tests/test_ingest_integration.py`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_D.3_canonical_verdict.md`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_d4_fix_summary.md`
++
++## Evidence
++Ontos activation was attempted first. `ontos map` exited nonzero on preexisting duplicate validation document IDs and metadata warnings, and `python3 -m ontos map` was unavailable. I then loaded the existing `Ontos_Context_Map.md` Tier 1 and the two requested D.3/D.4 documents. `scripts/llm-dev doctor` passed.
++
++Focused direct run:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m pytest tests/test_speaker_analytics.py tests/test_ingest_integration.py -q -p no:cacheprovider
++31 passed in 0.19s
++```
++
++Additional direct behavior probe:
++
++```text
++clean_freeform_md: should=False status=clean flags=[]
++degraded_freeform_txt: should=False status=flagged flags=['analysis_unavailable']
++timestamp_txt: should=True status=flagged flags=['speaker_analytics_unavailable']
++transcript_vtt: should=True status=flagged flags=['speaker_analytics_unavailable']
++```
++
++The orchestrator also reported the full validation command `./.venv/bin/python -m pytest tests -q` as `2100 passed, 6 skipped`; I did not rerun the full suite in this verifier pass.
++
++## Findings
++`folio/ingest.py` now computes `mark_unavailable` through `_should_flag_speaker_analytics_unavailable(...)` before applying speaker analytics state. Transcript format extensions remain strict, so missing analytics on VTT/SRT-like inputs are flagged. For other supported source text, the guard only returns true when the normalized body looks transcript-like, using timestamp or `Speaker N:` line detection.
++
++`_apply_speaker_analytics_state(...)` preserves existing status and flags whenever `speaker_stats` exists or `mark_unavailable` is false. This is the critical compatibility behavior: a normal free-form clean note remains clean, and a separately degraded free-form note keeps its existing degradation reason without accumulating `speaker_analytics_unavailable`.
++
++The D.3 canonical verdict and D.4 fix summary match the implemented behavior, and the focused tests continue to pass. No request-changes items were found for the compatibility fix under review.
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..dacc181697e26aba5c566c0368882316c74cf83b
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+@@ -0,0 +1,52 @@
++---
++deliverable_id: folio-ingest-signals-v1-1-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex Verifier R2: folio-ingest-signals-v1-1-0
++
++## Verdict
++approve
++
++## Scope
++This verifier pass reviewed the post-D.5 compatibility fix for `speaker_analytics_unavailable`. The intended behavior is that transcript-like sources still receive the unavailable-speaker-analytics flag when deterministic speaker analytics cannot be computed, while ordinary clean/free-form notes preserve their preexisting clean or degraded review state.
++
++Reviewed files:
++- `folio/ingest.py`
++- `tests/test_speaker_analytics.py`
++- `tests/test_ingest_integration.py`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_D.3_canonical_verdict.md`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_d4_fix_summary.md`
++
++## Evidence
++Ontos activation was attempted first. `ontos map` exited nonzero on preexisting duplicate validation document IDs and metadata warnings, and `python3 -m ontos map` was unavailable. I then loaded the existing `Ontos_Context_Map.md` Tier 1 and the two requested D.3/D.4 documents. `scripts/llm-dev doctor` passed.
++
++Focused direct run:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m pytest tests/test_speaker_analytics.py tests/test_ingest_integration.py -q -p no:cacheprovider
++31 passed in 0.19s
++```
++
++Additional direct behavior probe:
++
++```text
++clean_freeform_md: should=False status=clean flags=[]
++degraded_freeform_txt: should=False status=flagged flags=['analysis_unavailable']
++timestamp_txt: should=True status=flagged flags=['speaker_analytics_unavailable']
++transcript_vtt: should=True status=flagged flags=['speaker_analytics_unavailable']
++```
++
++The orchestrator also reported the full validation command `./.venv/bin/python -m pytest tests -q` as `2100 passed, 6 skipped`; I did not rerun the full suite in this verifier pass.
++
++## Findings
++`folio/ingest.py` now computes `mark_unavailable` through `_should_flag_speaker_analytics_unavailable(...)` before applying speaker analytics state. Transcript format extensions remain strict, so missing analytics on VTT/SRT-like inputs are flagged. For other supported source text, the guard only returns true when the normalized body looks transcript-like, using timestamp or `Speaker N:` line detection.
++
++`_apply_speaker_analytics_state(...)` preserves existing status and flags whenever `speaker_stats` exists or `mark_unavailable` is false. This is the critical compatibility behavior: a normal free-form clean note remains clean, and a separately degraded free-form note keeps its existing degradation reason without accumulating `speaker_analytics_unavailable`.
++
++The D.3 canonical verdict and D.4 fix summary match the implemented behavior, and the focused tests continue to pass. No request-changes items were found for the compatibility fix under review.
+
+2026-05-12T22:15:07.374622Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:15:07.376265Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:15:07.387053Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:15:07.387210Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The artifact has been added at the requested path. I’m doing a quick contract check for length, verdict heading, and the single file target.
+exec
+/bin/zsh -lc 'wc -m docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    2920 docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+
+exec
+/bin/zsh -lc 'rg -n "''^# |''^## Verdict$|''^approve$|''^deliverable_id:|''^phase:|''^role:|''^family:|''^status:|''^  - direct-run$" docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+2:deliverable_id: folio-ingest-signals-v1-1-0
+3:phase: D.5
+4:role: verifier
+5:family: codex
+6:status: completed
+8:  - direct-run
+11:# D.5 Codex Verifier R2: folio-ingest-signals-v1-1-0
+13:## Verdict
+14:approve
+
+exec
+/bin/zsh -lc 'git status --short -- docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+?? docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..dacc181697e26aba5c566c0368882316c74cf83b
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+@@ -0,0 +1,52 @@
++---
++deliverable_id: folio-ingest-signals-v1-1-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex Verifier R2: folio-ingest-signals-v1-1-0
++
++## Verdict
++approve
++
++## Scope
++This verifier pass reviewed the post-D.5 compatibility fix for `speaker_analytics_unavailable`. The intended behavior is that transcript-like sources still receive the unavailable-speaker-analytics flag when deterministic speaker analytics cannot be computed, while ordinary clean/free-form notes preserve their preexisting clean or degraded review state.
++
++Reviewed files:
++- `folio/ingest.py`
++- `tests/test_speaker_analytics.py`
++- `tests/test_ingest_integration.py`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_D.3_canonical_verdict.md`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_d4_fix_summary.md`
++
++## Evidence
++Ontos activation was attempted first. `ontos map` exited nonzero on preexisting duplicate validation document IDs and metadata warnings, and `python3 -m ontos map` was unavailable. I then loaded the existing `Ontos_Context_Map.md` Tier 1 and the two requested D.3/D.4 documents. `scripts/llm-dev doctor` passed.
++
++Focused direct run:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m pytest tests/test_speaker_analytics.py tests/test_ingest_integration.py -q -p no:cacheprovider
++31 passed in 0.19s
++```
++
++Additional direct behavior probe:
++
++```text
++clean_freeform_md: should=False status=clean flags=[]
++degraded_freeform_txt: should=False status=flagged flags=['analysis_unavailable']
++timestamp_txt: should=True status=flagged flags=['speaker_analytics_unavailable']
++transcript_vtt: should=True status=flagged flags=['speaker_analytics_unavailable']
++```
++
++The orchestrator also reported the full validation command `./.venv/bin/python -m pytest tests -q` as `2100 passed, 6 skipped`; I did not rerun the full suite in this verifier pass.
++
++## Findings
++`folio/ingest.py` now computes `mark_unavailable` through `_should_flag_speaker_analytics_unavailable(...)` before applying speaker analytics state. Transcript format extensions remain strict, so missing analytics on VTT/SRT-like inputs are flagged. For other supported source text, the guard only returns true when the normalized body looks transcript-like, using timestamp or `Speaker N:` line detection.
++
++`_apply_speaker_analytics_state(...)` preserves existing status and flags whenever `speaker_stats` exists or `mark_unavailable` is false. This is the critical compatibility behavior: a normal free-form clean note remains clean, and a separately degraded free-form note keeps its existing degradation reason without accumulating `speaker_analytics_unavailable`.
++
++The D.3 canonical verdict and D.4 fix summary match the implemented behavior, and the focused tests continue to pass. No request-changes items were found for the compatibility fix under review.
+
+2026-05-12T22:15:13.649271Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:15:13.649465Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:15:13.650910Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:15:13.650934Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Created the verifier artifact at [folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md).
+
+Verdict: `approve`.
+
+Verification run:
+`PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m pytest tests/test_speaker_analytics.py tests/test_ingest_integration.py -q -p no:cacheprovider`
+Result: `31 passed in 0.19s`.
+
+I also ran a direct probe confirming free-form clean/degraded inputs preserve their existing statuses, while transcript-like inputs receive `speaker_analytics_unavailable`. Only the requested artifact target was edited.
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..dacc181697e26aba5c566c0368882316c74cf83b
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md
+@@ -0,0 +1,52 @@
++---
++deliverable_id: folio-ingest-signals-v1-1-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex Verifier R2: folio-ingest-signals-v1-1-0
++
++## Verdict
++approve
++
++## Scope
++This verifier pass reviewed the post-D.5 compatibility fix for `speaker_analytics_unavailable`. The intended behavior is that transcript-like sources still receive the unavailable-speaker-analytics flag when deterministic speaker analytics cannot be computed, while ordinary clean/free-form notes preserve their preexisting clean or degraded review state.
++
++Reviewed files:
++- `folio/ingest.py`
++- `tests/test_speaker_analytics.py`
++- `tests/test_ingest_integration.py`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_D.3_canonical_verdict.md`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-ingest-signals-v1-1-0_d4_fix_summary.md`
++
++## Evidence
++Ontos activation was attempted first. `ontos map` exited nonzero on preexisting duplicate validation document IDs and metadata warnings, and `python3 -m ontos map` was unavailable. I then loaded the existing `Ontos_Context_Map.md` Tier 1 and the two requested D.3/D.4 documents. `scripts/llm-dev doctor` passed.
++
++Focused direct run:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m pytest tests/test_speaker_analytics.py tests/test_ingest_integration.py -q -p no:cacheprovider
++31 passed in 0.19s
++```
++
++Additional direct behavior probe:
++
++```text
++clean_freeform_md: should=False status=clean flags=[]
++degraded_freeform_txt: should=False status=flagged flags=['analysis_unavailable']
++timestamp_txt: should=True status=flagged flags=['speaker_analytics_unavailable']
++transcript_vtt: should=True status=flagged flags=['speaker_analytics_unavailable']
++```
++
++The orchestrator also reported the full validation command `./.venv/bin/python -m pytest tests -q` as `2100 passed, 6 skipped`; I did not rerun the full suite in this verifier pass.
++
++## Findings
++`folio/ingest.py` now computes `mark_unavailable` through `_should_flag_speaker_analytics_unavailable(...)` before applying speaker analytics state. Transcript format extensions remain strict, so missing analytics on VTT/SRT-like inputs are flagged. For other supported source text, the guard only returns true when the normalized body looks transcript-like, using timestamp or `Speaker N:` line detection.
++
++`_apply_speaker_analytics_state(...)` preserves existing status and flags whenever `speaker_stats` exists or `mark_unavailable` is false. This is the critical compatibility behavior: a normal free-form clean note remains clean, and a separately degraded free-form note keeps its existing degradation reason without accumulating `speaker_analytics_unavailable`.
++
++The D.3 canonical verdict and D.4 fix summary match the implemented behavior, and the focused tests continue to pass. No request-changes items were found for the compatibility fix under review.
+
+2026-05-12T22:15:19.262027Z ERROR codex_core::session: failed to record rollout items: thread 019e1e40-b1b9-7c00-a4c1-222a29dff6c4 not found
+tokens used
+72,841
+2026-05-12T22:15:19.281987Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 2617: No such process (os error 3)
+2026-05-12T22:15:19.344966Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 2619: No such process (os error 3)

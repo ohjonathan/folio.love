@@ -1,0 +1,11 @@
+[scanning]
+skip_patterns = [
+  "_template.md",
+  "archive/*",
+  ".git/*",
+  "node_modules/*",
+  "__pycache__/*",
+  "docs/validation/strict_p3_rerun_2026_05_12/review-board/*",
+  "docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/*",
+  "docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/*",
+]

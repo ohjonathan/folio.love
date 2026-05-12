@@ -1,0 +1,13 @@
+Review artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer.md`.
+
+**Verdict: approve**
+
+All 6 focused tests pass (direct-run evidence). The implementation covers every acceptance criterion from Phase A:
+
+- **`folio ingest-email`** — dedicated command at `cli.py:561` with all required flags including `--as-new-entry`
+- **`folio ingest --type email_thread`** — routing at `cli.py:507` via the shared `ingest` command
+- **Headers/metadata/attachments** — `parse_eml()` in `correspondence.py:216` extracts subject, sender, To/CC, date, body, `message_ids` (from Message-ID + In-Reply-To + References), and attachment metadata with SHA-256
+- **Frontmatter** — all required correspondence fields emitted including `type`, `subtype`, `source_type`, `message_ids`, `participants`, `external_thread`
+- **Message-ID overlap continuation** — `_find_message_id_overlap()` at `correspondence.py:363` performs set-intersection against registry, with merge and versioning on match
+- **`--as-new-entry` override** — bypasses overlap check, produces a new correspondence entry at version 1
+- **Registry** — `RegistryEntry.message_ids` round-trips through JSON; upsert carries `type="correspondence"` enabling future overlap lookups

@@ -1,0 +1,8 @@
+The review artifact has been written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md`.
+
+**Verdict: approve.** The spec and manifest are adequate to drive Phase C without stale evidence reuse. Two non-blocking findings are noted:
+
+1. **G-blocker-1 path mismatch** (`folio-github-closeout-v1-0-0.yaml:159-164`) — the gate command checks `_D.2_canonical_verdict.md` (uppercase, period) but `allowed_paths` uses `_d3_canonical_verdict.md` (lowercase). Will cause a false `test -f` failure at D.6 if not corrected.
+2. **Spec frontmatter collapsed to one line** (`folio-github-closeout-v1-0-0_phase_a_spec.md:1`) — YAML is unparseable by tooling, though the body content is readable and correct.
+
+Neither finding blocks Phase C implementation. Scope isolation is structurally enforced via the `lifecycle_receipt_inventory_path`, explicit exclusion of prior artifacts in the triage, and the `scope.allowed_paths` constraints in the manifest.

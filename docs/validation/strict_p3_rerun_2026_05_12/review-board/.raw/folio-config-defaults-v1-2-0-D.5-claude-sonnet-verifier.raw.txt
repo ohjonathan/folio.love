@@ -1,0 +1,11 @@
+Artifact written. Here's what the verification found:
+
+**Verdict: approve**
+
+All 21 focused tests pass (`exit 0`). The three D.2 defects closed in D.3/D.4 are confirmed against the implementation:
+
+1. **Provider/defaults shadowing** (`config.py:521`) — `defaults` is parsed before `providers`, both passed independently to `cls()`; they cannot overwrite each other.
+2. **Client/engagement derivation** (`defaults.py:57–71, 130–147`) — Both `resolve_ingest_metadata` and `resolve_convert_metadata` call `_infer_convert_source_root()` before falling back to static defaults; source-root derivation chain is complete.
+3. **`.eml` route CLI precedence** (`cli.py:507–528`) — `event_date` and `participants` are forwarded verbatim to `ingest_email()`, which applies them with explicit `participants is not None` guards so CLI values take precedence over email headers.
+
+All manifest cardinality anchors are present in the test files. Artifact at `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.5-claude-sonnet-verifier.md`.

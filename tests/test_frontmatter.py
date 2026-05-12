@@ -69,8 +69,8 @@ class TestSourceTypeDetection:
     def test_ppt_returns_deck(self):
         assert _detect_source_type(Path("old_slides.ppt")) == "deck"
 
-    def test_unknown_extension_returns_pdf(self):
-        assert _detect_source_type(Path("document.docx")) == "pdf"
+    def test_docx_returns_document(self):
+        assert _detect_source_type(Path("document.docx")) == "document"
 
     def test_source_type_in_frontmatter_deck(self):
         fm = _parse_frontmatter(_generate_simple(source_type="deck"))

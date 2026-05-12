@@ -1,0 +1,2712 @@
+OpenAI Codex v0.125.0 (research preview)
+--------
+workdir: /Users/jonathanoh/workspaces/folio.love
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/jonathanoh/.codex/memories]
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019e1e2f-5964-7bc3-9b14-8dc3d6b2e614
+--------
+user
+You are the codex external verifier for llm-dev strict-P3 Phase D.5, deliverable folio-document-format-coverage-v1-1-1.
+
+Do not run Ontos. Do not run a broad test suite. Verify D.3/D.4 against the implementation and focused tests. Slice summary: DOCX document-oriented conversion.
+
+Use these files:
+- docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md
+- docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md
+- frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml
+- folio/converter.py
+- folio/pipeline/text.py
+- tests/test_docx_conversion.py
+
+Focused validation command reported by orchestrator:
+- ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q
+
+Artifact target: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+
+Artifact contract:
+- Write the markdown artifact to the artifact target above.
+- Do not edit any repository file except the artifact target.
+- The artifact must be at least 700 characters.
+- It must begin with this exact YAML frontmatter:
+---
+deliverable_id: folio-document-format-coverage-v1-1-1
+phase: D.5
+role: verifier
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+- Include a top-level heading and a section named exactly "## Verdict" containing approve, request changes, reject, or concur.
+- If verification finds a remaining release issue, use "request changes" and cite file paths. Otherwise use "approve".
+
+2026-05-12T21:54:40.473660Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:54:40.475506Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:54:40.485359Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:54:40.485497Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T21:54:41.930765Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:54:41.930983Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:54:41.932547Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:54:41.932573Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T21:54:42.706998Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:54:42.707197Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:54:42.708534Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:54:42.708558Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’ll verify only the named slice and artifacts, then write the single D.5 review-board artifact. I’ll keep the pytest run focused and avoid Ontos.
+exec
+/bin/zsh -lc "sed -n '1,240p' docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '1,260p' frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-document-format-coverage-v1-1-1-d3-canonical-verdict
+deliverable_id: folio-document-format-coverage-v1-1-1
+phase: D.3
+role: meta-consolidator
+family: codex
+status: completed
+---
+
+# Phase D.3 Canonical Verdict: folio-document-format-coverage-v1-1-1
+
+## Verdict
+approve
+
+## Consolidation
+D.2 reviews from Claude Sonnet, Codex, and Gemini approved the document-oriented DOCX conversion path. The implementation uses document text extraction, avoids slide-image extraction for `.docx`, emits a single evidence note with `source_type: document`, and preserves `slide_count: 1` compatibility.
+
+## Evidence
+- `folio/converter.py` routes document extensions into `_convert_document`.
+- `tests/test_docx_conversion.py` covers DOCX conversion metadata and slide count compatibility.
+- Focused tests passed as part of the 108-test rerun.
+
+ succeeded in 0ms:
+manifest_version: 1.6.0
+id: folio-document-format-coverage-v1-1-1
+slug: folio-document-format-coverage
+summary: Route DOCX conversion through a document-oriented MarkItDown path with a single document evidence note and compatibility metadata.
+pre_a:
+  entry: triage
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+lifecycle_mode: framework lifecycle
+owners:
+- Jonathan Oh (ohjonathan)
+scope:
+  allowed_paths:
+  - AGENTS.md
+  - Ontos_Context_Map.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_B.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d6_final_approval.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_phase_a_spec.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_phase_e_retro.md
+  - docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_chat_log.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_prompt.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_report.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_session_log.md
+  - folio/converter.py
+  - frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml
+  - tests/test_docx_conversion.py
+  allowed_path_patterns:
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-*.yaml
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-document-format-coverage-v1-1-1-*.txt
+  composition_targets: []
+  forbidden_paths:
+  - .env
+  - tests/validation/.env
+  - frameworks/llm-dev-v1/
+  forbidden_symbols:
+  - API_KEY=
+  - OPENAI_API_KEY=
+  - ANTHROPIC_API_KEY=
+  - GEMINI_API_KEY=
+  cardinality_assertions:
+  - name: folio-document-format-coverage-v1-1-1 focused contract anchors exist
+    command: rg -n "source_type.*document|docx|slide_count" folio/converter.py tests/test_docx_conversion.py
+    expect: exit-0
+artifacts:
+  spec: docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_phase_a_spec.md
+  family_verdict: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-<phase>-<family>-<role>.md
+  canonical_verdict: docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_<phase>_canonical_verdict.md
+  fix_summary: docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md
+  verification: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-<family>-verifier.md
+  final_approval: docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d6_final_approval.md
+  retro: docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_phase_e_retro.md
+  triage_report: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+model_assignments:
+- phase: A
+  assignments:
+    claude-opus: spec-author
+- phase: B.1
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: B.3
+  assignments:
+    codex: meta-consolidator
+- phase: C
+  assignments:
+    claude-opus: implementation-author
+- phase: D.2
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: D.3
+  assignments:
+    codex: meta-consolidator
+- phase: D.4
+  assignments:
+    claude-opus: fix-author
+- phase: D.5
+  assignments:
+    codex: verifier
+    gemini: verifier
+    claude-sonnet: verifier
+- phase: D.6
+  assignments:
+    claude-opus: final-approval
+- phase: E
+  assignments:
+    claude-opus: retro
+cli_capability_matrix:
+  claude-opus:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sonnet:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  gemini:
+    shell: false
+    git: false
+    test_runner: false
+    doc_index: true
+    evidence_cap: static-inspection
+    fallback_models:
+    - gemini-3.1-pro-preview
+    - gemini-2.5-pro
+    - gemini-2.5-flash
+    writes_files_non_interactively: false
+smoke_checks:
+- phase: C
+  checks:
+  - name: folio-document-format-coverage-v1-1-1 focused tests pass
+    command: ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q
+    expect: exit-0
+- phase: D.6
+  checks:
+  - name: folio-document-format-coverage-v1-1-1 strict lifecycle verifies
+    command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml
+    expect: exit-0
+regression_guards: []
+lifecycle_receipt_inventory_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-lifecycle-receipts.yaml
+gate_prerequisites:
+- id: G-test-1
+  category: test
+  description: Focused slice tests pass.
+  verification:
+    command: ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q
+    expect: exit-0
+- id: G-scope-1
+  category: scope
+  description: Slice validation artifacts are rooted in the strict-P3 rerun directory.
+  verification:
+    command: test -d docs/validation/strict_p3_rerun_2026_05_12/review-board
+    expect: exit-0
+- id: G-cardinality-1
+  category: cardinality
+  description: Slice contract anchors exist in code/tests.
+  verification:
+    command: rg -n "source_type.*document|docx|slide_count" folio/converter.py tests/test_docx_conversion.py
+    expect: exit-0
+- id: G-verdict-1
+  category: verdict-presence
+  description: D.5 verifier artifacts from three families exist.
+  verification:
+    command: ls docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-*-verifier.md 2>/dev/null | wc -l
+    expect: eq:3
+- id: G-blocker-1
+  category: blocker-closure
+  description: No unresolved blocker marker remains in D.3 canonical verdict.
+  verification:
+    command: test -f docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md && ! rg -n "UNRESOLVED|BLOCKER|REQUEST CHANGES" docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md
+    expect: exit-0
+- id: G-branch-1
+  category: branch
+  description: Strict rerun branch is active.
+  verification:
+    command: git rev-parse --abbrev-ref HEAD | rg "^codex/github-issues-closeout-strict-p3-rerun$"
+    expect: exit-0
+tracker:
+  path: docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_tracker.md
+  columns:
+  - phase
+  - owner
+  - status
+  - artifact
+  - evidence
+  - timestamp
+branch_map:
+  default: codex/github-issues-closeout-strict-p3-rerun
+references:
+- path: https://github.com/ohjonathan/folio.love/issues/56
+  version: '2026-05-12'
+  relevance: Source scope for folio-document-format-coverage-v1-1-1
+sibling_deliverable_ids: []
+review_rounds: []
+self_review_caveats: []
+consolidation_mode: external
+reviewer_family_substitutes: []
+
+exec
+/bin/zsh -lc "sed -n '1,260p' docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-document-format-coverage-v1-1-1-d4-fix-summary
+deliverable_id: folio-document-format-coverage-v1-1-1
+phase: D.4
+role: fix-author
+family: claude-opus
+status: completed
+---
+
+# Phase D.4 Fix Summary: folio-document-format-coverage-v1-1-1
+
+Implemented `.docx` as a document conversion path with full text evidence, document source type metadata, and compatibility slide count. Added focused DOCX conversion coverage.
+
+exec
+/bin/zsh -lc 'git status --short -- folio/converter.py folio/pipeline/text.py tests/test_docx_conversion.py docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+ M folio/converter.py
+ M folio/pipeline/text.py
+?? tests/test_docx_conversion.py
+
+2026-05-12T21:55:06.214065Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:55:06.214343Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:55:06.216433Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:55:06.216469Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The worktree already has the D.4 implementation/test changes in the target files. I’m reading those diffs and the concrete code paths now, without touching them.
+exec
+/bin/zsh -lc "sed -n '1,280p' folio/converter.py" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '1,260p' tests/test_docx_conversion.py" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '1,260p' folio/pipeline/text.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Tests for document-oriented DOCX conversion."""
+
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import yaml
+
+from folio.config import FolioConfig
+from folio.converter import FolioConverter, _detect_source_type
+from folio.pipeline.text import SlideText
+
+
+def _parse_frontmatter(path) -> dict:
+    content = path.read_text()
+    return yaml.safe_load(content.split("---", 2)[1].strip())
+
+
+def test_detect_source_type_docx_is_document():
+    assert _detect_source_type(SimpleNamespace(suffix=".docx")) == "document"
+
+
+def test_docx_conversion_uses_document_path_and_skips_slide_images(tmp_path):
+    library = tmp_path / "library"
+    source = tmp_path / "sow.docx"
+    source.write_bytes(b"placeholder docx bytes")
+    converter = FolioConverter(FolioConfig(library_root=library))
+
+    with (
+        patch("folio.converter.normalize.to_pdf", side_effect=AssertionError("normalize should not run")),
+        patch("folio.converter.images.extract_with_metadata", side_effect=AssertionError("images should not run")),
+        patch(
+            "folio.converter.text.extract_document_text",
+            return_value=SlideText(
+                slide_num=1,
+                full_text="Statement of work\n\nFull document body for the engagement.",
+                elements=[{"type": "title", "text": "Statement of work"}],
+            ),
+        ),
+    ):
+        result = converter.convert(
+            source_path=source,
+            client="Acme",
+            engagement="Build",
+            passes=1,
+        )
+
+    assert result.slide_count == 1
+    assert result.renderer_used == "document-text"
+    assert result.cache_stats is None
+    assert result.output_path.exists()
+
+    content = result.output_path.read_text()
+    assert "## Document Text" in content
+    assert "Full document body for the engagement." in content
+    assert "![Slide 1]" not in content
+
+    fm = _parse_frontmatter(result.output_path)
+    assert fm["source_type"] == "document"
+    assert fm["slide_count"] == 1
+    assert fm["grounding_summary"]["total_claims"] == 1
+    assert fm["_llm_metadata"]["convert"]["status"] == "skipped"
+
+    registry = json.loads((library / "registry.json").read_text())
+    entry = registry["decks"][result.deck_id]
+    assert entry["source_type"] == "document"
+    assert entry["version"] == 1
+
+ succeeded in 0ms:
+"""Main conversion orchestrator. Ties the pipeline stages together."""
+
+import logging
+import re
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+import yaml as yaml_lib
+
+from .config import FolioConfig, LLMProfile
+from .defaults import resolve_convert_metadata
+from .llm.types import FallbackProfileSpec
+from .llm.types import ProviderRuntimeSettings
+from .naming import humanize_token, sanitize_token
+from .pipeline import normalize, images, text, analysis, inspect
+from .tracking import sources, versions
+from .tracking import registry
+from .output import frontmatter, markdown
+
+logger = logging.getLogger(__name__)
+
+# Shared constant for PPTX/PPT extensions — used by cli.py too.
+PPTX_EXTENSIONS = frozenset({".pptx", ".ppt"})
+DOCUMENT_EXTENSIONS = frozenset({".docx"})
+
+# P1b: Slide types that skip diagram extraction when framework is absent.
+_SKIP_DIAGRAM_TYPES = frozenset({"data", "appendix", "title"})
+
+
+def _get_provider(name: str):
+    """Resolve a provider adapter lazily to avoid widening module coupling."""
+    from .llm import get_provider
+    return get_provider(name)
+
+
+def _truncate_warning_text(message: str, max_chars: int = 200) -> str:
+    """Clamp long warning text to keep CLI logs readable."""
+    text = message.strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
+
+
+@dataclass
+class ConversionResult:
+    """Result of a single file conversion."""
+    output_path: Path
+    slide_count: int
+    version: int
+    changes: versions.ChangeSet
+    deck_id: str
+    renderer_used: str = "unknown"
+    cache_stats: Optional["analysis.CacheStats"] = None
+
+
+class FolioConverter:
+    """Orchestrates the full conversion pipeline."""
+
+    def __init__(self, config: Optional[FolioConfig] = None):
+        self.config = config or FolioConfig.load()
+
+    def _run_profile_preflight(self, profiles: list[LLMProfile]) -> None:
+        """Warn once per selected profile if the configured model looks unusable."""
+        seen: set[str] = set()
+        for profile in profiles:
+            if profile.name in seen:
+                continue
+            seen.add(profile.name)
+
+            try:
+                provider = _get_provider(profile.provider)
+                client = provider.create_client(
+                    api_key_env=profile.api_key_env,
+                    base_url_env=profile.base_url_env,
+                )
+            except (ImportError, ValueError):
+                # Existing pass-level warnings remain the source of truth for
+                # missing SDKs and credentials. Preflight is for model usability.
+                continue
+            except Exception as exc:
+                logger.warning(
+                    "LLM profile '%s' (%s/%s) may be unavailable: failed to "
+                    "initialize client for preflight: %s",
+                    profile.name,
+                    profile.provider,
+                    profile.model,
+                    _truncate_warning_text(str(exc) or type(exc).__name__),
+                )
+                continue
+
+            try:
+                settings = self.config.providers.get(
+                    profile.provider,
+                    ProviderRuntimeSettings(),
+                )
+                warning_reason = provider.preflight(client, profile.model, settings)
+            except Exception as exc:
+                warning_reason = _truncate_warning_text(
+                    str(exc) or type(exc).__name__
+                )
+
+            if warning_reason:
+                logger.warning(
+                    "LLM profile '%s' (%s/%s) may be unavailable: %s",
+                    profile.name,
+                    profile.provider,
+                    profile.model,
+                    warning_reason,
+                )
+
+    def convert(
+        self,
+        source_path: Path,
+        note: Optional[str] = None,
+        client: Optional[str] = None,
+        engagement: Optional[str] = None,
+        target: Optional[Path] = None,
+        passes: Optional[int] = None,
+        no_cache: bool = False,
+        subtype: str = "research",
+        industry: Optional[list[str]] = None,
+        extra_tags: Optional[list[str]] = None,
+        llm_profile: Optional[str] = None,
+        preserved_enrich_fields: Optional[dict] = None,
+    ) -> ConversionResult:
+        """Convert a single PPTX/PDF/DOCX to Folio markdown.
+
+        Args:
+            source_path: Path to the source file.
+            note: Optional version note.
+            client: Client name (for frontmatter and ID).
+            engagement: Engagement identifier (for frontmatter and ID).
+            target: Override target directory in library.
+            subtype: Evidence subtype (default "research").
+            industry: Industry tags (optional).
+            extra_tags: Manual tags to merge with auto-generated.
+
+        Returns:
+            ConversionResult with output path and metadata.
+
+        Raises:
+            Various pipeline errors if conversion fails.
+        """
+        source_path = Path(source_path).resolve()
+        if not source_path.exists():
+            raise FileNotFoundError(f"Source file not found: {source_path}")
+        resolved_metadata = resolve_convert_metadata(
+            self.config,
+            source_path=source_path,
+            client=client,
+            engagement=engagement,
+            target=target,
+        )
+        client = resolved_metadata.client
+        engagement = resolved_metadata.engagement
+        target = resolved_metadata.target
+        if source_path.suffix.lower() in DOCUMENT_EXTENSIONS:
+            return self._convert_document(
+                source_path=source_path,
+                note=note,
+                client=client,
+                engagement=engagement,
+                target=target,
+                subtype=subtype,
+                industry=industry,
+                extra_tags=extra_tags,
+                llm_profile=llm_profile,
+                preserved_enrich_fields=preserved_enrich_fields,
+            )
+
+        deck_name = _sanitize_name(source_path.stem)
+        logger.info("Converting: %s", source_path.name)
+
+        # Infer client/engagement from source-root mapping if not explicit
+        inferred_client, inferred_engagement = self._infer_from_source_root(
+            source_path, client, engagement
+        )
+        effective_client = client if client is not None else inferred_client
+        effective_engagement = engagement if engagement is not None else inferred_engagement
+
+        # Determine output location
+        deck_dir = self._resolve_target(
+            source_path, deck_name, effective_client, effective_engagement, target
+        )
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        markdown_path = deck_dir / f"{deck_name}.md"
+
+        # Read existing frontmatter early for ID stability on reconversion (B1)
+        existing_fm = _read_existing_frontmatter(markdown_path)
+
+        # Use existing ID on reconversion to prevent registry drift (B1)
+        if isinstance(existing_fm, dict) and existing_fm.get("id"):
+            deck_id = existing_fm["id"]
+        else:
+            deck_id = _generate_id(
+                client=effective_client,
+                engagement=effective_engagement,
+                deck_name=deck_name,
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+
+            # Stage 1: Normalize to PDF
+            logger.info("  Normalizing to PDF...")
+            norm_result = normalize.to_pdf(
+                source_path, tmpdir,
+                timeout=self.config.conversion.libreoffice_timeout,
+                renderer=self.config.conversion.pptx_renderer,
+            )
+            pdf_path = norm_result.pdf_path
+            renderer_used = norm_result.renderer_used
+            logger.info("  Renderer used: %s", renderer_used)
+
+            # Stage 1½: Deterministic page inspection
+            logger.info("  Inspecting pages...")
+            page_profiles = inspect.inspect_pages(pdf_path)
+
+            # Stage 2: Extract images
+            logger.info("  Extracting images...")
+            try:
+                image_results = images.extract_with_metadata(
+                    pdf_path, deck_dir,
+                    dpi=self.config.conversion.image_dpi,
+                    page_profiles=page_profiles,
+                    max_image_pixels=self.config.conversion.max_image_pixels,
+                )
+            finally:
+                # Clean up intermediate PowerPoint PDF written into deck_dir.
+                # Runs whether image extraction succeeds or fails.
+                # Only when: source is PPTX/PPT and the PDF landed in deck_dir.
+                # NOTE: Since PR #12, PowerPoint writes to a staging dir and
+                # normalize.to_pdf() moves the PDF to tmpdir, so this condition
+                # is normally false for PPTX.  Kept as a safety net for callers
+                # that override pptx_output_dir to deck_dir.
+                if (
+                    source_path.suffix.lower() in PPTX_EXTENSIONS
+                    and pdf_path.resolve().parent == deck_dir.resolve()
+                    and pdf_path.exists()
+                ):
+                    pdf_path.unlink()
+                    logger.debug(
+                        "Cleaned up intermediate PowerPoint PDF: %s", pdf_path.name
+                    )
+            image_paths = [r.path for r in image_results]
+            slide_count = len(image_results)
+
+            # P3: Large-document warning (informational only)
+            if slide_count > self.config.conversion.large_document_warn_pages:
+                logger.warning(
+                    "Large document (%d pages). Consider --passes 1 for text-heavy documents.",
+                    slide_count,
+                )
+
+            # Blank detection: combine inspection + histogram.
+            # Structurally blank (no text, no vectors, no images):
+            structural_blanks = {
+                p for p, prof in page_profiles.items()
+                if prof.classification == "blank"
+            }
+            # image_blank pages need histogram confirmation (BLK-2 fix):
+            # A raster-only page is only blank if the histogram also says so.
+            histogram_blanks = {r.slide_num for r in image_results if r.is_blank}
+            image_blanks_confirmed = {
+                p for p, prof in page_profiles.items()
+                if prof.classification == "image_blank" and p in histogram_blanks
+            }
+            blank_slides = structural_blanks | image_blanks_confirmed
+            if blank_slides:
+                logger.info("Blank slides: %s", sorted(blank_slides))
+
+            # PR 3: Derive diagram-like slide sets from classifications
+            _DIAGRAM_CLASSIFICATIONS = {"diagram", "mixed", "unsupported_diagram"}
+            diagram_like_slides = {
+                p for p, prof in page_profiles.items()
+                if prof.classification in _DIAGRAM_CLASSIFICATIONS
+            }
+
+ succeeded in 0ms:
+"""Stage 3: Text extraction. Extract verbatim text per slide using MarkItDown."""
+
+import logging
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+class TextExtractionError(Exception):
+    """Raised when text extraction fails."""
+
+
+_EXTRACTION_VERSION = "0.1.0"  # Track B: wired into analysis cache invalidation
+
+
+@dataclass(frozen=True)
+class SlideText:
+    """Structured text extracted from a single slide."""
+    slide_num: int
+    full_text: str
+    elements: list[dict] = field(default_factory=list)
+    is_empty: bool = False
+    # Each element: {"type": "title"|"body"|"note"|"table", "text": "..."}
+
+
+@dataclass
+class ReconciliationResult:
+    """Result of reconciling text count with authoritative image count."""
+    slide_texts: dict[int, SlideText]
+    was_reconciled: bool
+    action: str  # "none" | "gap_filled" | "padded" | "truncated"
+    gaps_filled: int  # count of empty entries inserted for missing keys within range
+    original_text_count: int
+    image_count: int
+    alignment_confidence: float  # min(text, image) / max(text, image); 1.0 = exact
+
+
+def _detect_elements(text: str) -> list[dict]:
+    """Detect element types from extracted slide text.
+
+    Heuristic:
+    - First H1/H2 markdown line → title
+    - Everything else → body
+    - Speaker notes (prefixed with "Notes:" or similar) → note
+    """
+    elements = []
+    lines = text.split("\n")
+    title_found = False
+    body_lines = []
+    note_lines = []
+    in_notes = False
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if in_notes:
+                note_lines.append("")
+            else:
+                body_lines.append("")
+            continue
+
+        # Detect speaker notes section
+        if re.match(r"^(?:Notes?|Speaker\s+Notes?)\s*:", stripped, re.IGNORECASE):
+            in_notes = True
+            remainder = re.sub(r"^(?:Notes?|Speaker\s+Notes?)\s*:\s*", "", stripped, flags=re.IGNORECASE)
+            if remainder:
+                note_lines.append(remainder)
+            continue
+
+        if in_notes:
+            note_lines.append(stripped)
+            continue
+
+        # Detect title (first H1/H2 line)
+        if not title_found and re.match(r"^#{1,2}\s+", stripped):
+            title_text = re.sub(r"^#{1,2}\s+", "", stripped)
+            elements.append({"type": "title", "text": title_text})
+            title_found = True
+            continue
+
+        # Detect title from bold-only first line
+        if not title_found and re.match(r"^\*\*[^*]+\*\*$", stripped):
+            title_text = stripped.strip("*")
+            elements.append({"type": "title", "text": title_text})
+            title_found = True
+            continue
+
+        body_lines.append(stripped)
+
+    # Consolidate body
+    body_text = "\n".join(body_lines).strip()
+    if body_text:
+        elements.append({"type": "body", "text": body_text})
+
+    # Consolidate notes
+    note_text = "\n".join(note_lines).strip()
+    if note_text:
+        elements.append({"type": "note", "text": note_text})
+
+    # Detect tables: lines with consistent pipe (|) or tab delimiters
+    if body_text and _looks_like_table(body_text):
+        for elem in elements:
+            if elem["type"] == "body":
+                elem["type"] = "table"
+                break
+
+    return elements
+
+
+def _looks_like_table(text: str) -> bool:
+    """Heuristic: text looks like a table if 3+ lines have consistent pipe delimiters."""
+    if not text:
+        return False
+    lines = [l for l in text.split("\n") if l.strip()]
+    if not lines:
+        return False  # Guard: prevents ZeroDivisionError on pipe_lines ratio check
+    pipe_lines = [l for l in lines if l.count("|") >= 2]
+    return len(pipe_lines) >= 3 and len(pipe_lines) / len(lines) > 0.5
+
+
+def extract(source_path: Path) -> dict[int, str]:
+    """Extract text from PPTX/PDF with per-slide boundaries.
+
+    Backward-compatible wrapper that returns plain strings.
+
+    Args:
+        source_path: Path to the original source file (PPTX preferred).
+
+    Returns:
+        Dict mapping slide number (1-indexed) to plain text string.
+        Empty dict if extraction fails completely (logged as warning).
+    """
+    return {num: st.full_text for num, st in extract_structured(source_path).items()}
+
+
+def extract_structured(source_path: Path) -> dict[int, "SlideText"]:
+    """Extract text from PPTX/PDF with per-slide boundaries.
+
+    Args:
+        source_path: Path to the original source file (PPTX preferred).
+
+    Returns:
+        Dict mapping slide number (1-indexed) to SlideText.
+        Empty dict if extraction fails completely (logged as warning).
+    """
+    source_path = Path(source_path)
+    suffix = source_path.suffix.lower()
+
+    try:
+        if suffix in (".pptx", ".ppt"):
+            return _extract_pptx(source_path)
+        elif suffix == ".pdf":
+            return _extract_pdf(source_path)
+        else:
+            logger.warning("Text extraction not supported for %s", suffix)
+            return {}
+    except TextExtractionError as e:
+        logger.warning("Text extraction failed (L2 fallback): %s", e)
+        return {}
+
+
+def extract_document_text(source_path: Path) -> SlideText:
+    """Extract full-document text from a document source using MarkItDown."""
+
+    source_path = Path(source_path)
+    try:
+        from markitdown import MarkItDown
+    except ImportError:
+        raise TextExtractionError(
+            "markitdown not installed. Run: pip install markitdown"
+        )
+
+    try:
+        md = MarkItDown()
+        result = md.convert(str(source_path))
+        raw_text = (result.text_content or "").strip()
+    except Exception as e:
+        raise TextExtractionError(
+            f"MarkItDown document extraction failed for {source_path.name}: {e}"
+        ) from e
+
+    if not raw_text:
+        raise TextExtractionError(f"No document text extracted from {source_path.name}")
+    return SlideText(
+        slide_num=1,
+        full_text=raw_text,
+        elements=_detect_elements(raw_text),
+        is_empty=False,
+    )
+
+
+def _extract_pptx(source_path: Path) -> dict[int, "SlideText"]:
+    """Extract text from PPTX using MarkItDown.
+
+    Raises TextExtractionError on unexpected failures (L1). The caller
+    (extract_structured) catches these at L2 and falls back to {}.
+    """
+    try:
+        from markitdown import MarkItDown
+    except ImportError:
+        raise TextExtractionError(
+            "markitdown not installed. Run: pip install markitdown"
+        )
+
+    try:
+        md = MarkItDown()
+        result = md.convert(str(source_path))
+        raw_text = result.text_content
+
+        raw_slides = _parse_slide_boundaries(raw_text)
+
+        if not raw_slides:
+            # Fallback: treat entire text as slide 1
+            logger.warning(
+                "No slide boundaries detected in %s. Treating as single block.",
+                source_path.name,
+            )
+            if raw_text.strip():
+                text = raw_text.strip()
+                return {1: SlideText(
+                    slide_num=1,
+                    full_text=text,
+                    elements=_detect_elements(text),
+                )}
+            return {}
+
+        slides = {}
+        for slide_num, text in raw_slides.items():
+            slides[slide_num] = SlideText(
+                slide_num=slide_num,
+                full_text=text,
+                elements=_detect_elements(text),
+            )
+
+        logger.info("Extracted text for %d slides from %s", len(slides), source_path.name)
+        return slides
+    except TextExtractionError:
+        raise
+    except Exception as e:
+        raise TextExtractionError(
+            f"MarkItDown extraction failed for {source_path.name}: {e}"
+        ) from e
+
+
+def _extract_pdf(pdf_path: Path) -> dict[int, "SlideText"]:
+    """Extract per-page structured text from PDF using pdfplumber.
+
+    Returns dict of SlideText keyed by 1-based page number. Empty pages are
+    omitted from the result (legitimate gaps, not errors).
+
+    Raises TextExtractionError on unexpected failures (L1). The caller
+    (extract_structured) catches these at L2 and falls back to {}.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        raise TextExtractionError(
+            "pdfplumber is required for PDF text extraction. "
+
+exec
+/bin/zsh -lc 'git diff -- folio/converter.py folio/pipeline/text.py tests/test_docx_conversion.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+diff --git a/folio/converter.py b/folio/converter.py
+index 8c3b09b..640c510 100644
+--- a/folio/converter.py
++++ b/folio/converter.py
+@@ -11,6 +11,7 @@ from typing import Any, Optional
+ import yaml as yaml_lib
+ 
+ from .config import FolioConfig, LLMProfile
++from .defaults import resolve_convert_metadata
+ from .llm.types import FallbackProfileSpec
+ from .llm.types import ProviderRuntimeSettings
+ from .naming import humanize_token, sanitize_token
+@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
+ 
+ # Shared constant for PPTX/PPT extensions — used by cli.py too.
+ PPTX_EXTENSIONS = frozenset({".pptx", ".ppt"})
++DOCUMENT_EXTENSIONS = frozenset({".docx"})
+ 
+ # P1b: Slide types that skip diagram extraction when framework is absent.
+ _SKIP_DIAGRAM_TYPES = frozenset({"data", "appendix", "title"})
+@@ -124,7 +126,7 @@ class FolioConverter:
+         llm_profile: Optional[str] = None,
+         preserved_enrich_fields: Optional[dict] = None,
+     ) -> ConversionResult:
+-        """Convert a single PPTX/PDF to Folio markdown.
++        """Convert a single PPTX/PDF/DOCX to Folio markdown.
+ 
+         Args:
+             source_path: Path to the source file.
+@@ -145,6 +147,29 @@ class FolioConverter:
+         source_path = Path(source_path).resolve()
+         if not source_path.exists():
+             raise FileNotFoundError(f"Source file not found: {source_path}")
++        resolved_metadata = resolve_convert_metadata(
++            self.config,
++            source_path=source_path,
++            client=client,
++            engagement=engagement,
++            target=target,
++        )
++        client = resolved_metadata.client
++        engagement = resolved_metadata.engagement
++        target = resolved_metadata.target
++        if source_path.suffix.lower() in DOCUMENT_EXTENSIONS:
++            return self._convert_document(
++                source_path=source_path,
++                note=note,
++                client=client,
++                engagement=engagement,
++                target=target,
++                subtype=subtype,
++                industry=industry,
++                extra_tags=extra_tags,
++                llm_profile=llm_profile,
++                preserved_enrich_fields=preserved_enrich_fields,
++            )
+ 
+         deck_name = _sanitize_name(source_path.stem)
+         logger.info("Converting: %s", source_path.name)
+@@ -725,6 +750,182 @@ class FolioConverter:
+             cache_stats=combined_stats,
+         )
+ 
++    def _convert_document(
++        self,
++        *,
++        source_path: Path,
++        note: Optional[str],
++        client: Optional[str],
++        engagement: Optional[str],
++        target: Optional[Path],
++        subtype: str,
++        industry: Optional[list[str]],
++        extra_tags: Optional[list[str]],
++        llm_profile: Optional[str],
++        preserved_enrich_fields: Optional[dict],
++    ) -> ConversionResult:
++        """Convert a DOCX as a document-oriented single evidence note."""
++
++        deck_name = _sanitize_name(source_path.stem)
++        logger.info("Converting document: %s", source_path.name)
++
++        inferred_client, inferred_engagement = self._infer_from_source_root(
++            source_path, client, engagement
++        )
++        effective_client = client if client is not None else inferred_client
++        effective_engagement = engagement if engagement is not None else inferred_engagement
++
++        deck_dir = self._resolve_target(
++            source_path, deck_name, effective_client, effective_engagement, target
++        )
++        deck_dir.mkdir(parents=True, exist_ok=True)
++        markdown_path = deck_dir / f"{deck_name}.md"
++        existing_fm = _read_existing_frontmatter(markdown_path)
++
++        if isinstance(existing_fm, dict) and existing_fm.get("id"):
++            deck_id = existing_fm["id"]
++        else:
++            deck_id = _generate_id(
++                client=effective_client,
++                engagement=effective_engagement,
++                deck_name=deck_name,
++            )
++
++        document_text = text.extract_document_text(source_path)
++        slide_texts = {1: document_text}
++        source_info = sources.compute_source_info(source_path, markdown_path)
++        version_info = versions.compute_version(
++            deck_dir=deck_dir,
++            source_hash=source_info.file_hash,
++            source_path=source_info.relative_path,
++            slide_count=1,
++            new_texts=slide_texts,
++            note=note,
++        )
++        history_path = deck_dir / "version_history.json"
++        version_history = versions.load_version_history(history_path)
++
++        analysis_item = analysis.SlideAnalysis(
++            slide_type="document",
++            framework="none",
++            visual_description="Document-oriented DOCX text extraction.",
++            key_data="",
++            main_insight="Document converted as one full-text evidence note.",
++            evidence=[
++                {
++                    "claim": "Document text extracted with MarkItDown.",
++                    "quote": _evidence_excerpt(document_text.full_text),
++                    "element_type": "body",
++                    "confidence": "high",
++                    "validated": True,
++                }
++            ],
++        )
++        analyses = {1: analysis_item}
++        profile = self.config.llm.resolve_profile(llm_profile, task="convert")
++        llm_meta = {
++            "convert": {
++                "requested_profile": llm_profile or profile.name,
++                "profile": profile.name,
++                "provider": None,
++                "model": None,
++                "fallback_used": False,
++                "mixed_providers": False,
++                "status": "skipped",
++                "reason": "document_text_extraction",
++                "pass1": {"status": "skipped", "reason": "document_text_extraction"},
++                "pass2": {"status": "skipped", "reason": "document_text_extraction"},
++            }
++        }
++        fm = frontmatter.generate(
++            title=_title_from_name(deck_name),
++            deck_id=deck_id,
++            source_relative_path=source_info.relative_path,
++            source_hash=source_info.file_hash,
++            source_type="document",
++            version_info=version_info,
++            analyses=analyses,
++            subtype=subtype,
++            client=effective_client,
++            engagement=effective_engagement,
++            industry=industry,
++            extra_tags=extra_tags,
++            existing_frontmatter=existing_fm,
++            llm_metadata=llm_meta,
++            review_status="clean",
++            review_flags=[],
++            extraction_confidence=1.0,
++            preserved_enrich_fields=preserved_enrich_fields,
++        )
++        md_content = _assemble_document_markdown(
++            title=_title_from_name(deck_name),
++            frontmatter=fm,
++            source_display_path=source_info.relative_path,
++            version_info=version_info,
++            document_text=document_text.full_text,
++            version_history=version_history,
++        )
++        tmp_md = markdown_path.with_suffix(".md.tmp")
++        tmp_md.write_text(md_content)
++        tmp_md.rename(markdown_path)
++
++        library_root = self.config.library_root.resolve()
++        try:
++            md_rel = str(markdown_path.relative_to(library_root)).replace("\\", "/")
++            deck_dir_rel = str(deck_dir.relative_to(library_root)).replace("\\", "/")
++        except ValueError:
++            logger.debug(
++                "Output %s is outside library_root %s — skipping registry upsert",
++                deck_dir,
++                library_root,
++            )
++        else:
++            reg_authority = "captured"
++            reg_curation = "L0"
++            if isinstance(existing_fm, dict):
++                prev_auth = existing_fm.get("authority")
++                if isinstance(prev_auth, str) and prev_auth:
++                    reg_authority = prev_auth
++                prev_curation = existing_fm.get("curation_level")
++                if isinstance(prev_curation, str) and prev_curation:
++                    reg_curation = prev_curation
++            now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
++            registry.upsert_entry(
++                library_root / "registry.json",
++                registry.RegistryEntry(
++                    id=deck_id,
++                    title=_title_from_name(deck_name),
++                    markdown_path=md_rel,
++                    deck_dir=deck_dir_rel,
++                    source_relative_path=source_info.relative_path,
++                    source_hash=source_info.file_hash,
++                    source_type="document",
++                    version=version_info.version,
++                    converted=now_str,
++                    modified=now_str,
++                    client=effective_client,
++                    engagement=effective_engagement,
++                    authority=reg_authority,
++                    curation_level=reg_curation,
++                    staleness_status="current",
++                    review_status="clean",
++                    review_flags=[],
++                    extraction_confidence=1.0,
++                    grounding_summary=frontmatter._compute_grounding_summary(analyses),
++                ),
++            )
++
++        logger.info("  ✓ Converted: %s (v%d, document)", markdown_path.name, version_info.version)
++        return ConversionResult(
++            output_path=markdown_path,
++            slide_count=1,
++            version=version_info.version,
++            changes=version_info.changes,
++            deck_id=deck_id,
++            renderer_used="document-text",
++            cache_stats=None,
++        )
++
+     def _resolve_target(
+         self,
+         source_path: Path,
+@@ -811,11 +1012,64 @@ def _detect_source_type(source_path: Path) -> str:
+     ext = source_path.suffix.lower()
+     if ext in (".pptx", ".ppt"):
+         return "deck"
++    if ext in DOCUMENT_EXTENSIONS:
++        return "document"
+     if ext != ".pdf":
+         logger.warning("Unrecognized extension '%s', defaulting source_type to 'pdf'", ext)
+     return "pdf"
+ 
+ 
++def _assemble_document_markdown(
++    *,
++    title: str,
++    frontmatter: str,
++    source_display_path: str,
++    version_info: versions.VersionInfo,
++    document_text: str,
++    version_history: list[dict],
++) -> str:
++    lines = [
++        frontmatter,
++        "",
++        f"# {title}",
++        "",
++        f"**Source:** `{source_display_path}`  ",
++        f"**Version:** {version_info.version} | **Converted:** {version_info.timestamp[:10]}  ",
++        "**Status:** ✓ Current",
++        "",
++    ]
++    if version_info.version > 1 and version_info.changes.has_changes:
++        lines.append(markdown._format_changes(version_info))
++        lines.append("")
++    lines.extend(
++        [
++            "---",
++            "",
++            "## Evidence Note",
++            "",
++            "- Document text extracted with MarkItDown.",
++            "- source_type: document",
++            "- slide_count: 1 (compatibility unit)",
++            "",
++            "## Document Text",
++            "",
++        ]
++    )
++    for line in document_text.splitlines():
++        lines.append(line)
++    lines.append("")
++    if version_history:
++        lines.append(markdown._format_version_history(version_history))
++    return "\n".join(lines).rstrip() + "\n"
++
++
++def _evidence_excerpt(value: str, max_chars: int = 500) -> str:
++    text_value = re.sub(r"\s+", " ", value).strip()
++    if len(text_value) <= max_chars:
++        return text_value
++    return text_value[: max_chars - 3].rstrip() + "..."
++
++
+ def _sanitize_name(name: str) -> str:
+     """Sanitize a name for use in file paths and IDs."""
+     return sanitize_token(name)
+diff --git a/folio/pipeline/text.py b/folio/pipeline/text.py
+index 51656c3..e472492 100644
+--- a/folio/pipeline/text.py
++++ b/folio/pipeline/text.py
+@@ -161,6 +161,36 @@ def extract_structured(source_path: Path) -> dict[int, "SlideText"]:
+         return {}
+ 
+ 
++def extract_document_text(source_path: Path) -> SlideText:
++    """Extract full-document text from a document source using MarkItDown."""
++
++    source_path = Path(source_path)
++    try:
++        from markitdown import MarkItDown
++    except ImportError:
++        raise TextExtractionError(
++            "markitdown not installed. Run: pip install markitdown"
++        )
++
++    try:
++        md = MarkItDown()
++        result = md.convert(str(source_path))
++        raw_text = (result.text_content or "").strip()
++    except Exception as e:
++        raise TextExtractionError(
++            f"MarkItDown document extraction failed for {source_path.name}: {e}"
++        ) from e
++
++    if not raw_text:
++        raise TextExtractionError(f"No document text extracted from {source_path.name}")
++    return SlideText(
++        slide_num=1,
++        full_text=raw_text,
++        elements=_detect_elements(raw_text),
++        is_empty=False,
++    )
++
++
+ def _extract_pptx(source_path: Path) -> dict[int, "SlideText"]:
+     """Extract text from PPTX using MarkItDown.
+ 
+
+2026-05-12T21:55:18.039536Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:55:18.039792Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:55:18.041703Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:55:18.041734Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "nl -ba folio/converter.py | sed -n '120,185p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   120	        target: Optional[Path] = None,
+   121	        passes: Optional[int] = None,
+   122	        no_cache: bool = False,
+   123	        subtype: str = "research",
+   124	        industry: Optional[list[str]] = None,
+   125	        extra_tags: Optional[list[str]] = None,
+   126	        llm_profile: Optional[str] = None,
+   127	        preserved_enrich_fields: Optional[dict] = None,
+   128	    ) -> ConversionResult:
+   129	        """Convert a single PPTX/PDF/DOCX to Folio markdown.
+   130	
+   131	        Args:
+   132	            source_path: Path to the source file.
+   133	            note: Optional version note.
+   134	            client: Client name (for frontmatter and ID).
+   135	            engagement: Engagement identifier (for frontmatter and ID).
+   136	            target: Override target directory in library.
+   137	            subtype: Evidence subtype (default "research").
+   138	            industry: Industry tags (optional).
+   139	            extra_tags: Manual tags to merge with auto-generated.
+   140	
+   141	        Returns:
+   142	            ConversionResult with output path and metadata.
+   143	
+   144	        Raises:
+   145	            Various pipeline errors if conversion fails.
+   146	        """
+   147	        source_path = Path(source_path).resolve()
+   148	        if not source_path.exists():
+   149	            raise FileNotFoundError(f"Source file not found: {source_path}")
+   150	        resolved_metadata = resolve_convert_metadata(
+   151	            self.config,
+   152	            source_path=source_path,
+   153	            client=client,
+   154	            engagement=engagement,
+   155	            target=target,
+   156	        )
+   157	        client = resolved_metadata.client
+   158	        engagement = resolved_metadata.engagement
+   159	        target = resolved_metadata.target
+   160	        if source_path.suffix.lower() in DOCUMENT_EXTENSIONS:
+   161	            return self._convert_document(
+   162	                source_path=source_path,
+   163	                note=note,
+   164	                client=client,
+   165	                engagement=engagement,
+   166	                target=target,
+   167	                subtype=subtype,
+   168	                industry=industry,
+   169	                extra_tags=extra_tags,
+   170	                llm_profile=llm_profile,
+   171	                preserved_enrich_fields=preserved_enrich_fields,
+   172	            )
+   173	
+   174	        deck_name = _sanitize_name(source_path.stem)
+   175	        logger.info("Converting: %s", source_path.name)
+   176	
+   177	        # Infer client/engagement from source-root mapping if not explicit
+   178	        inferred_client, inferred_engagement = self._infer_from_source_root(
+   179	            source_path, client, engagement
+   180	        )
+   181	        effective_client = client if client is not None else inferred_client
+   182	        effective_engagement = engagement if engagement is not None else inferred_engagement
+   183	
+   184	        # Determine output location
+   185	        deck_dir = self._resolve_target(
+
+exec
+/bin/zsh -lc "nl -ba folio/converter.py | sed -n '745,1085p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   745	            slide_count=slide_count,
+   746	            version=version_info.version,
+   747	            changes=version_info.changes,
+   748	            deck_id=deck_id,
+   749	            renderer_used=renderer_used,
+   750	            cache_stats=combined_stats,
+   751	        )
+   752	
+   753	    def _convert_document(
+   754	        self,
+   755	        *,
+   756	        source_path: Path,
+   757	        note: Optional[str],
+   758	        client: Optional[str],
+   759	        engagement: Optional[str],
+   760	        target: Optional[Path],
+   761	        subtype: str,
+   762	        industry: Optional[list[str]],
+   763	        extra_tags: Optional[list[str]],
+   764	        llm_profile: Optional[str],
+   765	        preserved_enrich_fields: Optional[dict],
+   766	    ) -> ConversionResult:
+   767	        """Convert a DOCX as a document-oriented single evidence note."""
+   768	
+   769	        deck_name = _sanitize_name(source_path.stem)
+   770	        logger.info("Converting document: %s", source_path.name)
+   771	
+   772	        inferred_client, inferred_engagement = self._infer_from_source_root(
+   773	            source_path, client, engagement
+   774	        )
+   775	        effective_client = client if client is not None else inferred_client
+   776	        effective_engagement = engagement if engagement is not None else inferred_engagement
+   777	
+   778	        deck_dir = self._resolve_target(
+   779	            source_path, deck_name, effective_client, effective_engagement, target
+   780	        )
+   781	        deck_dir.mkdir(parents=True, exist_ok=True)
+   782	        markdown_path = deck_dir / f"{deck_name}.md"
+   783	        existing_fm = _read_existing_frontmatter(markdown_path)
+   784	
+   785	        if isinstance(existing_fm, dict) and existing_fm.get("id"):
+   786	            deck_id = existing_fm["id"]
+   787	        else:
+   788	            deck_id = _generate_id(
+   789	                client=effective_client,
+   790	                engagement=effective_engagement,
+   791	                deck_name=deck_name,
+   792	            )
+   793	
+   794	        document_text = text.extract_document_text(source_path)
+   795	        slide_texts = {1: document_text}
+   796	        source_info = sources.compute_source_info(source_path, markdown_path)
+   797	        version_info = versions.compute_version(
+   798	            deck_dir=deck_dir,
+   799	            source_hash=source_info.file_hash,
+   800	            source_path=source_info.relative_path,
+   801	            slide_count=1,
+   802	            new_texts=slide_texts,
+   803	            note=note,
+   804	        )
+   805	        history_path = deck_dir / "version_history.json"
+   806	        version_history = versions.load_version_history(history_path)
+   807	
+   808	        analysis_item = analysis.SlideAnalysis(
+   809	            slide_type="document",
+   810	            framework="none",
+   811	            visual_description="Document-oriented DOCX text extraction.",
+   812	            key_data="",
+   813	            main_insight="Document converted as one full-text evidence note.",
+   814	            evidence=[
+   815	                {
+   816	                    "claim": "Document text extracted with MarkItDown.",
+   817	                    "quote": _evidence_excerpt(document_text.full_text),
+   818	                    "element_type": "body",
+   819	                    "confidence": "high",
+   820	                    "validated": True,
+   821	                }
+   822	            ],
+   823	        )
+   824	        analyses = {1: analysis_item}
+   825	        profile = self.config.llm.resolve_profile(llm_profile, task="convert")
+   826	        llm_meta = {
+   827	            "convert": {
+   828	                "requested_profile": llm_profile or profile.name,
+   829	                "profile": profile.name,
+   830	                "provider": None,
+   831	                "model": None,
+   832	                "fallback_used": False,
+   833	                "mixed_providers": False,
+   834	                "status": "skipped",
+   835	                "reason": "document_text_extraction",
+   836	                "pass1": {"status": "skipped", "reason": "document_text_extraction"},
+   837	                "pass2": {"status": "skipped", "reason": "document_text_extraction"},
+   838	            }
+   839	        }
+   840	        fm = frontmatter.generate(
+   841	            title=_title_from_name(deck_name),
+   842	            deck_id=deck_id,
+   843	            source_relative_path=source_info.relative_path,
+   844	            source_hash=source_info.file_hash,
+   845	            source_type="document",
+   846	            version_info=version_info,
+   847	            analyses=analyses,
+   848	            subtype=subtype,
+   849	            client=effective_client,
+   850	            engagement=effective_engagement,
+   851	            industry=industry,
+   852	            extra_tags=extra_tags,
+   853	            existing_frontmatter=existing_fm,
+   854	            llm_metadata=llm_meta,
+   855	            review_status="clean",
+   856	            review_flags=[],
+   857	            extraction_confidence=1.0,
+   858	            preserved_enrich_fields=preserved_enrich_fields,
+   859	        )
+   860	        md_content = _assemble_document_markdown(
+   861	            title=_title_from_name(deck_name),
+   862	            frontmatter=fm,
+   863	            source_display_path=source_info.relative_path,
+   864	            version_info=version_info,
+   865	            document_text=document_text.full_text,
+   866	            version_history=version_history,
+   867	        )
+   868	        tmp_md = markdown_path.with_suffix(".md.tmp")
+   869	        tmp_md.write_text(md_content)
+   870	        tmp_md.rename(markdown_path)
+   871	
+   872	        library_root = self.config.library_root.resolve()
+   873	        try:
+   874	            md_rel = str(markdown_path.relative_to(library_root)).replace("\\", "/")
+   875	            deck_dir_rel = str(deck_dir.relative_to(library_root)).replace("\\", "/")
+   876	        except ValueError:
+   877	            logger.debug(
+   878	                "Output %s is outside library_root %s — skipping registry upsert",
+   879	                deck_dir,
+   880	                library_root,
+   881	            )
+   882	        else:
+   883	            reg_authority = "captured"
+   884	            reg_curation = "L0"
+   885	            if isinstance(existing_fm, dict):
+   886	                prev_auth = existing_fm.get("authority")
+   887	                if isinstance(prev_auth, str) and prev_auth:
+   888	                    reg_authority = prev_auth
+   889	                prev_curation = existing_fm.get("curation_level")
+   890	                if isinstance(prev_curation, str) and prev_curation:
+   891	                    reg_curation = prev_curation
+   892	            now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+   893	            registry.upsert_entry(
+   894	                library_root / "registry.json",
+   895	                registry.RegistryEntry(
+   896	                    id=deck_id,
+   897	                    title=_title_from_name(deck_name),
+   898	                    markdown_path=md_rel,
+   899	                    deck_dir=deck_dir_rel,
+   900	                    source_relative_path=source_info.relative_path,
+   901	                    source_hash=source_info.file_hash,
+   902	                    source_type="document",
+   903	                    version=version_info.version,
+   904	                    converted=now_str,
+   905	                    modified=now_str,
+   906	                    client=effective_client,
+   907	                    engagement=effective_engagement,
+   908	                    authority=reg_authority,
+   909	                    curation_level=reg_curation,
+   910	                    staleness_status="current",
+   911	                    review_status="clean",
+   912	                    review_flags=[],
+   913	                    extraction_confidence=1.0,
+   914	                    grounding_summary=frontmatter._compute_grounding_summary(analyses),
+   915	                ),
+   916	            )
+   917	
+   918	        logger.info("  ✓ Converted: %s (v%d, document)", markdown_path.name, version_info.version)
+   919	        return ConversionResult(
+   920	            output_path=markdown_path,
+   921	            slide_count=1,
+   922	            version=version_info.version,
+   923	            changes=version_info.changes,
+   924	            deck_id=deck_id,
+   925	            renderer_used="document-text",
+   926	            cache_stats=None,
+   927	        )
+   928	
+   929	    def _resolve_target(
+   930	        self,
+   931	        source_path: Path,
+   932	        deck_name: str,
+   933	        client: Optional[str],
+   934	        engagement: Optional[str],
+   935	        target: Optional[Path],
+   936	    ) -> Path:
+   937	        """Determine the output directory for a conversion."""
+   938	        if target:
+   939	            return Path(target)
+   940	
+   941	        library_root = self.config.library_root.resolve()
+   942	
+   943	        # Source-root-aware routing
+   944	        match = self.config.match_source_root(source_path)
+   945	        if match:
+   946	            src_config, rel_path = match
+   947	            prefix = FolioConfig.normalize_target_prefix(src_config.target_prefix)
+   948	            relative_parent = rel_path.parent
+   949	            if prefix:
+   950	                return library_root / prefix / relative_parent / deck_name
+   951	            else:
+   952	                return library_root / relative_parent / deck_name
+   953	
+   954	        # Fallback: original client/engagement routing
+   955	        if client and engagement:
+   956	            engagement_short = _sanitize_name(engagement)
+   957	            return library_root / client / engagement_short / deck_name
+   958	        elif client:
+   959	            return library_root / client / deck_name
+   960	        else:
+   961	            return library_root / deck_name
+   962	
+   963	    def _infer_from_source_root(
+   964	        self,
+   965	        source_path: Path,
+   966	        explicit_client: Optional[str],
+   967	        explicit_engagement: Optional[str],
+   968	    ) -> tuple[Optional[str], Optional[str]]:
+   969	        """Infer client/engagement from source-root-relative path.
+   970	
+   971	        Only infers when target_prefix is empty and CLI flags are not set.
+   972	        Returns (client, engagement) — either or both may be None.
+   973	        """
+   974	        match = self.config.match_source_root(source_path)
+   975	        if not match:
+   976	            return (None, None)
+   977	
+   978	        src_config, rel_path = match
+   979	        prefix = FolioConfig.normalize_target_prefix(src_config.target_prefix)
+   980	
+   981	        # Only infer client/engagement when target_prefix is empty
+   982	        if prefix:
+   983	            return (None, None)
+   984	
+   985	        parts = rel_path.parent.parts
+   986	        if len(parts) >= 2:
+   987	            return (parts[0], parts[1])
+   988	        elif len(parts) == 1:
+   989	            return (parts[0], None)
+   990	        else:
+   991	            return (None, None)
+   992	
+   993	
+   994	def _alignment_status(confidence: float) -> str:
+   995	    """Map alignment confidence to a status string."""
+   996	    if confidence >= 0.7:
+   997	        return "accepted"
+   998	    elif confidence >= 0.3:
+   999	        return "degraded"
+  1000	    return "untrusted"
+  1001	
+  1002	
+  1003	def _detect_source_type(source_path: Path) -> str:
+  1004	    """Detect source type from file extension.
+  1005	
+  1006	    Returns ``"deck"`` for .pptx/.ppt, ``"pdf"`` for everything else.
+  1007	    The ontology also defines ``"report"`` but that requires semantic
+  1008	    classification (not file-extension detection) and is deferred to a
+  1009	    future ``--source-type`` CLI override or subtype-based inference.
+  1010	    See spec Section 7 and Ontology Section 12.4.
+  1011	    """
+  1012	    ext = source_path.suffix.lower()
+  1013	    if ext in (".pptx", ".ppt"):
+  1014	        return "deck"
+  1015	    if ext in DOCUMENT_EXTENSIONS:
+  1016	        return "document"
+  1017	    if ext != ".pdf":
+  1018	        logger.warning("Unrecognized extension '%s', defaulting source_type to 'pdf'", ext)
+  1019	    return "pdf"
+  1020	
+  1021	
+  1022	def _assemble_document_markdown(
+  1023	    *,
+  1024	    title: str,
+  1025	    frontmatter: str,
+  1026	    source_display_path: str,
+  1027	    version_info: versions.VersionInfo,
+  1028	    document_text: str,
+  1029	    version_history: list[dict],
+  1030	) -> str:
+  1031	    lines = [
+  1032	        frontmatter,
+  1033	        "",
+  1034	        f"# {title}",
+  1035	        "",
+  1036	        f"**Source:** `{source_display_path}`  ",
+  1037	        f"**Version:** {version_info.version} | **Converted:** {version_info.timestamp[:10]}  ",
+  1038	        "**Status:** ✓ Current",
+  1039	        "",
+  1040	    ]
+  1041	    if version_info.version > 1 and version_info.changes.has_changes:
+  1042	        lines.append(markdown._format_changes(version_info))
+  1043	        lines.append("")
+  1044	    lines.extend(
+  1045	        [
+  1046	            "---",
+  1047	            "",
+  1048	            "## Evidence Note",
+  1049	            "",
+  1050	            "- Document text extracted with MarkItDown.",
+  1051	            "- source_type: document",
+  1052	            "- slide_count: 1 (compatibility unit)",
+  1053	            "",
+  1054	            "## Document Text",
+  1055	            "",
+  1056	        ]
+  1057	    )
+  1058	    for line in document_text.splitlines():
+  1059	        lines.append(line)
+  1060	    lines.append("")
+  1061	    if version_history:
+  1062	        lines.append(markdown._format_version_history(version_history))
+  1063	    return "\n".join(lines).rstrip() + "\n"
+  1064	
+  1065	
+  1066	def _evidence_excerpt(value: str, max_chars: int = 500) -> str:
+  1067	    text_value = re.sub(r"\s+", " ", value).strip()
+  1068	    if len(text_value) <= max_chars:
+  1069	        return text_value
+  1070	    return text_value[: max_chars - 3].rstrip() + "..."
+  1071	
+  1072	
+  1073	def _sanitize_name(name: str) -> str:
+  1074	    """Sanitize a name for use in file paths and IDs."""
+  1075	    return sanitize_token(name)
+  1076	
+  1077	
+  1078	def _title_from_name(deck_name: str) -> str:
+  1079	    """Convert a sanitized deck name to a human-readable title."""
+  1080	    return humanize_token(deck_name)
+  1081	
+  1082	
+  1083	def _generate_id(
+  1084	    client: Optional[str] = None,
+  1085	    engagement: Optional[str] = None,
+
+exec
+/bin/zsh -lc "nl -ba folio/pipeline/text.py | sed -n '145,205p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   145	        Dict mapping slide number (1-indexed) to SlideText.
+   146	        Empty dict if extraction fails completely (logged as warning).
+   147	    """
+   148	    source_path = Path(source_path)
+   149	    suffix = source_path.suffix.lower()
+   150	
+   151	    try:
+   152	        if suffix in (".pptx", ".ppt"):
+   153	            return _extract_pptx(source_path)
+   154	        elif suffix == ".pdf":
+   155	            return _extract_pdf(source_path)
+   156	        else:
+   157	            logger.warning("Text extraction not supported for %s", suffix)
+   158	            return {}
+   159	    except TextExtractionError as e:
+   160	        logger.warning("Text extraction failed (L2 fallback): %s", e)
+   161	        return {}
+   162	
+   163	
+   164	def extract_document_text(source_path: Path) -> SlideText:
+   165	    """Extract full-document text from a document source using MarkItDown."""
+   166	
+   167	    source_path = Path(source_path)
+   168	    try:
+   169	        from markitdown import MarkItDown
+   170	    except ImportError:
+   171	        raise TextExtractionError(
+   172	            "markitdown not installed. Run: pip install markitdown"
+   173	        )
+   174	
+   175	    try:
+   176	        md = MarkItDown()
+   177	        result = md.convert(str(source_path))
+   178	        raw_text = (result.text_content or "").strip()
+   179	    except Exception as e:
+   180	        raise TextExtractionError(
+   181	            f"MarkItDown document extraction failed for {source_path.name}: {e}"
+   182	        ) from e
+   183	
+   184	    if not raw_text:
+   185	        raise TextExtractionError(f"No document text extracted from {source_path.name}")
+   186	    return SlideText(
+   187	        slide_num=1,
+   188	        full_text=raw_text,
+   189	        elements=_detect_elements(raw_text),
+   190	        is_empty=False,
+   191	    )
+   192	
+   193	
+   194	def _extract_pptx(source_path: Path) -> dict[int, "SlideText"]:
+   195	    """Extract text from PPTX using MarkItDown.
+   196	
+   197	    Raises TextExtractionError on unexpected failures (L1). The caller
+   198	    (extract_structured) catches these at L2 and falls back to {}.
+   199	    """
+   200	    try:
+   201	        from markitdown import MarkItDown
+   202	    except ImportError:
+   203	        raise TextExtractionError(
+   204	            "markitdown not installed. Run: pip install markitdown"
+   205	        )
+
+exec
+/bin/zsh -lc "nl -ba tests/test_docx_conversion.py | sed -n '1,180p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	"""Tests for document-oriented DOCX conversion."""
+     2	
+     3	from __future__ import annotations
+     4	
+     5	import json
+     6	from types import SimpleNamespace
+     7	from unittest.mock import patch
+     8	
+     9	import yaml
+    10	
+    11	from folio.config import FolioConfig
+    12	from folio.converter import FolioConverter, _detect_source_type
+    13	from folio.pipeline.text import SlideText
+    14	
+    15	
+    16	def _parse_frontmatter(path) -> dict:
+    17	    content = path.read_text()
+    18	    return yaml.safe_load(content.split("---", 2)[1].strip())
+    19	
+    20	
+    21	def test_detect_source_type_docx_is_document():
+    22	    assert _detect_source_type(SimpleNamespace(suffix=".docx")) == "document"
+    23	
+    24	
+    25	def test_docx_conversion_uses_document_path_and_skips_slide_images(tmp_path):
+    26	    library = tmp_path / "library"
+    27	    source = tmp_path / "sow.docx"
+    28	    source.write_bytes(b"placeholder docx bytes")
+    29	    converter = FolioConverter(FolioConfig(library_root=library))
+    30	
+    31	    with (
+    32	        patch("folio.converter.normalize.to_pdf", side_effect=AssertionError("normalize should not run")),
+    33	        patch("folio.converter.images.extract_with_metadata", side_effect=AssertionError("images should not run")),
+    34	        patch(
+    35	            "folio.converter.text.extract_document_text",
+    36	            return_value=SlideText(
+    37	                slide_num=1,
+    38	                full_text="Statement of work\n\nFull document body for the engagement.",
+    39	                elements=[{"type": "title", "text": "Statement of work"}],
+    40	            ),
+    41	        ),
+    42	    ):
+    43	        result = converter.convert(
+    44	            source_path=source,
+    45	            client="Acme",
+    46	            engagement="Build",
+    47	            passes=1,
+    48	        )
+    49	
+    50	    assert result.slide_count == 1
+    51	    assert result.renderer_used == "document-text"
+    52	    assert result.cache_stats is None
+    53	    assert result.output_path.exists()
+    54	
+    55	    content = result.output_path.read_text()
+    56	    assert "## Document Text" in content
+    57	    assert "Full document body for the engagement." in content
+    58	    assert "![Slide 1]" not in content
+    59	
+    60	    fm = _parse_frontmatter(result.output_path)
+    61	    assert fm["source_type"] == "document"
+    62	    assert fm["slide_count"] == 1
+    63	    assert fm["grounding_summary"]["total_claims"] == 1
+    64	    assert fm["_llm_metadata"]["convert"]["status"] == "skipped"
+    65	
+    66	    registry = json.loads((library / "registry.json").read_text())
+    67	    entry = registry["decks"][result.deck_id]
+    68	    assert entry["source_type"] == "document"
+    69	    assert entry["version"] == 1
+
+2026-05-12T21:55:26.610370Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:55:26.610669Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:55:26.612654Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:55:26.612687Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '1,240p' folio/output/frontmatter.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Frontmatter generation: Folio v2 schema with ontology-aware fields."""
+
+import re
+from datetime import datetime, timezone
+from typing import Optional
+
+import yaml
+
+from ..pipeline.analysis import DiagramAnalysis, SlideAnalysis
+from ..pipeline.interaction_analysis import InteractionAnalysisResult
+from ..tracking.versions import VersionInfo
+
+
+class _QuotedString(str):
+    """String subclass for YAML fields that must remain strings when reloaded."""
+
+
+def _quoted_string_representer(dumper: yaml.Dumper, value: _QuotedString):
+    return dumper.represent_scalar("tag:yaml.org,2002:str", str(value), style='"')
+
+
+yaml.add_representer(_QuotedString, _quoted_string_representer)
+
+
+def generate(
+    title: str,
+    deck_id: str,
+    source_relative_path: str,
+    source_hash: str,
+    *,
+    source_type: str,
+    version_info: VersionInfo,
+    analyses: dict[int, SlideAnalysis],
+    subtype: str = "research",
+    client: Optional[str] = None,
+    engagement: Optional[str] = None,
+    industry: Optional[list[str]] = None,
+    extra_tags: Optional[list[str]] = None,
+    existing_frontmatter: Optional[dict] = None,
+    reconciliation_metadata: Optional[dict] = None,
+    llm_metadata: Optional[dict] = None,
+    review_status: Optional[str] = None,
+    review_flags: Optional[list[str]] = None,
+    extraction_confidence: Optional[float] = None,
+    preserved_enrich_fields: Optional[dict] = None,
+) -> str:
+    """Generate YAML frontmatter conforming to Folio Ontology v2 schema.
+
+    Args:
+        title: Human-readable deck title.
+        deck_id: Date-based ID following convention.
+        source_relative_path: Relative path to source file.
+        source_hash: SHA256 hash (12 char prefix).
+        source_type: Source format ("deck" or "pdf"). The ontology also
+            defines "report" but it requires semantic classification and
+            is deferred to a future ``--source-type`` CLI override.
+        version_info: Current version metadata.
+        analyses: Per-slide LLM analyses.
+        subtype: Evidence subtype (default "research").
+        client: Client name (optional at L0).
+        engagement: Engagement identifier (optional at L0).
+        industry: Industry tags (optional).
+        extra_tags: Manual tags to merge with auto-generated.
+        existing_frontmatter: Preserved fields from prior conversion.
+        reconciliation_metadata: Text reconciliation diagnostics.
+
+    Returns:
+        YAML frontmatter string including --- delimiters.
+    """
+    # Coerce string args to lists (S1: prevents silent character-explosion)
+    if isinstance(industry, str):
+        industry = [industry]
+    if isinstance(extra_tags, str):
+        extra_tags = [extra_tags]
+
+    # Collect frameworks and slide types from analyses
+    frameworks = _collect_unique(analyses, "framework", exclude={"none", "pending"})
+    slide_types = _collect_unique(analyses, "slide_type", exclude={"unknown", "pending"})
+
+    # Collect diagram-specific fields
+    diagram_types = _collect_unique(analyses, "diagram_type", exclude={"unknown"})
+    diagram_components = _collect_unique(analyses, "diagram_component")
+    diagram_technologies = _collect_unique(analyses, "diagram_technology")
+
+    # Auto-generate tags from frameworks and slide types, merge manual tags
+    tags = _generate_tags(
+        frameworks, slide_types, title,
+        diagram_types=diagram_types or None,
+        diagram_technologies=diagram_technologies or None,
+    )
+    if extra_tags:
+        tags = sorted(set(tags) | set(extra_tags))
+
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Preserve id and created from existing frontmatter on reconversion.
+    # Only accept non-empty strings; null/missing/non-string values fall back
+    # to freshly generated values to avoid emitting YAML null in required fields.
+    preserved_id = deck_id
+    preserved_created = now_str
+    if isinstance(existing_frontmatter, dict):
+        prev_id = existing_frontmatter.get("id")
+        if isinstance(prev_id, str) and prev_id:
+            preserved_id = prev_id
+        prev_created = existing_frontmatter.get("created")
+        if isinstance(prev_created, str) and prev_created:
+            preserved_created = prev_created
+
+    # Preserve authority and curation_level from existing frontmatter on reconversion.
+    preserved_authority = "captured"
+    preserved_curation = "L0"
+    if isinstance(existing_frontmatter, dict):
+        prev_auth = existing_frontmatter.get("authority")
+        if isinstance(prev_auth, str) and prev_auth:
+            preserved_authority = prev_auth
+        prev_curation = existing_frontmatter.get("curation_level")
+        if isinstance(prev_curation, str) and prev_curation:
+            preserved_curation = prev_curation
+
+    # Build frontmatter in semantic group order:
+    # Identity > Lifecycle > Review/Quality > Source > Temporal > Engagement > Content > Extensions
+    frontmatter = {
+        # Identity
+        "id": preserved_id,
+        "title": title,
+        "type": "evidence",
+        "subtype": subtype,
+        # Lifecycle
+        "status": "active",
+        "authority": preserved_authority,
+        "curation_level": preserved_curation,
+        # Review state (FR-700)
+        "review_status": review_status if review_status is not None else "clean",
+        "review_flags": review_flags if review_flags is not None else [],
+        "extraction_confidence": extraction_confidence,
+        # Source
+        "source": source_relative_path,
+        "source_hash": source_hash,
+        "source_type": source_type,
+        "version": version_info.version,
+        # Temporal
+        "created": preserved_created,
+        "modified": now_str,
+        "converted": now_str,
+        # Content classification
+        "slide_count": version_info.slide_count,
+    }
+
+    # Engagement (optional)
+    if client:
+        frontmatter["client"] = client
+    if engagement:
+        frontmatter["engagement"] = engagement
+    if industry:
+        frontmatter["industry"] = sorted(industry)
+
+    # Content tags
+    if frameworks:
+        frontmatter["frameworks"] = sorted(frameworks)
+    if slide_types:
+        frontmatter["slide_types"] = sorted(slide_types)
+    if tags:
+        frontmatter["tags"] = sorted(tags)
+
+    # Reconciliation metadata
+    if reconciliation_metadata:
+        frontmatter.update(reconciliation_metadata)
+
+    # Diagram metadata (deck-level)
+    if diagram_types:
+        frontmatter["diagram_types"] = sorted(diagram_types)
+    if diagram_components:
+        frontmatter["diagram_components"] = sorted(diagram_components)
+
+    # Grounding summary from evidence — always emit to prevent
+    # registry/frontmatter drift (Finding 4 / round 1 + Finding 2 / round 2).
+    grounding = _compute_grounding_summary(analyses)
+    frontmatter["grounding_summary"] = grounding
+
+    # LLM provenance metadata
+    if llm_metadata:
+        frontmatter["_llm_metadata"] = llm_metadata
+
+    # Enrich state passthrough (D12 compatibility)
+    _inject_enrich_passthrough(frontmatter, preserved_enrich_fields)
+
+    # Use block style for lists, flow style would be less readable
+    yaml_str = yaml.dump(
+        frontmatter,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+    )
+
+    return f"---\n{yaml_str}---"
+
+
+def generate_interaction(
+    *,
+    interaction_id: str,
+    title: str,
+    subtype: str,
+    event_date: str,
+    version_info: VersionInfo,
+    source_transcript: str,
+    source_hash: str,
+    analysis_result: InteractionAnalysisResult,
+    client: Optional[str] = None,
+    engagement: Optional[str] = None,
+    participants: Optional[list[str]] = None,
+    duration_minutes: Optional[int] = None,
+    source_recording: Optional[str] = None,
+    existing_frontmatter: Optional[dict] = None,
+    llm_metadata: Optional[dict] = None,
+    preserved_enrich_fields: Optional[dict] = None,
+) -> str:
+    """Generate YAML frontmatter for ontology-native interaction notes."""
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    preserved_id = interaction_id
+    preserved_created = now_str
+    preserved_authority = "captured"
+    preserved_curation = "L0"
+    preserved_status = "complete"
+    if isinstance(existing_frontmatter, dict):
+        prev_id = existing_frontmatter.get("id")
+        if isinstance(prev_id, str) and prev_id:
+            preserved_id = prev_id
+        prev_created = existing_frontmatter.get("created")
+        if isinstance(prev_created, str) and prev_created:
+            preserved_created = prev_created
+        prev_auth = existing_frontmatter.get("authority")
+        if isinstance(prev_auth, str) and prev_auth:
+            preserved_authority = prev_auth
+        prev_curation = existing_frontmatter.get("curation_level")
+        if isinstance(prev_curation, str) and prev_curation:
+            preserved_curation = prev_curation
+        prev_status = existing_frontmatter.get("status")
+        if isinstance(prev_status, str) and prev_status:
+            preserved_status = prev_status
+
+exec
+/bin/zsh -lc "sed -n '1,220p' folio/tracking/registry.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Registry: fast library index backed by registry.json."""
+
+import fcntl
+import json
+import logging
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+import yaml as yaml_lib
+
+from .sources import check_staleness, compute_file_hash
+
+logger = logging.getLogger(__name__)
+
+_SCHEMA_VERSION = 2
+
+
+def _str_or_none(value: object) -> str | None:
+    """Cast a value to ``str`` if non-None.
+
+    YAML parsers auto-coerce bare dates like ``2026-03-30`` to
+    ``datetime.date`` objects.  ``json.dumps`` cannot serialise those,
+    so all rebuilt frontmatter strings pass through this helper.
+    """
+    if value is None:
+        return None
+    return str(value)
+
+
+@dataclass
+class RegistryEntry:
+    """A single managed document in the registry.
+
+    Schema v2 generalizes the registry to support source-less managed
+    documents (e.g. context docs).  Source-backed fields are optional;
+    source-less rows leave them as ``None``.
+    """
+    id: str
+    title: str
+    markdown_path: str          # relative to library_root
+    deck_dir: str               # relative to library_root
+    source_relative_path: Optional[str] = None   # None for source-less docs
+    source_hash: Optional[str] = None             # None for source-less docs
+    version: Optional[int] = None                 # None for source-less docs
+    converted: Optional[str] = None               # None for source-less docs
+    source_type: Optional[str] = None
+    type: Optional[str] = None
+    subtype: Optional[str] = None                 # round-trip context subtypes
+    modified: Optional[str] = None
+    client: Optional[str] = None
+    engagement: Optional[str] = None
+    authority: Optional[str] = None
+    curation_level: Optional[str] = None
+    staleness_status: str = "current"  # current | stale | missing
+    # FR-700 reviewability
+    review_status: Optional[str] = None
+    review_flags: Optional[list[str]] = field(default=None)
+    extraction_confidence: Optional[float] = None
+    grounding_summary: Optional[dict] = field(default=None)
+    speaker_summary: Optional[dict] = field(default=None)
+    message_ids: Optional[list[str]] = field(default=None)
+
+    def to_dict(self) -> dict:
+        """Serialize to a dict suitable for JSON storage.
+
+        Review field semantics:
+        - ``None`` means the field has not been computed (legacy doc or LLM failure).
+        - ``[]`` / ``{}`` means the field was computed and is clean (no issues).
+        We preserve empty list/dict so downstream consumers can distinguish
+        "not computed" from "computed, clean".
+        """
+        d = {k: v for k, v in asdict(self).items() if v is not None}
+        # Preserve empty list / dict for review fields (FR-700)
+        if self.review_flags is not None:
+            d["review_flags"] = self.review_flags
+        if self.grounding_summary is not None:
+            d["grounding_summary"] = self.grounding_summary
+        if self.speaker_summary is not None:
+            d["speaker_summary"] = self.speaker_summary
+        if self.message_ids is not None:
+            d["message_ids"] = self.message_ids
+        return d
+
+
+def load_registry(registry_path: Path) -> dict:
+    """Load registry from JSON file.
+
+    Returns the full registry dict including ``_schema_version``,
+    ``updated_at``, and ``decks``.  Returns a fresh empty registry
+    if the file does not exist or is unreadable.
+    """
+    if not registry_path.exists():
+        return _empty_registry()
+    try:
+        data = json.loads(registry_path.read_text())
+        if not isinstance(data, dict):
+            logger.warning("Registry is not a dict — marking corrupt")
+            return _empty_registry(_corrupt=True)
+        # Ensure decks key exists and is a dict
+        if "decks" not in data:
+            data["decks"] = {}
+        if not isinstance(data["decks"], dict):
+            logger.warning("Registry 'decks' is not a dict — marking corrupt")
+            return _empty_registry(_corrupt=True)
+        return data
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load registry: %s — marking corrupt", e)
+        return _empty_registry(_corrupt=True)
+
+
+def save_registry(registry_path: Path, data: dict) -> None:
+    """Write registry atomically."""
+    data.pop("_corrupt", None)  # internal flag, not persisted
+    data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    data["_schema_version"] = _SCHEMA_VERSION
+    _atomic_write_json(registry_path, data)
+
+
+def upsert_entry(registry_path: Path, entry: RegistryEntry) -> None:
+    """Add or update a registry entry."""
+    data = load_registry(registry_path)
+    # M1: rebuild on corrupt to avoid clobbering the full index
+    if data.get("_corrupt"):
+        library_root = registry_path.parent
+        data = rebuild_registry(library_root)
+    data["decks"][entry.id] = entry.to_dict()
+    save_registry(registry_path, data)
+
+
+def remove_entry(registry_path: Path, deck_id: str) -> None:
+    """Remove a registry entry by ID."""
+    data = load_registry(registry_path)
+    data["decks"].pop(deck_id, None)
+    save_registry(registry_path, data)
+
+
+def rebuild_registry(library_root: Path) -> dict:
+    """Bootstrap a registry by walking existing markdown files.
+
+    Scans ``library_root`` for Folio markdown files and creates a registry
+    entry for each note carrying either:
+    - ``source`` + ``source_hash`` (evidence-style docs)
+    - ``source_transcript`` + ``source_hash`` (interaction docs)
+    - ``type: context`` / ``type: analysis`` for source-less managed docs
+    """
+    library_root = Path(library_root).resolve()
+    data = _empty_registry()
+
+    for md_file in sorted(library_root.rglob("*.md")):
+        fm = _read_frontmatter(md_file)
+        if fm is None:
+            continue
+
+        # Source-less managed documents (context + analysis)
+        if fm.get("type") in {"context", "analysis"} and "source" not in fm and "source_transcript" not in fm:
+            deck_id = fm.get("id", md_file.stem)
+            md_rel = str(md_file.relative_to(library_root)).replace("\\", "/")
+            deck_dir_rel = str(md_file.parent.relative_to(library_root)).replace("\\", "/")
+            if deck_dir_rel == ".":
+                deck_dir_rel = ""
+            entry = RegistryEntry(
+                id=deck_id,
+                title=str(fm.get("title", md_file.stem)),
+                markdown_path=md_rel,
+                deck_dir=deck_dir_rel,
+                type=_str_or_none(fm.get("type")) or "context",
+                subtype=_str_or_none(fm.get("subtype")),
+                modified=_str_or_none(fm.get("modified")),
+                client=_str_or_none(fm.get("client")),
+                engagement=_str_or_none(fm.get("engagement")),
+                authority=_str_or_none(fm.get("authority")),
+                curation_level=_str_or_none(fm.get("curation_level")),
+                staleness_status="current",
+                review_status=fm.get("review_status"),
+                review_flags=fm.get("review_flags"),
+                extraction_confidence=fm.get("extraction_confidence"),
+                grounding_summary=fm.get("grounding_summary"),
+                speaker_summary=fm.get("speaker_summary"),
+                message_ids=fm.get("message_ids"),
+            )
+            data["decks"][entry.id] = entry.to_dict()
+            continue
+
+        source_field = None
+        if "source" in fm:
+            source_field = "source"
+        elif "source_transcript" in fm:
+            source_field = "source_transcript"
+
+        # Must have a supported source tracking field to be a Folio document
+        if source_field is None or "source_hash" not in fm:
+            continue
+
+        deck_id = fm.get("id", md_file.stem)
+        md_rel = str(md_file.relative_to(library_root)).replace("\\", "/")
+        deck_dir_rel = str(md_file.parent.relative_to(library_root)).replace("\\", "/")
+        if deck_dir_rel == ".":
+            deck_dir_rel = ""
+
+        # Compute staleness
+        staleness = check_staleness(md_file, fm[source_field], fm["source_hash"])
+
+        entry = RegistryEntry(
+            id=deck_id,
+            title=fm.get("title", md_file.stem),
+            markdown_path=md_rel,
+            deck_dir=deck_dir_rel,
+            source_relative_path=fm[source_field],
+            source_hash=fm["source_hash"],
+            source_type=fm.get("source_type"),
+            version=fm.get("version", 1),
+            converted=fm.get("converted", ""),
+            type=fm.get("type", "evidence"),
+            subtype=fm.get("subtype"),
+            modified=fm.get("modified"),
+            client=fm.get("client"),
+            engagement=fm.get("engagement"),
+            authority=fm.get("authority"),
+
+exec
+/bin/zsh -lc 'rg -n "def compute_version|slide_count|new_texts" folio/tracking/versions.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+67:    slide_count: int
+77:            "slide_count": self.slide_count,
+84:    new_texts: dict[int, SlideTextLike],
+100:        new_texts: Current version's slide texts {slide_num: str or SlideText}.
+106:    new_slides = set(new_texts.keys())
+117:        new_text = _normalize_text(_to_str(new_texts[slide_num]))
+141:def compute_version(
+145:    slide_count: int,
+146:    new_texts: dict[int, SlideTextLike],
+155:        slide_count: Number of tracked content units.
+156:        new_texts: Current tracked texts (str or SlideText values). Callers
+171:    changes = detect_changes(old_texts, new_texts)
+182:                added=sorted(new_texts.keys()),
+196:        slide_count=slide_count,
+204:    save_texts_cache(cache_path, new_texts)
+
+exec
+/bin/zsh -lc 'rg -n "source_type|slide_count|document" folio/converter.py tests/test_docx_conversion.py folio/output/frontmatter.py folio/tracking/registry.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+tests/test_docx_conversion.py:1:"""Tests for document-oriented DOCX conversion."""
+tests/test_docx_conversion.py:12:from folio.converter import FolioConverter, _detect_source_type
+tests/test_docx_conversion.py:21:def test_detect_source_type_docx_is_document():
+tests/test_docx_conversion.py:22:    assert _detect_source_type(SimpleNamespace(suffix=".docx")) == "document"
+tests/test_docx_conversion.py:25:def test_docx_conversion_uses_document_path_and_skips_slide_images(tmp_path):
+tests/test_docx_conversion.py:35:            "folio.converter.text.extract_document_text",
+tests/test_docx_conversion.py:38:                full_text="Statement of work\n\nFull document body for the engagement.",
+tests/test_docx_conversion.py:50:    assert result.slide_count == 1
+tests/test_docx_conversion.py:51:    assert result.renderer_used == "document-text"
+tests/test_docx_conversion.py:57:    assert "Full document body for the engagement." in content
+tests/test_docx_conversion.py:61:    assert fm["source_type"] == "document"
+tests/test_docx_conversion.py:62:    assert fm["slide_count"] == 1
+tests/test_docx_conversion.py:68:    assert entry["source_type"] == "document"
+folio/tracking/registry.py:34:    """A single managed document in the registry.
+folio/tracking/registry.py:37:    documents (e.g. context docs).  Source-backed fields are optional;
+folio/tracking/registry.py:48:    source_type: Optional[str] = None
+folio/tracking/registry.py:156:        # Source-less managed documents (context + analysis)
+folio/tracking/registry.py:192:        # Must have a supported source tracking field to be a Folio document
+folio/tracking/registry.py:212:            source_type=fm.get("source_type"),
+folio/tracking/registry.py:309:        raise ValueError(f"Entry {entry.id} has no source path (source-less document)")
+folio/tracking/registry.py:362:    source_type = d.get("source_type")
+folio/tracking/registry.py:363:    if source_type is not None:
+folio/converter.py:51:    slide_count: int
+folio/converter.py:161:            return self._convert_document(
+folio/converter.py:249:            slide_count = len(image_results)
+folio/converter.py:251:            # P3: Large-document warning (informational only)
+folio/converter.py:252:            if slide_count > self.config.conversion.large_document_warn_pages:
+folio/converter.py:254:                    "Large document (%d pages). Consider --passes 1 for text-heavy documents.",
+folio/converter.py:255:                    slide_count,
+folio/converter.py:323:            if slide_count > 0:
+folio/converter.py:327:                avg_chars = total_chars / slide_count
+folio/converter.py:337:            reconciliation = text.reconcile_slide_count(slide_texts, slide_count)
+folio/converter.py:535:            slide_count=slide_count,
+folio/converter.py:540:        # Load full version history for the document
+folio/converter.py:644:            source_type=_detect_source_type(source_path),
+folio/converter.py:675:            slide_count=slide_count,
+folio/converter.py:721:                source_type=_detect_source_type(source_path),
+folio/converter.py:740:            markdown_path.name, version_info.version, slide_count,
+folio/converter.py:745:            slide_count=slide_count,
+folio/converter.py:753:    def _convert_document(
+folio/converter.py:767:        """Convert a DOCX as a document-oriented single evidence note."""
+folio/converter.py:770:        logger.info("Converting document: %s", source_path.name)
+folio/converter.py:794:        document_text = text.extract_document_text(source_path)
+folio/converter.py:795:        slide_texts = {1: document_text}
+folio/converter.py:801:            slide_count=1,
+folio/converter.py:809:            slide_type="document",
+folio/converter.py:817:                    "quote": _evidence_excerpt(document_text.full_text),
+folio/converter.py:835:                "reason": "document_text_extraction",
+folio/converter.py:836:                "pass1": {"status": "skipped", "reason": "document_text_extraction"},
+folio/converter.py:837:                "pass2": {"status": "skipped", "reason": "document_text_extraction"},
+folio/converter.py:845:            source_type="document",
+folio/converter.py:860:        md_content = _assemble_document_markdown(
+folio/converter.py:865:            document_text=document_text.full_text,
+folio/converter.py:902:                    source_type="document",
+folio/converter.py:918:        logger.info("  ✓ Converted: %s (v%d, document)", markdown_path.name, version_info.version)
+folio/converter.py:921:            slide_count=1,
+folio/converter.py:925:            renderer_used="document-text",
+folio/converter.py:1003:def _detect_source_type(source_path: Path) -> str:
+folio/converter.py:1016:        return "document"
+folio/converter.py:1018:        logger.warning("Unrecognized extension '%s', defaulting source_type to 'pdf'", ext)
+folio/converter.py:1022:def _assemble_document_markdown(
+folio/converter.py:1028:    document_text: str,
+folio/converter.py:1051:            "- source_type: document",
+folio/converter.py:1052:            "- slide_count: 1 (compatibility unit)",
+folio/converter.py:1058:    for line in document_text.splitlines():
+folio/output/frontmatter.py:31:    source_type: str,
+folio/output/frontmatter.py:54:        source_type: Source format ("deck" or "pdf"). The ontology also
+folio/output/frontmatter.py:139:        "source_type": source_type,
+folio/output/frontmatter.py:146:        "slide_count": version_info.slide_count,
+
+2026-05-12T21:55:32.624407Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:55:32.624709Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:55:32.627000Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:55:32.627032Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The code path matches the intended shape so far: `.docx` branches before normalization, uses `text.extract_document_text`, emits document source metadata, and preserves `slide_count=1`. I’m running only the focused DOCX test file now, with pytest cache/bytecode disabled to keep the repository unchanged apart from the required verifier artifact.
+exec
+/bin/zsh -lc "PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q" in /Users/jonathanoh/workspaces/folio.love
+2026-05-12T21:55:49.948875Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:55:49.950763Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:55:49.967881Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:55:49.967998Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+ succeeded in 271ms:
+..                                                                       [100%]
+2 passed in 0.07s
+
+exec
+/bin/zsh -lc "test -f docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md; printf '%s\\n' "'$?' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+1
+
+exec
+/bin/zsh -lc 'rg -n "source_type.*document|docx|slide_count" folio/converter.py tests/test_docx_conversion.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+tests/test_docx_conversion.py:21:def test_detect_source_type_docx_is_document():
+tests/test_docx_conversion.py:22:    assert _detect_source_type(SimpleNamespace(suffix=".docx")) == "document"
+tests/test_docx_conversion.py:25:def test_docx_conversion_uses_document_path_and_skips_slide_images(tmp_path):
+tests/test_docx_conversion.py:27:    source = tmp_path / "sow.docx"
+tests/test_docx_conversion.py:28:    source.write_bytes(b"placeholder docx bytes")
+tests/test_docx_conversion.py:50:    assert result.slide_count == 1
+tests/test_docx_conversion.py:61:    assert fm["source_type"] == "document"
+tests/test_docx_conversion.py:62:    assert fm["slide_count"] == 1
+tests/test_docx_conversion.py:68:    assert entry["source_type"] == "document"
+folio/converter.py:27:DOCUMENT_EXTENSIONS = frozenset({".docx"})
+folio/converter.py:51:    slide_count: int
+folio/converter.py:249:            slide_count = len(image_results)
+folio/converter.py:252:            if slide_count > self.config.conversion.large_document_warn_pages:
+folio/converter.py:255:                    slide_count,
+folio/converter.py:323:            if slide_count > 0:
+folio/converter.py:327:                avg_chars = total_chars / slide_count
+folio/converter.py:337:            reconciliation = text.reconcile_slide_count(slide_texts, slide_count)
+folio/converter.py:535:            slide_count=slide_count,
+folio/converter.py:675:            slide_count=slide_count,
+folio/converter.py:740:            markdown_path.name, version_info.version, slide_count,
+folio/converter.py:745:            slide_count=slide_count,
+folio/converter.py:801:            slide_count=1,
+folio/converter.py:845:            source_type="document",
+folio/converter.py:902:                    source_type="document",
+folio/converter.py:921:            slide_count=1,
+folio/converter.py:1051:            "- source_type: document",
+folio/converter.py:1052:            "- slide_count: 1 (compatibility unit)",
+
+exec
+/bin/zsh -lc 'git status --short -- folio/converter.py folio/pipeline/text.py tests/test_docx_conversion.py .pytest_cache docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+ M folio/converter.py
+ M folio/pipeline/text.py
+?? tests/test_docx_conversion.py
+
+2026-05-12T21:55:57.640992Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:55:57.642859Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:55:57.654862Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:55:57.655026Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "test -d docs/validation/strict_p3_rerun_2026_05_12/review-board; printf '%s\\n' "'$?' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+0
+
+2026-05-12T21:56:02.004764Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:56:02.005046Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:56:02.006991Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:56:02.007023Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I found no remaining release issue in the inspected slice. I’m writing the verifier artifact now and will then check its contract and repository status.
+apply patch
+patch: completed
+/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e5d6308455675071347f7f408a037b7fcfefda1
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+@@ -0,0 +1,32 @@
++---
++deliverable_id: folio-document-format-coverage-v1-1-1
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++# D.5 Codex Verifier: folio-document-format-coverage-v1-1-1
++
++## Verdict
++approve
++
++## Scope
++Verified only the strict-P3 Phase D.5 DOCX document-oriented conversion slice requested by the orchestrator. I did not run Ontos and did not run a broad test suite.
++
++## Evidence
++- Reviewed D.3 canonical verdict at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md`; it approves the document-oriented DOCX path and cites routing through `_convert_document`, document metadata, and `slide_count: 1` compatibility.
++- Reviewed D.4 fix summary at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md`; it claims DOCX was implemented as document conversion with full text evidence, document source metadata, and focused DOCX coverage.
++- Inspected `frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml`; the relevant gate command is the focused `./.venv/bin/python -m pytest tests/test_docx_conversion.py -q` check.
++- Inspected `folio/converter.py`; `.docx` is included in `DOCUMENT_EXTENSIONS`, `convert()` routes DOCX sources to `_convert_document()` before normalization/image extraction, `_convert_document()` calls `text.extract_document_text()`, sets `source_type="document"` in frontmatter and registry, writes a document evidence section and full document text, returns `slide_count=1`, and reports `renderer_used="document-text"`.
++- Inspected `folio/pipeline/text.py`; `extract_document_text()` uses MarkItDown, rejects empty extraction, and wraps the full document as `SlideText(slide_num=1)`.
++- Inspected `tests/test_docx_conversion.py`; the focused test asserts DOCX source detection, mocks failures if slide normalization or image extraction are called, and verifies document frontmatter, registry source type, compatibility slide count, and skipped LLM metadata.
++- Direct run: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q`; result: `2 passed in 0.07s`.
++- Focused anchor check: `rg -n "source_type.*document|docx|slide_count" folio/converter.py tests/test_docx_conversion.py`; result: exit 0 with matching implementation and test anchors.
++
++## Findings
++No remaining release issue was found. The D.4 implementation satisfies the D.3-approved behavior for this slice: DOCX conversion is document-oriented, avoids the deck slide image path, emits document source metadata, preserves a one-unit `slide_count` compatibility contract, and has focused tests covering the intended route and metadata.
++
++## Caveats
++Per instruction, this verification did not execute Ontos, lifecycle verification, or the full repository test suite. The direct execution evidence is limited to `tests/test_docx_conversion.py`.
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e5d6308455675071347f7f408a037b7fcfefda1
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+@@ -0,0 +1,32 @@
++---
++deliverable_id: folio-document-format-coverage-v1-1-1
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++# D.5 Codex Verifier: folio-document-format-coverage-v1-1-1
++
++## Verdict
++approve
++
++## Scope
++Verified only the strict-P3 Phase D.5 DOCX document-oriented conversion slice requested by the orchestrator. I did not run Ontos and did not run a broad test suite.
++
++## Evidence
++- Reviewed D.3 canonical verdict at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md`; it approves the document-oriented DOCX path and cites routing through `_convert_document`, document metadata, and `slide_count: 1` compatibility.
++- Reviewed D.4 fix summary at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md`; it claims DOCX was implemented as document conversion with full text evidence, document source metadata, and focused DOCX coverage.
++- Inspected `frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml`; the relevant gate command is the focused `./.venv/bin/python -m pytest tests/test_docx_conversion.py -q` check.
++- Inspected `folio/converter.py`; `.docx` is included in `DOCUMENT_EXTENSIONS`, `convert()` routes DOCX sources to `_convert_document()` before normalization/image extraction, `_convert_document()` calls `text.extract_document_text()`, sets `source_type="document"` in frontmatter and registry, writes a document evidence section and full document text, returns `slide_count=1`, and reports `renderer_used="document-text"`.
++- Inspected `folio/pipeline/text.py`; `extract_document_text()` uses MarkItDown, rejects empty extraction, and wraps the full document as `SlideText(slide_num=1)`.
++- Inspected `tests/test_docx_conversion.py`; the focused test asserts DOCX source detection, mocks failures if slide normalization or image extraction are called, and verifies document frontmatter, registry source type, compatibility slide count, and skipped LLM metadata.
++- Direct run: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q`; result: `2 passed in 0.07s`.
++- Focused anchor check: `rg -n "source_type.*document|docx|slide_count" folio/converter.py tests/test_docx_conversion.py`; result: exit 0 with matching implementation and test anchors.
++
++## Findings
++No remaining release issue was found. The D.4 implementation satisfies the D.3-approved behavior for this slice: DOCX conversion is document-oriented, avoids the deck slide image path, emits document source metadata, preserves a one-unit `slide_count` compatibility contract, and has focused tests covering the intended route and metadata.
++
++## Caveats
++Per instruction, this verification did not execute Ontos, lifecycle verification, or the full repository test suite. The direct execution evidence is limited to `tests/test_docx_conversion.py`.
+
+2026-05-12T21:56:19.132511Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:56:19.132738Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:56:19.134414Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:56:19.134440Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '1,80p' docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc 'wc -m docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    2947 docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+
+ succeeded in 0ms:
+---
+deliverable_id: folio-document-format-coverage-v1-1-1
+phase: D.5
+role: verifier
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+# D.5 Codex Verifier: folio-document-format-coverage-v1-1-1
+
+## Verdict
+approve
+
+## Scope
+Verified only the strict-P3 Phase D.5 DOCX document-oriented conversion slice requested by the orchestrator. I did not run Ontos and did not run a broad test suite.
+
+## Evidence
+- Reviewed D.3 canonical verdict at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md`; it approves the document-oriented DOCX path and cites routing through `_convert_document`, document metadata, and `slide_count: 1` compatibility.
+- Reviewed D.4 fix summary at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md`; it claims DOCX was implemented as document conversion with full text evidence, document source metadata, and focused DOCX coverage.
+- Inspected `frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml`; the relevant gate command is the focused `./.venv/bin/python -m pytest tests/test_docx_conversion.py -q` check.
+- Inspected `folio/converter.py`; `.docx` is included in `DOCUMENT_EXTENSIONS`, `convert()` routes DOCX sources to `_convert_document()` before normalization/image extraction, `_convert_document()` calls `text.extract_document_text()`, sets `source_type="document"` in frontmatter and registry, writes a document evidence section and full document text, returns `slide_count=1`, and reports `renderer_used="document-text"`.
+- Inspected `folio/pipeline/text.py`; `extract_document_text()` uses MarkItDown, rejects empty extraction, and wraps the full document as `SlideText(slide_num=1)`.
+- Inspected `tests/test_docx_conversion.py`; the focused test asserts DOCX source detection, mocks failures if slide normalization or image extraction are called, and verifies document frontmatter, registry source type, compatibility slide count, and skipped LLM metadata.
+- Direct run: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q`; result: `2 passed in 0.07s`.
+- Focused anchor check: `rg -n "source_type.*document|docx|slide_count" folio/converter.py tests/test_docx_conversion.py`; result: exit 0 with matching implementation and test anchors.
+
+## Findings
+No remaining release issue was found. The D.4 implementation satisfies the D.3-approved behavior for this slice: DOCX conversion is document-oriented, avoids the deck slide image path, emits document source metadata, preserves a one-unit `slide_count` compatibility contract, and has focused tests covering the intended route and metadata.
+
+## Caveats
+Per instruction, this verification did not execute Ontos, lifecycle verification, or the full repository test suite. The direct execution evidence is limited to `tests/test_docx_conversion.py`.
+
+exec
+/bin/zsh -lc 'rg -n "''^# |''^## Verdict$|''^approve$" docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc 'git status --short -- folio/converter.py folio/pipeline/text.py tests/test_docx_conversion.py .pytest_cache docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+10:# D.5 Codex Verifier: folio-document-format-coverage-v1-1-1
+12:## Verdict
+13:approve
+
+ succeeded in 0ms:
+ M folio/converter.py
+ M folio/pipeline/text.py
+?? docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+?? tests/test_docx_conversion.py
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e5d6308455675071347f7f408a037b7fcfefda1
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+@@ -0,0 +1,32 @@
++---
++deliverable_id: folio-document-format-coverage-v1-1-1
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++# D.5 Codex Verifier: folio-document-format-coverage-v1-1-1
++
++## Verdict
++approve
++
++## Scope
++Verified only the strict-P3 Phase D.5 DOCX document-oriented conversion slice requested by the orchestrator. I did not run Ontos and did not run a broad test suite.
++
++## Evidence
++- Reviewed D.3 canonical verdict at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md`; it approves the document-oriented DOCX path and cites routing through `_convert_document`, document metadata, and `slide_count: 1` compatibility.
++- Reviewed D.4 fix summary at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md`; it claims DOCX was implemented as document conversion with full text evidence, document source metadata, and focused DOCX coverage.
++- Inspected `frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml`; the relevant gate command is the focused `./.venv/bin/python -m pytest tests/test_docx_conversion.py -q` check.
++- Inspected `folio/converter.py`; `.docx` is included in `DOCUMENT_EXTENSIONS`, `convert()` routes DOCX sources to `_convert_document()` before normalization/image extraction, `_convert_document()` calls `text.extract_document_text()`, sets `source_type="document"` in frontmatter and registry, writes a document evidence section and full document text, returns `slide_count=1`, and reports `renderer_used="document-text"`.
++- Inspected `folio/pipeline/text.py`; `extract_document_text()` uses MarkItDown, rejects empty extraction, and wraps the full document as `SlideText(slide_num=1)`.
++- Inspected `tests/test_docx_conversion.py`; the focused test asserts DOCX source detection, mocks failures if slide normalization or image extraction are called, and verifies document frontmatter, registry source type, compatibility slide count, and skipped LLM metadata.
++- Direct run: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q`; result: `2 passed in 0.07s`.
++- Focused anchor check: `rg -n "source_type.*document|docx|slide_count" folio/converter.py tests/test_docx_conversion.py`; result: exit 0 with matching implementation and test anchors.
++
++## Findings
++No remaining release issue was found. The D.4 implementation satisfies the D.3-approved behavior for this slice: DOCX conversion is document-oriented, avoids the deck slide image path, emits document source metadata, preserves a one-unit `slide_count` compatibility contract, and has focused tests covering the intended route and metadata.
++
++## Caveats
++Per instruction, this verification did not execute Ontos, lifecycle verification, or the full repository test suite. The direct execution evidence is limited to `tests/test_docx_conversion.py`.
+
+2026-05-12T21:56:26.072086Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:56:26.072457Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:56:26.075129Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:56:26.075169Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Wrote the D.5 Codex verifier artifact:
+
+[folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md)
+
+Verdict: `approve`.
+
+Focused validation passed: `2 passed in 0.07s`. I did not run Ontos or a broad test suite. Contract checked: exact frontmatter, `## Verdict` with `approve`, and artifact length is 2947 characters.
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e5d6308455675071347f7f408a037b7fcfefda1
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-codex-verifier.md
+@@ -0,0 +1,32 @@
++---
++deliverable_id: folio-document-format-coverage-v1-1-1
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++# D.5 Codex Verifier: folio-document-format-coverage-v1-1-1
++
++## Verdict
++approve
++
++## Scope
++Verified only the strict-P3 Phase D.5 DOCX document-oriented conversion slice requested by the orchestrator. I did not run Ontos and did not run a broad test suite.
++
++## Evidence
++- Reviewed D.3 canonical verdict at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_D.3_canonical_verdict.md`; it approves the document-oriented DOCX path and cites routing through `_convert_document`, document metadata, and `slide_count: 1` compatibility.
++- Reviewed D.4 fix summary at `docs/validation/strict_p3_rerun_2026_05_12/folio-document-format-coverage-v1-1-1_d4_fix_summary.md`; it claims DOCX was implemented as document conversion with full text evidence, document source metadata, and focused DOCX coverage.
++- Inspected `frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml`; the relevant gate command is the focused `./.venv/bin/python -m pytest tests/test_docx_conversion.py -q` check.
++- Inspected `folio/converter.py`; `.docx` is included in `DOCUMENT_EXTENSIONS`, `convert()` routes DOCX sources to `_convert_document()` before normalization/image extraction, `_convert_document()` calls `text.extract_document_text()`, sets `source_type="document"` in frontmatter and registry, writes a document evidence section and full document text, returns `slide_count=1`, and reports `renderer_used="document-text"`.
++- Inspected `folio/pipeline/text.py`; `extract_document_text()` uses MarkItDown, rejects empty extraction, and wraps the full document as `SlideText(slide_num=1)`.
++- Inspected `tests/test_docx_conversion.py`; the focused test asserts DOCX source detection, mocks failures if slide normalization or image extraction are called, and verifies document frontmatter, registry source type, compatibility slide count, and skipped LLM metadata.
++- Direct run: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' ./.venv/bin/python -m pytest tests/test_docx_conversion.py -q`; result: `2 passed in 0.07s`.
++- Focused anchor check: `rg -n "source_type.*document|docx|slide_count" folio/converter.py tests/test_docx_conversion.py`; result: exit 0 with matching implementation and test anchors.
++
++## Findings
++No remaining release issue was found. The D.4 implementation satisfies the D.3-approved behavior for this slice: DOCX conversion is document-oriented, avoids the deck slide image path, emits document source metadata, preserves a one-unit `slide_count` compatibility contract, and has focused tests covering the intended route and metadata.
++
++## Caveats
++Per instruction, this verification did not execute Ontos, lifecycle verification, or the full repository test suite. The direct execution evidence is limited to `tests/test_docx_conversion.py`.
+
+2026-05-12T21:56:31.705564Z ERROR codex_core::session: failed to record rollout items: thread 019e1e2f-5964-7bc3-9b14-8dc3d6b2e614 not found
+tokens used
+47,905
+2026-05-12T21:56:31.716466Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 97952: No such process (os error 3)
+2026-05-12T21:56:31.756940Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 97951: No such process (os error 3)

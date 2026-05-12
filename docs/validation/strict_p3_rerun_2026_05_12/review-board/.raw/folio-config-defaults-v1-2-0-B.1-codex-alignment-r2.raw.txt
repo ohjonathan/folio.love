@@ -1,0 +1,7 @@
+Wrote the B.1 round-2 artifact here:
+
+[folio-config-defaults-v1-2-0-B.1-codex-alignment-r2.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment-r2.md)
+
+Verdict is `request changes`: the spec fixes the missing ingest and convert scope, and `folio/converter.py` is allowed, but the manifest’s cardinality gate is still too broad to prevent a narrow date/type-only implementation.
+
+Contract checks passed: exact frontmatter present, `## Verdict` contains only `request changes`, artifact is 3378 bytes, and I only wrote the requested artifact file.

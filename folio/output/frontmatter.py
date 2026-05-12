@@ -314,6 +314,16 @@ def generate_interaction(
         analysis_result.grounding_summary
     )
 
+    if analysis_result.speaker_stats is not None:
+        speaker_stats = analysis_result.speaker_stats
+        frontmatter["speakers"] = speaker_stats.to_frontmatter()
+        frontmatter["total_words"] = speaker_stats.total_words
+        frontmatter["total_duration_seconds"] = speaker_stats.total_duration_seconds
+        frontmatter["speaker_count"] = speaker_stats.speaker_count
+        frontmatter["balance_score"] = speaker_stats.balance_score
+        frontmatter["dominant_speaker"] = speaker_stats.dominant_speaker
+        frontmatter["speaker_summary"] = speaker_stats.to_summary()
+
     if llm_metadata:
         frontmatter["_llm_metadata"] = llm_metadata
 

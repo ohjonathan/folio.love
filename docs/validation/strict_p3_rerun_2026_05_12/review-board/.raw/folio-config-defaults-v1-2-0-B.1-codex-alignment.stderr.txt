@@ -1,0 +1,1945 @@
+2026-05-12T20:13:11.156506Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:13:11.157298Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:13:11.161594Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:13:11.161670Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+OpenAI Codex v0.125.0 (research preview)
+--------
+workdir: /Users/jonathanoh/workspaces/folio.love
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/jonathanoh/.codex/memories]
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019e1dd2-709f-7262-a008-10863c769def
+--------
+user
+You are the codex external reviewer for llm-dev strict-P3 Phase B.1, role alignment, deliverable folio-config-defaults-v1-2-0.
+
+Review only the Phase A spec and manifest for this slice. Use these repo files:
+- docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+- docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md
+- frameworks/manifests/folio-config-defaults-v1-2-0.yaml
+
+Artifact target: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+
+Artifact contract:
+- Write the markdown artifact to the artifact target above.
+- Do not edit any repository file except the artifact target.
+- The artifact must be at least 700 characters.
+- It must begin with this exact YAML frontmatter, with no execution_provider field:
+---
+deliverable_id: folio-config-defaults-v1-2-0
+phase: B.1
+role: alignment
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+- Then include a top-level markdown heading and a section named exactly "## Verdict".
+- The "## Verdict" section must contain exactly one of these words: approve, request changes, reject, or concur.
+- For B.1, assess whether the spec and manifest are adequate to drive the slice without stale evidence reuse.
+- If you identify blockers, use "request changes" and list them with concrete file/path references. If not, use "approve".
+
+2026-05-12T20:13:16.911783Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:13:16.912034Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:13:16.913559Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:13:16.913584Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T20:13:17.598580Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:13:17.598846Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:13:17.600149Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:13:17.600180Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’ll load the mandated project context first, then keep the review scoped to the three named inputs and write only the requested review artifact.
+exec
+/bin/zsh -lc 'test -f .llm-dev/config.yaml && scripts/llm-dev doctor || true' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+llm-dev doctor
+  repo:               /Users/jonathanoh/workspaces/folio.love
+  config:             .llm-dev/config.yaml
+  framework_path:     .llm-dev/framework
+  framework_ref:      df39e6e3de47b2b5a970b99aa1580c1463dd97e0
+  framework_repo_url: https://github.com/ohjonathan/llm-dev-framework.git
+  PASS command: git
+  PASS command: bash
+  PASS command: python3
+  PASS command: check-jsonschema
+  PASS framework checkout: .llm-dev/framework
+  PASS framework scripts (verify-adopter.sh, day-one.sh)
+  PASS worker CLI: claude
+  PASS worker CLI: codex
+  PASS worker CLI: gemini
+llm-dev doctor: PASS
+
+exec
+/bin/zsh -lc 'ontos map' in /Users/jonathanoh/workspaces/folio.love
+2026-05-12T20:13:27.960201Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:13:27.960613Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:13:27.962166Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:13:27.962197Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+ exited 1 in 216ms:
+Warning: Invalid doc status 'generated'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'approved'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc type 'review'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-codex-alignment.md.
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+
+codex
+`ontos map` hit existing duplicate-ID errors in the review-board area, so I’m trying the documented Python fallback and then I’ll read the existing context map if regeneration remains blocked. The llm-dev framework doctor passed.
+exec
+/bin/zsh -lc "sed -n '1,180p' Ontos_Context_Map.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: ontos_context_map
+type: reference
+status: generated
+ontos_map_version: 2
+generated_by: ontos map
+generated_at: 2026-05-10 18:57:42
+---
+
+# folio.love Tiered Context Map
+
+> Auto-generated by Ontos 3.0
+> Last updated: 2026-05-10 18:57:42
+
+This document provides a tiered index of the knowledge graph for AI orientation.
+- **Tier 1: Essential Context**: (~2k tokens) Project summary, recent work, and architecture.
+- **Tier 2: Document Index**: Full list of all tracked documents.
+- **Tier 3: Full Graph Details**: Dependency trees, timelines, and health metrics.
+
+## Tier 1: Essential Context
+
+### Project Summary
+- **Name:** folio.love
+- **Doc Count:** 416
+- **Last Updated:** 2026-05-11 01:57:42 UTC
+
+### Recent Activity
+| Log | Status | Summary |
+|-----|--------|---------|
+| log_20260510_root-cleanup | active | No summary |
+| log_20260510_folio-love-vtt-srt-transcript-ingest | active | No summary |
+| log_20260417_v1-0-0-spec-canonical-verdict-r3 | active | No summary |
+| ... and 81 more logs | | |
+
+### Key Documents
+- `doc_02_product_requirements_document` (7 dependents) — docs/product/02_Product_Requirements_Document.md
+- `doc_04_implementation_roadmap` (7 dependents) — docs/product/04_Implementation_Roadmap.md
+- `folio_ontology_architecture` (6 dependents) — docs/architecture/Folio_Ontology_Architecture.md
+
+### Critical Paths
+- **Docs Root:** `docs/`
+- **Logs:** `docs/logs/`
+
+---
+
+## Tier 2: Document Index
+
+
+
+## Documents
+
+| Path | ID | Type | Status |
+|------|-----|------|--------|
+| docs/architecture/Folio_Ontology_Architecture.md | `folio_ontology_architecture` | unknown | active |
+| docs/archive/ontos/Ontos_Context_Map.md | `ontos_context_map` | reference | unknown |
+| docs/archive/reviews/README.md | `archived_review_artifacts` | reference | active |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review.md | `PRD_PhaseB_B1_Adversarial_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R2.md | `PRD_PhaseB_B1_Adversarial_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R3.md | `PRD_PhaseB_B1_Adversarial_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R4.md | `PRD_PhaseB_B1_Adversarial_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R5.md | `PRD_PhaseB_B1_Adversarial_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review.md | `PRD_PhaseB_B1_Alignment_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R2.md | `PRD_PhaseB_B1_Alignment_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R3.md | `PRD_PhaseB_B1_Alignment_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R4.md | `PRD_PhaseB_B1_Alignment_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R5.md | `PRD_PhaseB_B1_Alignment_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review.md | `PRD_PhaseB_B1_Peer_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R2.md | `PRD_PhaseB_B1_Peer_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R3.md | `PRD_PhaseB_B1_Peer_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R4.md | `PRD_PhaseB_B1_Peer_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R5.md | `PRD_PhaseB_B1_Peer_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation.md | `PRD_PhaseB_B2_Consolidation` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R2.md | `PRD_PhaseB_B2_Consolidation_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R3.md | `PRD_PhaseB_B2_Consolidation_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R4.md | `PRD_PhaseB_B2_Consolidation_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R5.md | `PRD_PhaseB_B2_Consolidation_R5` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Adversarial_Review.md | `PRE_B1_Adversarial_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Alignment_Review.md | `PRE_B1_Alignment_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Peer_Review.md | `PRE_B1_Peer_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B2_Consolidation.md | `PRE_B2_Consolidation` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B2_Consolidation_R2.md | `PRE_B2_Consolidation_R2` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Adversarial_Product.md | `Folio_Tier4_ProposalReview_R1_Adversarial_Product` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Alignment_Technical.md | `Folio_Tier4_ProposalReview_R1_Alignment_Technical` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Consolidated.md | `Folio_Tier4_ProposalReview_R1_Consolidated` | unknown | unknown |
+| docs/framework-adoption.md | `framework-adoption` | unknown | unknown |
+| docs/guides/agentic_setup.md | `agentic_setup` | unknown | unknown |
+| docs/guides/managed_mac_workflow.md | `managed_mac_workflow` | unknown | unknown |
+| docs/logs/2026-03-02_doc-cleanup-and-ontos-init-for-folio-love.md | `log_20260302_doc-cleanup-and-ontos-init-for-folio-love` | log | active |
+| docs/logs/2026-03-02_source-grounding-multi-pass-extraction-pipeline.md | `log_20260302_source-grounding-multi-pass-extraction-pipeline` | log | active |
+| docs/logs/2026-03-06_analysis-caching-hardening-b1-b3-g1-g4-s1-s2.md | `log_20260306_analysis-caching-hardening-b1-b3-g1-g4-s1-s2` | log | active |
+| docs/logs/2026-03-06_analysis-caching-spec-review.md | `log_20260306_analysis-caching-spec-review` | log | active |
+| docs/logs/2026-03-06_frontmatter-v2-completeness.md | `log_20260306_frontmatter-v2-completeness` | log | active |
+| docs/logs/2026-03-06_frontmatter-v2-spec-review-reviewer1.md | `log_20260306_frontmatter-v2-spec-review-reviewer1` | log | active |
+| docs/logs/2026-03-06_merge-pull-request-2-from-ohjonathan-feat-core-ex.md | `log_20260306_merge-pull-request-2-from-ohjonathan-feat-core-ex` | log | active |
+| docs/logs/2026-03-06_version-tracking-code-review-pr5.md | `2026-03-06_version-tracking-code-review-pr5` | unknown | unknown |
+| docs/logs/2026-03-06_version-tracking-hardening-g1-g8-b1-b3.md | `log_20260306_version-tracking-hardening-g1-g8-b1-b3` | log | active |
+| docs/logs/2026-03-07_docs-multi-provider-docs-alignment-and-merge.md | `log_20260307_docs-multi-provider-docs-alignment-and-merge` | log | active |
+| docs/logs/2026-03-07_managed-laptop-pdf-fallback.md | `log_20260307_managed-laptop-pdf-fallback` | log | active |
+| docs/logs/2026-03-07_pr-8-multi-provider-llm-support-code-review-resolu.md | `log_20260307_pr-8-multi-provider-llm-support-code-review-resolu` | log | active |
+| docs/logs/2026-03-08_pr-10-pptx-renderer-reliability-fix-open-a-two-ste.md | `log_20260308_pr-10-pptx-renderer-reliability-fix-open-a-two-ste` | log | active |
+| docs/logs/2026-03-08_tier1-validation-rerun-prompt-refresh.md | `log_20260308_tier1-validation-rerun-prompt-refresh` | log | active |
+| docs/logs/2026-03-09_pr-12-tier1-rerun-validation-and-merge-readiness.md | `log_20260309_pr-12-tier1-rerun-validation-and-merge-readiness` | log | active |
+| docs/logs/2026-03-13_docs-validation-tighten-tier-2-closeout-criteria.md | `log_20260313_docs-validation-tighten-tier-2-closeout-criteria` | log | active |
+| docs/logs/2026-03-14_docs-test-standardize-pytest-commands-to-venv-b.md | `log_20260314_fr700-reviewability-integration` | log | active |
+| docs/logs/2026-03-14_feat-diagrams-deterministic-page-inspection-with.md | `log_20260314_feat-diagrams-deterministic-page-inspection-with` | log | active |
+| docs/logs/2026-03-14_pr-1-page-inspection-implementation-prompt.md | `log_20260314_pr-1-page-inspection-implementation-prompt` | log | active |
+| docs/logs/2026-03-14_pr-1-som-validation-runbook-and-doc-handoff.md | `log_20260314_pr-1-som-validation-runbook-and-doc-handoff` | log | active |
+| docs/logs/2026-03-14_rewrite-grounding-multipass-prompt.md | `log_20260314_rewrite-grounding-multipass-prompt` | log | active |
+| docs/logs/2026-03-14_source-of-truth-doc-naming-and-docs-sync.md | `log_20260314_source-of-truth-doc-naming-and-docs-sync` | log | active |
+| docs/logs/2026-03-15_add-25-regression-tests-for-type-gate-highlights.md | `log_20260315_pr22-diagram-extraction-tier2-fixes` | log | complete |
+| docs/logs/2026-03-15_add-pr-2-prompts-session-logs-and-update-context.md | `log_20260315_add-pr-2-prompts-session-logs-and-update-context` | log | active |
+| docs/logs/2026-03-15_clean-stray-files-add-tmp-and-output-to-gitign.md | `log_20260315_clean-stray-files-add-tmp-and-output-to-gitign` | log | complete |
+| docs/logs/2026-03-15_fix-p1-frontmatter-fence-must-be-unindented-fi.md | `log_20260315_fix-p1-frontmatter-fence-must-be-unindented-fi` | log | active |
+| docs/logs/2026-03-15_fix-rendering-address-round-3-review-all-block.md | `log_20260315_fix-rendering-address-round-3-review-all-block` | log | active |
+| docs/logs/2026-03-15_fix-rendering-normalize-unrecognized-directions.md | `log_20260315_fix-rendering-normalize-unrecognized-directions` | log | active |
+| docs/logs/2026-03-15_fix-rendering-round-4-fix-4-semantic-renderer.md | `log_20260315_fix-rendering-round-4-fix-4-semantic-renderer` | log | active |
+| docs/logs/2026-03-15_obsidian-mermaid-transclusion-test-runbook.md | `log_20260315_obsidian-mermaid-transclusion-test-runbook` | log | active |
+| docs/logs/2026-03-15_pr-20-reviewer-3-adversarial-review.md | `log_20260315_pr-20-reviewer-3-adversarial-review` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-1-merge-readiness-rerun.md | `log_20260315_pr-21-reviewer-1-merge-readiness-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-2-alignment-review-rerun-head-4c4e5.md | `log_20260315_pr-21-reviewer-2-alignment-review-rerun-head-4c4e5` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-2-alignment-review-rerun.md | `log_20260315_pr-21-reviewer-2-alignment-review-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-3-adversarial-review-rerun.md | `log_20260315_pr-21-reviewer-3-adversarial-review-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-3-adversarial-review.md | `log_20260315_pr-21-reviewer-3-adversarial-review` | log | active |
+| docs/logs/2026-03-15_pr-23-reviewer-2-alignment-review.md | `log_20260315_pr-23-reviewer-2-alignment-review` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer1-peer-review-rerun-head-6a83d3a.md | `log_20260315_pr23-reviewer1-peer-review-rerun-head-6a83d3a` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer1-peer-review.md | `log_20260315_pr23-reviewer1-peer-review` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer3-adversarial-review-rerun-head-172c51a.md | `log_20260315_pr23-reviewer3-adversarial-review-rerun-head-172c51a` | log | active |
+| docs/logs/2026-03-16_update-diagram-extraction-checklist-with-pr-6-comp.md | `log_20260316_update-diagram-extraction-checklist-with-pr-6-comp` | log | active |
+| docs/logs/2026-03-21_cap-diagram-max-tokens-at-32768-proposal-ceiling.md | `log_20260321_cap-diagram-max-tokens-at-32768-proposal-ceiling` | log | active |
+| docs/logs/2026-03-21_maintain-ontos-configuration-and-graph-health.md | `log_20260321_maintain-ontos-configuration-and-graph-health` | log | active |
+| docs/logs/2026-03-21_test-perf-close-residual-test-coverage-frozen.md | `log_20260321_performance-patch-pr30-review` | log | complete |
+| docs/logs/2026-03-22_add-entity-registry-pr-a-prompt.md | `log_20260322_entity-registry-pr-a-implementation-and-review` | log | active |
+| docs/logs/2026-03-22_bump-version-to-0-2-0-and-add-pypi-publish-workflo.md | `log_20260322_pypi-v020-release-prep` | log | complete |
+| docs/logs/2026-03-22_entity-system-kickoff-spec-approved.md | `log_20260322_entity-system-kickoff-spec-approved` | log | complete |
+| docs/logs/2026-03-22_feat-ingest-resolve-remaining-review-items.md | `log_20260322_feat-ingest-resolve-remaining-review-items` | log | active |
+| docs/logs/2026-03-22_merge-pull-request-32-from-ohjonathan-feature-v0.md | `log_20260322_merge-pull-request-32-from-ohjonathan-feature-v0` | log | active |
+| docs/logs/2026-03-22_platform-model-comparison-validation-prompt.md | `log_20260322_platform-model-comparison-validation-prompt` | log | active |
+| docs/logs/2026-03-22_pr-35-ingest-time-entity-resolution.md | `log_20260322_pr-35-ingest-time-entity-resolution` | log | complete |
+| docs/logs/2026-03-22_tier-3-ingest-kickoff-spec-approved-and-merged.md | `log_20260322_tier-3-ingest-kickoff-spec-approved-and-merged` | log | complete |
+| docs/logs/2026-03-27_docs-product-address-pr-review-feedback.md | `log_20260327_docs-product-address-pr-review-feedback` | log | active |
+| docs/logs/2026-03-27_docs-validation-add-vault-validation-prompt.md | `log_20260327_docs-validation-add-vault-validation-prompt` | log | active |
+| docs/logs/2026-03-27_tier2-platform-model-comparison-finalization.md | `log_20260327_tier2-platform-model-comparison-finalization` | log | complete |
+| docs/logs/2026-03-28_feat-enrich-add-scale-test-with-50-file-fixture.md | `log_20260328_feat-enrich-add-scale-test-with-50-file-fixture` | log | active |
+| docs/logs/2026-03-28_fix-enrich-callout-safe-related-removal-and-a.md | `log_20260328_fix-enrich-callout-safe-related-removal-and-a` | log | active |
+| docs/logs/2026-03-29_pr38-entity-stubs-org-chart-merge.md | `log_20260329_pr38-entity-stubs-org-chart-merge` | log | active |
+| docs/logs/2026-03-29_pr39-provenance-round2-merge-readiness.md | `log_20260329_pr39-provenance-round2-merge-readiness` | log | active |
+| docs/logs/2026-03-29_prd-phaseb-b1-alignment-review-r4.md | `log_20260329_prd-phaseb-b1-alignment-review-r4` | log | active |
+| docs/logs/2026-03-29_rev6-provenance-unblock-doc-reconciliation.md | `log_20260329_rev6-provenance-unblock-doc-reconciliation` | log | active |
+| docs/logs/2026-03-30_tier-3-lifecycle-integration-context-docs-regis.md | `log_20260330_tier-3-lifecycle-integration-context-docs-regis` | log | active |
+| docs/logs/2026-04-04_docs-product-close-tier-4-review-round-two.md | `log_20260404_docs-product-close-tier-4-review-round-two` | log | active |
+| docs/logs/2026-04-04_merge-tier-3-closeout-reconciliation-pr.md | `log_20260404_merge-tier-3-closeout-reconciliation-pr` | log | active |
+| docs/logs/2026-04-04_production-ingest-validation-closes-tier-3-ec-1-fo.md | `log_20260404_production-ingest-validation-closes-tier-3-ec-1-fo` | log | active |
+| docs/logs/2026-04-04_tier-3-closeout-production-validation-complete.md | `log_20260404_tier-3-closeout-production-validation-complete` | log | active |
+| docs/logs/2026-04-15_llm-dev-v1-full-a-e-lifecycle-on-proposal-review-h.md | `log_20260415_llm-dev-v1-full-a-e-lifecycle-on-proposal-review-h` | log | complete |
+| docs/logs/2026-04-15_proposal-review-hardening-v0-6-0--A.proposal-halt.md | `log_20260415_proposal-review-hardening-v0-6-0-pre-a-proposal-halt` | log | complete |
+| docs/logs/2026-04-15_proposal-review-hardening-v0-6-0-pre-a-halt.md | `log_20260415_proposal-review-hardening-v0-6-0-pre-a-halt` | log | complete |
+| docs/logs/2026-04-15_revise-tier-4-latent-discovery-proposal.md | `log_20260415_revise-tier-4-latent-discovery-proposal` | log | active |
+| docs/logs/2026-04-15_tier-4-graph-ops-layer.md | `log_20260415_tier-4-graph-ops-layer` | log | active |
+| docs/logs/2026-04-15_tier-4-latent-discovery-proposal-layer.md | `log_20260415_tier-4-latent-discovery-proposal-layer` | log | active |
+| docs/logs/2026-04-15_tier-4-proposal-pre-phase-a-review-round-1-two-rev.md | `log_20260415_tier-4-proposal-pre-phase-a-review-round-1-two-rev` | log | active |
+| docs/logs/2026-04-15_tier-4-proposal-revision-graph-ops-quality-layer.md | `log_20260415_tier-4-proposal-revision-graph-ops-quality-layer` | log | active |
+| docs/logs/2026-04-15_v0-6-1-code-adversarial-review.md | `log_20260415_v0-6-1-code-adversarial-review` | log | active |
+| docs/logs/2026-04-15_v0-6-1-spec-peer-codex-round2-review.md | `log_20260415_v0-6-1-spec-peer-codex-round2-review` | log | active |
+| docs/logs/2026-04-17_llm-dev-v1-slice-7-phase-b-2-r2-spec-v1-2-man.md | `log_20260417_llm-dev-v1-slice-7-phase-b-2-r2-spec-v1-2-man` | log | active |
+| docs/logs/2026-04-17_v1-0-0-code-adversarial-codex-review.md | `log_20260417_v1-0-0-code-adversarial-codex-review` | log | active |
+| docs/logs/2026-04-17_v1-0-0-d-5-r2-verification-codex.md | `log_20260417_v1-0-0-d-5-r2-verification-codex` | log | active |
+| docs/logs/2026-04-17_v1-0-0-d5-verification-codex.md | `log_20260417_v1-0-0-d5-verification-codex` | log | active |
+| docs/logs/2026-04-17_v1-0-0-d6-final-approval-gate.md | `log_20260417_v1-0-0-d6-final-approval-gate` | log | active |
+| docs/logs/2026-04-17_v1-0-0-spec-canonical-verdict-r3.md | `log_20260417_v1-0-0-spec-canonical-verdict-r3` | log | active |
+| docs/logs/2026-04-17_v1-0-0-spec-canonical-verdict.md | `log_20260417_v1-0-0-spec-canonical-verdict` | log | active |
+| docs/logs/2026-05-10_folio-love-vtt-srt-transcript-ingest.md | `log_20260510_folio-love-vtt-srt-transcript-ingest` | log | active |
+| docs/logs/2026-05-10_root-cleanup.md | `log_20260510_root-cleanup` | log | active |
+| docs/obsidian_queries.md | `obsidian_queries` | reference | active |
+| docs/product/02_Product_Requirements_Document.md | `doc_02_product_requirements_document` | atom | scaffold |
+| docs/product/04_Implementation_Roadmap.md | `doc_04_implementation_roadmap` | atom | scaffold |
+| docs/product/05_User_Stories.md | `doc_05_user_stories` | product | scaffold |
+| docs/product/06_Prioritization_Matrix.md | `doc_06_prioritization_matrix` | product | scaffold |
+| docs/product/Folio_Feature_Handoff_Brief.md | `folio_feature_handoff_brief` | product | scaffold |
+| docs/product/strategic_direction_memo.md | `strategic_direction_memo` | strategy | active |
+| docs/product/tier3_baseline_decision_memo.md | `tier3_baseline_decision_memo_20260327` | atom | active |
+
+exec
+/bin/zsh -lc 'python3 -m ontos map' in /Users/jonathanoh/workspaces/folio.love
+ exited 1 in 0ms:
+/opt/homebrew/opt/python@3.14/bin/python3.14: No module named ontos
+
+2026-05-12T20:13:32.980097Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:13:32.980343Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:13:32.982217Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:13:32.982246Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Loaded: `ontos_context_map` (Tier 1), plus llm-dev doctor context. The map fallback failed because the Python module is not installed, so I’m proceeding from the existing context map and the files named in the review prompt.
+exec
+/bin/zsh -lc "sed -n '1,240p' docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+# Pre-A Triage: Strict-P3 GitHub Issues Closeout Rerun
+
+Date: 2026-05-12
+
+Framework: `llm-dev-framework@df39e6e3de47b2b5a970b99aa1580c1463dd97e0`
+
+Repository baseline: `origin/main` at `8fbddf7369684ad5609ec3ac450ce986932f21d9`
+
+Evidence rule: prior `folio_*_v1_*` artifacts and the preserved dirty attempt are implementation history only; they are not lifecycle evidence for this rerun.
+
+## Scope Authority
+
+This artifact was regenerated from live GitHub issue bodies and PR #50 metadata after reopening issues #56, #61, #62, #63, #64, #69, #70, and #71 for strict-P3 verification.
+
+## PR #50 Merge-Readiness Scope
+
+- PR: #50 chore(log): ontos session archive — slices 2 merge, 3, 4
+
+- URL: https://github.com/ohjonathan/folio.love/pull/50
+
+- State: MERGED
+
+- Merged at: 2026-05-12T01:35:07Z
+
+- Merge commit: 8fbddf7369684ad5609ec3ac450ce986932f21d9
+
+- Files: docs/logs/2026-04-15_merge-pull-request-45-from-ohjonathan-feat-propos.md, docs/logs/2026-04-15_v0-6-3-emission-time-rejection-memory-queue-cap.md, docs/logs/2026-04-15_v0-6-4-code-adversarial-codex.md
+
+- Closeout requirement: verify the merged change remains docs-only and the archive logs are present on `main`; no re-merge action is needed because PR #50 is already merged.
+
+## Issue-to-Slice Mapping
+
+| Slice | Issues / PR | Scope |
+|---|---|---|
+
+| `folio-github-closeout-v1-0-0` | PR #50, #69 | Verify PR #50 merged/docs-only; verify VTT/SRT support from PR #73; reclose #69 with strict-P3 evidence. |
+
+| `folio-ingest-signals-v1-1-0` | #70, #71 | First-class `action_items`; subtype rendering; deterministic speaker analytics in frontmatter, markdown, and registry. |
+
+| `folio-document-format-coverage-v1-1-1` | #56 | `.docx` conversion through document-oriented MarkItDown path; no slide image extraction; document evidence note and compatibility metadata. |
+
+| `folio-config-defaults-v1-2-0` | #63 | `defaults`/`derive` in `folio.yaml`; metadata resolution order CLI flag -> derivation -> defaults -> error. |
+
+| `folio-correspondence-ingest-v1-3-0` | #61, #64 | Native EML ingest and Message-ID overlap continuation/versioning with `--as-new-entry`. |
+
+| `folio-watch-v1-4-0` | #62 | Watch/drop-zone ingestion routing, stable size waits, success archive, failure quarantine. |
+
+## Live GitHub Issue Records
+
+### Issue #56: folio convert rejects .docx files — normalization gate too narrow
+
+- URL: https://github.com/ohjonathan/folio.love/issues/56
+
+- State at triage: OPEN
+
+- Created: 2026-04-16T16:30:52Z
+
+- Updated: 2026-05-12T19:23:15Z
+
+- Labels: none
+
+#### Body
+
+## Summary
+
+`folio convert` rejects `.docx` files with `Unsupported format: .docx` at the normalization stage, even though `markitdown` (used internally for text extraction) supports DOCX natively.
+
+## Reproduction
+
+```bash
+folio convert "./path/to/sow.docx" --client Acme --engagement "Build"
+```
+
+```
+Converting: sow.docx
+  Normalizing to PDF...
+✗ Conversion failed: Unsupported format: .docx
+```
+
+## Context
+
+Real consulting corpora frequently contain `.docx` artifacts (SOWs, contracts, terms sheets, design documents). Today the workaround is to manually export to PDF via Word, then convert the PDF. This adds an operator step that breaks automation and `folio batch` workflows.
+
+## Suggested behavior
+
+Accept `.docx` at the normalization gate. Since DOCX is not slide-oriented:
+- Skip slide image extraction (or render page images via a document renderer)
+- Use `markitdown` for full-document text extraction (already works)
+- Produce a single evidence note with the full document body rather than per-slide sections
+
+Alternatively, expose a `folio convert --format document` flag that opts into a document-oriented pipeline rather than the slide-oriented one.
+
+## Environment
+
+- folio-love 0.6.4
+- macOS 25.4.0
+- Python 3.12
+
+
+### Issue #61: folio ingest: native .eml / email thread support
+
+- URL: https://github.com/ohjonathan/folio.love/issues/61
+
+- State at triage: OPEN
+
+- Created: 2026-04-17T04:29:35Z
+
+- Updated: 2026-05-12T19:23:17Z
+
+- Labels: none
+
+#### Body
+
+## Summary
+
+`folio` does not natively handle `.eml` files. Email threads — a critical class of consulting engagement evidence — currently require a custom parsing step (extract headers, reconstruct quoted thread, strip Outlook noise, render markdown) before they can be fed into `folio ingest --type internal_sync`. A first-class email pipeline would close a significant gap in the format coverage story alongside #56.
+
+## Today's workaround
+
+On a live engagement we wrote a ~370-line `scripts/parse_emails.py` to:
+- Parse `.eml` via Python's `email` stdlib
+- Extract envelope headers (From, To, CC, Date, Subject)
+- Reconstruct the quoted thread by splitting on Outlook's `From: ...` / `Date: ...` blocks
+- Sort messages chronologically (oldest-first), with the outermost message dated from the EML envelope
+- Strip noise: `<tel:>` / `<mailto:>` / `<https://disclaimer-link>` wrappers, Zoom dial-in tables, SIP/H.323 lines, `____________` separators, repeated signatures, external-sender warnings, scotiabank/firm-wide disclaimers
+- Collapse Outlook's split bullets (`*` on one line, content on the next) into proper markdown bullets
+- Catalog attachments by filename + MIME type (no binary extraction)
+
+The resulting markdown then ingests cleanly via:
+
+```bash
+folio ingest <thread.md> \
+  --type internal_sync \
+  --date <YYYY-MM-DD> \
+  --client <Client> \
+  --engagement <Engagement> \
+  --participants \"<comma-separated-names>\"
+```
+
+For a 3-thread, 11-attachment Scotiabank corpus this produced 3 `review_status: clean` interaction notes with 28 total claims extracted via the Anthropic fallback (Sonnet 4 took over after the OpenAI route 403'd at the AI Gateway).
+
+## Suggested behavior
+
+### 1. New document type: `correspondence`
+
+Email threads aren't really meetings. Add a sibling to `interaction` and `evidence`:
+
+```yaml
+type: correspondence
+subtype: email_thread  # or email_single
+```
+
+This avoids overloading `internal_sync` and gives consumers (e.g., the Folio Library cursor rule) a cleaner lookup vocabulary.
+
+### 2. New CLI: `folio ingest-email <path.eml>`
+
+Or extend `folio ingest` with `--type email_thread` and accept `.eml` directly. Required behavior:
+
+- Parse all `text/plain` parts; fall back to `html` -> markdown via `markitdown`
+- Reconstruct the thread (oldest-first); preserve per-message From/To/CC/Date in frontmatter
+- Strip Outlook/Zoom/disclaimer noise (a curated rules list will get most of it)
+- Resolve participants from To/CC/From across the thread (deduplicated, normalized)
+- Catalog attachments in frontmatter:
+  ```yaml
+  attachments:
+    - filename: SOW_v9.docx
+      content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      size_bytes: 2140160
+      sha256: <hash>
+  ```
+- Optionally extract attachment bodies into the registry (gated by `--extract-attachments`) so that PDFs and images on the thread become first-class documents and can be `impacts:`-linked back to the email
+
+### 3. Registry / frontmatter additions
+
+```yaml
+sender: Mishal Desai <Mishal_Desai@mckinsey.com>
+recipients_to: [Jake Itzkowitz, Tim Vogeler, ...]
+recipients_cc: [Pankaj Kumar, ...]
+thread_message_count: 11
+attachment_count: 3
+external_thread: false   # true if any party is non-McKinsey
+```
+
+### 4. Enrichment hints
+
+The `enrich` step would benefit from email-aware heuristics:
+- Quoted blocks (markdown `>`) should be lower-weight than primary author content
+- Signatures should be detected and excluded from claim extraction
+- Decisions that show up in the most recent message should be boosted
+
+## Why this matters
+
+For a typical engagement, the email thread is where decisions are actually made and where vendor positions are first surfaced. The Scotia corpus we just ingested includes a Microsoft solutions-engineer pitch on Azure vs GCP that doesn't appear in any deck or meeting note, but is essential context for the architecture decision. Without first-class email support, this evidence either gets dropped or gets shoehorned into `internal_sync` with awkward titles like \"Re: [External] AI Platform Vendor Decision Points\".
+
+## Related
+
+- #56 (DOCX normalization gate) — same theme: format coverage gaps push real consulting evidence outside Folio's pipeline.
+
+## Environment
+
+- folio-love 0.6.4
+- macOS 25.4.0
+- Python 3.12
+- QuantumBlack AI Gateway (enterprise proxy)
+
+
+### Issue #62: folio watch <dir>: folder-based auto-ingestion (drop-zone UX)
+
+- URL: https://github.com/ohjonathan/folio.love/issues/62
+
+- State at triage: OPEN
+
+- Created: 2026-04-17T05:03:55Z
+
+- Updated: 2026-05-12T19:23:19Z
+
+- Labels: none
+
+#### Body
+
+## Summary
+
+Add `folio watch <dir>` — a long-running daemon (or `--once` mode for cron / launchd) that monitors a directory for new files and routes each to the appropriate Folio pipeline based on file extension. Closes the "manual CLI invocation per file" gap that today makes Folio feel like a tool you reach for rather than a system that just runs.
+
+## User pain (current state)
+
+To save an email, transcript, deck, or PDF into Folio today, every artifact has the same 4-7 ceremony steps:
+
+1. Get the file into the right subdirectory (`library/<client>/<engagement>/<doctype>/`)
+2. Open terminal, `cd` to workspace, `source .env`
+3. Remember which Folio verb (`ingest` vs `convert`)
+4. Type the right flags (`--type`, `--client`, `--engagement`, `--date`, `--participants`, `--target`)
+5. Wait for processing
+6. Verify the registry entry was written
+
+Steps 2-6 are 100% mechanical given the file. The user always has the same intent ("this is engagement evidence, file it") but has to translate that into Folio's verb-and-flag vocabulary every single time.
+
+For a solo consultant on a live engagement, this friction is the dominant reason artifacts *don't* end up in Folio — the ceremony cost beats the marginal value of any single file.
+
+## Concrete example from a live engagement
+
+exec
+/bin/zsh -lc "sed -n '1,280p' docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-config-defaults-v1-2-0-phase-a-spec
+deliverable_id: folio-config-defaults-v1-2-0
+phase: A
+role: spec-author
+family: claude-opus
+status: completed
+---
+
+# Phase A Spec: folio-config-defaults-v1-2-0
+## Scope
+This strict-P3 rerun slice addresses issue #63. The scope authority is `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`; prior `folio_*_v1_*` artifacts are not lifecycle evidence.
+## Acceptance Criteria
+- Support `defaults` and `defaults.derive` blocks in config.
+- Resolve metadata in order: CLI flag, derivation, defaults, then error.
+- Make ingest date/type optional at Click parsing level while preserving required resolved metadata before ingest commits.
+## Implementation Surface
+- `folio/config.py`
+- `folio/defaults.py`
+- `folio/cli.py`
+- `tests/test_config_defaults.py`
+- `tests/test_cli_ingest.py`
+## Required Validation
+- `./.venv/bin/python -m pytest tests/test_config_defaults.py tests/test_cli_ingest.py -q`
+- `scripts/llm-dev verify <manifest>`
+- Negative control: `scripts/llm-dev verify-lifecycle <manifest>` must fail with `review_pending` before receipts exist.
+- Dispatch B.1, D.2, and D.5 through `dispatch-family-review.sh --append-receipt` for `claude-sonnet`, `codex`, and `gemini`.
+- D.6 final approval must include the exact strict-P3 receipt row and pass `verify-d6-gate.sh --strict-p3 --manifest <manifest> <final_approval>`.
+## Non-Goals
+- Do not count any old artifacts from the prior failed closeout as evidence.
+- Do not commit API keys or local `.env` files.
+
+
+exec
+/bin/zsh -lc "sed -n '1,260p' frameworks/manifests/folio-config-defaults-v1-2-0.yaml" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+manifest_version: 1.6.0
+id: folio-config-defaults-v1-2-0
+slug: folio-config-defaults
+summary: Add `defaults` and `defaults.derive` metadata resolution in folio.yaml so ingest metadata can be omitted when derivable or defaulted.
+pre_a:
+  entry: triage
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+lifecycle_mode: framework lifecycle
+owners:
+- Jonathan Oh (ohjonathan)
+scope:
+  allowed_paths:
+  - AGENTS.md
+  - Ontos_Context_Map.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_B.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_D.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_d4_fix_summary.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_d6_final_approval.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_e_retro.md
+  - docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_chat_log.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_prompt.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_report.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_session_log.md
+  - folio/cli.py
+  - folio/config.py
+  - folio/defaults.py
+  - frameworks/manifests/folio-config-defaults-v1-2-0.yaml
+  - tests/test_cli_ingest.py
+  - tests/test_config_defaults.py
+  allowed_path_patterns:
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-*.yaml
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-config-defaults-v1-2-0-*.txt
+  composition_targets: []
+  forbidden_paths:
+  - .env
+  - tests/validation/.env
+  - frameworks/llm-dev-v1/
+  forbidden_symbols:
+  - API_KEY=
+  - OPENAI_API_KEY=
+  - ANTHROPIC_API_KEY=
+  - GEMINI_API_KEY=
+  cardinality_assertions:
+  - name: folio-config-defaults-v1-2-0 focused contract anchors exist
+    command: test -f folio/defaults.py && rg -n "defaults|derive|resolve" folio/defaults.py folio/cli.py tests/test_config_defaults.py
+    expect: exit-0
+artifacts:
+  spec: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md
+  family_verdict: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-<phase>-<family>-<role>.md
+  canonical_verdict: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_<phase>_canonical_verdict.md
+  fix_summary: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_d4_fix_summary.md
+  verification: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.5-<family>-verifier.md
+  final_approval: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_d6_final_approval.md
+  retro: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_e_retro.md
+  triage_report: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+model_assignments:
+- phase: A
+  assignments:
+    claude-opus: spec-author
+- phase: B.1
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: B.3
+  assignments:
+    codex: meta-consolidator
+- phase: C
+  assignments:
+    claude-opus: implementation-author
+- phase: D.2
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: D.3
+  assignments:
+    codex: meta-consolidator
+- phase: D.4
+  assignments:
+    claude-opus: fix-author
+- phase: D.5
+  assignments:
+    codex: verifier
+    gemini: verifier
+    claude-sonnet: verifier
+- phase: D.6
+  assignments:
+    claude-opus: final-approval
+- phase: E
+  assignments:
+    claude-opus: retro
+cli_capability_matrix:
+  claude-opus:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sonnet:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  gemini:
+    shell: false
+    git: false
+    test_runner: false
+    doc_index: true
+    evidence_cap: static-inspection
+    fallback_models:
+    - gemini-3.1-pro-preview
+    - gemini-2.5-pro
+    - gemini-2.5-flash
+    writes_files_non_interactively: false
+smoke_checks:
+- phase: C
+  checks:
+  - name: folio-config-defaults-v1-2-0 focused tests pass
+    command: ./.venv/bin/python -m pytest tests/test_config_defaults.py tests/test_cli_ingest.py -q
+    expect: exit-0
+- phase: D.6
+  checks:
+  - name: folio-config-defaults-v1-2-0 strict lifecycle verifies
+    command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-config-defaults-v1-2-0.yaml
+    expect: exit-0
+regression_guards: []
+lifecycle_receipt_inventory_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-lifecycle-receipts.yaml
+gate_prerequisites:
+- id: G-test-1
+  category: test
+  description: Focused slice tests pass.
+  verification:
+    command: ./.venv/bin/python -m pytest tests/test_config_defaults.py tests/test_cli_ingest.py -q
+    expect: exit-0
+- id: G-scope-1
+  category: scope
+  description: Slice validation artifacts are rooted in the strict-P3 rerun directory.
+  verification:
+    command: test -d docs/validation/strict_p3_rerun_2026_05_12/review-board
+    expect: exit-0
+- id: G-cardinality-1
+  category: cardinality
+  description: Slice contract anchors exist in code/tests.
+  verification:
+    command: test -f folio/defaults.py && rg -n "defaults|derive|resolve" folio/defaults.py folio/cli.py tests/test_config_defaults.py
+    expect: exit-0
+- id: G-verdict-1
+  category: verdict-presence
+  description: D.5 verifier artifacts from three families exist.
+  verification:
+    command: ls docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.5-*-verifier.md 2>/dev/null | wc -l
+    expect: eq:3
+- id: G-blocker-1
+  category: blocker-closure
+  description: No unresolved blocker marker remains in D.3 canonical verdict.
+  verification:
+    command: test -f docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_D.3_canonical_verdict.md && ! rg -n "UNRESOLVED|BLOCKER|REQUEST CHANGES" docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_D.3_canonical_verdict.md
+    expect: exit-0
+- id: G-branch-1
+  category: branch
+  description: Strict rerun branch is active.
+  verification:
+    command: git rev-parse --abbrev-ref HEAD | rg "^codex/github-issues-closeout-strict-p3-rerun$"
+    expect: exit-0
+tracker:
+  path: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_tracker.md
+  columns:
+  - phase
+  - owner
+  - status
+  - artifact
+  - evidence
+  - timestamp
+branch_map:
+  default: codex/github-issues-closeout-strict-p3-rerun
+references:
+- path: https://github.com/ohjonathan/folio.love/issues/63
+  version: '2026-05-12'
+  relevance: Source scope for folio-config-defaults-v1-2-0
+sibling_deliverable_ids: []
+review_rounds: []
+self_review_caveats: []
+consolidation_mode: external
+reviewer_family_substitutes: []
+
+2026-05-12T20:13:39.109126Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:13:39.109410Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:13:39.111324Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:13:39.111355Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I have the spec and manifest. I’m pulling the issue #63 section from triage next, because B.1 alignment hinges on whether the Phase A scope matches the live issue rather than inherited artifacts.
+exec
+/bin/zsh -lc "sed -n '240,380p' docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+## Concrete example from a live engagement
+
+Today, ingesting one email thread on the Scotiabank AI Platform engagement looks like this (from our actual workflow):
+
+```bash
+folio ingest \"library/scotiabank/aiplatform/correspondence/2026-04-17_scotia_ai_platform_azure_gcp.md\" \\
+  --type internal_sync \\
+  --date 2026-04-16 \\
+  --client Scotiabank \\
+  --engagement \"AI Platform\" \\
+  --participants \"Chi Wai Cheung, Jonathan Oh, Bishal Dasgupta, Will Lau\" \\
+  --target library/scotiabank/aiplatform/correspondence/ \\
+  -n \"Initial ingest from email thread (Azure/GCP agentic stack discussion)\"
+```
+
+Seven flags. Six of them have the same value across every email on this engagement, or could be derived from the email's headers. Only `-n` is genuinely per-invocation.
+
+Multiply by a dozen artifacts a day and the reason Folio adoption stalls becomes obvious.
+
+## Proposed feature
+
+### CLI
+
+```bash
+folio watch <dir> [--config folio.yaml] [--once] [--dry-run] [--quiet]
+```
+
+| Flag | Behavior |
+|---|---|
+| (default) | Long-running daemon. Watches `<dir>` via `watchdog` (cross-platform: kqueue on macOS, inotify on Linux, ReadDirectoryChangesW on Windows) |
+| `--once` | Single pass: process anything currently in `<dir>` that hasn't been seen, then exit. Suitable for cron / launchd. |
+| `--dry-run` | Log what would be processed but don't call the underlying pipeline. |
+| `--quiet` | Suppress per-file stdout; only log errors. |
+
+### Routing rules
+
+By file extension, with overrides via `folio.yaml`:
+
+| Extension | Default pipeline | CLI equivalent |
+|---|---|---|
+| `.eml` | EML thread ingest (#61) | `folio ingest --type email_thread` |
+| `.pptx`, `.ppt` | Deck conversion | `folio convert` |
+| `.pdf` | Document conversion | `folio convert` |
+| `.docx` | Document conversion (#56) | `folio convert` |
+| `.md`, `.txt` | Interaction ingest | `folio ingest` |
+| Other | Skip with warning |
+
+### Configuration
+
+```yaml
+# folio.yaml
+watch:
+  - path: ~/Folio-Inbox
+    defaults:
+      client: Scotiabank
+      engagement: AI Platform
+    routing:
+      - match: \"*.eml\"
+        action: ingest
+        type: email_thread
+      - match: \"*.pptx\"
+        action: convert
+      - match: \"*.md\"
+        action: ingest
+        type: internal_sync   # or auto-derive (see related FR for defaults)
+    after_process:
+      action: archive          # or \"delete\", \"leave\"
+      to: ~/Folio-Inbox/_archive/
+    notify:
+      backend: macos_notification  # or \"stdout\", \"slack\", \"none\"
+```
+
+### Behavior
+
+1. New file appears in watched directory
+2. Folio matches extension against routing rules
+3. Folio waits until file size is stable for N seconds (configurable; default 3) — guards against partial drops while drag is in progress
+4. Folio runs the appropriate pipeline (calls the existing `folio convert` or `folio ingest` internally), with engagement defaults applied
+5. On success: archive (or delete, or leave) the original; post a notification
+6. On failure: write `<filename>.error.log` to `<dir>/_failed/`; post a notification with the error
+
+### Edge cases
+
+- **Partial files / drag in progress**: wait for file size to be stable for N seconds before processing. Configurable via `watch.stability_seconds`.
+- **Duplicates** (same file dropped twice): hash content; if already in registry, log \"already ingested as <id>\" and skip (or archive directly without re-processing).
+- **Concurrent files dropped together**: process serially to avoid LLM rate limits and to make registry writes atomic.
+- **Daemon hygiene**: log rotation under `~/.folio/logs/`, restart on `folio.yaml` change (config watcher), `folio watch --healthcheck` command for monitoring.
+- **Missing target subdirectory**: if `library/scotiabank/aiplatform/correspondence/` doesn't exist, create it (parent dir derived from `defaults.client` + `defaults.engagement` + routed `type`).
+
+### Composition with other features
+
+This feature depends on or composes with:
+
+- **#56** — `.docx` normalization gate. Without this, the watcher can't route `.docx` properly.
+- **#61** — Native `.eml` support. Without this, the watcher needs an intermediate parser for emails (which we've written as a workaround in this engagement — temporary scaffolding to be deleted when #61 ships).
+- **[FR-defaults]** — Engagement defaults in `folio.yaml`. Without this, the watcher would still need to know `--client`, `--engagement`, `--type` etc. for each file. This is the feature that makes `folio watch` truly zero-ceremony. To be filed as a sibling issue.
+- **[FR-thread-dedup]** — Message-ID-based thread dedup. Without this, dragging a thread continuation creates a duplicate registry entry. With it, thread continuations bump the existing entry's version. To be filed as a sibling issue.
+
+### Why not just a shell wrapper around `fswatch` / `inotifywait`?
+
+We considered this. We declined because:
+
+1. **Routing rules need to evolve with Folio's own format support** (today PPTX/PDF; tomorrow DOCX/EML/CSV/etc.). A shell wrapper has to be re-edited every time Folio adds a format.
+2. **Defaults need to compose with Folio's existing config** (`folio.yaml`). A shell wrapper invents its own config or hardcodes values.
+3. **Dedup needs registry-aware logic**, which a shell wrapper would have to reimplement against `library/registry.json`.
+4. **Notification format / failure handling should match Folio's existing UX**, not diverge across N user-built wrappers.
+5. **The Folio user community would build N divergent shell scripts**; one Folio feature replaces them all.
+
+The same argument holds for asking users to write a Hazel rule, Dropzone action, or macOS Folder Action. They all work, but they all reinvent Folio-aware logic outside of Folio.
+
+### Why this matters
+
+Folio today is a CLI-of-verbs (`convert`, `ingest`, `enrich`). For solo consultants doing live engagements, the cognitive overhead of \"which verb, which flags, where does it go\" is the dominant friction — and it's the reason artifacts don't get filed.
+
+A drop-zone collapses that friction to \"save this thing\" — same gesture for any artifact, no taxonomy decisions at the moment of saving. The taxonomy work happens in `folio.yaml` once and is reused forever.
+
+This pattern is well-established in adjacent tools (Hazel, Dropzone, DropBox folder upload, OneDrive auto-sort). What's missing is something that knows the Folio pipeline.
+
+### Environment
+
+- folio-love 0.6.4
+- macOS 25.4.0 (target: also Linux via `inotify`, Windows via `watchdog`)
+- Python 3.12
+
+### Related issues
+
+- #56 — DOCX support (needed for full extension routing coverage)
+- #61 — Native EML support (needed for `.eml` routing)
+- [FR-defaults] — Engagement defaults in `folio.yaml` (sibling)
+- [FR-thread-dedup] — Message-ID-based email thread dedup (sibling)
+
+
+### Issue #63: Engagement defaults & auto-derived ingest metadata in folio.yaml
+
+- URL: https://github.com/ohjonathan/folio.love/issues/63
+
+- State at triage: OPEN
+
+- Created: 2026-04-17T05:04:45Z
+
+- Updated: 2026-05-12T19:23:21Z
+
+exec
+/bin/zsh -lc 'rg -n "Issue #63|defaults|derive|metadata" docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+13:This artifact was regenerated from live GitHub issue bodies and PR #50 metadata after reopening issues #56, #61, #62, #63, #64, #69, #70, and #71 for strict-P3 verification.
+40:| `folio-document-format-coverage-v1-1-1` | #56 | `.docx` conversion through document-oriented MarkItDown path; no slide image extraction; document evidence note and compatibility metadata. |
+42:| `folio-config-defaults-v1-2-0` | #63 | `defaults`/`derive` in `folio.yaml`; metadata resolution order CLI flag -> derivation -> defaults -> error. |
+255:Seven flags. Six of them have the same value across every email on this engagement, or could be derived from the email's headers. Only `-n` is genuinely per-invocation.
+293:    defaults:
+304:        type: internal_sync   # or auto-derive (see related FR for defaults)
+317:4. Folio runs the appropriate pipeline (calls the existing `folio convert` or `folio ingest` internally), with engagement defaults applied
+327:- **Missing target subdirectory**: if `library/scotiabank/aiplatform/correspondence/` doesn't exist, create it (parent dir derived from `defaults.client` + `defaults.engagement` + routed `type`).
+335:- **[FR-defaults]** — Engagement defaults in `folio.yaml`. Without this, the watcher would still need to know `--client`, `--engagement`, `--type` etc. for each file. This is the feature that makes `folio watch` truly zero-ceremony. To be filed as a sibling issue.
+368:- [FR-defaults] — Engagement defaults in `folio.yaml` (sibling)
+372:### Issue #63: Engagement defaults & auto-derived ingest metadata in folio.yaml
+388:Add a `defaults:` block to `folio.yaml` so `folio ingest` and `folio convert` don't require repeating `--client`, `--engagement`, `--type`, `--date`, `--participants`, `--target` on every CLI invocation. Layer on a `derive:` block with rules for pulling `--date` from EML envelope headers, `--participants` from From/To/CC, `--type` from sender domain matching, etc. CLI flag still wins; config is the floor.
+435:defaults:
+441:  derive:
+482:3. **`defaults:` block** in `folio.yaml`
+483:4. **Interactive prompt** (only if `--strict` is set; default behavior is to use defaults silently)
+486:Folio always logs the derived value so the user can see what was used:
+490:[derive] client: Scotiabank (defaults.client)
+491:[derive] engagement: AI Platform (defaults.engagement)
+492:[derive] type: internal_sync (rule: all_participants_match_domain @mckinsey.com)
+493:[derive] date: 2026-04-16 (eml.date)
+494:[derive] participants: [Chi Wai Cheung, Jonathan Oh, Bishal Dasgupta, Will Lau] (eml.headers)
+495:[derive] target: ./library/scotiabank/aiplatform/correspondence/ (rule: type_is email_thread)
+502:# Override just the type — everything else is derived
+511:Without this, **`folio watch` (related FR) is impossible** without per-file metadata sidecar files or some other awkward UX. With this, the watcher just calls `folio ingest <file>` and the right thing happens.
+513:This also reduces error: today, a typo like `--client \"Scotabank\"` creates a phantom client in the registry that's hard to clean up afterward. With config-defined defaults, the value is right once and right forever.
+517:- **#62 (folio watch)** depends on this. The watcher cannot apply per-file flags via shell — it needs config-driven defaults.
+519:- **#56 (DOCX support)** benefits from this. DOCX ingest could derive type and date from the document itself.
+523:- **Multiple defaults per workspace** (e.g., user works on multiple engagements simultaneously): support `defaults` per directory tree. `folio.yaml` in a subdirectory overrides the parent. Or: `--profile <name>` flag to select among named default profiles.
+525:- **Conflicting derivations** (e.g., filename says 2026-04-16 but EML header says 2026-04-15): use first-match-wins per the order in `derive:`. Log both.
+526:- **Backward compatibility**: when `defaults` is absent, behavior is unchanged. Existing scripts continue to work.
+546:- #61 — Native EML support (highest-value beneficiary of `derive:` rules)
+567:When ingesting an `.eml` (post-#61) or an EML-derived markdown file, use the email's RFC 5322 `Message-ID`, `In-Reply-To`, and `References` headers to detect when the new file is a **continuation** of a previously-ingested thread. Treat continuations as new versions of the same registry entry rather than as independent entries.
+595:Email already carries the relationship metadata. Every reply chain has:
+676:- **#63 (defaults)** — pairs naturally; once defaults remove flag friction, dedup removes registry friction.
+681:Email threads are **inherently cumulative**: every reply is a superset of the previous body. Treating each version as a fresh document violates the user's mental model and pollutes the registry. Other Folio document types (PPTX, PDF) have explicit version tracking (via filename or `--version`). EML needs the same, but derived automatically from headers that already exist in every email since 1982.
+695:- #63 — Engagement defaults
+860:- No `owner` / `due` / `status` metadata on findings, even though `_SUBTYPE_PROMPT_HINTS` references "owners".
+
+exec
+/bin/zsh -lc 'git status --short -- docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md Ontos_Context_Map.md AGENTS.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+2026-05-12T20:13:44.535556Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:13:44.535804Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:13:44.537624Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:13:44.537659Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc 'test -e docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md' in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '372,540p' docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md" in /Users/jonathanoh/workspaces/folio.love
+ exited 1 in 0ms:
+ succeeded in 0ms:
+### Issue #63: Engagement defaults & auto-derived ingest metadata in folio.yaml
+
+- URL: https://github.com/ohjonathan/folio.love/issues/63
+
+- State at triage: OPEN
+
+- Created: 2026-04-17T05:04:45Z
+
+- Updated: 2026-05-12T19:23:21Z
+
+- Labels: none
+
+#### Body
+
+## Summary
+
+Add a `defaults:` block to `folio.yaml` so `folio ingest` and `folio convert` don't require repeating `--client`, `--engagement`, `--type`, `--date`, `--participants`, `--target` on every CLI invocation. Layer on a `derive:` block with rules for pulling `--date` from EML envelope headers, `--participants` from From/To/CC, `--type` from sender domain matching, etc. CLI flag still wins; config is the floor.
+
+## User pain (current state)
+
+For a solo consultant on one engagement, every `folio ingest` invocation today looks like this (real example from the Scotiabank AI Platform engagement):
+
+```bash
+folio ingest \"thread.md\" \\
+  --type internal_sync \\
+  --date 2026-04-16 \\
+  --client Scotiabank \\
+  --engagement \"AI Platform\" \\
+  --participants \"Chi Wai Cheung, Jonathan Oh, Bishal Dasgupta, Will Lau\" \\
+  --target library/scotiabank/aiplatform/correspondence/ \\
+  -n \"Initial ingest from email thread\"
+```
+
+Of those 7 flags:
+
+| Flag | Source of truth | Repeated value? |
+|---|---|---|
+| `--client` | Engagement-level constant | Same for every invocation on this engagement |
+| `--engagement` | Engagement-level constant | Same for every invocation on this engagement |
+| `--target` | Deterministic from client + engagement + type | Same for every invocation |
+| `--type` | Derivable from participants | All `@mckinsey.com` → `internal_sync`; mixed → `client_meeting` |
+| `--date` | Derivable from EML `Date:` header / markdown frontmatter / filename | Per-file but available in the file itself |
+| `--participants` | Derivable from EML From/To/CC | Per-file but available in the file itself |
+| `-n` | Genuinely per-invocation | The only flag that's truly user input |
+
+Six of seven flags either:
+(a) repeat constant values, or
+(b) restate values already present in the source file.
+
+The user is doing manual data entry against information that already exists.
+
+## Concrete example
+
+Across a single workday on this engagement, we filed 3 emails. That's 3 × 7 = 21 flag inputs, of which 18 were either constant or derivable. Three were genuinely per-invocation. **86% of flag-typing was redundant.**
+
+This compounds: as adoption grows or the corpus expands, the redundant typing scales linearly while the value of each marginal artifact stays constant. At some threshold, users stop filing.
+
+## Proposed feature
+
+### Config schema additions
+
+```yaml
+# folio.yaml
+defaults:
+  client: Scotiabank
+  engagement: AI Platform
+  target_root: ./library
+
+  # Per-source-type derivation rules
+  derive:
+    date:
+      - from: eml.date                    # for .eml inputs
+      - from: markdown.frontmatter.date   # for .md inputs with YAML frontmatter
+      - from: filename.regex
+        pattern: '^(\\d{4}-\\d{2}-\\d{2})_'  # date prefix in filename
+      - from: file.mtime                  # last resort
+
+    participants:
+      - from: eml.headers
+        fields: [from, to, cc]
+        normalize: name_only              # strip \"<email@domain>\"; dedup
+      - from: markdown.frontmatter.participants
+
+    type:
+      - rule: all_participants_match_domain
+        domain: \"@mckinsey.com\"
+        type: internal_sync
+      - rule: any_participant_matches_domain
+        domain: \"@scotiabank.com\"
+        type: client_meeting
+      - rule: filename_contains
+        substring: \"_workshop_\"
+        type: workshop
+      - default: internal_sync
+
+    target:
+      - rule: type_is
+        type: email_thread
+        target: \"{target_root}/{client_slug}/{engagement_slug}/correspondence/\"
+      - rule: type_is
+        type: client_meeting
+        target: \"{target_root}/{client_slug}/{engagement_slug}/interactions/\"
+```
+
+### CLI behavior
+
+When a flag is omitted, Folio resolves in this precedence order:
+
+1. **Explicit CLI flag** (highest precedence)
+2. **Derivation rule** matching the source file
+3. **`defaults:` block** in `folio.yaml`
+4. **Interactive prompt** (only if `--strict` is set; default behavior is to use defaults silently)
+5. **Error** (if still unresolved and `--strict` is set, OR if the field is required and unresolvable)
+
+Folio always logs the derived value so the user can see what was used:
+
+```bash
+$ folio ingest thread.eml
+[derive] client: Scotiabank (defaults.client)
+[derive] engagement: AI Platform (defaults.engagement)
+[derive] type: internal_sync (rule: all_participants_match_domain @mckinsey.com)
+[derive] date: 2026-04-16 (eml.date)
+[derive] participants: [Chi Wai Cheung, Jonathan Oh, Bishal Dasgupta, Will Lau] (eml.headers)
+[derive] target: ./library/scotiabank/aiplatform/correspondence/ (rule: type_is email_thread)
+✓ Ingested as scotiabank_aiplatform_sync_20260416_re_scotia_azure_gcp
+```
+
+### CLI overrides still work
+
+```bash
+# Override just the type — everything else is derived
+folio ingest thread.eml --type workshop
+
+# Strict mode: prompt if anything's unresolvable
+folio ingest thread.eml --strict
+```
+
+### Why this matters
+
+Without this, **`folio watch` (related FR) is impossible** without per-file metadata sidecar files or some other awkward UX. With this, the watcher just calls `folio ingest <file>` and the right thing happens.
+
+This also reduces error: today, a typo like `--client \"Scotabank\"` creates a phantom client in the registry that's hard to clean up afterward. With config-defined defaults, the value is right once and right forever.
+
+### Composition
+
+- **#62 (folio watch)** depends on this. The watcher cannot apply per-file flags via shell — it needs config-driven defaults.
+- **#61 (EML support)** is the highest-value beneficiary of derivation: date, participants, and type all come \"for free\" from RFC 5322 headers.
+- **#56 (DOCX support)** benefits from this. DOCX ingest could derive type and date from the document itself.
+
+### Edge cases
+
+- **Multiple defaults per workspace** (e.g., user works on multiple engagements simultaneously): support `defaults` per directory tree. `folio.yaml` in a subdirectory overrides the parent. Or: `--profile <name>` flag to select among named default profiles.
+- **Missing required field** (e.g., file has no extractable date): error with a clear message naming the field, the source file, and the rules that were tried.
+- **Conflicting derivations** (e.g., filename says 2026-04-16 but EML header says 2026-04-15): use first-match-wins per the order in `derive:`. Log both.
+- **Backward compatibility**: when `defaults` is absent, behavior is unchanged. Existing scripts continue to work.
+
+### Why not \"just write a shell alias\"?
+
+A user could `alias fingest='folio ingest --client Scotiabank --engagement \"AI Platform\"'`. We considered this and declined because:
+
+1. Aliases don't compose with `folio watch` — daemons don't read shell aliases.
+2. Aliases can't do file-content derivation (date, participants, type from headers).
+3. Aliases are per-user; Folio config is per-workspace and survives onboarding new team members.
+4. Aliases proliferate (`fingest`, `fingest_internal`, `fingest_client`, ...) where one config block would do.
+
+### Environment
+
+- folio-love 0.6.4
+- macOS 25.4.0
+
+exec
+/bin/zsh -lc 'git status --short Ontos_Context_Map.md AGENTS.md docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+2026-05-12T20:13:49.102545Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:13:49.102808Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:13:49.104563Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:13:49.104595Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The key alignment risk I’m checking is whether the Phase A contract is specific enough to force fresh implementation evidence for issue #63, rather than allowing a narrow or inherited interpretation of “defaults.”
+exec
+/bin/zsh -lc 'nl -ba docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	---
+     2	id: folio-config-defaults-v1-2-0-phase-a-spec
+     3	deliverable_id: folio-config-defaults-v1-2-0
+     4	phase: A
+     5	role: spec-author
+     6	family: claude-opus
+     7	status: completed
+     8	---
+     9	
+    10	# Phase A Spec: folio-config-defaults-v1-2-0
+    11	## Scope
+    12	This strict-P3 rerun slice addresses issue #63. The scope authority is `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`; prior `folio_*_v1_*` artifacts are not lifecycle evidence.
+    13	## Acceptance Criteria
+    14	- Support `defaults` and `defaults.derive` blocks in config.
+    15	- Resolve metadata in order: CLI flag, derivation, defaults, then error.
+    16	- Make ingest date/type optional at Click parsing level while preserving required resolved metadata before ingest commits.
+    17	## Implementation Surface
+    18	- `folio/config.py`
+    19	- `folio/defaults.py`
+    20	- `folio/cli.py`
+    21	- `tests/test_config_defaults.py`
+    22	- `tests/test_cli_ingest.py`
+    23	## Required Validation
+    24	- `./.venv/bin/python -m pytest tests/test_config_defaults.py tests/test_cli_ingest.py -q`
+    25	- `scripts/llm-dev verify <manifest>`
+    26	- Negative control: `scripts/llm-dev verify-lifecycle <manifest>` must fail with `review_pending` before receipts exist.
+    27	- Dispatch B.1, D.2, and D.5 through `dispatch-family-review.sh --append-receipt` for `claude-sonnet`, `codex`, and `gemini`.
+    28	- D.6 final approval must include the exact strict-P3 receipt row and pass `verify-d6-gate.sh --strict-p3 --manifest <manifest> <final_approval>`.
+    29	## Non-Goals
+    30	- Do not count any old artifacts from the prior failed closeout as evidence.
+    31	- Do not commit API keys or local `.env` files.
+    32	
+
+exec
+/bin/zsh -lc "nl -ba frameworks/manifests/folio-config-defaults-v1-2-0.yaml | sed -n '1,190p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	manifest_version: 1.6.0
+     2	id: folio-config-defaults-v1-2-0
+     3	slug: folio-config-defaults
+     4	summary: Add `defaults` and `defaults.derive` metadata resolution in folio.yaml so ingest metadata can be omitted when derivable or defaulted.
+     5	pre_a:
+     6	  entry: triage
+     7	  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+     8	lifecycle_mode: framework lifecycle
+     9	owners:
+    10	- Jonathan Oh (ohjonathan)
+    11	scope:
+    12	  allowed_paths:
+    13	  - AGENTS.md
+    14	  - Ontos_Context_Map.md
+    15	  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_B.3_canonical_verdict.md
+    16	  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_D.3_canonical_verdict.md
+    17	  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_d4_fix_summary.md
+    18	  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_d6_final_approval.md
+    19	  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md
+    20	  - docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_e_retro.md
+    21	  - docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+    22	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_chat_log.md
+    23	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_prompt.md
+    24	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_report.md
+    25	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_session_log.md
+    26	  - folio/cli.py
+    27	  - folio/config.py
+    28	  - folio/defaults.py
+    29	  - frameworks/manifests/folio-config-defaults-v1-2-0.yaml
+    30	  - tests/test_cli_ingest.py
+    31	  - tests/test_config_defaults.py
+    32	  allowed_path_patterns:
+    33	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-*.md
+    34	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-*.yaml
+    35	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-*.md
+    36	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-config-defaults-v1-2-0-*.txt
+    37	  composition_targets: []
+    38	  forbidden_paths:
+    39	  - .env
+    40	  - tests/validation/.env
+    41	  - frameworks/llm-dev-v1/
+    42	  forbidden_symbols:
+    43	  - API_KEY=
+    44	  - OPENAI_API_KEY=
+    45	  - ANTHROPIC_API_KEY=
+    46	  - GEMINI_API_KEY=
+    47	  cardinality_assertions:
+    48	  - name: folio-config-defaults-v1-2-0 focused contract anchors exist
+    49	    command: test -f folio/defaults.py && rg -n "defaults|derive|resolve" folio/defaults.py folio/cli.py tests/test_config_defaults.py
+    50	    expect: exit-0
+    51	artifacts:
+    52	  spec: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md
+    53	  family_verdict: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-<phase>-<family>-<role>.md
+    54	  canonical_verdict: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_<phase>_canonical_verdict.md
+    55	  fix_summary: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_d4_fix_summary.md
+    56	  verification: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.5-<family>-verifier.md
+    57	  final_approval: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_d6_final_approval.md
+    58	  retro: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_e_retro.md
+    59	  triage_report: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+    60	model_assignments:
+    61	- phase: A
+    62	  assignments:
+    63	    claude-opus: spec-author
+    64	- phase: B.1
+    65	  assignments:
+    66	    claude-sonnet: peer
+    67	    codex: alignment
+    68	    gemini: adversarial
+    69	- phase: B.3
+    70	  assignments:
+    71	    codex: meta-consolidator
+    72	- phase: C
+    73	  assignments:
+    74	    claude-opus: implementation-author
+    75	- phase: D.2
+    76	  assignments:
+    77	    claude-sonnet: peer
+    78	    codex: alignment
+    79	    gemini: adversarial
+    80	- phase: D.3
+    81	  assignments:
+    82	    codex: meta-consolidator
+    83	- phase: D.4
+    84	  assignments:
+    85	    claude-opus: fix-author
+    86	- phase: D.5
+    87	  assignments:
+    88	    codex: verifier
+    89	    gemini: verifier
+    90	    claude-sonnet: verifier
+    91	- phase: D.6
+    92	  assignments:
+    93	    claude-opus: final-approval
+    94	- phase: E
+    95	  assignments:
+    96	    claude-opus: retro
+    97	cli_capability_matrix:
+    98	  claude-opus:
+    99	    shell: true
+   100	    git: true
+   101	    test_runner: true
+   102	    doc_index: true
+   103	  claude-sonnet:
+   104	    shell: true
+   105	    git: true
+   106	    test_runner: true
+   107	    doc_index: true
+   108	  codex:
+   109	    shell: true
+   110	    git: true
+   111	    test_runner: true
+   112	    doc_index: true
+   113	  gemini:
+   114	    shell: false
+   115	    git: false
+   116	    test_runner: false
+   117	    doc_index: true
+   118	    evidence_cap: static-inspection
+   119	    fallback_models:
+   120	    - gemini-3.1-pro-preview
+   121	    - gemini-2.5-pro
+   122	    - gemini-2.5-flash
+   123	    writes_files_non_interactively: false
+   124	smoke_checks:
+   125	- phase: C
+   126	  checks:
+   127	  - name: folio-config-defaults-v1-2-0 focused tests pass
+   128	    command: ./.venv/bin/python -m pytest tests/test_config_defaults.py tests/test_cli_ingest.py -q
+   129	    expect: exit-0
+   130	- phase: D.6
+   131	  checks:
+   132	  - name: folio-config-defaults-v1-2-0 strict lifecycle verifies
+   133	    command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-config-defaults-v1-2-0.yaml
+   134	    expect: exit-0
+   135	regression_guards: []
+   136	lifecycle_receipt_inventory_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-lifecycle-receipts.yaml
+   137	gate_prerequisites:
+   138	- id: G-test-1
+   139	  category: test
+   140	  description: Focused slice tests pass.
+   141	  verification:
+   142	    command: ./.venv/bin/python -m pytest tests/test_config_defaults.py tests/test_cli_ingest.py -q
+   143	    expect: exit-0
+   144	- id: G-scope-1
+   145	  category: scope
+   146	  description: Slice validation artifacts are rooted in the strict-P3 rerun directory.
+   147	  verification:
+   148	    command: test -d docs/validation/strict_p3_rerun_2026_05_12/review-board
+   149	    expect: exit-0
+   150	- id: G-cardinality-1
+   151	  category: cardinality
+   152	  description: Slice contract anchors exist in code/tests.
+   153	  verification:
+   154	    command: test -f folio/defaults.py && rg -n "defaults|derive|resolve" folio/defaults.py folio/cli.py tests/test_config_defaults.py
+   155	    expect: exit-0
+   156	- id: G-verdict-1
+   157	  category: verdict-presence
+   158	  description: D.5 verifier artifacts from three families exist.
+   159	  verification:
+   160	    command: ls docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.5-*-verifier.md 2>/dev/null | wc -l
+   161	    expect: eq:3
+   162	- id: G-blocker-1
+   163	  category: blocker-closure
+   164	  description: No unresolved blocker marker remains in D.3 canonical verdict.
+   165	  verification:
+   166	    command: test -f docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_D.3_canonical_verdict.md && ! rg -n "UNRESOLVED|BLOCKER|REQUEST CHANGES" docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_D.3_canonical_verdict.md
+   167	    expect: exit-0
+   168	- id: G-branch-1
+   169	  category: branch
+   170	  description: Strict rerun branch is active.
+   171	  verification:
+   172	    command: git rev-parse --abbrev-ref HEAD | rg "^codex/github-issues-closeout-strict-p3-rerun$"
+   173	    expect: exit-0
+   174	tracker:
+   175	  path: docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_tracker.md
+   176	  columns:
+   177	  - phase
+   178	  - owner
+   179	  - status
+   180	  - artifact
+   181	  - evidence
+   182	  - timestamp
+   183	branch_map:
+   184	  default: codex/github-issues-closeout-strict-p3-rerun
+   185	references:
+   186	- path: https://github.com/ohjonathan/folio.love/issues/63
+   187	  version: '2026-05-12'
+   188	  relevance: Source scope for folio-config-defaults-v1-2-0
+   189	sibling_deliverable_ids: []
+   190	review_rounds: []
+
+exec
+/bin/zsh -lc "nl -ba docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md | sed -n '372,530p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   372	### Issue #63: Engagement defaults & auto-derived ingest metadata in folio.yaml
+   373	
+   374	- URL: https://github.com/ohjonathan/folio.love/issues/63
+   375	
+   376	- State at triage: OPEN
+   377	
+   378	- Created: 2026-04-17T05:04:45Z
+   379	
+   380	- Updated: 2026-05-12T19:23:21Z
+   381	
+   382	- Labels: none
+   383	
+   384	#### Body
+   385	
+   386	## Summary
+   387	
+   388	Add a `defaults:` block to `folio.yaml` so `folio ingest` and `folio convert` don't require repeating `--client`, `--engagement`, `--type`, `--date`, `--participants`, `--target` on every CLI invocation. Layer on a `derive:` block with rules for pulling `--date` from EML envelope headers, `--participants` from From/To/CC, `--type` from sender domain matching, etc. CLI flag still wins; config is the floor.
+   389	
+   390	## User pain (current state)
+   391	
+   392	For a solo consultant on one engagement, every `folio ingest` invocation today looks like this (real example from the Scotiabank AI Platform engagement):
+   393	
+   394	```bash
+   395	folio ingest \"thread.md\" \\
+   396	  --type internal_sync \\
+   397	  --date 2026-04-16 \\
+   398	  --client Scotiabank \\
+   399	  --engagement \"AI Platform\" \\
+   400	  --participants \"Chi Wai Cheung, Jonathan Oh, Bishal Dasgupta, Will Lau\" \\
+   401	  --target library/scotiabank/aiplatform/correspondence/ \\
+   402	  -n \"Initial ingest from email thread\"
+   403	```
+   404	
+   405	Of those 7 flags:
+   406	
+   407	| Flag | Source of truth | Repeated value? |
+   408	|---|---|---|
+   409	| `--client` | Engagement-level constant | Same for every invocation on this engagement |
+   410	| `--engagement` | Engagement-level constant | Same for every invocation on this engagement |
+   411	| `--target` | Deterministic from client + engagement + type | Same for every invocation |
+   412	| `--type` | Derivable from participants | All `@mckinsey.com` → `internal_sync`; mixed → `client_meeting` |
+   413	| `--date` | Derivable from EML `Date:` header / markdown frontmatter / filename | Per-file but available in the file itself |
+   414	| `--participants` | Derivable from EML From/To/CC | Per-file but available in the file itself |
+   415	| `-n` | Genuinely per-invocation | The only flag that's truly user input |
+   416	
+   417	Six of seven flags either:
+   418	(a) repeat constant values, or
+   419	(b) restate values already present in the source file.
+   420	
+   421	The user is doing manual data entry against information that already exists.
+   422	
+   423	## Concrete example
+   424	
+   425	Across a single workday on this engagement, we filed 3 emails. That's 3 × 7 = 21 flag inputs, of which 18 were either constant or derivable. Three were genuinely per-invocation. **86% of flag-typing was redundant.**
+   426	
+   427	This compounds: as adoption grows or the corpus expands, the redundant typing scales linearly while the value of each marginal artifact stays constant. At some threshold, users stop filing.
+   428	
+   429	## Proposed feature
+   430	
+   431	### Config schema additions
+   432	
+   433	```yaml
+   434	# folio.yaml
+   435	defaults:
+   436	  client: Scotiabank
+   437	  engagement: AI Platform
+   438	  target_root: ./library
+   439	
+   440	  # Per-source-type derivation rules
+   441	  derive:
+   442	    date:
+   443	      - from: eml.date                    # for .eml inputs
+   444	      - from: markdown.frontmatter.date   # for .md inputs with YAML frontmatter
+   445	      - from: filename.regex
+   446	        pattern: '^(\\d{4}-\\d{2}-\\d{2})_'  # date prefix in filename
+   447	      - from: file.mtime                  # last resort
+   448	
+   449	    participants:
+   450	      - from: eml.headers
+   451	        fields: [from, to, cc]
+   452	        normalize: name_only              # strip \"<email@domain>\"; dedup
+   453	      - from: markdown.frontmatter.participants
+   454	
+   455	    type:
+   456	      - rule: all_participants_match_domain
+   457	        domain: \"@mckinsey.com\"
+   458	        type: internal_sync
+   459	      - rule: any_participant_matches_domain
+   460	        domain: \"@scotiabank.com\"
+   461	        type: client_meeting
+   462	      - rule: filename_contains
+   463	        substring: \"_workshop_\"
+   464	        type: workshop
+   465	      - default: internal_sync
+   466	
+   467	    target:
+   468	      - rule: type_is
+   469	        type: email_thread
+   470	        target: \"{target_root}/{client_slug}/{engagement_slug}/correspondence/\"
+   471	      - rule: type_is
+   472	        type: client_meeting
+   473	        target: \"{target_root}/{client_slug}/{engagement_slug}/interactions/\"
+   474	```
+   475	
+   476	### CLI behavior
+   477	
+   478	When a flag is omitted, Folio resolves in this precedence order:
+   479	
+   480	1. **Explicit CLI flag** (highest precedence)
+   481	2. **Derivation rule** matching the source file
+   482	3. **`defaults:` block** in `folio.yaml`
+   483	4. **Interactive prompt** (only if `--strict` is set; default behavior is to use defaults silently)
+   484	5. **Error** (if still unresolved and `--strict` is set, OR if the field is required and unresolvable)
+   485	
+   486	Folio always logs the derived value so the user can see what was used:
+   487	
+   488	```bash
+   489	$ folio ingest thread.eml
+   490	[derive] client: Scotiabank (defaults.client)
+   491	[derive] engagement: AI Platform (defaults.engagement)
+   492	[derive] type: internal_sync (rule: all_participants_match_domain @mckinsey.com)
+   493	[derive] date: 2026-04-16 (eml.date)
+   494	[derive] participants: [Chi Wai Cheung, Jonathan Oh, Bishal Dasgupta, Will Lau] (eml.headers)
+   495	[derive] target: ./library/scotiabank/aiplatform/correspondence/ (rule: type_is email_thread)
+   496	✓ Ingested as scotiabank_aiplatform_sync_20260416_re_scotia_azure_gcp
+   497	```
+   498	
+   499	### CLI overrides still work
+   500	
+   501	```bash
+   502	# Override just the type — everything else is derived
+   503	folio ingest thread.eml --type workshop
+   504	
+   505	# Strict mode: prompt if anything's unresolvable
+   506	folio ingest thread.eml --strict
+   507	```
+   508	
+   509	### Why this matters
+   510	
+   511	Without this, **`folio watch` (related FR) is impossible** without per-file metadata sidecar files or some other awkward UX. With this, the watcher just calls `folio ingest <file>` and the right thing happens.
+   512	
+   513	This also reduces error: today, a typo like `--client \"Scotabank\"` creates a phantom client in the registry that's hard to clean up afterward. With config-defined defaults, the value is right once and right forever.
+   514	
+   515	### Composition
+   516	
+   517	- **#62 (folio watch)** depends on this. The watcher cannot apply per-file flags via shell — it needs config-driven defaults.
+   518	- **#61 (EML support)** is the highest-value beneficiary of derivation: date, participants, and type all come \"for free\" from RFC 5322 headers.
+   519	- **#56 (DOCX support)** benefits from this. DOCX ingest could derive type and date from the document itself.
+   520	
+   521	### Edge cases
+   522	
+   523	- **Multiple defaults per workspace** (e.g., user works on multiple engagements simultaneously): support `defaults` per directory tree. `folio.yaml` in a subdirectory overrides the parent. Or: `--profile <name>` flag to select among named default profiles.
+   524	- **Missing required field** (e.g., file has no extractable date): error with a clear message naming the field, the source file, and the rules that were tried.
+   525	- **Conflicting derivations** (e.g., filename says 2026-04-16 but EML header says 2026-04-15): use first-match-wins per the order in `derive:`. Log both.
+   526	- **Backward compatibility**: when `defaults` is absent, behavior is unchanged. Existing scripts continue to work.
+   527	
+   528	### Why not \"just write a shell alias\"?
+   529	
+   530	A user could `alias fingest='folio ingest --client Scotiabank --engagement \"AI Platform\"'`. We considered this and declined because:
+
+2026-05-12T20:14:14.826561Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:14:14.828639Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:14:14.845751Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:14:14.845798Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’m going to write the review artifact with a `request changes` verdict. The blocker is not stale-evidence handling, which is mostly well covered, but the Phase A contract is too narrow against issue #63’s own required metadata fields and convert/ingest wording.
+apply patch
+patch: completed
+/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4616786351e0e3b5ba039e37a65dda746f1339e1
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+@@ -0,0 +1,29 @@
++---
++deliverable_id: folio-config-defaults-v1-2-0
++phase: B.1
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++# B.1 Alignment Review: folio-config-defaults-v1-2-0
++
++## Verdict
++request changes
++
++## Review Scope
++Reviewed only the Phase A spec, strict-P3 pre-A triage entry, and lifecycle manifest named in the prompt:
++`docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`,
++`docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md`, and
++`frameworks/manifests/folio-config-defaults-v1-2-0.yaml`.
++
++## Blockers
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:13` reduces the acceptance contract to generic `defaults` / `defaults.derive` support and explicitly calls out only ingest `date/type` optionality at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:16`. The live issue scope in `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:388` names both `folio ingest` and `folio convert`, and the repeated metadata table at `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:407` through `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:414` names `client`, `engagement`, `target`, `type`, `date`, and `participants`. The Phase A contract should either require resolution coverage for those fields or explicitly defer specific fields as non-goals. As written, a Phase C implementation could satisfy the spec while leaving most of issue #63 unresolved.
++- `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:4` frames the slice as ingest metadata only, and the validation surface at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:127` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:129` runs only `tests/test_config_defaults.py` and `tests/test_cli_ingest.py`. There is no manifest-level guard that `folio convert` participates in defaults resolution, despite the triage source saying `folio ingest` and `folio convert` should stop requiring repeated metadata. If convert is intentionally out of this slice, the manifest and spec need an explicit non-goal or sibling-slice reference.
++
++## Stale Evidence Assessment
++The stale-evidence boundary is mostly aligned. The Phase A spec states that prior `folio_*_v1_*` artifacts are not lifecycle evidence at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:12` and repeats that as a non-goal at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:30`. The manifest also roots pre-A to the regenerated triage artifact at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:5` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:7`, keeps review artifacts under the strict-P3 rerun review board at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:32` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:36`, and defines a fresh lifecycle receipt inventory at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:136`.
++
++## Required Changes
++Revise the Phase A spec and manifest so the deliverable cannot pass with only partial ingest `date/type` behavior. At minimum, enumerate the metadata fields in scope, state whether `folio convert` is in scope or explicitly deferred, and add validation expectations that prove the intended coverage from fresh strict-P3 artifacts rather than relying on prior closeout history.
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4616786351e0e3b5ba039e37a65dda746f1339e1
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+@@ -0,0 +1,29 @@
++---
++deliverable_id: folio-config-defaults-v1-2-0
++phase: B.1
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++# B.1 Alignment Review: folio-config-defaults-v1-2-0
++
++## Verdict
++request changes
++
++## Review Scope
++Reviewed only the Phase A spec, strict-P3 pre-A triage entry, and lifecycle manifest named in the prompt:
++`docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`,
++`docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md`, and
++`frameworks/manifests/folio-config-defaults-v1-2-0.yaml`.
++
++## Blockers
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:13` reduces the acceptance contract to generic `defaults` / `defaults.derive` support and explicitly calls out only ingest `date/type` optionality at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:16`. The live issue scope in `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:388` names both `folio ingest` and `folio convert`, and the repeated metadata table at `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:407` through `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:414` names `client`, `engagement`, `target`, `type`, `date`, and `participants`. The Phase A contract should either require resolution coverage for those fields or explicitly defer specific fields as non-goals. As written, a Phase C implementation could satisfy the spec while leaving most of issue #63 unresolved.
++- `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:4` frames the slice as ingest metadata only, and the validation surface at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:127` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:129` runs only `tests/test_config_defaults.py` and `tests/test_cli_ingest.py`. There is no manifest-level guard that `folio convert` participates in defaults resolution, despite the triage source saying `folio ingest` and `folio convert` should stop requiring repeated metadata. If convert is intentionally out of this slice, the manifest and spec need an explicit non-goal or sibling-slice reference.
++
++## Stale Evidence Assessment
++The stale-evidence boundary is mostly aligned. The Phase A spec states that prior `folio_*_v1_*` artifacts are not lifecycle evidence at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:12` and repeats that as a non-goal at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:30`. The manifest also roots pre-A to the regenerated triage artifact at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:5` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:7`, keeps review artifacts under the strict-P3 rerun review board at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:32` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:36`, and defines a fresh lifecycle receipt inventory at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:136`.
++
++## Required Changes
++Revise the Phase A spec and manifest so the deliverable cannot pass with only partial ingest `date/type` behavior. At minimum, enumerate the metadata fields in scope, state whether `folio convert` is in scope or explicitly deferred, and add validation expectations that prove the intended coverage from fresh strict-P3 artifacts rather than relying on prior closeout history.
+
+2026-05-12T20:14:51.096064Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:14:51.096442Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:14:51.098467Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:14:51.098514Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The artifact is written. I’m doing a final contract check now: frontmatter, verdict section shape, length, and touched-file scope.
+exec
+/bin/zsh -lc 'wc -c docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md' in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '1,80p' docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    3482 docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+
+ succeeded in 0ms:
+---
+deliverable_id: folio-config-defaults-v1-2-0
+phase: B.1
+role: alignment
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+# B.1 Alignment Review: folio-config-defaults-v1-2-0
+
+## Verdict
+request changes
+
+## Review Scope
+Reviewed only the Phase A spec, strict-P3 pre-A triage entry, and lifecycle manifest named in the prompt:
+`docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`,
+`docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md`, and
+`frameworks/manifests/folio-config-defaults-v1-2-0.yaml`.
+
+## Blockers
+- `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:13` reduces the acceptance contract to generic `defaults` / `defaults.derive` support and explicitly calls out only ingest `date/type` optionality at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:16`. The live issue scope in `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:388` names both `folio ingest` and `folio convert`, and the repeated metadata table at `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:407` through `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:414` names `client`, `engagement`, `target`, `type`, `date`, and `participants`. The Phase A contract should either require resolution coverage for those fields or explicitly defer specific fields as non-goals. As written, a Phase C implementation could satisfy the spec while leaving most of issue #63 unresolved.
+- `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:4` frames the slice as ingest metadata only, and the validation surface at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:127` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:129` runs only `tests/test_config_defaults.py` and `tests/test_cli_ingest.py`. There is no manifest-level guard that `folio convert` participates in defaults resolution, despite the triage source saying `folio ingest` and `folio convert` should stop requiring repeated metadata. If convert is intentionally out of this slice, the manifest and spec need an explicit non-goal or sibling-slice reference.
+
+## Stale Evidence Assessment
+The stale-evidence boundary is mostly aligned. The Phase A spec states that prior `folio_*_v1_*` artifacts are not lifecycle evidence at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:12` and repeats that as a non-goal at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:30`. The manifest also roots pre-A to the regenerated triage artifact at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:5` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:7`, keeps review artifacts under the strict-P3 rerun review board at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:32` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:36`, and defines a fresh lifecycle receipt inventory at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:136`.
+
+## Required Changes
+Revise the Phase A spec and manifest so the deliverable cannot pass with only partial ingest `date/type` behavior. At minimum, enumerate the metadata fields in scope, state whether `folio convert` is in scope or explicitly deferred, and add validation expectations that prove the intended coverage from fresh strict-P3 artifacts rather than relying on prior closeout history.
+
+exec
+/bin/zsh -lc 'git status --short Ontos_Context_Map.md AGENTS.md docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+?? docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4616786351e0e3b5ba039e37a65dda746f1339e1
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+@@ -0,0 +1,29 @@
++---
++deliverable_id: folio-config-defaults-v1-2-0
++phase: B.1
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++# B.1 Alignment Review: folio-config-defaults-v1-2-0
++
++## Verdict
++request changes
++
++## Review Scope
++Reviewed only the Phase A spec, strict-P3 pre-A triage entry, and lifecycle manifest named in the prompt:
++`docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`,
++`docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md`, and
++`frameworks/manifests/folio-config-defaults-v1-2-0.yaml`.
++
++## Blockers
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:13` reduces the acceptance contract to generic `defaults` / `defaults.derive` support and explicitly calls out only ingest `date/type` optionality at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:16`. The live issue scope in `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:388` names both `folio ingest` and `folio convert`, and the repeated metadata table at `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:407` through `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:414` names `client`, `engagement`, `target`, `type`, `date`, and `participants`. The Phase A contract should either require resolution coverage for those fields or explicitly defer specific fields as non-goals. As written, a Phase C implementation could satisfy the spec while leaving most of issue #63 unresolved.
++- `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:4` frames the slice as ingest metadata only, and the validation surface at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:127` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:129` runs only `tests/test_config_defaults.py` and `tests/test_cli_ingest.py`. There is no manifest-level guard that `folio convert` participates in defaults resolution, despite the triage source saying `folio ingest` and `folio convert` should stop requiring repeated metadata. If convert is intentionally out of this slice, the manifest and spec need an explicit non-goal or sibling-slice reference.
++
++## Stale Evidence Assessment
++The stale-evidence boundary is mostly aligned. The Phase A spec states that prior `folio_*_v1_*` artifacts are not lifecycle evidence at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:12` and repeats that as a non-goal at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:30`. The manifest also roots pre-A to the regenerated triage artifact at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:5` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:7`, keeps review artifacts under the strict-P3 rerun review board at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:32` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:36`, and defines a fresh lifecycle receipt inventory at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:136`.
++
++## Required Changes
++Revise the Phase A spec and manifest so the deliverable cannot pass with only partial ingest `date/type` behavior. At minimum, enumerate the metadata fields in scope, state whether `folio convert` is in scope or explicitly deferred, and add validation expectations that prove the intended coverage from fresh strict-P3 artifacts rather than relying on prior closeout history.
+
+2026-05-12T20:14:56.810481Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:14:56.810707Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:14:56.812347Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:14:56.812374Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Wrote the review artifact: [folio-config-defaults-v1-2-0-B.1-codex-alignment.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md).
+
+Verdict is `request changes`. Contract checks passed: exact required frontmatter, `## Verdict` section contains only the verdict phrase, artifact is 3482 bytes, and `git status` shows only the requested artifact target changed.
+
+Note: `ontos map` failed on pre-existing duplicate Ontos IDs, and the Python fallback module was unavailable; I used the existing `Ontos_Context_Map.md` after that. `scripts/llm-dev doctor` passed.
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4616786351e0e3b5ba039e37a65dda746f1339e1
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md
+@@ -0,0 +1,29 @@
++---
++deliverable_id: folio-config-defaults-v1-2-0
++phase: B.1
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++# B.1 Alignment Review: folio-config-defaults-v1-2-0
++
++## Verdict
++request changes
++
++## Review Scope
++Reviewed only the Phase A spec, strict-P3 pre-A triage entry, and lifecycle manifest named in the prompt:
++`docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`,
++`docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md`, and
++`frameworks/manifests/folio-config-defaults-v1-2-0.yaml`.
++
++## Blockers
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:13` reduces the acceptance contract to generic `defaults` / `defaults.derive` support and explicitly calls out only ingest `date/type` optionality at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:16`. The live issue scope in `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:388` names both `folio ingest` and `folio convert`, and the repeated metadata table at `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:407` through `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md:414` names `client`, `engagement`, `target`, `type`, `date`, and `participants`. The Phase A contract should either require resolution coverage for those fields or explicitly defer specific fields as non-goals. As written, a Phase C implementation could satisfy the spec while leaving most of issue #63 unresolved.
++- `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:4` frames the slice as ingest metadata only, and the validation surface at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:127` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:129` runs only `tests/test_config_defaults.py` and `tests/test_cli_ingest.py`. There is no manifest-level guard that `folio convert` participates in defaults resolution, despite the triage source saying `folio ingest` and `folio convert` should stop requiring repeated metadata. If convert is intentionally out of this slice, the manifest and spec need an explicit non-goal or sibling-slice reference.
++
++## Stale Evidence Assessment
++The stale-evidence boundary is mostly aligned. The Phase A spec states that prior `folio_*_v1_*` artifacts are not lifecycle evidence at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:12` and repeats that as a non-goal at `docs/validation/strict_p3_rerun_2026_05_12/folio-config-defaults-v1-2-0_phase_a_spec.md:30`. The manifest also roots pre-A to the regenerated triage artifact at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:5` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:7`, keeps review artifacts under the strict-P3 rerun review board at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:32` through `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:36`, and defines a fresh lifecycle receipt inventory at `frameworks/manifests/folio-config-defaults-v1-2-0.yaml:136`.
++
++## Required Changes
++Revise the Phase A spec and manifest so the deliverable cannot pass with only partial ingest `date/type` behavior. At minimum, enumerate the metadata fields in scope, state whether `folio convert` is in scope or explicitly deferred, and add validation expectations that prove the intended coverage from fresh strict-P3 artifacts rather than relying on prior closeout history.
+
+2026-05-12T20:15:03.174058Z ERROR codex_core::session: failed to record rollout items: thread 019e1dd2-709f-7262-a008-10863c769def not found
+tokens used
+79,988
+2026-05-12T20:15:03.188496Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 76864: No such process (os error 3)

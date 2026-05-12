@@ -1,0 +1,13 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2.md`.
+
+**Verdict: approve**
+
+All four round-1 blockers are resolved:
+
+1. **Ingest metadata fields** — spec line 17 now explicitly enumerates all six fields (`client`, `engagement`, `target`, `type`, `date`, `participants`), closing the gap where a partial implementation could have satisfied the original AC.
+
+2. **`folio convert` coverage** — spec line 18–19 explicitly adds convert for `client`, `engagement`, `target` with source-root derivation before config defaults.
+
+3. **Converter in scope and tested** — `folio/converter.py` is in `scope.allowed_paths`; the cardinality assertion (manifest line 50 and gate `G-cardinality-1`) requires `resolve_convert_metadata` to exist, providing an executable guard.
+
+4. **Resolution order** — spec line 15 retains CLI flag → derivation → defaults → error verbatim.

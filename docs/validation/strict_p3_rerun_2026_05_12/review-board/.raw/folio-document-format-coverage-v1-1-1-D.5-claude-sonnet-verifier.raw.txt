@@ -1,0 +1,3 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.5-claude-sonnet-verifier.md`.
+
+**Verdict: approve.** Both focused tests passed (2/2, 0.07s). Implementation audit confirmed: `.docx` routes to `_convert_document` before any image/LLM stage runs; `source_type: document` and `slide_count: 1` appear in frontmatter, registry, and markdown evidence note; `_detect_source_type` correctly returns `"document"` for `.docx`; all D.3 gate prerequisites (`G-test-1`, `G-cardinality-1`, `G-blocker-1`) are satisfied with no outstanding blockers.

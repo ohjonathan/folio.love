@@ -1,0 +1,10 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer.md`.
+
+**Verdict: approve**
+
+Key findings from the review:
+
+- **Stale evidence**: Clean. Both the triage doc and spec explicitly exclude prior `folio_*_v1_*` artifacts from lifecycle evidence.
+- **Spec adequacy**: The three acceptance-criteria bullets are sparse, but the full issue bodies (#61, #64) are embedded in the triage doc, giving the Phase C author access to the detail. Adequate to proceed.
+- **Manifest**: Structurally sound — `manifest_version: 1.6.0`, `lifecycle_receipt_inventory_path` present, correct model assignments, six gate prerequisites with full coverage.
+- **Noted (non-blocking)**: The `allowed_paths` doesn't include `folio/output/frontmatter.py`, which may be needed for correspondence frontmatter rendering. The spec should clarify whether `folio/correspondence.py` owns all its own output, or those paths need to be added. Also, `--extract-attachments` and the `branch_strategy` edge cases from #64 are not addressed in the spec's non-goals, leaving scope ambiguity for the Phase C author.

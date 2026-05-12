@@ -40,6 +40,7 @@ class TestIngestCommand:
 
         assert result.exit_code == 0
         assert ".txt, .md, .vtt, .srt" in result.output
+        assert ".eml" in result.output
 
     @patch("folio.cli.ingest_source")
     def test_ingest_forwards_options(self, mock_ingest_source, tmp_path):
@@ -160,7 +161,8 @@ class TestIngestCommand:
         )
 
         assert result.exit_code != 0
-        assert "Missing option '--type'" in result.output
+        assert "Missing required ingest metadata" in result.output
+        assert "--type" in result.output
 
     def test_ingest_requires_date(self, tmp_path):
         library = tmp_path / "library"
@@ -184,7 +186,8 @@ class TestIngestCommand:
         )
 
         assert result.exit_code != 0
-        assert "Missing option '--date'" in result.output
+        assert "Missing required ingest metadata" in result.output
+        assert "--date" in result.output
 
     def test_ingest_rejects_invalid_date_format(self, tmp_path):
         library = tmp_path / "library"
@@ -271,7 +274,7 @@ class TestIngestCommand:
         )
 
         assert result.exit_code != 0
-        assert "supports .txt, .md, .vtt, and .srt transcript sources" in result.output
+        assert "supports .txt, .md, .vtt, .srt, and .eml transcript sources" in result.output
 
     def test_ingest_rejects_missing_source_file(self, tmp_path):
         library = tmp_path / "library"

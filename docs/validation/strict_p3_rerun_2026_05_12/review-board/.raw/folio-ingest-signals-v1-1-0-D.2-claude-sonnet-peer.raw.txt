@@ -1,0 +1,12 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer.md`.
+
+**Verdict: approve.** All six Phase A acceptance criteria are satisfied by the Phase C implementation:
+
+1. `InteractionFinding` carries `owner`/`due`; `_coerce_findings()` extracts them; `_ALLOWED_ELEMENT_TYPES` includes `"action"`.
+2. `all_findings()` includes `action_items`; `_apply_review_state()` counts them in `grounding_summary`.
+3. `_action_header()` returns `"### Next Steps"` for client/expert/partner subtypes and `"### Action Items"` otherwise; empty bucket suppresses the header entirely.
+4. Speaker stats flow through frontmatter (`speakers`, `speaker_summary`, aggregates), markdown table, and registry `speaker_summary` field.
+5. `compute_speaker_stats()` runs before the LLM call; `_apply_speaker_analytics_state()` sets `speaker_analytics_unavailable` when stats are `None`.
+6. `_load_speaker_aliases()` builds a confirmed-entity alias map; `compute_speaker_stats()` applies it via case-insensitive lookup before aggregating turns.
+
+73 tests pass cleanly under direct execution.

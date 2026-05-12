@@ -9,6 +9,7 @@ from ..pipeline.interaction_analysis import (
     InteractionFinding,
     InteractionQuote,
 )
+from ..pipeline.speaker_analytics import SpeakerStats, format_duration
 from ..tracking.versions import VersionInfo
 
 _HYPOTHESIS_STUB = (
@@ -25,6 +26,7 @@ def assemble_interaction(
     version_info: VersionInfo,
     analysis_result: InteractionAnalysisResult,
     raw_transcript: str,
+    subtype: str | None = None,
 ) -> str:
     """Render the markdown body for an interaction note."""
 
@@ -51,6 +53,10 @@ def assemble_interaction(
         lines.append("[Summary unavailable — re-run `folio ingest` to populate analysis.]")
     lines.append("")
 
+    if analysis_result.speaker_stats is not None:
+        _append_speaker_analytics(lines, analysis_result.speaker_stats)
+        lines.append("")
+
     lines.extend(["## Key Findings", "", "### Claims", ""])
     _append_findings(lines, analysis_result.claims)
     lines.extend(["", "### Data Points", ""])
@@ -59,6 +65,9 @@ def assemble_interaction(
     _append_findings(lines, analysis_result.decisions)
     lines.extend(["", "### Open Questions", ""])
     _append_findings(lines, analysis_result.open_questions)
+    if analysis_result.action_items:
+        lines.extend(["", _action_header(subtype), ""])
+        _append_findings(lines, analysis_result.action_items)
     lines.append("")
 
     lines.extend(["## Entities Mentioned", "", "### People", ""])
@@ -102,6 +111,10 @@ def _append_findings(lines: list[str], findings: Iterable[InteractionFinding]) -
             lines.append(f"  - timestamp: {finding.timestamp}")
         if finding.attribution:
             lines.append(f"  - attribution: {finding.attribution}")
+        if finding.owner:
+            lines.append(f"  - owner: {finding.owner}")
+        if finding.due:
+            lines.append(f"  - due: {finding.due}")
         lines.append(f"  - validated: {'yes' if finding.validated else 'no'}")
 
 
@@ -127,3 +140,56 @@ def _append_quotes(lines: list[str], quotes: Iterable[InteractionQuote]) -> None
         if quote.timestamp:
             lines.append(f"  - timestamp: {quote.timestamp}")
         lines.append(f"  - validated: {'yes' if quote.validated else 'no'}")
+
+
+def _append_speaker_analytics(lines: list[str], stats: SpeakerStats) -> None:
+    lines.extend(
+        [
+            "## Speaker Analytics",
+            "",
+            "| Speaker | Words | % | Turns | Avg/turn | Talk time | Talk % |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    total_turns = 0
+    for speaker_stats in stats.per_speaker.values():
+        total_turns += speaker_stats.turn_count
+        lines.append(
+            "| "
+            f"{speaker_stats.speaker} | "
+            f"{speaker_stats.word_count:,} | "
+            f"{speaker_stats.word_share:.0%} | "
+            f"{speaker_stats.turn_count} | "
+            f"{speaker_stats.avg_words_per_turn:g} | "
+            f"{format_duration(speaker_stats.talk_time_seconds)} | "
+            f"{speaker_stats.talk_share:.0%} |"
+        )
+    average_words = round(stats.total_words / total_turns, 1) if total_turns else 0
+    lines.append(
+        "| **Total** | "
+        f"**{stats.total_words:,}** | "
+        "**100%** | "
+        f"**{total_turns}** | "
+        f"**{average_words:g}** | "
+        f"**{format_duration(stats.total_duration_seconds)}** | "
+        "**100%** |"
+    )
+    lines.extend(
+        [
+            "",
+            f"Conversation balance: **{stats.balance_score:.2f}** (1.0 = even split, 0 = monologue); dominant speaker: {stats.dominant_speaker}.",
+        ]
+    )
+    longest = max(
+        stats.per_speaker.values(),
+        key=lambda item: (item.longest_turn_words, item.word_count),
+    )
+    lines.append(
+        f"Longest monologue: {longest.speaker}, {longest.longest_turn_words} words at {longest.longest_turn_timestamp}."
+    )
+
+
+def _action_header(subtype: str | None) -> str:
+    if subtype in {"client_meeting", "expert_interview", "partner_check_in"}:
+        return "### Next Steps"
+    return "### Action Items"

@@ -2,5 +2,5 @@
 # All paths are repo-relative. Do not introduce absolute paths here.
 framework_path: .llm-dev/framework
 framework_repo_url: https://github.com/ohjonathan/llm-dev-framework.git
-framework_ref: df39e6e3de47b2b5a970b99aa1580c1463dd97e0
+framework_ref: 65750453ed5befb83ec50d67bd1a8ae21365c5f2
 manifest_dir: frameworks/manifests
