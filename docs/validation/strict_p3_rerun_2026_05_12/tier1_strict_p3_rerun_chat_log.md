@@ -10,3 +10,4 @@ Platform exception: Codex Desktop does not expose a raw transcript export as a f
 - B.1, D.2, and D.5 were dispatched through the framework receipt machinery. Change-request findings were fixed and superseding review rounds were recorded.
 - A framework adopter-path bug was discovered during strict D.6: the lifecycle verifier used the correct adopter manifest root, but its nested dispatch verifier recomputed root from `.llm-dev/framework`. A small framework fix was committed and opened as PR #7, then the folio rerun pinned that commit.
 - Final local evidence: all six strict lifecycle verifications passed, all six D.6 strict gates passed, and the full folio test suite passed with `2100 passed, 6 skipped`.
+- Final GitHub evidence: folio PR #74 is open, mergeable, and has passing pytest checks; issues #56, #61, #62, #63, #64, #69, #70, and #71 were closed with evidence comments.

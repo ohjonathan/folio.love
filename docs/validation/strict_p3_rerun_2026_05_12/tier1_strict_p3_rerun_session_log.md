@@ -37,6 +37,11 @@
 - Ran `ontos map --sync-agents`; initial run failed on duplicate IDs because immutable dispatch prompt artifacts share IDs with reviewer output artifacts.
 - Added `.ontos.toml` skip patterns for the strict rerun `review-board/` prompt/raw/receipt area, leaving receipt bytes unchanged.
 - Re-ran `ontos map --sync-agents`; exit 0, regenerated `Ontos_Context_Map.md`, and synced `AGENTS.md` with warnings only.
+- Pushed branch `codex/github-issues-closeout-strict-p3-rerun` to `origin`.
+- Opened folio PR #74: `https://github.com/ohjonathan/folio.love/pull/74`.
+- Verified PR #74 is mergeable and GitHub pytest checks passed for Python 3.10 and 3.13.
+- Closed GitHub issues #56, #61, #62, #63, #64, #69, #70, and #71 with strict-P3 evidence comments.
+- Re-queried issue states; all eight scoped issues are `CLOSED`.
 
 ## Decisions
 - Prior validation artifacts remain non-evidence; only files under `docs/validation/strict_p3_rerun_2026_05_12/` count for this rerun.

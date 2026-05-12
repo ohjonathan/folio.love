@@ -17,6 +17,11 @@ PASS. Each slice has:
 - `scripts/llm-dev verify-lifecycle <manifest>` returning `status=strict_p3_review_complete`,
 - `verify-d6-gate.sh --strict-p3 --manifest <manifest> <final_approval>` passing.
 
+## GitHub Closeout
+- Folio PR: https://github.com/ohjonathan/folio.love/pull/74, mergeable with GitHub pytest checks passing on Python 3.10 and 3.13.
+- Framework compatibility PR: https://github.com/ohjonathan/llm-dev-framework/pull/7.
+- Closed issues with strict-P3 evidence comments: #56, #61, #62, #63, #64, #69, #70, #71.
+
 ## Validation Results
 - `scripts/llm-dev doctor`: PASS.
 - `.llm-dev/framework/scripts/verify-all.sh`: PASS.
