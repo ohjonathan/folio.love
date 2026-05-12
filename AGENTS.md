@@ -115,6 +115,31 @@ similar macOS issues can trace every step.
 
 **API key handling:** Never commit API keys. Use `tests/validation/.env`
 (gitignored) during runs and delete it immediately after.
+
+<!-- llm-dev-framework:start -->
+## llm-dev-framework Activation
+
+This repo uses `llm-dev-framework` via the repo-local wrapper at
+`scripts/llm-dev`. Resolve the framework checkout from
+`.llm-dev/config.yaml`; never hard-code an absolute framework path.
+
+Auto-detect rule:
+- If `.llm-dev/config.yaml` exists, run `scripts/llm-dev doctor`
+  before planning implementation work, then use the wrapper for
+  `new <deliverable-id>` / `verify <manifest>` /
+  `update --to latest` / `agents install`.
+- If `.llm-dev/config.yaml` is absent, only activate the framework
+  when the user explicitly asks for `llm-dev-framework`, `/llm-dev`,
+  or "install llm-dev-framework". Do not invent the framework into
+  unrelated requests.
+
+Managed by `scripts/llm-dev agents install`. Edit content outside
+the start/end markers; the block between markers is overwritten on
+every refresh. In an AGENTS.md with a preserved `USER CUSTOM`
+section, this block lives inside that section so upstream generators
+keep it.
+<!-- llm-dev-framework:end -->
+
 <!-- /USER CUSTOM -->
 
 ## Staleness
