@@ -1,0 +1,9 @@
+Created the verifier artifact at [folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.5-codex-verifier-r2.md).
+
+Verdict: `approve`.
+
+Verification run:
+`PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m pytest tests/test_speaker_analytics.py tests/test_ingest_integration.py -q -p no:cacheprovider`
+Result: `31 passed in 0.19s`.
+
+I also ran a direct probe confirming free-form clean/degraded inputs preserve their existing statuses, while transcript-like inputs receive `speaker_analytics_unavailable`. Only the requested artifact target was edited.

@@ -1,0 +1,2507 @@
+OpenAI Codex v0.125.0 (research preview)
+--------
+workdir: /Users/jonathanoh/workspaces/folio.love
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/jonathanoh/.codex/memories]
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019e1e1b-805d-7032-b1aa-f08270afacb9
+--------
+user
+You are the codex external reviewer for llm-dev strict-P3 Phase D.2, role alignment, deliverable folio-watch-v1-4-0.
+
+Review the Phase C implementation against Phase A and B.3. Slice summary: folio watch routing, stable-size waiting, dry-run/once/quiet, archive, and failure quarantine.
+
+Use these files:
+- docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+- docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md
+- frameworks/manifests/folio-watch-v1-4-0.yaml
+- folio/cli.py
+- folio/watch.py
+- folio/config.py
+- tests/test_watch.py
+
+Focused validation command reported by orchestrator:
+- ./.venv/bin/python -m pytest tests/test_watch.py -q
+
+Artifact target: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+
+Artifact contract:
+- Write the markdown artifact to the artifact target above.
+- Do not edit any repository file except the artifact target.
+- The artifact must be at least 700 characters.
+- It must begin with this exact YAML frontmatter, with no execution_provider field:
+---
+deliverable_id: folio-watch-v1-4-0
+phase: D.2
+role: alignment
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+- Then include a top-level markdown heading and a section named exactly "## Verdict".
+- The "## Verdict" section must contain exactly one of these words: approve, request changes, reject, or concur.
+- If you identify implementation blockers, use "request changes" and list concrete file/path references. If not, use "approve".
+
+2026-05-12T21:32:59.839429Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:32:59.840109Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:32:59.842011Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:32:59.842042Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T21:33:00.896140Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:00.896508Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:00.898934Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:00.898980Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T21:33:01.656623Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:01.656811Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:01.658138Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:01.658159Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’ll load the repo context required by `AGENTS.md`, then keep the review strictly read-only until writing the requested D.2 artifact. I’ll also avoid session logging because the artifact-only constraint is explicit here.
+exec
+/bin/zsh -lc 'test -f .llm-dev/config.yaml && scripts/llm-dev doctor || true' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+llm-dev doctor
+  repo:               /Users/jonathanoh/workspaces/folio.love
+  config:             .llm-dev/config.yaml
+  framework_path:     .llm-dev/framework
+  framework_ref:      df39e6e3de47b2b5a970b99aa1580c1463dd97e0
+  framework_repo_url: https://github.com/ohjonathan/llm-dev-framework.git
+  PASS command: git
+  PASS command: bash
+  PASS command: python3
+  PASS command: check-jsonschema
+  PASS framework checkout: .llm-dev/framework
+  PASS framework scripts (verify-adopter.sh, day-one.sh)
+  PASS worker CLI: claude
+  PASS worker CLI: codex
+  PASS worker CLI: gemini
+llm-dev doctor: PASS
+
+exec
+/bin/zsh -lc 'ontos map' in /Users/jonathanoh/workspaces/folio.love
+2026-05-12T21:33:11.847110Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:11.848707Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:11.859556Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:11.859703Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+ exited 1 in 246ms:
+Warning: Invalid doc status 'generated'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'approved'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc type 'review'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment-r3' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment-r3.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment-r3.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment-r2.md.
+Warning: Invalid doc status 'failed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-codex-alignment.md.
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2.md.
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+
+codex
+`ontos map` failed with duplicate-document ID errors before producing a usable activation; `scripts/llm-dev doctor` passed. I’m trying the documented fallback, then I’ll read the existing context map and proceed with the focused review files.
+exec
+/bin/zsh -lc "sed -n '1,180p' Ontos_Context_Map.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: ontos_context_map
+type: reference
+status: generated
+ontos_map_version: 2
+generated_by: ontos map
+generated_at: 2026-05-10 18:57:42
+---
+
+# folio.love Tiered Context Map
+
+> Auto-generated by Ontos 3.0
+> Last updated: 2026-05-10 18:57:42
+
+This document provides a tiered index of the knowledge graph for AI orientation.
+- **Tier 1: Essential Context**: (~2k tokens) Project summary, recent work, and architecture.
+- **Tier 2: Document Index**: Full list of all tracked documents.
+- **Tier 3: Full Graph Details**: Dependency trees, timelines, and health metrics.
+
+## Tier 1: Essential Context
+
+### Project Summary
+- **Name:** folio.love
+- **Doc Count:** 416
+- **Last Updated:** 2026-05-11 01:57:42 UTC
+
+### Recent Activity
+| Log | Status | Summary |
+|-----|--------|---------|
+| log_20260510_root-cleanup | active | No summary |
+| log_20260510_folio-love-vtt-srt-transcript-ingest | active | No summary |
+| log_20260417_v1-0-0-spec-canonical-verdict-r3 | active | No summary |
+| ... and 81 more logs | | |
+
+### Key Documents
+- `doc_02_product_requirements_document` (7 dependents) — docs/product/02_Product_Requirements_Document.md
+- `doc_04_implementation_roadmap` (7 dependents) — docs/product/04_Implementation_Roadmap.md
+- `folio_ontology_architecture` (6 dependents) — docs/architecture/Folio_Ontology_Architecture.md
+
+### Critical Paths
+- **Docs Root:** `docs/`
+- **Logs:** `docs/logs/`
+
+---
+
+## Tier 2: Document Index
+
+
+
+## Documents
+
+| Path | ID | Type | Status |
+|------|-----|------|--------|
+| docs/architecture/Folio_Ontology_Architecture.md | `folio_ontology_architecture` | unknown | active |
+| docs/archive/ontos/Ontos_Context_Map.md | `ontos_context_map` | reference | unknown |
+| docs/archive/reviews/README.md | `archived_review_artifacts` | reference | active |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review.md | `PRD_PhaseB_B1_Adversarial_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R2.md | `PRD_PhaseB_B1_Adversarial_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R3.md | `PRD_PhaseB_B1_Adversarial_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R4.md | `PRD_PhaseB_B1_Adversarial_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R5.md | `PRD_PhaseB_B1_Adversarial_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review.md | `PRD_PhaseB_B1_Alignment_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R2.md | `PRD_PhaseB_B1_Alignment_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R3.md | `PRD_PhaseB_B1_Alignment_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R4.md | `PRD_PhaseB_B1_Alignment_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R5.md | `PRD_PhaseB_B1_Alignment_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review.md | `PRD_PhaseB_B1_Peer_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R2.md | `PRD_PhaseB_B1_Peer_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R3.md | `PRD_PhaseB_B1_Peer_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R4.md | `PRD_PhaseB_B1_Peer_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R5.md | `PRD_PhaseB_B1_Peer_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation.md | `PRD_PhaseB_B2_Consolidation` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R2.md | `PRD_PhaseB_B2_Consolidation_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R3.md | `PRD_PhaseB_B2_Consolidation_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R4.md | `PRD_PhaseB_B2_Consolidation_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R5.md | `PRD_PhaseB_B2_Consolidation_R5` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Adversarial_Review.md | `PRE_B1_Adversarial_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Alignment_Review.md | `PRE_B1_Alignment_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Peer_Review.md | `PRE_B1_Peer_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B2_Consolidation.md | `PRE_B2_Consolidation` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B2_Consolidation_R2.md | `PRE_B2_Consolidation_R2` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Adversarial_Product.md | `Folio_Tier4_ProposalReview_R1_Adversarial_Product` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Alignment_Technical.md | `Folio_Tier4_ProposalReview_R1_Alignment_Technical` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Consolidated.md | `Folio_Tier4_ProposalReview_R1_Consolidated` | unknown | unknown |
+| docs/framework-adoption.md | `framework-adoption` | unknown | unknown |
+| docs/guides/agentic_setup.md | `agentic_setup` | unknown | unknown |
+| docs/guides/managed_mac_workflow.md | `managed_mac_workflow` | unknown | unknown |
+| docs/logs/2026-03-02_doc-cleanup-and-ontos-init-for-folio-love.md | `log_20260302_doc-cleanup-and-ontos-init-for-folio-love` | log | active |
+| docs/logs/2026-03-02_source-grounding-multi-pass-extraction-pipeline.md | `log_20260302_source-grounding-multi-pass-extraction-pipeline` | log | active |
+| docs/logs/2026-03-06_analysis-caching-hardening-b1-b3-g1-g4-s1-s2.md | `log_20260306_analysis-caching-hardening-b1-b3-g1-g4-s1-s2` | log | active |
+| docs/logs/2026-03-06_analysis-caching-spec-review.md | `log_20260306_analysis-caching-spec-review` | log | active |
+| docs/logs/2026-03-06_frontmatter-v2-completeness.md | `log_20260306_frontmatter-v2-completeness` | log | active |
+| docs/logs/2026-03-06_frontmatter-v2-spec-review-reviewer1.md | `log_20260306_frontmatter-v2-spec-review-reviewer1` | log | active |
+| docs/logs/2026-03-06_merge-pull-request-2-from-ohjonathan-feat-core-ex.md | `log_20260306_merge-pull-request-2-from-ohjonathan-feat-core-ex` | log | active |
+| docs/logs/2026-03-06_version-tracking-code-review-pr5.md | `2026-03-06_version-tracking-code-review-pr5` | unknown | unknown |
+| docs/logs/2026-03-06_version-tracking-hardening-g1-g8-b1-b3.md | `log_20260306_version-tracking-hardening-g1-g8-b1-b3` | log | active |
+| docs/logs/2026-03-07_docs-multi-provider-docs-alignment-and-merge.md | `log_20260307_docs-multi-provider-docs-alignment-and-merge` | log | active |
+| docs/logs/2026-03-07_managed-laptop-pdf-fallback.md | `log_20260307_managed-laptop-pdf-fallback` | log | active |
+| docs/logs/2026-03-07_pr-8-multi-provider-llm-support-code-review-resolu.md | `log_20260307_pr-8-multi-provider-llm-support-code-review-resolu` | log | active |
+| docs/logs/2026-03-08_pr-10-pptx-renderer-reliability-fix-open-a-two-ste.md | `log_20260308_pr-10-pptx-renderer-reliability-fix-open-a-two-ste` | log | active |
+| docs/logs/2026-03-08_tier1-validation-rerun-prompt-refresh.md | `log_20260308_tier1-validation-rerun-prompt-refresh` | log | active |
+| docs/logs/2026-03-09_pr-12-tier1-rerun-validation-and-merge-readiness.md | `log_20260309_pr-12-tier1-rerun-validation-and-merge-readiness` | log | active |
+| docs/logs/2026-03-13_docs-validation-tighten-tier-2-closeout-criteria.md | `log_20260313_docs-validation-tighten-tier-2-closeout-criteria` | log | active |
+| docs/logs/2026-03-14_docs-test-standardize-pytest-commands-to-venv-b.md | `log_20260314_fr700-reviewability-integration` | log | active |
+| docs/logs/2026-03-14_feat-diagrams-deterministic-page-inspection-with.md | `log_20260314_feat-diagrams-deterministic-page-inspection-with` | log | active |
+| docs/logs/2026-03-14_pr-1-page-inspection-implementation-prompt.md | `log_20260314_pr-1-page-inspection-implementation-prompt` | log | active |
+| docs/logs/2026-03-14_pr-1-som-validation-runbook-and-doc-handoff.md | `log_20260314_pr-1-som-validation-runbook-and-doc-handoff` | log | active |
+| docs/logs/2026-03-14_rewrite-grounding-multipass-prompt.md | `log_20260314_rewrite-grounding-multipass-prompt` | log | active |
+| docs/logs/2026-03-14_source-of-truth-doc-naming-and-docs-sync.md | `log_20260314_source-of-truth-doc-naming-and-docs-sync` | log | active |
+| docs/logs/2026-03-15_add-25-regression-tests-for-type-gate-highlights.md | `log_20260315_pr22-diagram-extraction-tier2-fixes` | log | complete |
+| docs/logs/2026-03-15_add-pr-2-prompts-session-logs-and-update-context.md | `log_20260315_add-pr-2-prompts-session-logs-and-update-context` | log | active |
+| docs/logs/2026-03-15_clean-stray-files-add-tmp-and-output-to-gitign.md | `log_20260315_clean-stray-files-add-tmp-and-output-to-gitign` | log | complete |
+| docs/logs/2026-03-15_fix-p1-frontmatter-fence-must-be-unindented-fi.md | `log_20260315_fix-p1-frontmatter-fence-must-be-unindented-fi` | log | active |
+| docs/logs/2026-03-15_fix-rendering-address-round-3-review-all-block.md | `log_20260315_fix-rendering-address-round-3-review-all-block` | log | active |
+| docs/logs/2026-03-15_fix-rendering-normalize-unrecognized-directions.md | `log_20260315_fix-rendering-normalize-unrecognized-directions` | log | active |
+| docs/logs/2026-03-15_fix-rendering-round-4-fix-4-semantic-renderer.md | `log_20260315_fix-rendering-round-4-fix-4-semantic-renderer` | log | active |
+| docs/logs/2026-03-15_obsidian-mermaid-transclusion-test-runbook.md | `log_20260315_obsidian-mermaid-transclusion-test-runbook` | log | active |
+| docs/logs/2026-03-15_pr-20-reviewer-3-adversarial-review.md | `log_20260315_pr-20-reviewer-3-adversarial-review` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-1-merge-readiness-rerun.md | `log_20260315_pr-21-reviewer-1-merge-readiness-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-2-alignment-review-rerun-head-4c4e5.md | `log_20260315_pr-21-reviewer-2-alignment-review-rerun-head-4c4e5` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-2-alignment-review-rerun.md | `log_20260315_pr-21-reviewer-2-alignment-review-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-3-adversarial-review-rerun.md | `log_20260315_pr-21-reviewer-3-adversarial-review-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-3-adversarial-review.md | `log_20260315_pr-21-reviewer-3-adversarial-review` | log | active |
+| docs/logs/2026-03-15_pr-23-reviewer-2-alignment-review.md | `log_20260315_pr-23-reviewer-2-alignment-review` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer1-peer-review-rerun-head-6a83d3a.md | `log_20260315_pr23-reviewer1-peer-review-rerun-head-6a83d3a` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer1-peer-review.md | `log_20260315_pr23-reviewer1-peer-review` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer3-adversarial-review-rerun-head-172c51a.md | `log_20260315_pr23-reviewer3-adversarial-review-rerun-head-172c51a` | log | active |
+| docs/logs/2026-03-16_update-diagram-extraction-checklist-with-pr-6-comp.md | `log_20260316_update-diagram-extraction-checklist-with-pr-6-comp` | log | active |
+| docs/logs/2026-03-21_cap-diagram-max-tokens-at-32768-proposal-ceiling.md | `log_20260321_cap-diagram-max-tokens-at-32768-proposal-ceiling` | log | active |
+| docs/logs/2026-03-21_maintain-ontos-configuration-and-graph-health.md | `log_20260321_maintain-ontos-configuration-and-graph-health` | log | active |
+| docs/logs/2026-03-21_test-perf-close-residual-test-coverage-frozen.md | `log_20260321_performance-patch-pr30-review` | log | complete |
+| docs/logs/2026-03-22_add-entity-registry-pr-a-prompt.md | `log_20260322_entity-registry-pr-a-implementation-and-review` | log | active |
+| docs/logs/2026-03-22_bump-version-to-0-2-0-and-add-pypi-publish-workflo.md | `log_20260322_pypi-v020-release-prep` | log | complete |
+| docs/logs/2026-03-22_entity-system-kickoff-spec-approved.md | `log_20260322_entity-system-kickoff-spec-approved` | log | complete |
+| docs/logs/2026-03-22_feat-ingest-resolve-remaining-review-items.md | `log_20260322_feat-ingest-resolve-remaining-review-items` | log | active |
+| docs/logs/2026-03-22_merge-pull-request-32-from-ohjonathan-feature-v0.md | `log_20260322_merge-pull-request-32-from-ohjonathan-feature-v0` | log | active |
+| docs/logs/2026-03-22_platform-model-comparison-validation-prompt.md | `log_20260322_platform-model-comparison-validation-prompt` | log | active |
+| docs/logs/2026-03-22_pr-35-ingest-time-entity-resolution.md | `log_20260322_pr-35-ingest-time-entity-resolution` | log | complete |
+| docs/logs/2026-03-22_tier-3-ingest-kickoff-spec-approved-and-merged.md | `log_20260322_tier-3-ingest-kickoff-spec-approved-and-merged` | log | complete |
+| docs/logs/2026-03-27_docs-product-address-pr-review-feedback.md | `log_20260327_docs-product-address-pr-review-feedback` | log | active |
+| docs/logs/2026-03-27_docs-validation-add-vault-validation-prompt.md | `log_20260327_docs-validation-add-vault-validation-prompt` | log | active |
+| docs/logs/2026-03-27_tier2-platform-model-comparison-finalization.md | `log_20260327_tier2-platform-model-comparison-finalization` | log | complete |
+| docs/logs/2026-03-28_feat-enrich-add-scale-test-with-50-file-fixture.md | `log_20260328_feat-enrich-add-scale-test-with-50-file-fixture` | log | active |
+| docs/logs/2026-03-28_fix-enrich-callout-safe-related-removal-and-a.md | `log_20260328_fix-enrich-callout-safe-related-removal-and-a` | log | active |
+| docs/logs/2026-03-29_pr38-entity-stubs-org-chart-merge.md | `log_20260329_pr38-entity-stubs-org-chart-merge` | log | active |
+| docs/logs/2026-03-29_pr39-provenance-round2-merge-readiness.md | `log_20260329_pr39-provenance-round2-merge-readiness` | log | active |
+| docs/logs/2026-03-29_prd-phaseb-b1-alignment-review-r4.md | `log_20260329_prd-phaseb-b1-alignment-review-r4` | log | active |
+| docs/logs/2026-03-29_rev6-provenance-unblock-doc-reconciliation.md | `log_20260329_rev6-provenance-unblock-doc-reconciliation` | log | active |
+| docs/logs/2026-03-30_tier-3-lifecycle-integration-context-docs-regis.md | `log_20260330_tier-3-lifecycle-integration-context-docs-regis` | log | active |
+| docs/logs/2026-04-04_docs-product-close-tier-4-review-round-two.md | `log_20260404_docs-product-close-tier-4-review-round-two` | log | active |
+| docs/logs/2026-04-04_merge-tier-3-closeout-reconciliation-pr.md | `log_20260404_merge-tier-3-closeout-reconciliation-pr` | log | active |
+| docs/logs/2026-04-04_production-ingest-validation-closes-tier-3-ec-1-fo.md | `log_20260404_production-ingest-validation-closes-tier-3-ec-1-fo` | log | active |
+| docs/logs/2026-04-04_tier-3-closeout-production-validation-complete.md | `log_20260404_tier-3-closeout-production-validation-complete` | log | active |
+| docs/logs/2026-04-15_llm-dev-v1-full-a-e-lifecycle-on-proposal-review-h.md | `log_20260415_llm-dev-v1-full-a-e-lifecycle-on-proposal-review-h` | log | complete |
+| docs/logs/2026-04-15_proposal-review-hardening-v0-6-0--A.proposal-halt.md | `log_20260415_proposal-review-hardening-v0-6-0-pre-a-proposal-halt` | log | complete |
+| docs/logs/2026-04-15_proposal-review-hardening-v0-6-0-pre-a-halt.md | `log_20260415_proposal-review-hardening-v0-6-0-pre-a-halt` | log | complete |
+| docs/logs/2026-04-15_revise-tier-4-latent-discovery-proposal.md | `log_20260415_revise-tier-4-latent-discovery-proposal` | log | active |
+| docs/logs/2026-04-15_tier-4-graph-ops-layer.md | `log_20260415_tier-4-graph-ops-layer` | log | active |
+| docs/logs/2026-04-15_tier-4-latent-discovery-proposal-layer.md | `log_20260415_tier-4-latent-discovery-proposal-layer` | log | active |
+| docs/logs/2026-04-15_tier-4-proposal-pre-phase-a-review-round-1-two-rev.md | `log_20260415_tier-4-proposal-pre-phase-a-review-round-1-two-rev` | log | active |
+| docs/logs/2026-04-15_tier-4-proposal-revision-graph-ops-quality-layer.md | `log_20260415_tier-4-proposal-revision-graph-ops-quality-layer` | log | active |
+| docs/logs/2026-04-15_v0-6-1-code-adversarial-review.md | `log_20260415_v0-6-1-code-adversarial-review` | log | active |
+| docs/logs/2026-04-15_v0-6-1-spec-peer-codex-round2-review.md | `log_20260415_v0-6-1-spec-peer-codex-round2-review` | log | active |
+| docs/logs/2026-04-17_llm-dev-v1-slice-7-phase-b-2-r2-spec-v1-2-man.md | `log_20260417_llm-dev-v1-slice-7-phase-b-2-r2-spec-v1-2-man` | log | active |
+| docs/logs/2026-04-17_v1-0-0-code-adversarial-codex-review.md | `log_20260417_v1-0-0-code-adversarial-codex-review` | log | active |
+| docs/logs/2026-04-17_v1-0-0-d-5-r2-verification-codex.md | `log_20260417_v1-0-0-d-5-r2-verification-codex` | log | active |
+| docs/logs/2026-04-17_v1-0-0-d5-verification-codex.md | `log_20260417_v1-0-0-d5-verification-codex` | log | active |
+| docs/logs/2026-04-17_v1-0-0-d6-final-approval-gate.md | `log_20260417_v1-0-0-d6-final-approval-gate` | log | active |
+| docs/logs/2026-04-17_v1-0-0-spec-canonical-verdict-r3.md | `log_20260417_v1-0-0-spec-canonical-verdict-r3` | log | active |
+| docs/logs/2026-04-17_v1-0-0-spec-canonical-verdict.md | `log_20260417_v1-0-0-spec-canonical-verdict` | log | active |
+| docs/logs/2026-05-10_folio-love-vtt-srt-transcript-ingest.md | `log_20260510_folio-love-vtt-srt-transcript-ingest` | log | active |
+| docs/logs/2026-05-10_root-cleanup.md | `log_20260510_root-cleanup` | log | active |
+| docs/obsidian_queries.md | `obsidian_queries` | reference | active |
+| docs/product/02_Product_Requirements_Document.md | `doc_02_product_requirements_document` | atom | scaffold |
+| docs/product/04_Implementation_Roadmap.md | `doc_04_implementation_roadmap` | atom | scaffold |
+| docs/product/05_User_Stories.md | `doc_05_user_stories` | product | scaffold |
+| docs/product/06_Prioritization_Matrix.md | `doc_06_prioritization_matrix` | product | scaffold |
+| docs/product/Folio_Feature_Handoff_Brief.md | `folio_feature_handoff_brief` | product | scaffold |
+| docs/product/strategic_direction_memo.md | `strategic_direction_memo` | strategy | active |
+| docs/product/tier3_baseline_decision_memo.md | `tier3_baseline_decision_memo_20260327` | atom | active |
+
+exec
+/bin/zsh -lc 'python3 -m ontos map' in /Users/jonathanoh/workspaces/folio.love
+ exited 1 in 0ms:
+/opt/homebrew/opt/python@3.14/bin/python3.14: No module named ontos
+
+2026-05-12T21:33:16.139723Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:16.140012Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:16.142232Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:16.142272Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Loaded: `ontos_context_map` (existing Tier 1; map regeneration failed because of duplicate IDs, and the Python fallback has no `ontos` module). I’m reading the Phase A/B.3 docs and the watch implementation next, with line numbers for concrete findings.
+exec
+/bin/zsh -lc "nl -ba docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md | sed -n '1,260p'" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "nl -ba docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md | sed -n '1,260p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	---
+     2	id: folio-watch-v1-4-0-b3-canonical-verdict
+     3	deliverable_id: folio-watch-v1-4-0
+     4	phase: B.3
+     5	role: meta-consolidator
+     6	family: codex
+     7	status: completed
+     8	---
+     9	
+    10	# Phase B.3 Canonical Verdict: folio-watch-v1-4-0
+    11	
+    12	## Verdict
+    13	approve
+    14	
+    15	## Review Inputs
+    16	- Claude Sonnet peer round 1: approved.
+    17	- Codex alignment round 1: approved.
+    18	- Gemini adversarial round 1: approved.
+    19	
+    20	## Canonical Decision
+    21	The watch slice may proceed to Phase C. Reviewers found the spec and manifest adequate for issue #62: add `folio watch <dir> [--once] [--dry-run] [--quiet]`, route by extension, wait for stable file size, process serially, archive successes, write failures under `_failed/`, and rely on the previous slices for defaults, correspondence, and DOCX support.
+    22	
+    23	## Phase C Scope
+    24	Implement watcher routing, dry-run/once behavior, stable-size waiting, success archiving, and failure quarantine tests.
+
+ succeeded in 0ms:
+     1	---
+     2	id: folio-watch-v1-4-0-phase-a-spec
+     3	deliverable_id: folio-watch-v1-4-0
+     4	phase: A
+     5	role: spec-author
+     6	family: claude-opus
+     7	status: completed
+     8	---
+     9	
+    10	# Phase A Spec: folio-watch-v1-4-0
+    11	## Scope
+    12	This strict-P3 rerun slice addresses issue #62. The scope authority is `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`; prior `folio_*_v1_*` artifacts are not lifecycle evidence.
+    13	## Acceptance Criteria
+    14	- Add `folio watch <dir> [--once] [--dry-run] [--quiet]`.
+    15	- Route by extension and depend on defaults, correspondence, and DOCX support from prior slices.
+    16	- Wait for stable file size, process serially, archive successes, and write failures under `_failed/`.
+    17	## Implementation Surface
+    18	- `folio/watch.py`
+    19	- `folio/cli.py`
+    20	- `tests/test_watch.py`
+    21	## Required Validation
+    22	- `./.venv/bin/python -m pytest tests/test_watch.py -q`
+    23	- `scripts/llm-dev verify <manifest>`
+    24	- Negative control: `scripts/llm-dev verify-lifecycle <manifest>` must fail with `review_pending` before receipts exist.
+    25	- Dispatch B.1, D.2, and D.5 through `dispatch-family-review.sh --append-receipt` for `claude-sonnet`, `codex`, and `gemini`.
+    26	- D.6 final approval must include the exact strict-P3 receipt row and pass `verify-d6-gate.sh --strict-p3 --manifest <manifest> <final_approval>`.
+    27	## Non-Goals
+    28	- Do not count any old artifacts from the prior failed closeout as evidence.
+    29	- Do not commit API keys or local `.env` files.
+    30	
+
+exec
+/bin/zsh -lc "nl -ba frameworks/manifests/folio-watch-v1-4-0.yaml | sed -n '1,240p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	manifest_version: 1.6.0
+     2	id: folio-watch-v1-4-0
+     3	slug: folio-watch
+     4	summary: Add serial folder watch/drop-zone ingestion with extension routing, stable-size waits, success archive, failure quarantine, dry-run, and once mode.
+     5	pre_a:
+     6	  entry: triage
+     7	  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+     8	lifecycle_mode: framework lifecycle
+     9	owners:
+    10	- Jonathan Oh (ohjonathan)
+    11	scope:
+    12	  allowed_paths:
+    13	  - AGENTS.md
+    14	  - Ontos_Context_Map.md
+    15	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md
+    16	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+    17	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+    18	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d6_final_approval.md
+    19	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+    20	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_e_retro.md
+    21	  - docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+    22	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_chat_log.md
+    23	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_prompt.md
+    24	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_report.md
+    25	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_session_log.md
+    26	  - folio/cli.py
+    27	  - folio/watch.py
+    28	  - frameworks/manifests/folio-watch-v1-4-0.yaml
+    29	  - tests/test_watch.py
+    30	  allowed_path_patterns:
+    31	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-*.md
+    32	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-*.yaml
+    33	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-*.md
+    34	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-*.txt
+    35	  composition_targets: []
+    36	  forbidden_paths:
+    37	  - .env
+    38	  - tests/validation/.env
+    39	  - frameworks/llm-dev-v1/
+    40	  forbidden_symbols:
+    41	  - API_KEY=
+    42	  - OPENAI_API_KEY=
+    43	  - ANTHROPIC_API_KEY=
+    44	  - GEMINI_API_KEY=
+    45	  cardinality_assertions:
+    46	  - name: folio-watch-v1-4-0 focused contract anchors exist
+    47	    command: test -f folio/watch.py && rg -n "stable|_failed|dry_run|once|archive" folio/watch.py tests/test_watch.py
+    48	    expect: exit-0
+    49	artifacts:
+    50	  spec: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+    51	  family_verdict: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-<phase>-<family>-<role>.md
+    52	  canonical_verdict: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_<phase>_canonical_verdict.md
+    53	  fix_summary: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+    54	  verification: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-<family>-verifier.md
+    55	  final_approval: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d6_final_approval.md
+    56	  retro: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_e_retro.md
+    57	  triage_report: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+    58	model_assignments:
+    59	- phase: A
+    60	  assignments:
+    61	    claude-opus: spec-author
+    62	- phase: B.1
+    63	  assignments:
+    64	    claude-sonnet: peer
+    65	    codex: alignment
+    66	    gemini: adversarial
+    67	- phase: B.3
+    68	  assignments:
+    69	    codex: meta-consolidator
+    70	- phase: C
+    71	  assignments:
+    72	    claude-opus: implementation-author
+    73	- phase: D.2
+    74	  assignments:
+    75	    claude-sonnet: peer
+    76	    codex: alignment
+    77	    gemini: adversarial
+    78	- phase: D.3
+    79	  assignments:
+    80	    codex: meta-consolidator
+    81	- phase: D.4
+    82	  assignments:
+    83	    claude-opus: fix-author
+    84	- phase: D.5
+    85	  assignments:
+    86	    codex: verifier
+    87	    gemini: verifier
+    88	    claude-sonnet: verifier
+    89	- phase: D.6
+    90	  assignments:
+    91	    claude-opus: final-approval
+    92	- phase: E
+    93	  assignments:
+    94	    claude-opus: retro
+    95	cli_capability_matrix:
+    96	  claude-opus:
+    97	    shell: true
+    98	    git: true
+    99	    test_runner: true
+   100	    doc_index: true
+   101	  claude-sonnet:
+   102	    shell: true
+   103	    git: true
+   104	    test_runner: true
+   105	    doc_index: true
+   106	  codex:
+   107	    shell: true
+   108	    git: true
+   109	    test_runner: true
+   110	    doc_index: true
+   111	  gemini:
+   112	    shell: false
+   113	    git: false
+   114	    test_runner: false
+   115	    doc_index: true
+   116	    evidence_cap: static-inspection
+   117	    fallback_models:
+   118	    - gemini-3.1-pro-preview
+   119	    - gemini-2.5-pro
+   120	    - gemini-2.5-flash
+   121	    writes_files_non_interactively: false
+   122	smoke_checks:
+   123	- phase: C
+   124	  checks:
+   125	  - name: folio-watch-v1-4-0 focused tests pass
+   126	    command: ./.venv/bin/python -m pytest tests/test_watch.py -q
+   127	    expect: exit-0
+   128	- phase: D.6
+   129	  checks:
+   130	  - name: folio-watch-v1-4-0 strict lifecycle verifies
+   131	    command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-watch-v1-4-0.yaml
+   132	    expect: exit-0
+   133	regression_guards: []
+   134	lifecycle_receipt_inventory_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-lifecycle-receipts.yaml
+   135	gate_prerequisites:
+   136	- id: G-test-1
+   137	  category: test
+   138	  description: Focused slice tests pass.
+   139	  verification:
+   140	    command: ./.venv/bin/python -m pytest tests/test_watch.py -q
+   141	    expect: exit-0
+   142	- id: G-scope-1
+   143	  category: scope
+   144	  description: Slice validation artifacts are rooted in the strict-P3 rerun directory.
+   145	  verification:
+   146	    command: test -d docs/validation/strict_p3_rerun_2026_05_12/review-board
+   147	    expect: exit-0
+   148	- id: G-cardinality-1
+   149	  category: cardinality
+   150	  description: Slice contract anchors exist in code/tests.
+   151	  verification:
+   152	    command: test -f folio/watch.py && rg -n "stable|_failed|dry_run|once|archive" folio/watch.py tests/test_watch.py
+   153	    expect: exit-0
+   154	- id: G-verdict-1
+   155	  category: verdict-presence
+   156	  description: D.5 verifier artifacts from three families exist.
+   157	  verification:
+   158	    command: ls docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-*-verifier.md 2>/dev/null | wc -l
+   159	    expect: eq:3
+   160	- id: G-blocker-1
+   161	  category: blocker-closure
+   162	  description: No unresolved blocker marker remains in D.3 canonical verdict.
+   163	  verification:
+   164	    command: test -f docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md && ! rg -n "UNRESOLVED|BLOCKER|REQUEST CHANGES" docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+   165	    expect: exit-0
+   166	- id: G-branch-1
+   167	  category: branch
+   168	  description: Strict rerun branch is active.
+   169	  verification:
+   170	    command: git rev-parse --abbrev-ref HEAD | rg "^codex/github-issues-closeout-strict-p3-rerun$"
+   171	    expect: exit-0
+   172	tracker:
+   173	  path: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_tracker.md
+   174	  columns:
+   175	  - phase
+   176	  - owner
+   177	  - status
+   178	  - artifact
+   179	  - evidence
+   180	  - timestamp
+   181	branch_map:
+   182	  default: codex/github-issues-closeout-strict-p3-rerun
+   183	references:
+   184	- path: https://github.com/ohjonathan/folio.love/issues/62
+   185	  version: '2026-05-12'
+   186	  relevance: Source scope for folio-watch-v1-4-0
+   187	sibling_deliverable_ids: []
+   188	review_rounds: []
+   189	self_review_caveats: []
+   190	consolidation_mode: external
+   191	reviewer_family_substitutes: []
+
+2026-05-12T21:33:22.780900Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:22.781215Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:22.783507Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:22.783541Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "nl -ba folio/watch.py | sed -n '1,280p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	"""Folder-based auto-ingestion for Folio."""
+     2	
+     3	from __future__ import annotations
+     4	
+     5	import shutil
+     6	import time
+     7	import traceback
+     8	from dataclasses import dataclass
+     9	from pathlib import Path
+    10	from typing import Callable
+    11	
+    12	from .config import FolioConfig
+    13	from .converter import DOCUMENT_EXTENSIONS, PPTX_EXTENSIONS, FolioConverter
+    14	from .correspondence import EMAIL_EXTENSIONS, ingest_email
+    15	from .ingest import SUPPORTED_INGEST_EXTENSIONS, ingest_source
+    16	
+    17	CONVERT_EXTENSIONS = PPTX_EXTENSIONS | DOCUMENT_EXTENSIONS | {".pdf"}
+    18	WATCHABLE_EXTENSIONS = CONVERT_EXTENSIONS | SUPPORTED_INGEST_EXTENSIONS
+    19	
+    20	
+    21	@dataclass(frozen=True)
+    22	class WatchFileResult:
+    23	    source_path: Path
+    24	    action: str
+    25	    outcome: str
+    26	    output_path: Path | None = None
+    27	    error: str | None = None
+    28	
+    29	
+    30	def run_watch_once(
+    31	    config: FolioConfig,
+    32	    directory: Path,
+    33	    *,
+    34	    dry_run: bool = False,
+    35	    quiet: bool = False,
+    36	    emit: Callable[[str], None] | None = None,
+    37	    stability_seconds: float | None = None,
+    38	) -> list[WatchFileResult]:
+    39	    """Process the current contents of a watched directory once."""
+    40	
+    41	    directory = Path(directory).resolve()
+    42	    if not directory.exists() or not directory.is_dir():
+    43	        raise ValueError(f"Watch directory not found: {directory}")
+    44	    watch_config = _match_watch_config(config, directory)
+    45	    stable_seconds = (
+    46	        stability_seconds
+    47	        if stability_seconds is not None
+    48	        else float(watch_config.get("stability_seconds", 3))
+    49	    )
+    50	    results: list[WatchFileResult] = []
+    51	    for source_path in _iter_watch_files(directory):
+    52	        action = route_file(source_path)
+    53	        if action == "skip":
+    54	            result = WatchFileResult(source_path=source_path, action=action, outcome="skipped")
+    55	            results.append(result)
+    56	            _emit(emit, quiet, f"⊘ {source_path.name} (unsupported)")
+    57	            continue
+    58	        if dry_run:
+    59	            result = WatchFileResult(source_path=source_path, action=action, outcome="dry_run")
+    60	            results.append(result)
+    61	            _emit(emit, quiet, f"dry-run: {source_path.name} → {action}")
+    62	            continue
+    63	        try:
+    64	            _wait_for_stable_size(source_path, stable_seconds)
+    65	            output_path = _process_file(config, source_path, action)
+    66	            _archive_success(source_path, directory, watch_config)
+    67	            result = WatchFileResult(
+    68	                source_path=source_path,
+    69	                action=action,
+    70	                outcome="success",
+    71	                output_path=output_path,
+    72	            )
+    73	            _emit(emit, quiet, f"✓ {source_path.name} → {action}")
+    74	        except Exception as exc:
+    75	            _write_failure(source_path, directory, exc)
+    76	            result = WatchFileResult(
+    77	                source_path=source_path,
+    78	                action=action,
+    79	                outcome="failed",
+    80	                error=str(exc),
+    81	            )
+    82	            _emit(emit, False, f"✗ {source_path.name}: {exc}")
+    83	        results.append(result)
+    84	    return results
+    85	
+    86	
+    87	def run_watch_loop(
+    88	    config: FolioConfig,
+    89	    directory: Path,
+    90	    *,
+    91	    dry_run: bool = False,
+    92	    quiet: bool = False,
+    93	    interval_seconds: float = 3,
+    94	    emit: Callable[[str], None] | None = None,
+    95	) -> None:
+    96	    """Run a simple polling watcher until interrupted."""
+    97	
+    98	    while True:
+    99	        run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+   100	        time.sleep(interval_seconds)
+   101	
+   102	
+   103	def route_file(path: Path) -> str:
+   104	    """Return the pipeline action for a path."""
+   105	
+   106	    suffix = Path(path).suffix.lower()
+   107	    if suffix in EMAIL_EXTENSIONS:
+   108	        return "ingest_email"
+   109	    if suffix in CONVERT_EXTENSIONS:
+   110	        return "convert"
+   111	    if suffix in SUPPORTED_INGEST_EXTENSIONS:
+   112	        return "ingest"
+   113	    return "skip"
+   114	
+   115	
+   116	def _process_file(config: FolioConfig, source_path: Path, action: str) -> Path:
+   117	    if action == "convert":
+   118	        return FolioConverter(config).convert(source_path=source_path).output_path
+   119	    if action == "ingest_email":
+   120	        return ingest_email(config, source_path=source_path).output_path
+   121	    if action == "ingest":
+   122	        return ingest_source(config, source_path=source_path).output_path
+   123	    raise ValueError(f"Unsupported watch action: {action}")
+   124	
+   125	
+   126	def _iter_watch_files(directory: Path) -> list[Path]:
+   127	    results = []
+   128	    for child in sorted(directory.iterdir()):
+   129	        if child.name in {"_archive", "_failed"}:
+   130	            continue
+   131	        if child.is_file():
+   132	            results.append(child)
+   133	    return results
+   134	
+   135	
+   136	def _wait_for_stable_size(path: Path, seconds: float) -> None:
+   137	    if seconds <= 0:
+   138	        return
+   139	    previous = path.stat().st_size
+   140	    deadline = time.monotonic() + seconds
+   141	    while time.monotonic() < deadline:
+   142	        time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+   143	        current = path.stat().st_size
+   144	        if current != previous:
+   145	            previous = current
+   146	            deadline = time.monotonic() + seconds
+   147	
+   148	
+   149	def _archive_success(source_path: Path, directory: Path, watch_config: dict) -> None:
+   150	    after = watch_config.get("after_process") if isinstance(watch_config, dict) else None
+   151	    action = "archive"
+   152	    destination = directory / "_archive"
+   153	    if isinstance(after, dict):
+   154	        action = str(after.get("action", "archive"))
+   155	        if after.get("to"):
+   156	            destination = Path(str(after["to"])).expanduser()
+   157	    if action == "leave":
+   158	        return
+   159	    if action == "delete":
+   160	        source_path.unlink(missing_ok=True)
+   161	        return
+   162	    destination.mkdir(parents=True, exist_ok=True)
+   163	    shutil.move(str(source_path), str(_unique_destination(destination / source_path.name)))
+   164	
+   165	
+   166	def _write_failure(source_path: Path, directory: Path, exc: Exception) -> None:
+   167	    failed_dir = directory / "_failed"
+   168	    failed_dir.mkdir(parents=True, exist_ok=True)
+   169	    error_path = _unique_destination(failed_dir / f"{source_path.name}.error.log")
+   170	    error_path.write_text(
+   171	        f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}",
+   172	        encoding="utf-8",
+   173	    )
+   174	
+   175	
+   176	def _unique_destination(path: Path) -> Path:
+   177	    if not path.exists():
+   178	        return path
+   179	    stem = path.stem
+   180	    suffix = path.suffix
+   181	    for index in range(1, 10_000):
+   182	        candidate = path.with_name(f"{stem}-{index}{suffix}")
+   183	        if not candidate.exists():
+   184	            return candidate
+   185	    raise RuntimeError(f"Could not find unique destination for {path}")
+   186	
+   187	
+   188	def _match_watch_config(config: FolioConfig, directory: Path) -> dict:
+   189	    for item in config.watch:
+   190	        raw_path = item.get("path")
+   191	        if not raw_path:
+   192	            continue
+   193	        configured = Path(str(raw_path)).expanduser()
+   194	        if not configured.is_absolute() and config.config_dir is not None:
+   195	            configured = config.config_dir / configured
+   196	        try:
+   197	            if configured.resolve() == directory.resolve():
+   198	                return item
+   199	        except OSError:
+   200	            continue
+   201	    return {}
+   202	
+   203	
+   204	def _emit(emit: Callable[[str], None] | None, quiet: bool, message: str) -> None:
+   205	    if quiet and not message.startswith("✗"):
+   206	        return
+   207	    if emit:
+   208	        emit(message)
+
+exec
+/bin/zsh -lc "nl -ba folio/cli.py | sed -n '1,320p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	"""CLI interface for Folio."""
+     2	
+     3	import hashlib
+     4	import json
+     5	import logging
+     6	import os
+     7	import re
+     8	import subprocess
+     9	import sys
+    10	import time
+    11	from datetime import datetime, timezone
+    12	from dataclasses import dataclass
+    13	from pathlib import Path
+    14	from typing import Optional
+    15	
+    16	import click
+    17	
+    18	from .config import FolioConfig
+    19	from .converter import DOCUMENT_EXTENSIONS, FolioConverter, PPTX_EXTENSIONS
+    20	from .correspondence import CorrespondenceIngestError, ingest_email
+    21	from .ingest import (
+    22	    SUPPORTED_INGEST_EXTENSIONS,
+    23	    IngestAmbiguityError,
+    24	    IngestError,
+    25	    IngestSubtypeMismatchError,
+    26	    ingest_source,
+    27	)
+    28	from .pipeline.images import ImageExtractionError
+    29	from .llm.runtime import EndpointNotAllowedError
+    30	from .watch import run_watch_loop, run_watch_once
+    31	
+    32	logger = logging.getLogger(__name__)
+    33	
+    34	
+    35	class ScopeOrCommandGroup(click.Group):
+    36	    """Click group that accepts either a subcommand or a bare scope argument.
+    37	
+    38	    v1.2 extension (folio-enrich-diagnose CB-2 closure): handles BOTH
+    39	    bare-positional-first (`folio enrich ClientA`) AND option-before-scope
+    40	    (`folio enrich --dry-run ClientA`) forms by walking args, recognizing
+    41	    Click option-with-value pairs, and rewriting the FIRST non-option,
+    42	    non-subcommand token as `--scope X` regardless of position.
+    43	
+    44	    v1.3 extension (folio-enrich-diagnose CB-2 final closure): once a
+    45	    registered subcommand token is encountered, the parser passes the
+    46	    subcommand token AND all remaining tokens verbatim — no further
+    47	    `--scope` rewrites. Prevents subcommand positional args from being
+    48	    rewritten to group-level `--scope`.
+    49	    """
+    50	
+    51	    def parse_args(self, ctx, args):
+    52	        # Determine which group-level options take a value (so their value
+    53	        # token is not mistaken for a positional scope).
+    54	        value_taking_short = set()
+    55	        value_taking_long = set()
+    56	        for param in self.params:
+    57	            if isinstance(param, click.Option) and not param.is_flag and not param.count:
+    58	                for opt in param.opts:
+    59	                    if opt.startswith("--"):
+    60	                        value_taking_long.add(opt)
+    61	                    elif opt.startswith("-"):
+    62	                        value_taking_short.add(opt)
+    63	
+    64	        new_args: list[str] = []
+    65	        rewrote = False
+    66	        skip_next = False
+    67	        saw_subcommand = False
+    68	        i = 0
+    69	        while i < len(args):
+    70	            arg = args[i]
+    71	            if saw_subcommand:
+    72	                # v1.3 closure: pass subcommand args verbatim (do NOT rewrite
+    73	                # the subcommand's positional scope to group-level --scope).
+    74	                new_args.extend(args[i:])
+    75	                break
+    76	            if skip_next:
+    77	                new_args.append(arg)
+    78	                skip_next = False
+    79	                i += 1
+    80	                continue
+    81	            if arg.startswith("-"):
+    82	                new_args.append(arg)
+    83	                opt_name = arg.split("=", 1)[0]
+    84	                if "=" not in arg and (
+    85	                    opt_name in value_taking_long or opt_name in value_taking_short
+    86	                ):
+    87	                    skip_next = True
+    88	                i += 1
+    89	                continue
+    90	            # Non-option token
+    91	            if rewrote:
+    92	                new_args.append(arg)
+    93	                i += 1
+    94	                continue
+    95	            if self.get_command(ctx, arg) is not None:
+    96	                # Registered subcommand; pass through and stop rewriting.
+    97	                new_args.append(arg)
+    98	                saw_subcommand = True
+    99	                i += 1
+   100	            else:
+   101	                # Treat as scope. Rewrite to --scope X.
+   102	                new_args.extend(["--scope", arg])
+   103	                rewrote = True
+   104	                i += 1
+   105	        return super().parse_args(ctx, new_args)
+   106	
+   107	
+   108	def _matches_scope(path: str, scope: str) -> bool:
+   109	    """Check if a path falls under a scope prefix using segment boundaries.
+   110	
+   111	    Normalizes with trailing '/' to prevent prefix collisions:
+   112	    'ClientA' must not match 'ClientA2/deck'.
+   113	    """
+   114	    norm_scope = scope.rstrip("/") + "/"
+   115	    return path == scope or path.startswith(norm_scope)
+   116	
+   117	
+   118	# Enrich/provenance relationship fields for D12/PR D passthrough
+   119	_ENRICH_RELATIONSHIP_FIELDS = (
+   120	    "depends_on", "draws_from", "impacts",
+   121	    "relates_to", "supersedes", "instantiates",
+   122	)
+   123	
+   124	_ENRICH_FINGERPRINT_FIELDS = (
+   125	    "input_fingerprint", "managed_body_fingerprint",
+   126	    "entity_resolution_fingerprint", "relationship_context_fingerprint",
+   127	)
+   128	
+   129	
+   130	def _extract_enrich_passthrough(fm: dict) -> dict | None:
+   131	    """Extract enrich/provenance passthrough fields from existing frontmatter.
+   132	
+   133	    Returns a dict suitable for ``preserved_enrich_fields`` parameter,
+   134	    or None if nothing to preserve.
+   135	    """
+   136	    if not isinstance(fm, dict):
+   137	        return None
+   138	
+   139	    result: dict = {}
+   140	
+   141	    # Preserve canonical relationship fields (human-owned)
+   142	    for field_name in _ENRICH_RELATIONSHIP_FIELDS:
+   143	        if field_name in fm:
+   144	            result[field_name] = fm[field_name]
+   145	
+   146	    if "provenance_links" in fm:
+   147	        result["provenance_links"] = fm["provenance_links"]
+   148	
+   149	    # Preserve _llm_metadata.enrich / provenance / links
+   150	    llm_meta = fm.get("_llm_metadata")
+   151	    if isinstance(llm_meta, dict):
+   152	        metadata: dict = {}
+   153	        if isinstance(llm_meta.get("enrich"), dict):
+   154	            metadata["enrich"] = dict(llm_meta["enrich"])
+   155	        if isinstance(llm_meta.get("provenance"), dict):
+   156	            metadata["provenance"] = dict(llm_meta["provenance"])
+   157	        if isinstance(llm_meta.get("links"), dict):
+   158	            metadata["links"] = dict(llm_meta["links"])
+   159	        if metadata:
+   160	            result["_llm_metadata"] = metadata
+   161	
+   162	    if not result:
+   163	        return None
+   164	
+   165	    return result
+   166	
+   167	
+   168	def _mark_enrich_stale(preserved: dict) -> None:
+   169	    """Mark enrich/provenance metadata stale when source hash changes.
+   170	
+   171	    Clears enrich fingerprints/proposals and provenance pair cache while
+   172	    preserving human-owned canonical relationships and links.
+   173	    """
+   174	    enrich = preserved.get("_llm_metadata", {}).get("enrich")
+   175	    if enrich:
+   176	        enrich["status"] = "stale"
+   177	
+   178	        # Clear fingerprints
+   179	        for fp_field in _ENRICH_FINGERPRINT_FIELDS:
+   180	            enrich.pop(fp_field, None)
+   181	
+   182	        # Clear relationship proposals
+   183	        axes = enrich.get("axes")
+   184	        if isinstance(axes, dict):
+   185	            relationships = axes.get("relationships")
+   186	            if isinstance(relationships, dict):
+   187	                relationships.pop("proposals", None)
+   188	
+   189	    provenance = preserved.get("_llm_metadata", {}).get("provenance")
+   190	    if isinstance(provenance, dict):
+   191	        pairs = provenance.get("pairs")
+   192	        if isinstance(pairs, dict):
+   193	            for pair in pairs.values():
+   194	                if not isinstance(pair, dict):
+   195	                    continue
+   196	                pair.pop("pair_fingerprint", None)
+   197	                pair.pop("repair_error", None)
+   198	                pair.pop("repair_error_detail", None)
+   199	                pair.pop("re_evaluate_requested", None)
+   200	                proposals = pair.get("proposals")
+   201	                if isinstance(proposals, list):
+   202	                    for proposal in proposals:
+   203	                        if not isinstance(proposal, dict):
+   204	                            continue
+   205	                        state = proposal.get("lifecycle_state")
+   206	                        if state is None:
+   207	                            state = proposal.get("status")
+   208	                        if state in ("queued", "pending_human_confirmation"):
+   209	                            proposal["lifecycle_state"] = "stale_pending"
+   210	
+   211	
+   212	# Restart cadence: preemptive PowerPoint restart every N automated PPTX/PPT conversions.
+   213	_RESTART_CADENCE = 15
+   214	
+   215	_HASH_CHUNK_SIZE = 65536
+   216	
+   217	
+   218	def _content_hash(path: Path) -> str:
+   219	    """Streaming SHA-256 of file contents (64 KB chunks)."""
+   220	    h = hashlib.sha256()
+   221	    with open(path, "rb") as fh:
+   222	        while True:
+   223	            chunk = fh.read(_HASH_CHUNK_SIZE)
+   224	            if not chunk:
+   225	                break
+   226	            h.update(chunk)
+   227	    return h.hexdigest()
+   228	
+   229	
+   230	def _split_csv_values(value: Optional[str]) -> list[str] | None:
+   231	    """Split a comma-separated option into a trimmed, deduplicated list."""
+   232	    if not value:
+   233	        return None
+   234	
+   235	    values: list[str] = []
+   236	    seen: set[str] = set()
+   237	    for raw in value.split(","):
+   238	        cleaned = raw.strip()
+   239	        if not cleaned:
+   240	            continue
+   241	        key = cleaned.lower()
+   242	        if key in seen:
+   243	            continue
+   244	        seen.add(key)
+   245	        values.append(cleaned)
+   246	    return values or None
+   247	
+   248	
+   249	# AppleScript error codes are 4-digit negative numbers following "error number"
+   250	# or "error (" patterns.  We anchor to these patterns to avoid false matches
+   251	# on arbitrary negative numbers in unrelated error messages.
+   252	_APPLESCRIPT_ERROR_RE = re.compile(r"error\s+(?:number\s+)?(-\d{4,})")
+   253	
+   254	
+   255	def _configure_logging(verbose: bool) -> None:
+   256	    """Configure CLI logging without adding new user-facing flags."""
+   257	    level = logging.DEBUG if verbose else logging.INFO
+   258	    logging.basicConfig(
+   259	        level=level,
+   260	        format="%(message)s" if not verbose else "%(name)s: %(message)s",
+   261	    )
+   262	    third_party_loggers = (
+   263	        "pdfminer",
+   264	        "pdfplumber",
+   265	        "PIL",
+   266	        "PIL.PngImagePlugin",
+   267	    )
+   268	    third_party_level = logging.WARNING if verbose else logging.NOTSET
+   269	    for logger_name in third_party_loggers:
+   270	        logging.getLogger(logger_name).setLevel(third_party_level)
+   271	
+   272	
+   273	@dataclass
+   274	class BatchOutcome:
+   275	    """Per-file batch outcome record."""
+   276	    file_name: str
+   277	    renderer: str
+   278	    duration: float
+   279	    outcome: str  # success | applescript_<code> | timeout | unknown
+   280	    slide_count: int = 0
+   281	
+   282	
+   283	def _classify_outcome(exc: Exception) -> str:
+   284	    """Classify an exception into an allowed outcome bucket.
+   285	
+   286	    Stage 1 additions: recognizes oversized image, model API, PDF
+   287	    corruption, and rate-limiting failures for better batch reports.
+   288	    """
+   289	    msg = str(exc).lower()
+   290	    exc_type = type(exc).__name__
+   291	
+   292	    # Timeout
+   293	    if "timed out" in msg or "timeout" in msg:
+   294	        return "timeout"
+   295	
+   296	    # AppleScript error codes (e.g., "error number -9074")
+   297	    match = _APPLESCRIPT_ERROR_RE.search(str(exc))
+   298	    if match:
+   299	        return f"applescript_{match.group(1)}"
+   300	
+   301	    # Stage 1: Oversized image (Pillow MAX_IMAGE_PIXELS or DPI backoff failure)
+   302	    if isinstance(exc, ImageExtractionError) and (
+   303	        "too large" in msg or "exceeds limit" in msg
+   304	    ):
+   305	        return "oversized_image"
+   306	    if "decompression bomb" in msg or "max_image_pixels" in msg:
+   307	        return "oversized_image"
+   308	
+   309	    # Stage 1: Model / LLM API errors
+   310	    if any(kw in exc_type.lower() for kw in ("apierror", "apiconnection", "apistatus")):
+   311	        return "model_error"
+   312	    if any(kw in msg for kw in ("api error", "model not found", "invalid api key")):
+   313	        return "model_error"
+   314	
+   315	    # Stage 1: Rate limiting
+   316	    if "rate limit" in msg or "429" in msg or "too many requests" in msg:
+   317	        return "rate_limited"
+   318	
+   319	    # Stage 1: PDF corruption / rendering failure
+   320	    if isinstance(exc, ImageExtractionError):
+
+exec
+/bin/zsh -lc "nl -ba folio/config.py | sed -n '1,260p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	"""Configuration management for Folio."""
+     2	
+     3	from dataclasses import dataclass, field
+     4	import logging
+     5	from pathlib import Path
+     6	import re
+     7	from typing import Optional
+     8	
+     9	import yaml
+    10	
+    11	from .llm.types import ProviderRuntimeSettings
+    12	
+    13	logger = logging.getLogger(__name__)
+    14	
+    15	
+    16	# ---------------------------------------------------------------------------
+    17	# Default provider runtime settings
+    18	# ---------------------------------------------------------------------------
+    19	
+    20	_KNOWN_ENDPOINTS: dict[str, set[str]] = {
+    21	    "anthropic": {"messages"},
+    22	    "openai": {"chat_completions"},
+    23	    "google": {"generate_content"},
+    24	}
+    25	
+    26	_DEFAULT_PROVIDER_SETTINGS: dict[str, ProviderRuntimeSettings] = {
+    27	    "anthropic": ProviderRuntimeSettings(
+    28	        rate_limit_rpm=50,
+    29	        rate_limit_tpm=80000,
+    30	        max_attempts=3,
+    31	        base_delay_seconds=1.0,
+    32	        max_delay_seconds=60.0,
+    33	        allowed_endpoints=("messages",),
+    34	    ),
+    35	    "openai": ProviderRuntimeSettings(
+    36	        rate_limit_rpm=60,
+    37	        rate_limit_tpm=None,
+    38	        max_attempts=3,
+    39	        base_delay_seconds=1.0,
+    40	        max_delay_seconds=60.0,
+    41	        allowed_endpoints=("chat_completions",),
+    42	    ),
+    43	    "google": ProviderRuntimeSettings(
+    44	        rate_limit_rpm=60,
+    45	        rate_limit_tpm=None,
+    46	        max_attempts=3,
+    47	        base_delay_seconds=1.0,
+    48	        max_delay_seconds=60.0,
+    49	        allowed_endpoints=("generate_content",),
+    50	    ),
+    51	}
+    52	
+    53	
+    54	# Default env var names per provider (spec §3.3)
+    55	_DEFAULT_API_KEY_ENV = {
+    56	    "anthropic": "ANTHROPIC_API_KEY",
+    57	    "openai": "OPENAI_API_KEY",
+    58	    "google": "GEMINI_API_KEY",
+    59	}
+    60	
+    61	
+    62	@dataclass
+    63	class SourceConfig:
+    64	    """A configured source directory."""
+    65	    name: str
+    66	    path: str
+    67	    target_prefix: str = ""
+    68	
+    69	
+    70	@dataclass
+    71	class LLMProfile:
+    72	    """A named LLM configuration profile."""
+    73	    name: str
+    74	    provider: str = "anthropic"
+    75	    model: str = "claude-sonnet-4-20250514"
+    76	    api_key_env: str = ""  # Defaults via _DEFAULT_API_KEY_ENV
+    77	    base_url_env: str = ""
+    78	
+    79	    def __post_init__(self):
+    80	        if not self.api_key_env:
+    81	            self.api_key_env = _DEFAULT_API_KEY_ENV.get(
+    82	                self.provider, f"{self.provider.upper().replace('-', '_')}_API_KEY"
+    83	            )
+    84	
+    85	
+    86	@dataclass
+    87	class LLMRoute:
+    88	    """A task-to-profile routing entry."""
+    89	    primary: str = ""
+    90	    fallbacks: list[str] = field(default_factory=list)
+    91	
+    92	
+    93	@dataclass
+    94	class LLMConfig:
+    95	    """LLM configuration with profile and routing support."""
+    96	    profiles: dict[str, LLMProfile] = field(default_factory=lambda: {
+    97	        "default": LLMProfile(name="default"),
+    98	    })
+    99	    routing: dict[str, LLMRoute] = field(default_factory=lambda: {
+   100	        "default": LLMRoute(primary="default"),
+   101	    })
+   102	
+   103	    # Legacy fields for backward compat (used when no profiles section exists)
+   104	    provider: str = "anthropic"
+   105	    model: str = "claude-sonnet-4-20250514"
+   106	
+   107	    def resolve_profile(self, override: str | None = None,
+   108	                        task: str = "convert") -> LLMProfile:
+   109	        """Resolve the active LLM profile.
+   110	
+   111	        Resolution order (spec §3.5, §6.1):
+   112	        1. --llm-profile CLI override (bypasses routing, disables fallback)
+   113	        2. routing.<task>.primary
+   114	        3. routing.default.primary
+   115	        4. first available profile
+   116	
+   117	        Args:
+   118	            override: CLI --llm-profile override (takes precedence).
+   119	            task: Task name for route lookup (default: "convert").
+   120	
+   121	        Returns:
+   122	            The resolved LLMProfile.
+   123	
+   124	        Raises:
+   125	            ValueError: if the profile name is not found.
+   126	        """
+   127	        if override:
+   128	            # CLI override: bypass routing entirely
+   129	            profile = self.profiles.get(override)
+   130	            if profile is None:
+   131	                available = ", ".join(sorted(self.profiles.keys()))
+   132	                raise ValueError(
+   133	                    f"Unknown LLM profile '{override}'. Available: {available}"
+   134	                )
+   135	            return profile
+   136	
+   137	        # Route resolution: task route → default route
+   138	        route = self.routing.get(task) or self.routing.get("default")
+   139	        if route and route.primary:
+   140	            profile = self.profiles.get(route.primary)
+   141	            if profile:
+   142	                return profile
+   143	            raise ValueError(
+   144	                f"Route '{task}' references missing profile '{route.primary}'. "
+   145	                f"Available: {', '.join(sorted(self.profiles.keys()))}"
+   146	            )
+   147	
+   148	        # Fallback: default route
+   149	        if task != "default":
+   150	            default_route = self.routing.get("default")
+   151	            if default_route and default_route.primary:
+   152	                profile = self.profiles.get(default_route.primary)
+   153	                if profile:
+   154	                    return profile
+   155	                raise ValueError(
+   156	                    f"Default route references missing profile '{default_route.primary}'. "
+   157	                    f"Available: {', '.join(sorted(self.profiles.keys()))}"
+   158	                )
+   159	
+   160	        raise ValueError(
+   161	            f"No route configured for task '{task}' and no default route found"
+   162	        )
+   163	
+   164	    def get_fallbacks(self, override: str | None = None,
+   165	                      task: str = "convert") -> list[LLMProfile]:
+   166	        """Get the fallback profiles for the resolved route.
+   167	
+   168	        Returns empty list if --llm-profile override is used (spec §3.5).
+   169	        """
+   170	        if override:
+   171	            return []  # CLI override disables fallback
+   172	
+   173	        route = self.routing.get(task) or self.routing.get("default")
+   174	        if not route:
+   175	            return []
+   176	
+   177	        fallbacks = []
+   178	        for fname in route.fallbacks:
+   179	            profile = self.profiles.get(fname)
+   180	            if profile:
+   181	                fallbacks.append(profile)
+   182	        return fallbacks
+   183	
+   184	
+   185	@dataclass
+   186	class ConversionConfig:
+   187	    """Conversion settings."""
+   188	    image_dpi: int = 150
+   189	    image_format: str = "png"
+   190	    libreoffice_timeout: int = 60
+   191	    default_passes: int = 1
+   192	    density_threshold: float = 2.0
+   193	    pptx_renderer: str = "auto"
+   194	    review_confidence_threshold: float = 0.6
+   195	    diagram_max_tokens: int = 16384
+   196	    max_image_pixels: Optional[int] = None
+   197	    large_document_warn_pages: int = 50
+   198	
+   199	
+   200	@dataclass
+   201	class DefaultsConfig:
+   202	    """Workspace defaults and derivation rules from folio.yaml."""
+   203	
+   204	    client: Optional[str] = None
+   205	    engagement: Optional[str] = None
+   206	    target_root: Optional[str] = None
+   207	    target: Optional[str] = None
+   208	    type: Optional[str] = None
+   209	    date: Optional[str] = None
+   210	    participants: list[str] = field(default_factory=list)
+   211	    derive: dict = field(default_factory=dict)
+   212	
+   213	
+   214	@dataclass
+   215	class FolioConfig:
+   216	    """Top-level Folio configuration."""
+   217	    library_root: Path = field(default_factory=lambda: Path("./library"))
+   218	    sources: list[SourceConfig] = field(default_factory=list)
+   219	    llm: LLMConfig = field(default_factory=LLMConfig)
+   220	    conversion: ConversionConfig = field(default_factory=ConversionConfig)
+   221	    defaults: DefaultsConfig = field(default_factory=DefaultsConfig)
+   222	    watch: list[dict] = field(default_factory=list)
+   223	    providers: dict[str, ProviderRuntimeSettings] = field(
+   224	        default_factory=lambda: dict(_DEFAULT_PROVIDER_SETTINGS)
+   225	    )
+   226	    config_dir: Optional[Path] = None  # directory containing folio.yaml
+   227	
+   228	    def __post_init__(self):
+   229	        self._validate()
+   230	
+   231	    def _validate(self):
+   232	        """Validate config values have correct types and ranges."""
+   233	        c = self.conversion
+   234	        if not isinstance(c.image_dpi, int) or c.image_dpi <= 0:
+   235	            raise ValueError(f"image_dpi must be a positive integer, got {c.image_dpi!r}")
+   236	        if not isinstance(c.default_passes, int) or c.default_passes not in (1, 2):
+   237	            raise ValueError(f"default_passes must be 1 or 2, got {c.default_passes!r}")
+   238	        if not isinstance(c.density_threshold, (int, float)) or c.density_threshold <= 0:
+   239	            raise ValueError(f"density_threshold must be a positive number, got {c.density_threshold!r}")
+   240	        if not isinstance(c.libreoffice_timeout, (int, float)) or c.libreoffice_timeout <= 0:
+   241	            raise ValueError(f"libreoffice_timeout must be a positive number, got {c.libreoffice_timeout!r}")
+   242	        if c.pptx_renderer not in ("auto", "libreoffice", "powerpoint"):
+   243	            raise ValueError(
+   244	                f"pptx_renderer must be 'auto', 'libreoffice', or 'powerpoint', got {c.pptx_renderer!r}"
+   245	            )
+   246	        if not isinstance(c.review_confidence_threshold, (int, float)):
+   247	            raise ValueError(
+   248	                f"review_confidence_threshold must be a number, got {c.review_confidence_threshold!r}"
+   249	            )
+   250	        if c.review_confidence_threshold < 0.0 or c.review_confidence_threshold > 1.0:
+   251	            raise ValueError(
+   252	                f"review_confidence_threshold must be between 0.0 and 1.0, got {c.review_confidence_threshold!r}"
+   253	            )
+   254	        if not isinstance(c.diagram_max_tokens, int) or c.diagram_max_tokens <= 0:
+   255	            raise ValueError(
+   256	                f"diagram_max_tokens must be a positive integer, got {c.diagram_max_tokens!r}"
+   257	            )
+   258	        if c.diagram_max_tokens > 32768:
+   259	            raise ValueError(
+   260	                f"diagram_max_tokens must be <= 32768 (proposal ceiling), got {c.diagram_max_tokens!r}"
+
+exec
+/bin/zsh -lc "nl -ba tests/test_watch.py | sed -n '1,360p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	"""Tests for folder-based watch routing."""
+     2	
+     3	from __future__ import annotations
+     4	
+     5	from types import SimpleNamespace
+     6	from unittest.mock import patch
+     7	
+     8	from click.testing import CliRunner
+     9	
+    10	from folio.cli import cli
+    11	from folio.config import FolioConfig
+    12	from folio.watch import route_file, run_watch_once
+    13	
+    14	
+    15	def test_route_file_by_extension():
+    16	    assert route_file("deck.pptx") == "convert"
+    17	    assert route_file("doc.docx") == "convert"
+    18	    assert route_file("thread.eml") == "ingest_email"
+    19	    assert route_file("meeting.vtt") == "ingest"
+    20	    assert route_file("image.png") == "skip"
+    21	
+    22	
+    23	def test_watch_once_dry_run_routes_without_moving(tmp_path):
+    24	    source = tmp_path / "meeting.vtt"
+    25	    source.write_text("WEBVTT\n")
+    26	    messages: list[str] = []
+    27	
+    28	    results = run_watch_once(
+    29	        FolioConfig(library_root=tmp_path / "library"),
+    30	        tmp_path,
+    31	        dry_run=True,
+    32	        emit=messages.append,
+    33	    )
+    34	
+    35	    assert results[0].action == "ingest"
+    36	    assert results[0].outcome == "dry_run"
+    37	    assert source.exists()
+    38	    assert "dry-run" in messages[0]
+    39	
+    40	
+    41	def test_watch_once_archives_success(tmp_path):
+    42	    source = tmp_path / "deck.docx"
+    43	    source.write_bytes(b"docx")
+    44	    output = tmp_path / "library" / "deck.md"
+    45	
+    46	    with patch(
+    47	        "folio.watch.FolioConverter.convert",
+    48	        return_value=SimpleNamespace(output_path=output),
+    49	    ) as mock_convert:
+    50	        results = run_watch_once(
+    51	            FolioConfig(library_root=tmp_path / "library"),
+    52	            tmp_path,
+    53	            stability_seconds=0,
+    54	        )
+    55	
+    56	    assert results[0].outcome == "success"
+    57	    assert mock_convert.call_args.kwargs["source_path"] == source
+    58	    assert not source.exists()
+    59	    assert (tmp_path / "_archive" / "deck.docx").exists()
+    60	
+    61	
+    62	def test_watch_once_writes_failure_log(tmp_path):
+    63	    source = tmp_path / "thread.eml"
+    64	    source.write_text("not really an email")
+    65	
+    66	    with patch("folio.watch.ingest_email", side_effect=RuntimeError("boom")):
+    67	        results = run_watch_once(
+    68	            FolioConfig(library_root=tmp_path / "library"),
+    69	            tmp_path,
+    70	            stability_seconds=0,
+    71	        )
+    72	
+    73	    assert results[0].outcome == "failed"
+    74	    logs = list((tmp_path / "_failed").glob("thread.eml.error.log*"))
+    75	    assert logs
+    76	    assert "boom" in logs[0].read_text()
+    77	    assert source.exists()
+    78	
+    79	
+    80	def test_watch_cli_once_dry_run(tmp_path):
+    81	    config_path = tmp_path / "folio.yaml"
+    82	    config_path.write_text(f"library_root: {tmp_path / 'library'}\n")
+    83	    (tmp_path / "meeting.txt").write_text("Meeting notes")
+    84	
+    85	    result = CliRunner().invoke(
+    86	        cli,
+    87	        ["--config", str(config_path), "watch", str(tmp_path), "--once", "--dry-run"],
+    88	    )
+    89	
+    90	    assert result.exit_code == 0, result.output
+    91	    assert "dry-run" in result.output
+
+2026-05-12T21:33:27.407465Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:27.407720Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:27.409541Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:27.409569Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The implementation surface is small: `folio/watch.py` owns routing and file movement, while the CLI only wires flags into it. I’m narrowing on the command definition and config loading now, then I’ll run the focused pytest command.
+exec
+/bin/zsh -lc "nl -ba folio/config.py | sed -n '260,520p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   260	                f"diagram_max_tokens must be <= 32768 (proposal ceiling), got {c.diagram_max_tokens!r}"
+   261	            )
+   262	        if c.max_image_pixels is not None:
+   263	            if not isinstance(c.max_image_pixels, int) or c.max_image_pixels <= 0:
+   264	                raise ValueError(
+   265	                    f"max_image_pixels must be None or a positive integer, got {c.max_image_pixels!r}"
+   266	                )
+   267	        if not isinstance(c.large_document_warn_pages, int) or c.large_document_warn_pages <= 0:
+   268	            raise ValueError(
+   269	                f"large_document_warn_pages must be a positive integer, got {c.large_document_warn_pages!r}"
+   270	            )
+   271	
+   272	        # LLM validation (spec §3.2)
+   273	        self._validate_llm()
+   274	
+   275	        # Provider runtime settings validation
+   276	        self._validate_providers()
+   277	
+   278	    def _validate_providers(self):
+   279	        """Validate provider runtime settings."""
+   280	        supported = {"anthropic", "openai", "google"}
+   281	        for pname, settings in self.providers.items():
+   282	            if pname not in supported:
+   283	                raise ValueError(
+   284	                    f"Unknown provider '{pname}'. Supported: {', '.join(sorted(supported))}"
+   285	                )
+   286	            if settings.rate_limit_rpm <= 0:
+   287	                raise ValueError(
+   288	                    f"Provider '{pname}': rate_limit_rpm must be > 0, got {settings.rate_limit_rpm}"
+   289	                )
+   290	            if settings.rate_limit_tpm is not None and settings.rate_limit_tpm <= 0:
+   291	                raise ValueError(
+   292	                    f"Provider '{pname}': rate_limit_tpm must be None or > 0, got {settings.rate_limit_tpm}"
+   293	                )
+   294	            if settings.max_attempts < 1:
+   295	                raise ValueError(
+   296	                    f"Provider '{pname}': max_attempts must be >= 1, got {settings.max_attempts}"
+   297	                )
+   298	            if settings.base_delay_seconds <= 0:
+   299	                raise ValueError(
+   300	                    f"Provider '{pname}': base_delay_seconds must be > 0, got {settings.base_delay_seconds}"
+   301	                )
+   302	            if settings.max_delay_seconds < settings.base_delay_seconds:
+   303	                raise ValueError(
+   304	                    f"Provider '{pname}': max_delay_seconds ({settings.max_delay_seconds}) "
+   305	                    f"must be >= base_delay_seconds ({settings.base_delay_seconds})"
+   306	                )
+   307	            known = _KNOWN_ENDPOINTS.get(pname, set())
+   308	            for ep in settings.allowed_endpoints:
+   309	                if ep not in known:
+   310	                    raise ValueError(
+   311	                        f"Provider '{pname}': unknown allowed endpoint '{ep}'. "
+   312	                        f"Known: {', '.join(sorted(known))}"
+   313	                    )
+   314	            for ep in settings.excluded_endpoints:
+   315	                if ep not in known:
+   316	                    raise ValueError(
+   317	                        f"Provider '{pname}': unknown excluded endpoint '{ep}'. "
+   318	                        f"Known: {', '.join(sorted(known))}"
+   319	                    )
+   320	            overlap = set(settings.allowed_endpoints) & set(settings.excluded_endpoints)
+   321	            if overlap:
+   322	                raise ValueError(
+   323	                    f"Provider '{pname}': endpoints in both allowed and excluded: "
+   324	                    f"{', '.join(sorted(overlap))}"
+   325	                )
+   326	
+   327	    def _validate_llm(self):
+   328	        """Validate LLM profiles and routing per spec §3.2."""
+   329	        _PROFILE_NAME_RE = re.compile(r'^[a-z][a-z0-9_]*$')
+   330	        _SUPPORTED_PROVIDERS = {"anthropic", "openai", "google"}
+   331	
+   332	        # Validate profile names (spec §3.2)
+   333	        for pname in self.llm.profiles:
+   334	            if not _PROFILE_NAME_RE.match(pname):
+   335	                raise ValueError(
+   336	                    f"LLM profile name '{pname}' does not match required pattern "
+   337	                    f"'^[a-z][a-z0-9_]*$' (spec §3.2)"
+   338	                )
+   339	
+   340	        # Validate providers
+   341	        for pname, profile in self.llm.profiles.items():
+   342	            if profile.provider not in _SUPPORTED_PROVIDERS:
+   343	                raise ValueError(
+   344	                    f"LLM profile '{pname}' uses unsupported provider "
+   345	                    f"'{profile.provider}'. Supported: {', '.join(sorted(_SUPPORTED_PROVIDERS))}"
+   346	                )
+   347	            if not isinstance(profile.base_url_env, str):
+   348	                raise ValueError(
+   349	                    f"LLM profile '{pname}' base_url_env must be a string, "
+   350	                    f"got {profile.base_url_env!r}"
+   351	                )
+   352	
+   353	        # Validate routing.default exists
+   354	        if "default" not in self.llm.routing:
+   355	            raise ValueError(
+   356	                "LLM config requires a 'routing.default' entry (spec §3.2)"
+   357	            )
+   358	
+   359	        # Validate all route targets reference existing profiles
+   360	        for rname, route in self.llm.routing.items():
+   361	            if route.primary and route.primary not in self.llm.profiles:
+   362	                raise ValueError(
+   363	                    f"LLM route '{rname}' references missing profile "
+   364	                    f"'{route.primary}'. Available: {', '.join(sorted(self.llm.profiles.keys()))}"
+   365	                )
+   366	            for fallback in route.fallbacks:
+   367	                if fallback not in self.llm.profiles:
+   368	                    raise ValueError(
+   369	                        f"LLM route '{rname}' fallback references missing profile "
+   370	                        f"'{fallback}'. Available: {', '.join(sorted(self.llm.profiles.keys()))}"
+   371	                    )
+   372	                # Fallback must not be the same as primary (M8)
+   373	                if fallback == route.primary:
+   374	                    raise ValueError(
+   375	                        f"LLM route '{rname}' fallback '{fallback}' is the same as "
+   376	                        f"its primary profile — self-referencing fallback is not allowed"
+   377	                    )
+   378	            # Reject duplicate fallback entries (M8)
+   379	            if len(route.fallbacks) != len(set(route.fallbacks)):
+   380	                dupes = [f for f in route.fallbacks if route.fallbacks.count(f) > 1]
+   381	                raise ValueError(
+   382	                    f"LLM route '{rname}' has duplicate fallback entries: "
+   383	                    f"{', '.join(sorted(set(dupes)))}"
+   384	                )
+   385	
+   386	    def resolve_source_roots(self, base_path: Optional[Path] = None) -> list[tuple["SourceConfig", Path]]:
+   387	        """Resolve configured source roots to absolute paths.
+   388	
+   389	        Args:
+   390	            base_path: Base directory for resolving relative paths.
+   391	                       Defaults to cwd.
+   392	
+   393	        Returns:
+   394	            List of (SourceConfig, resolved_absolute_path) tuples.
+   395	        """
+   396	        base = Path(base_path) if base_path else (self.config_dir or Path.cwd())
+   397	        result = []
+   398	        for src in self.sources:
+   399	            resolved = (base / src.path).resolve()
+   400	            result.append((src, resolved))
+   401	        return result
+   402	
+   403	    def match_source_root(
+   404	        self, source_path: Path, base_path: Optional[Path] = None
+   405	    ) -> Optional[tuple["SourceConfig", Path]]:
+   406	        """Match a source file to a configured source root.
+   407	
+   408	        Args:
+   409	            source_path: Absolute path to the source file.
+   410	            base_path: Base directory for resolving source root paths.
+   411	
+   412	        Returns:
+   413	            (SourceConfig, relative_path_from_root) or None if no match.
+   414	        """
+   415	        source_path = Path(source_path).resolve()
+   416	        for src_config, resolved_root in self.resolve_source_roots(base_path):
+   417	            try:
+   418	                rel = source_path.relative_to(resolved_root)
+   419	                return (src_config, rel)
+   420	            except ValueError:
+   421	                continue
+   422	        return None
+   423	
+   424	    @staticmethod
+   425	    def normalize_target_prefix(prefix: str) -> str:
+   426	        """Normalize a target_prefix for consistent path construction.
+   427	
+   428	        Strips trailing slashes so ``""``, ``"Internal"``, and
+   429	        ``"Internal/"`` all behave consistently.
+   430	
+   431	        Raises ValueError if any path component is ``..`` (path traversal).
+   432	        """
+   433	        cleaned = prefix.strip("/").strip()
+   434	        if ".." in cleaned.split("/"):
+   435	            raise ValueError(f"target_prefix must not contain '..': {prefix!r}")
+   436	        return cleaned
+   437	
+   438	    @classmethod
+   439	    def load(cls, config_path: Optional[Path] = None) -> "FolioConfig":
+   440	        """Load config from folio.yaml, falling back to defaults."""
+   441	        if config_path is None:
+   442	            # Walk up from cwd looking for folio.yaml
+   443	            config_path = _find_config()
+   444	
+   445	        if config_path is None or not config_path.exists():
+   446	            return cls()
+   447	
+   448	        with open(config_path) as f:
+   449	            raw = yaml.safe_load(f) or {}
+   450	
+   451	        sources = [
+   452	            SourceConfig(**s) for s in raw.get("sources", [])
+   453	        ]
+   454	        llm_raw = raw.get("llm") or {}
+   455	        profiles_raw = llm_raw.get("profiles") or {}
+   456	        routing_raw = llm_raw.get("routing") or {}
+   457	
+   458	        if profiles_raw:
+   459	            # New profile-based config (spec §3.1)
+   460	            profiles = {}
+   461	            for pname, pdata in profiles_raw.items():
+   462	                if isinstance(pdata, dict):
+   463	                    profiles[pname] = LLMProfile(
+   464	                        name=pname,
+   465	                        provider=pdata.get("provider", "anthropic"),
+   466	                        model=pdata.get("model", "claude-sonnet-4-20250514"),
+   467	                        api_key_env=pdata.get("api_key_env", ""),
+   468	                        base_url_env=pdata.get("base_url_env", ""),
+   469	                    )
+   470	            if not profiles:
+   471	                profiles = {"default": LLMProfile(name="default")}
+   472	
+   473	            # Parse routing (spec §3.1)
+   474	            routing = {}
+   475	            for rname, rdata in routing_raw.items():
+   476	                if isinstance(rdata, dict):
+   477	                    routing[rname] = LLMRoute(
+   478	                        primary=rdata.get("primary", ""),
+   479	                        fallbacks=rdata.get("fallbacks", []),
+   480	                    )
+   481	
+   482	            # routing.default is required (spec §3.2) — validated by _validate_llm()
+   483	
+   484	            llm = LLMConfig(
+   485	                profiles=profiles,
+   486	                routing=routing,
+   487	                provider=llm_raw.get("provider", "anthropic"),
+   488	                model=llm_raw.get("model", "claude-sonnet-4-20250514"),
+   489	            )
+   490	        else:
+   491	            # Legacy flat config (spec §3.4): create synthetic profile + routes
+   492	            provider = llm_raw.get("provider", "anthropic")
+   493	            model = llm_raw.get("model", "claude-sonnet-4-20250514")
+   494	            profile_name = f"default_{provider}"
+   495	            profile = LLMProfile(
+   496	                name=profile_name, provider=provider, model=model,
+   497	            )
+   498	            llm = LLMConfig(
+   499	                profiles={profile_name: profile},
+   500	                routing={
+   501	                    "default": LLMRoute(primary=profile_name),
+   502	                    "convert": LLMRoute(primary=profile_name),
+   503	                },
+   504	                provider=provider,
+   505	                model=model,
+   506	            )
+   507	        conv_raw = raw.get("conversion") or {}
+   508	        conversion = ConversionConfig(
+   509	            image_dpi=conv_raw.get("image_dpi", 150),
+   510	            image_format=conv_raw.get("image_format", "png"),
+   511	            libreoffice_timeout=conv_raw.get("libreoffice_timeout", 60),
+   512	            default_passes=conv_raw.get("default_passes", 1),
+   513	            density_threshold=conv_raw.get("density_threshold", 2.0),
+   514	            pptx_renderer=conv_raw.get("pptx_renderer", "auto"),
+   515	            review_confidence_threshold=conv_raw.get("review_confidence_threshold", 0.6),
+   516	            diagram_max_tokens=conv_raw.get("diagram_max_tokens", 16384),
+   517	            max_image_pixels=conv_raw.get("max_image_pixels", None),
+   518	            large_document_warn_pages=conv_raw.get("large_document_warn_pages", 50),
+   519	        )
+   520	
+
+exec
+/bin/zsh -lc "rg -n \"def watch|@cli.command|run_watch|watch\\(\" folio/cli.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+30:from .watch import run_watch_loop, run_watch_once
+377:@cli.command()
+457:@cli.command()
+561:@cli.command("ingest-email")
+602:@cli.command("watch")
+608:def watch_command(ctx, directory: Path, once: bool, dry_run: bool, quiet: bool):
+614:            run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+616:        run_watch_loop(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+627:@cli.command()
+844:@cli.command()
+998:@cli.command()
+1134:@cli.command()
+2274:@cli.command()
+2319:@cli.command()
+2542:@cli.command()
+
+exec
+/bin/zsh -lc 'rg -n "watch|after_process|stability" folio/config.py folio/watch.py tests/test_watch.py docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+folio/watch.py:30:def run_watch_once(
+folio/watch.py:37:    stability_seconds: float | None = None,
+folio/watch.py:39:    """Process the current contents of a watched directory once."""
+folio/watch.py:44:    watch_config = _match_watch_config(config, directory)
+folio/watch.py:46:        stability_seconds
+folio/watch.py:47:        if stability_seconds is not None
+folio/watch.py:48:        else float(watch_config.get("stability_seconds", 3))
+folio/watch.py:51:    for source_path in _iter_watch_files(directory):
+folio/watch.py:66:            _archive_success(source_path, directory, watch_config)
+folio/watch.py:87:def run_watch_loop(
+folio/watch.py:96:    """Run a simple polling watcher until interrupted."""
+folio/watch.py:99:        run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+folio/watch.py:123:    raise ValueError(f"Unsupported watch action: {action}")
+folio/watch.py:126:def _iter_watch_files(directory: Path) -> list[Path]:
+folio/watch.py:149:def _archive_success(source_path: Path, directory: Path, watch_config: dict) -> None:
+folio/watch.py:150:    after = watch_config.get("after_process") if isinstance(watch_config, dict) else None
+folio/watch.py:188:def _match_watch_config(config: FolioConfig, directory: Path) -> dict:
+folio/watch.py:189:    for item in config.watch:
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md:2:id: folio-watch-v1-4-0-b3-canonical-verdict
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md:3:deliverable_id: folio-watch-v1-4-0
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md:10:# Phase B.3 Canonical Verdict: folio-watch-v1-4-0
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md:21:The watch slice may proceed to Phase C. Reviewers found the spec and manifest adequate for issue #62: add `folio watch <dir> [--once] [--dry-run] [--quiet]`, route by extension, wait for stable file size, process serially, archive successes, write failures under `_failed/`, and rely on the previous slices for defaults, correspondence, and DOCX support.
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md:24:Implement watcher routing, dry-run/once behavior, stable-size waiting, success archiving, and failure quarantine tests.
+tests/test_watch.py:1:"""Tests for folder-based watch routing."""
+tests/test_watch.py:12:from folio.watch import route_file, run_watch_once
+tests/test_watch.py:23:def test_watch_once_dry_run_routes_without_moving(tmp_path):
+tests/test_watch.py:28:    results = run_watch_once(
+tests/test_watch.py:41:def test_watch_once_archives_success(tmp_path):
+tests/test_watch.py:47:        "folio.watch.FolioConverter.convert",
+tests/test_watch.py:50:        results = run_watch_once(
+tests/test_watch.py:53:            stability_seconds=0,
+tests/test_watch.py:62:def test_watch_once_writes_failure_log(tmp_path):
+tests/test_watch.py:66:    with patch("folio.watch.ingest_email", side_effect=RuntimeError("boom")):
+tests/test_watch.py:67:        results = run_watch_once(
+tests/test_watch.py:70:            stability_seconds=0,
+tests/test_watch.py:80:def test_watch_cli_once_dry_run(tmp_path):
+tests/test_watch.py:87:        ["--config", str(config_path), "watch", str(tmp_path), "--once", "--dry-run"],
+folio/config.py:222:    watch: list[dict] = field(default_factory=list)
+folio/config.py:522:        watch = _parse_watch(raw.get("watch") or [])
+folio/config.py:555:            watch=watch,
+folio/config.py:600:def _parse_watch(raw: object) -> list[dict]:
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md:2:id: folio-watch-v1-4-0-phase-a-spec
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md:3:deliverable_id: folio-watch-v1-4-0
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md:10:# Phase A Spec: folio-watch-v1-4-0
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md:14:- Add `folio watch <dir> [--once] [--dry-run] [--quiet]`.
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md:18:- `folio/watch.py`
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md:20:- `tests/test_watch.py`
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md:22:- `./.venv/bin/python -m pytest tests/test_watch.py -q`
+
+2026-05-12T21:33:32.772926Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:32.773181Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:32.775123Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:32.775155Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "nl -ba folio/cli.py | sed -n '580,630p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   580	    """Ingest a .eml file into a correspondence note."""
+   581	    config = ctx.obj["config"]
+   582	    try:
+   583	        result = ingest_email(
+   584	            config,
+   585	            source_path=source,
+   586	            client=client,
+   587	            engagement=engagement,
+   588	            title=title,
+   589	            target=target,
+   590	            note=note,
+   591	            as_new_entry=as_new_entry,
+   592	        )
+   593	    except (FileNotFoundError, CorrespondenceIngestError) as exc:
+   594	        click.echo(f"✗ Ingest failed: {exc}", err=True)
+   595	        sys.exit(1)
+   596	    click.echo(f"✓ {source.name}")
+   597	    click.echo(f"  {result.output_path}")
+   598	    status = "Skipped" if result.skipped else "Version"
+   599	    click.echo(f"  {status}: {result.version} | ID: {result.correspondence_id} | Review: {result.review_status}")
+   600	
+   601	
+   602	@cli.command("watch")
+   603	@click.argument("directory", type=click.Path(exists=True, file_okay=False, path_type=Path))
+   604	@click.option("--once", is_flag=True, default=False, help="Process current files once and exit.")
+   605	@click.option("--dry-run", is_flag=True, default=False, help="Show routing without running pipelines or moving files.")
+   606	@click.option("--quiet", is_flag=True, default=False, help="Suppress per-file success output.")
+   607	@click.pass_context
+   608	def watch_command(ctx, directory: Path, once: bool, dry_run: bool, quiet: bool):
+   609	    """Watch a directory and route new files into Folio."""
+   610	    config = ctx.obj["config"]
+   611	    emit = click.echo
+   612	    try:
+   613	        if once:
+   614	            run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+   615	            return
+   616	        run_watch_loop(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+   617	    except KeyboardInterrupt:
+   618	        return
+   619	    except Exception as exc:
+   620	        click.echo(f"✗ Watch failed: {exc}", err=True)
+   621	        if ctx.obj.get("verbose"):
+   622	            import traceback
+   623	            traceback.print_exc()
+   624	        sys.exit(1)
+   625	
+   626	
+   627	@cli.command()
+   628	@click.argument("directory", type=click.Path(exists=True))
+   629	@click.option("--pattern", default="*.pptx", help="File glob pattern (default: *.pptx).")
+   630	@click.option("--note", "-n", default=None, help="Version note for all conversions.")
+
+exec
+/bin/zsh -lc "nl -ba folio/config.py | sed -n '520,640p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   520	
+   521	        defaults = _parse_defaults(raw.get("defaults") or {})
+   522	        watch = _parse_watch(raw.get("watch") or [])
+   523	
+   524	        # Parse provider runtime settings (merge onto defaults)
+   525	        providers_raw = raw.get("providers") or {}
+   526	        providers = dict(_DEFAULT_PROVIDER_SETTINGS)
+   527	        for pname, pdata in providers_raw.items():
+   528	            if isinstance(pdata, dict) and pname in _DEFAULT_PROVIDER_SETTINGS:
+   529	                defaults = _DEFAULT_PROVIDER_SETTINGS[pname]
+   530	                providers[pname] = ProviderRuntimeSettings(
+   531	                    rate_limit_rpm=pdata.get("rate_limit_rpm", defaults.rate_limit_rpm),
+   532	                    rate_limit_tpm=pdata.get("rate_limit_tpm", defaults.rate_limit_tpm),
+   533	                    max_attempts=pdata.get("max_attempts", defaults.max_attempts),
+   534	                    base_delay_seconds=pdata.get("base_delay_seconds", defaults.base_delay_seconds),
+   535	                    max_delay_seconds=pdata.get("max_delay_seconds", defaults.max_delay_seconds),
+   536	                    allowed_endpoints=tuple(pdata.get("allowed_endpoints", defaults.allowed_endpoints)),
+   537	                    excluded_endpoints=tuple(pdata.get("excluded_endpoints", defaults.excluded_endpoints)),
+   538	                    require_store_false=pdata.get("require_store_false", defaults.require_store_false),
+   539	                )
+   540	            elif isinstance(pdata, dict):
+   541	                raise ValueError(
+   542	                    f"Unknown provider '{pname}' in config. "
+   543	                    f"Known providers: {', '.join(sorted(_DEFAULT_PROVIDER_SETTINGS))}. "
+   544	                    f"Check for typos in folio.yaml."
+   545	                )
+   546	
+   547	        config_dir = config_path.resolve().parent
+   548	
+   549	        return cls(
+   550	            library_root=Path(raw.get("library_root", "./library")),
+   551	            sources=sources,
+   552	            llm=llm,
+   553	            conversion=conversion,
+   554	            defaults=defaults,
+   555	            watch=watch,
+   556	            providers=providers,
+   557	            config_dir=config_dir,
+   558	        )
+   559	
+   560	
+   561	def _find_config() -> Optional[Path]:
+   562	    """Walk up from cwd looking for folio.yaml."""
+   563	    current = Path.cwd()
+   564	    for _ in range(10):  # max depth
+   565	        candidate = current / "folio.yaml"
+   566	        if candidate.exists():
+   567	            return candidate
+   568	        parent = current.parent
+   569	        if parent == current:
+   570	            break
+   571	        current = parent
+   572	    return None
+   573	
+   574	
+   575	def _parse_defaults(raw: object) -> DefaultsConfig:
+   576	    if not isinstance(raw, dict):
+   577	        return DefaultsConfig()
+   578	    participants = raw.get("participants", [])
+   579	    if isinstance(participants, str):
+   580	        participants = [item.strip() for item in participants.split(",") if item.strip()]
+   581	    elif isinstance(participants, list):
+   582	        participants = [str(item).strip() for item in participants if str(item).strip()]
+   583	    else:
+   584	        participants = []
+   585	    derive = raw.get("derive") or {}
+   586	    if not isinstance(derive, dict):
+   587	        derive = {}
+   588	    return DefaultsConfig(
+   589	        client=_str_default(raw.get("client")),
+   590	        engagement=_str_default(raw.get("engagement")),
+   591	        target_root=_str_default(raw.get("target_root")),
+   592	        target=_str_default(raw.get("target")),
+   593	        type=_str_default(raw.get("type")),
+   594	        date=_str_default(raw.get("date")),
+   595	        participants=participants,
+   596	        derive=derive,
+   597	    )
+   598	
+   599	
+   600	def _parse_watch(raw: object) -> list[dict]:
+   601	    if isinstance(raw, list):
+   602	        return [dict(item) for item in raw if isinstance(item, dict)]
+   603	    if isinstance(raw, dict):
+   604	        return [dict(raw)]
+   605	    return []
+   606	
+   607	
+   608	def _str_default(value: object) -> Optional[str]:
+   609	    if value is None:
+   610	        return None
+   611	    cleaned = str(value).strip()
+   612	    return cleaned or None
+
+exec
+/bin/zsh -lc './.venv/bin/python -m pytest tests/test_watch.py -q' in /Users/jonathanoh/workspaces/folio.love
+2026-05-12T21:33:36.403997Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:36.404217Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:36.405871Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:36.405896Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+ succeeded in 277ms:
+.....                                                                    [100%]
+5 passed in 0.08s
+
+codex
+The focused pytest command passes: `5 passed in 0.08s`. I found one alignment concern: the failure path writes an error log under `_failed/`, but leaves the source file in the watched directory, so the polling loop will reprocess the same failed file indefinitely instead of quarantining it.
+exec
+/bin/zsh -lc "test -f docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md && nl -ba docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md | sed -n '1,220p' || true" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git status --short' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+ M folio/cli.py
+ M folio/config.py
+ M folio/converter.py
+ M folio/ingest.py
+ M folio/output/frontmatter.py
+ M folio/output/interaction_markdown.py
+ M folio/pipeline/interaction_analysis.py
+ M folio/pipeline/text.py
+ M folio/tracking/registry.py
+ M tests/test_cli_ingest.py
+ M tests/test_frontmatter.py
+?? docs/validation/strict_p3_rerun_2026_05_12/
+?? folio/correspondence.py
+?? folio/defaults.py
+?? folio/pipeline/speaker_analytics.py
+?? folio/watch.py
+?? frameworks/llm-dev-strict-p3
+?? frameworks/manifests/folio-config-defaults-v1-2-0.yaml
+?? frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml
+?? frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml
+?? frameworks/manifests/folio-github-closeout-v1-0-0.yaml
+?? frameworks/manifests/folio-ingest-signals-v1-1-0.yaml
+?? frameworks/manifests/folio-watch-v1-4-0.yaml
+?? tests/test_cli_correspondence.py
+?? tests/test_config_defaults.py
+?? tests/test_correspondence_ingest.py
+?? tests/test_docx_conversion.py
+?? tests/test_interaction_actions.py
+?? tests/test_speaker_analytics.py
+?? tests/test_watch.py
+
+2026-05-12T21:33:54.568123Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:33:54.570037Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:33:54.586954Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:33:54.587088Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’m writing the requested review artifact only. The verdict will be `request changes` because the implementation matches most routing and CLI behavior, but the failed input is not actually quarantined.
+apply patch
+patch: completed
+/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..be7e816c7252b31fab86de9e871e35f3840a1752
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+@@ -0,0 +1,35 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: D.2
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.2 Codex Alignment Review: folio-watch-v1-4-0
++
++## Verdict
++request changes
++
++## Evidence
++
++- Read Phase A spec: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`.
++- Read Phase B.3 canonical verdict: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md`.
++- Inspected implementation and tests: `folio/watch.py`, `folio/cli.py`, `folio/config.py`, and `tests/test_watch.py`.
++- Direct run: `./.venv/bin/python -m pytest tests/test_watch.py -q` exited 0 with `5 passed in 0.08s`.
++
++## Blocking Finding
++
++Failure quarantine is not implemented. Phase A requires failures under `_failed/`, and B.3 explicitly includes failure quarantine in Phase C scope. The current failure path in `folio/watch.py` only writes `source.name.error.log` under `_failed/` at `folio/watch.py:166`; it does not move or copy the failed source file out of the watched directory. `run_watch_once` catches the exception at `folio/watch.py:74` and then returns with the original source still present. In continuous mode, `run_watch_loop` calls `run_watch_once` every interval at `folio/watch.py:98`, so the same failed source will be picked up repeatedly, generating repeated failures instead of being quarantined.
++
++The test currently encodes this non-quarantine behavior: `tests/test_watch.py:77` asserts that the failed source still exists. That should be inverted or replaced with an assertion that the input file is placed under `_failed/` using the same collision-safe naming approach as success archives, with the error log kept alongside it.
++
++## Aligned Areas
++
++The rest of the narrow slice appears aligned with Phase A and B.3: `folio watch <dir>` exposes `--once`, `--dry-run`, and `--quiet` in `folio/cli.py:602`; extension routing covers DOCX/PPTX/PDF conversion, email ingest, text/transcript ingest, and skip behavior in `folio/watch.py:103`; dry-run avoids pipeline execution and movement in `folio/watch.py:58`; stable-size waiting is present in `folio/watch.py:136`; and successful inputs are archived by default under `_archive` in `folio/watch.py:149`.
++
++## Requested Change
++
++Move failed source files into `_failed/` after a processing exception, using a unique destination to avoid overwrites, and update `tests/test_watch.py` so the failure case proves quarantine instead of proving the source remains in the active watch directory. After that, rerun the focused pytest command and the lifecycle checks required by the manifest.
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..be7e816c7252b31fab86de9e871e35f3840a1752
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+@@ -0,0 +1,35 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: D.2
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.2 Codex Alignment Review: folio-watch-v1-4-0
++
++## Verdict
++request changes
++
++## Evidence
++
++- Read Phase A spec: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`.
++- Read Phase B.3 canonical verdict: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md`.
++- Inspected implementation and tests: `folio/watch.py`, `folio/cli.py`, `folio/config.py`, and `tests/test_watch.py`.
++- Direct run: `./.venv/bin/python -m pytest tests/test_watch.py -q` exited 0 with `5 passed in 0.08s`.
++
++## Blocking Finding
++
++Failure quarantine is not implemented. Phase A requires failures under `_failed/`, and B.3 explicitly includes failure quarantine in Phase C scope. The current failure path in `folio/watch.py` only writes `source.name.error.log` under `_failed/` at `folio/watch.py:166`; it does not move or copy the failed source file out of the watched directory. `run_watch_once` catches the exception at `folio/watch.py:74` and then returns with the original source still present. In continuous mode, `run_watch_loop` calls `run_watch_once` every interval at `folio/watch.py:98`, so the same failed source will be picked up repeatedly, generating repeated failures instead of being quarantined.
++
++The test currently encodes this non-quarantine behavior: `tests/test_watch.py:77` asserts that the failed source still exists. That should be inverted or replaced with an assertion that the input file is placed under `_failed/` using the same collision-safe naming approach as success archives, with the error log kept alongside it.
++
++## Aligned Areas
++
++The rest of the narrow slice appears aligned with Phase A and B.3: `folio watch <dir>` exposes `--once`, `--dry-run`, and `--quiet` in `folio/cli.py:602`; extension routing covers DOCX/PPTX/PDF conversion, email ingest, text/transcript ingest, and skip behavior in `folio/watch.py:103`; dry-run avoids pipeline execution and movement in `folio/watch.py:58`; stable-size waiting is present in `folio/watch.py:136`; and successful inputs are archived by default under `_archive` in `folio/watch.py:149`.
++
++## Requested Change
++
++Move failed source files into `_failed/` after a processing exception, using a unique destination to avoid overwrites, and update `tests/test_watch.py` so the failure case proves quarantine instead of proving the source remains in the active watch directory. After that, rerun the focused pytest command and the lifecycle checks required by the manifest.
+
+2026-05-12T21:34:14.290327Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:34:14.290610Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:34:14.292740Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:34:14.292772Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The artifact is in place. I’m doing a quick contract check on the frontmatter, verdict section, and size before I close this out.
+exec
+/bin/zsh -lc 'wc -c docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    2616 docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+
+exec
+/bin/zsh -lc "sed -n '1,80p' docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+deliverable_id: folio-watch-v1-4-0
+phase: D.2
+role: alignment
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+
+# D.2 Codex Alignment Review: folio-watch-v1-4-0
+
+## Verdict
+request changes
+
+## Evidence
+
+- Read Phase A spec: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`.
+- Read Phase B.3 canonical verdict: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md`.
+- Inspected implementation and tests: `folio/watch.py`, `folio/cli.py`, `folio/config.py`, and `tests/test_watch.py`.
+- Direct run: `./.venv/bin/python -m pytest tests/test_watch.py -q` exited 0 with `5 passed in 0.08s`.
+
+## Blocking Finding
+
+Failure quarantine is not implemented. Phase A requires failures under `_failed/`, and B.3 explicitly includes failure quarantine in Phase C scope. The current failure path in `folio/watch.py` only writes `source.name.error.log` under `_failed/` at `folio/watch.py:166`; it does not move or copy the failed source file out of the watched directory. `run_watch_once` catches the exception at `folio/watch.py:74` and then returns with the original source still present. In continuous mode, `run_watch_loop` calls `run_watch_once` every interval at `folio/watch.py:98`, so the same failed source will be picked up repeatedly, generating repeated failures instead of being quarantined.
+
+The test currently encodes this non-quarantine behavior: `tests/test_watch.py:77` asserts that the failed source still exists. That should be inverted or replaced with an assertion that the input file is placed under `_failed/` using the same collision-safe naming approach as success archives, with the error log kept alongside it.
+
+## Aligned Areas
+
+The rest of the narrow slice appears aligned with Phase A and B.3: `folio watch <dir>` exposes `--once`, `--dry-run`, and `--quiet` in `folio/cli.py:602`; extension routing covers DOCX/PPTX/PDF conversion, email ingest, text/transcript ingest, and skip behavior in `folio/watch.py:103`; dry-run avoids pipeline execution and movement in `folio/watch.py:58`; stable-size waiting is present in `folio/watch.py:136`; and successful inputs are archived by default under `_archive` in `folio/watch.py:149`.
+
+## Requested Change
+
+Move failed source files into `_failed/` after a processing exception, using a unique destination to avoid overwrites, and update `tests/test_watch.py` so the failure case proves quarantine instead of proving the source remains in the active watch directory. After that, rerun the focused pytest command and the lifecycle checks required by the manifest.
+
+exec
+/bin/zsh -lc "awk '/"'^## Verdict$/{getline; print; exit}'"' docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+request changes
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..be7e816c7252b31fab86de9e871e35f3840a1752
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+@@ -0,0 +1,35 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: D.2
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.2 Codex Alignment Review: folio-watch-v1-4-0
++
++## Verdict
++request changes
++
++## Evidence
++
++- Read Phase A spec: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`.
++- Read Phase B.3 canonical verdict: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md`.
++- Inspected implementation and tests: `folio/watch.py`, `folio/cli.py`, `folio/config.py`, and `tests/test_watch.py`.
++- Direct run: `./.venv/bin/python -m pytest tests/test_watch.py -q` exited 0 with `5 passed in 0.08s`.
++
++## Blocking Finding
++
++Failure quarantine is not implemented. Phase A requires failures under `_failed/`, and B.3 explicitly includes failure quarantine in Phase C scope. The current failure path in `folio/watch.py` only writes `source.name.error.log` under `_failed/` at `folio/watch.py:166`; it does not move or copy the failed source file out of the watched directory. `run_watch_once` catches the exception at `folio/watch.py:74` and then returns with the original source still present. In continuous mode, `run_watch_loop` calls `run_watch_once` every interval at `folio/watch.py:98`, so the same failed source will be picked up repeatedly, generating repeated failures instead of being quarantined.
++
++The test currently encodes this non-quarantine behavior: `tests/test_watch.py:77` asserts that the failed source still exists. That should be inverted or replaced with an assertion that the input file is placed under `_failed/` using the same collision-safe naming approach as success archives, with the error log kept alongside it.
++
++## Aligned Areas
++
++The rest of the narrow slice appears aligned with Phase A and B.3: `folio watch <dir>` exposes `--once`, `--dry-run`, and `--quiet` in `folio/cli.py:602`; extension routing covers DOCX/PPTX/PDF conversion, email ingest, text/transcript ingest, and skip behavior in `folio/watch.py:103`; dry-run avoids pipeline execution and movement in `folio/watch.py:58`; stable-size waiting is present in `folio/watch.py:136`; and successful inputs are archived by default under `_archive` in `folio/watch.py:149`.
++
++## Requested Change
++
++Move failed source files into `_failed/` after a processing exception, using a unique destination to avoid overwrites, and update `tests/test_watch.py` so the failure case proves quarantine instead of proving the source remains in the active watch directory. After that, rerun the focused pytest command and the lifecycle checks required by the manifest.
+
+2026-05-12T21:34:21.322698Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:34:21.322998Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:34:21.325269Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:34:21.325305Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Wrote the D.2 alignment artifact here:
+
+[folio-watch-v1-4-0-D.2-codex-alignment.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md)
+
+Verdict: `request changes`.
+
+Focused validation passed: `./.venv/bin/python -m pytest tests/test_watch.py -q` -> `5 passed in 0.08s`.
+
+Primary blocker: failed source files are not quarantined into `_failed/`; only an error log is written, leaving the failed input in the active watch directory for repeated processing.
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..be7e816c7252b31fab86de9e871e35f3840a1752
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+@@ -0,0 +1,35 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: D.2
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.2 Codex Alignment Review: folio-watch-v1-4-0
++
++## Verdict
++request changes
++
++## Evidence
++
++- Read Phase A spec: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`.
++- Read Phase B.3 canonical verdict: `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md`.
++- Inspected implementation and tests: `folio/watch.py`, `folio/cli.py`, `folio/config.py`, and `tests/test_watch.py`.
++- Direct run: `./.venv/bin/python -m pytest tests/test_watch.py -q` exited 0 with `5 passed in 0.08s`.
++
++## Blocking Finding
++
++Failure quarantine is not implemented. Phase A requires failures under `_failed/`, and B.3 explicitly includes failure quarantine in Phase C scope. The current failure path in `folio/watch.py` only writes `source.name.error.log` under `_failed/` at `folio/watch.py:166`; it does not move or copy the failed source file out of the watched directory. `run_watch_once` catches the exception at `folio/watch.py:74` and then returns with the original source still present. In continuous mode, `run_watch_loop` calls `run_watch_once` every interval at `folio/watch.py:98`, so the same failed source will be picked up repeatedly, generating repeated failures instead of being quarantined.
++
++The test currently encodes this non-quarantine behavior: `tests/test_watch.py:77` asserts that the failed source still exists. That should be inverted or replaced with an assertion that the input file is placed under `_failed/` using the same collision-safe naming approach as success archives, with the error log kept alongside it.
++
++## Aligned Areas
++
++The rest of the narrow slice appears aligned with Phase A and B.3: `folio watch <dir>` exposes `--once`, `--dry-run`, and `--quiet` in `folio/cli.py:602`; extension routing covers DOCX/PPTX/PDF conversion, email ingest, text/transcript ingest, and skip behavior in `folio/watch.py:103`; dry-run avoids pipeline execution and movement in `folio/watch.py:58`; stable-size waiting is present in `folio/watch.py:136`; and successful inputs are archived by default under `_archive` in `folio/watch.py:149`.
++
++## Requested Change
++
++Move failed source files into `_failed/` after a processing exception, using a unique destination to avoid overwrites, and update `tests/test_watch.py` so the failure case proves quarantine instead of proving the source remains in the active watch directory. After that, rerun the focused pytest command and the lifecycle checks required by the manifest.
+
+2026-05-12T21:34:26.203919Z ERROR codex_core::session: failed to record rollout items: thread 019e1e1b-805d-7032-b1aa-f08270afacb9 not found
+tokens used
+56,312
+2026-05-12T21:34:26.214220Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 94320: No such process (os error 3)
+2026-05-12T21:34:26.263586Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 94319: No such process (os error 3)

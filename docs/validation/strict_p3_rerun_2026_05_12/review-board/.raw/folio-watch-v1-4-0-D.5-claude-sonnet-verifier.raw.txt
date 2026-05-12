@@ -1,0 +1,3 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-claude-sonnet-verifier.md`.
+
+**Verdict: approve.** All 5 focused tests pass (exit 0). The D.4 failure-quarantine fix is fully present in `folio/watch.py` — `_write_failure` moves failed files to `_failed/` with a co-located error log, and `_iter_watch_files` excludes `_failed` and `_archive` from re-scan so quarantined files are never reprocessed. All four gate prerequisites (G-test-1, G-scope-1, G-cardinality-1, G-blocker-1) are satisfied. No remaining release issues.

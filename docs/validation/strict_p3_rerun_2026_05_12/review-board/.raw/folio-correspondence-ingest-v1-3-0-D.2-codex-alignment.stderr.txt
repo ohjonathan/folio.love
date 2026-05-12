@@ -1,0 +1,334 @@
+OpenAI Codex v0.125.0 (research preview)
+--------
+workdir: /Users/jonathanoh/workspaces/folio.love
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/jonathanoh/.codex/memories]
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019e1e08-c92e-79b1-99d8-4da37b369831
+--------
+user
+You are the codex external reviewer for llm-dev strict-P3 Phase D.2, role alignment, deliverable folio-correspondence-ingest-v1-3-0.
+
+Review the Phase C implementation against Phase A and B.3. Slice summary: native .eml correspondence ingest, metadata, Message-ID overlap, and CLI surface.
+
+Use these files:
+- docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_phase_a_spec.md
+- docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_B.3_canonical_verdict.md
+- frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml
+- folio/cli.py
+- folio/correspondence.py
+- folio/ingest.py
+- folio/tracking/registry.py
+- tests/test_correspondence_ingest.py
+- tests/test_cli_correspondence.py
+
+Focused validation command reported by orchestrator:
+- ./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
+
+Artifact target: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-codex-alignment.md
+
+Artifact contract:
+- Write the markdown artifact to the artifact target above.
+- Do not edit any repository file except the artifact target.
+- The artifact must be at least 700 characters.
+- It must begin with this exact YAML frontmatter, with no execution_provider field:
+---
+deliverable_id: folio-correspondence-ingest-v1-3-0
+phase: D.2
+role: alignment
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+- Then include a top-level markdown heading and a section named exactly "## Verdict".
+- The "## Verdict" section must contain exactly one of these words: approve, request changes, reject, or concur.
+- If you identify implementation blockers, use "request changes" and list concrete file/path references. If not, use "approve".
+
+2026-05-12T21:12:32.937958Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:12:32.939583Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:12:32.951247Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:12:32.951306Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T21:12:34.487794Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:12:34.488013Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:12:34.489543Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:12:34.489568Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T21:12:36.081092Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:12:36.081357Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:12:36.083167Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:12:36.083196Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’ll load the required project context first, then review the specified spec/verdict/implementation files and write only the requested D.2 artifact.
+  → Activate Ontos and llm-dev context
+  • Read Phase A/B.3, manifest, implementation, and tests
+  • Run focused validation without repository cache writes
+  • Write D.2 alignment artifact only
+2026-05-12T21:12:48.310393Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T21:12:48.310753Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T21:12:48.313355Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T21:12:48.313394Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc 'ontos map' in /Users/jonathanoh/workspaces/folio.love
+ exited 1 in 232ms:
+Warning: Invalid doc status 'generated'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'spec'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'approved'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'draft-for-review'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc type 'review'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment-r3' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment-r3.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment-r3.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-config-defaults-v1-2-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-config-defaults-v1-2-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-document-format-coverage-v1-1-1-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-codex-alignment.md.
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial-r3.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-github-closeout-v1-0-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-github-closeout-v1-0-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-codex-alignment-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial-r2.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial-r2.md.
+Error: Duplicate ID 'folio-ingest-signals-v1-1-0-D.2-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-ingest-signals-v1-1-0-D.2-gemini-adversarial.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-claude-sonnet-peer' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-codex-alignment' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-codex-alignment.md.
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Error: Duplicate ID 'folio-watch-v1-4-0-B.1-gemini-adversarial' found in /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-gemini-adversarial.md. Keeping original from /Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-gemini-adversarial.md.
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc type 'validation'. Expected one of: kernel, strategy, product, atom, log, reference, concept, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'passed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+Warning: Invalid doc status 'completed'. Expected one of: draft, active, deprecated, rejected, complete, scaffold, pending_curation, in_progress, unknown
+

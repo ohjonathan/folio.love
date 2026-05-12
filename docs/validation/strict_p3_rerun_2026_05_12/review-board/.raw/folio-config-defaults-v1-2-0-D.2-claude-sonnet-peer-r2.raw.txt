@@ -1,0 +1,11 @@
+Artifact written. Here is the summary of findings:
+
+**Round-1 blocker: RESOLVED**
+
+1. **Variable shadowing fix confirmed** — `folio/config.py:529` now uses `provider_defaults = _DEFAULT_PROVIDER_SETTINGS[pname]` instead of `defaults = ...`, so the `DefaultsConfig` object is never clobbered when `providers:` is present in config.
+
+2. **Focused regression test confirmed** — `test_config_loads_defaults_block_when_providers_are_configured` (lines 52–70 of `tests/test_config_defaults.py`) loads a config with both blocks and asserts both `config.defaults.client` and `config.providers["anthropic"].rate_limit_rpm` are correct. This closes the exact coverage gap from round 1.
+
+3. **Validation command passes** — `21 passed in 0.12s` (up from 16 in round 1).
+
+**Verdict: approve.** Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-config-defaults-v1-2-0-D.2-claude-sonnet-peer-r2.md`.

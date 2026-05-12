@@ -1,0 +1,3 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md`.
+
+**Verdict: approve.** The spec and manifest are clean of stale evidence reuse — the pre_a triage explicitly bars prior-cycle artifacts, the spec anchors to the fresh 2026-05-12 triage, and the manifest's `pre_a.artifact_path` resolves to the same fresh file. The core acceptance criteria (CLI shape, extension routing, stable-size wait, serial processing, success archive, `_failed/` quarantine) are adequately specified to drive implementation. Three soft notes were raised (empty `sibling_deliverable_ids`, empty `regression_guards`, empty `composition_targets`) but none are blockers.

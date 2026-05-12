@@ -1,0 +1,3 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-claude-sonnet-verifier.md`.
+
+**Verdict: approve.** All 7 focused tests pass (direct-run, 0.11s). The D.3 canonical verdict carries no unresolved blockers. Implementation in `folio/correspondence.py`, `folio/cli.py`, `folio/ingest.py`, and `folio/tracking/registry.py` is complete and consistent with the slice contract — native EML parsing, correspondence frontmatter, attachment metadata, Message-ID overlap versioning, `--as-new-entry` bypass, and CLI date/participants precedence are all verified.

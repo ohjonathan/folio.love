@@ -1,0 +1,9 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-github-closeout-v1-0-0-D.2-claude-sonnet-peer.md`.
+
+**Verdict: approve.** All Phase A acceptance criteria are satisfied:
+
+- PR #50 is confirmed merged docs-only at commit `8fbddf7` per the pre-A triage record.
+- `folio/pipeline/transcript_formats.py` exists and correctly normalizes `.vtt` and `.srt` caption formats.
+- `tests/test_transcript_formats.py` exists with 3 unit tests covering VTT stripping, SRT cue-number removal, and multi-speaker voice-tag resolution.
+- Integration tests in `test_ingest_integration.py` verify end-to-end VTT/SRT ingest including provenance, `source_hash`, and raw transcript callout.
+- The focused test command (`-k 'vtt or srt'`) ran **5 passed, 0 failures** against the three test files.

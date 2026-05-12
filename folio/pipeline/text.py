@@ -161,6 +161,36 @@ def extract_structured(source_path: Path) -> dict[int, "SlideText"]:
         return {}
 
 
+def extract_document_text(source_path: Path) -> SlideText:
+    """Extract full-document text from a document source using MarkItDown."""
+
+    source_path = Path(source_path)
+    try:
+        from markitdown import MarkItDown
+    except ImportError:
+        raise TextExtractionError(
+            "markitdown not installed. Run: pip install markitdown"
+        )
+
+    try:
+        md = MarkItDown()
+        result = md.convert(str(source_path))
+        raw_text = (result.text_content or "").strip()
+    except Exception as e:
+        raise TextExtractionError(
+            f"MarkItDown document extraction failed for {source_path.name}: {e}"
+        ) from e
+
+    if not raw_text:
+        raise TextExtractionError(f"No document text extracted from {source_path.name}")
+    return SlideText(
+        slide_num=1,
+        full_text=raw_text,
+        elements=_detect_elements(raw_text),
+        is_empty=False,
+    )
+
+
 def _extract_pptx(source_path: Path) -> dict[int, "SlideText"]:
     """Extract text from PPTX using MarkItDown.
 

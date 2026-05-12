@@ -1,0 +1,573 @@
+#!/usr/bin/env bash
+# llm-dev — repo-local adopter wrapper for llm-dev-framework (v1.5.0+).
+#
+# This script is copied verbatim into adopter repos at scripts/llm-dev
+# by `scripts/install-adopter.sh`. It resolves the framework checkout
+# from .llm-dev/config.yaml so agents never need a hard-wired absolute
+# framework path.
+#
+# Commands:
+#   doctor                                 — environment + config health check
+#   new <deliverable-id>                   — scaffold manifest + tracker
+#   verify <manifest-path>                 — run framework verify-adopter.sh
+#                                            (manifest conformance only;
+#                                            does NOT prove lifecycle
+#                                            execution or reviewer dispatch)
+#   verify-lifecycle <manifest-path>       — run framework verify-lifecycle.sh
+#                                            in --mode strict-p3
+#                                            (strict-P3 lifecycle receipt
+#                                            verification — issue #5)
+#   update --to latest|vX.Y.Z|<ref>        — re-pin framework checkout
+#   agents install                         — insert/refresh AGENTS.md block
+#
+# Environment overrides:
+#   LLM_DEV_CONFIG  — path to config (default: <repo-root>/.llm-dev/config.yaml)
+
+set -euo pipefail
+
+START_MARKER="<!-- llm-dev-framework:start -->"
+END_MARKER="<!-- llm-dev-framework:end -->"
+CUSTOM_START_MARKER="<!-- USER CUSTOM -->"
+CUSTOM_END_MARKER="<!-- /USER CUSTOM -->"
+
+usage() {
+  cat <<'USAGE'
+usage:
+  scripts/llm-dev doctor
+  scripts/llm-dev new <deliverable-id>
+  scripts/llm-dev verify <manifest-path>
+  scripts/llm-dev verify-lifecycle <manifest-path>
+  scripts/llm-dev update --to latest|vX.Y.Z|<ref>
+  scripts/llm-dev agents install
+  scripts/llm-dev --help
+
+Note:
+  `verify`           — manifest conformance only (does not prove
+                       lifecycle execution or reviewer dispatch).
+  `verify-lifecycle` — strict-P3 lifecycle receipt verification (the
+                       gate that proves real multi-family review +
+                       verifier dispatch happened — see issue #5).
+
+Environment:
+  LLM_DEV_CONFIG  Override config path (default: .llm-dev/config.yaml under repo root)
+USAGE
+}
+
+die() {
+  echo "llm-dev: $*" >&2
+  exit 1
+}
+
+info() {
+  echo "llm-dev: $*"
+}
+
+find_repo_root() {
+  local script_dir script_root cwd_root
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  script_root="$(cd "$script_dir/.." && pwd)"
+
+  # Prefer the repo that owns this copied wrapper. This keeps absolute
+  # invocations like `/path/to/repo/scripts/llm-dev doctor` from accidentally
+  # binding to the caller's current git repo.
+  if [[ -r "$script_root/.llm-dev/config.yaml" ]]; then
+    printf '%s\n' "$script_root"
+    return
+  fi
+
+  if cwd_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    # The same-inode check keeps install-time calls rooted in the wrapper's
+    # own repo even before .llm-dev/config.yaml exists.
+    if [[ -r "$cwd_root/.llm-dev/config.yaml" || "$cwd_root" -ef "$script_root" ]]; then
+      printf '%s\n' "$cwd_root"
+      return
+    fi
+  fi
+
+  printf '%s\n' "$script_root"
+}
+
+repo_root="$(find_repo_root)"
+config_path="${LLM_DEV_CONFIG:-$repo_root/.llm-dev/config.yaml}"
+
+# Trim a config value: strip inline `# comment`, leading/trailing
+# whitespace, and surrounding quotes.
+trim_value() {
+  sed -E \
+    -e 's/[[:space:]]+#.*$//' \
+    -e 's/^[[:space:]]+//' \
+    -e 's/[[:space:]]+$//' \
+    -e 's/^"//' \
+    -e 's/"$//' \
+    -e "s/^'//" \
+    -e "s/'$//"
+}
+
+config_get() {
+  local key="$1"
+  [[ -r "$config_path" ]] || return 1
+  sed -n -E "s/^[[:space:]]*${key}:[[:space:]]*//p" "$config_path" \
+    | head -n 1 \
+    | trim_value
+}
+
+config_required() {
+  local key="$1" value
+  value="$(config_get "$key" || true)"
+  [[ -n "$value" ]] || die "missing required config key '$key' in $config_path"
+  printf '%s\n' "$value"
+}
+
+abs_path() {
+  local p="$1"
+  case "$p" in
+    /*) printf '%s\n' "$p" ;;
+    *)  printf '%s/%s\n' "$repo_root" "$p" ;;
+  esac
+}
+
+framework_path() {
+  abs_path "$(config_required framework_path)"
+}
+
+manifest_dir() {
+  config_get manifest_dir || true
+}
+
+# Rewrite a single top-level scalar key in config.yaml. Adds the key
+# at the end of the file if it does not already exist.
+set_config_value() {
+  local key="$1" value="$2" tmp
+  [[ -r "$config_path" ]] || die "config not readable at $config_path"
+  tmp="$(mktemp)"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { done = 0 }
+    $0 ~ "^[[:space:]]*" key ":" {
+      print key ": " value
+      done = 1
+      next
+    }
+    { print }
+    END {
+      if (!done) { print key ": " value }
+    }
+  ' "$config_path" > "$tmp"
+  mv "$tmp" "$config_path"
+}
+
+resolve_latest_tag() {
+  local repo_url="$1" tags
+  command -v python3 >/dev/null 2>&1 || die "python3 is required for update --to latest"
+  tags="$(git -c protocol.file.allow=always ls-remote --tags --refs "$repo_url" 'v[0-9]*.[0-9]*.[0-9]*' \
+            | awk '{print $2}' \
+            | sed 's#refs/tags/##')"
+  [[ -n "$tags" ]] || die "no semver tags found at $repo_url"
+  printf '%s\n' "$tags" | python3 -c '
+import re, sys
+def key(t):
+    m = re.fullmatch(r"v([0-9]+)\.([0-9]+)\.([0-9]+)", t)
+    return tuple(int(p) for p in m.groups()) if m else (-1, -1, -1)
+tags = [l.strip() for l in sys.stdin if l.strip()]
+print(sorted(tags, key=key)[-1])
+'
+}
+
+checkout_framework_ref() {
+  local fw="$1" ref="$2"
+  git -C "$fw" fetch --tags --force origin >/dev/null 2>&1 || true
+  if git -C "$fw" rev-parse -q --verify "refs/tags/$ref^{commit}" >/dev/null; then
+    git -C "$fw" checkout --detach "$ref" >/dev/null
+  elif git -C "$fw" rev-parse -q --verify "refs/remotes/origin/$ref^{commit}" >/dev/null; then
+    git -C "$fw" checkout --detach "origin/$ref" >/dev/null
+  else
+    git -C "$fw" checkout --detach "$ref" >/dev/null
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# doctor
+# ---------------------------------------------------------------------------
+cmd_doctor() {
+  local failed=0
+  local fw fw_rel ref repo_url
+
+  [[ -r "$config_path" ]] || die "config not found at $config_path (run install-adopter.sh first)"
+  fw="$(framework_path)"
+  fw_rel="$(config_required framework_path)"
+  ref="$(config_get framework_ref || true)"
+  repo_url="$(config_get framework_repo_url || true)"
+
+  echo "llm-dev doctor"
+  echo "  repo:               $repo_root"
+  echo "  config:             ${config_path#$repo_root/}"
+  echo "  framework_path:     $fw_rel"
+  [[ -n "$ref" ]]      && echo "  framework_ref:      $ref"
+  [[ -n "$repo_url" ]] && echo "  framework_repo_url: $repo_url"
+
+  check_cmd() {
+    if command -v "$1" >/dev/null 2>&1; then
+      echo "  PASS command: $1"
+    else
+      echo "  FAIL command: $1" >&2
+      failed=1
+    fi
+  }
+
+  check_cmd git
+  check_cmd bash
+  check_cmd python3
+  check_cmd check-jsonschema
+
+  if [[ -d "$fw" && ( -d "$fw/.git" || -f "$fw/.git" || -f "$fw/scripts/verify-adopter.sh" ) ]]; then
+    echo "  PASS framework checkout: $fw_rel"
+  else
+    echo "  FAIL framework checkout missing: $fw_rel" >&2
+    failed=1
+  fi
+
+  if [[ -x "$fw/scripts/verify-adopter.sh" && -x "$fw/examples/day-one.sh" ]]; then
+    echo "  PASS framework scripts (verify-adopter.sh, day-one.sh)"
+  else
+    echo "  FAIL framework scripts missing or not executable" >&2
+    failed=1
+  fi
+
+  for cli in claude codex gemini; do
+    if command -v "$cli" >/dev/null 2>&1; then
+      echo "  PASS worker CLI: $cli"
+    else
+      echo "  WARN worker CLI not installed: $cli (review-board phases will need a host with it)"
+    fi
+  done
+
+  if [[ "$failed" -eq 0 ]]; then
+    echo "llm-dev doctor: PASS"
+  else
+    die "doctor failed"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# new <deliverable-id>
+# ---------------------------------------------------------------------------
+cmd_new() {
+  local deliverable_id="${1:-}" fw mdir
+  [[ -n "$deliverable_id" ]] || die "new requires <deliverable-id>"
+  fw="$(framework_path)"
+  mdir="$(manifest_dir)"
+  [[ -n "$mdir" ]] || mdir="manifests"
+
+  (
+    cd "$repo_root"
+    MANIFEST_DIR="$(abs_path "$mdir")" bash "$fw/examples/day-one.sh" "$deliverable_id"
+  )
+}
+
+# ---------------------------------------------------------------------------
+# verify <manifest-path>
+# ---------------------------------------------------------------------------
+cmd_verify() {
+  local manifest="${1:-}" fw
+  [[ -n "$manifest" ]] || die "verify requires <manifest-path>"
+  fw="$(framework_path)"
+  bash "$fw/scripts/verify-adopter.sh" "$(abs_path "$manifest")"
+}
+
+# ---------------------------------------------------------------------------
+# verify-lifecycle <manifest-path> — issue #5 strict-P3 receipt verifier.
+#
+# Delegates to scripts/verify-lifecycle.sh in --mode strict-p3. Unlike
+# `verify`, this command requires the deliverable's lifecycle receipt
+# inventory to exist and prove that real multi-family review + verifier
+# dispatch happened — D.6 cannot self-attest closure without it.
+# ---------------------------------------------------------------------------
+cmd_verify_lifecycle() {
+  local manifest="" fw allow_warn=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --allow-warn) allow_warn=1 ;;
+      -h|--help)
+        echo "usage: scripts/llm-dev verify-lifecycle [--allow-warn] <manifest-path>"
+        exit 0
+        ;;
+      --*)
+        die "verify-lifecycle: unknown flag: $1"
+        ;;
+      *)
+        if [[ -z "$manifest" ]]; then
+          manifest="$1"
+        else
+          die "verify-lifecycle: unexpected positional arg: $1"
+        fi
+        ;;
+    esac
+    shift || true
+  done
+  [[ -n "$manifest" ]] || die "verify-lifecycle requires <manifest-path>"
+  fw="$(framework_path)"
+  if [[ "$allow_warn" == "1" ]]; then
+    bash "$fw/scripts/verify-lifecycle.sh" "$(abs_path "$manifest")" --mode strict-p3 --allow-warn
+  else
+    bash "$fw/scripts/verify-lifecycle.sh" "$(abs_path "$manifest")" --mode strict-p3
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# update --to latest|vX.Y.Z|<ref>
+# ---------------------------------------------------------------------------
+cmd_update() {
+  local to_ref="latest" fw repo_url resolved
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --to)
+        shift; to_ref="${1:-}"
+        ;;
+      -h|--help)
+        usage; exit 0
+        ;;
+      *)
+        die "unknown update argument: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  [[ -n "$to_ref" ]] || die "update --to requires a ref"
+  fw="$(framework_path)"
+  repo_url="$(config_get framework_repo_url || true)"
+  [[ -n "$repo_url" ]] || repo_url="$(git -C "$fw" remote get-url origin 2>/dev/null || true)"
+  [[ -n "$repo_url" ]] || die "no framework_repo_url in config and no origin in framework checkout"
+
+  if [[ "$to_ref" == "latest" ]]; then
+    resolved="$(resolve_latest_tag "$repo_url")"
+  else
+    resolved="$to_ref"
+  fi
+
+  checkout_framework_ref "$fw" "$resolved"
+  set_config_value framework_ref "$resolved"
+
+  bash "$fw/scripts/verify-schema.sh" >/dev/null
+  bash "$fw/scripts/verify-tokens.sh" >/dev/null
+
+  info "framework checkout updated to $resolved"
+  info "next: re-validate each adopter manifest you rely on:"
+  info "  bash scripts/llm-dev verify <manifest-path>"
+  info "next: review and commit changes:"
+  info "  git add .gitmodules ${config_path#$repo_root/} \\"
+  info "          $(config_required framework_path)"
+}
+
+# ---------------------------------------------------------------------------
+# agents install
+# ---------------------------------------------------------------------------
+agents_block() {
+  cat <<'BLOCK'
+<!-- llm-dev-framework:start -->
+## llm-dev-framework Activation
+
+This repo uses `llm-dev-framework` via the repo-local wrapper at
+`scripts/llm-dev`. Resolve the framework checkout from
+`.llm-dev/config.yaml`; never hard-code an absolute framework path.
+
+Auto-detect rule:
+- If `.llm-dev/config.yaml` exists, run `scripts/llm-dev doctor`
+  before planning implementation work, then use the wrapper for
+  `new <deliverable-id>` / `verify <manifest>` /
+  `update --to latest` / `agents install`.
+- If `.llm-dev/config.yaml` is absent, only activate the framework
+  when the user explicitly asks for `llm-dev-framework`, `/llm-dev`,
+  or "install llm-dev-framework". Do not invent the framework into
+  unrelated requests.
+
+Managed by `scripts/llm-dev agents install`. Edit content outside
+the start/end markers; the block between markers is overwritten on
+every refresh. In an AGENTS.md with a preserved `USER CUSTOM`
+section, this block lives inside that section so upstream generators
+keep it.
+<!-- llm-dev-framework:end -->
+BLOCK
+}
+
+cmd_agents_install() {
+  local action="${1:-}" agents_file agents_target agents_dir block_file tmp has_custom link_target
+  [[ "$action" == "install" ]] || die "usage: scripts/llm-dev agents install"
+
+  agents_file="$repo_root/AGENTS.md"
+  agents_target="$agents_file"
+  if [[ -L "$agents_file" ]]; then
+    link_target="$(readlink "$agents_file")" || die "could not read AGENTS.md symlink"
+    [[ -n "$link_target" ]] || die "AGENTS.md symlink has an empty target"
+    case "$link_target" in
+      /*) agents_target="$link_target" ;;
+      *)
+        agents_dir="$(cd "$(dirname "$agents_file")" && pwd)"
+        agents_target="$agents_dir/$link_target"
+        ;;
+    esac
+    [[ -e "$agents_target" ]] || die "AGENTS.md symlink target does not exist: $link_target"
+    [[ ! -d "$agents_target" ]] || die "AGENTS.md symlink target is a directory: $link_target"
+  else
+    if [[ -d "$agents_file" ]]; then
+      die "AGENTS.md is a directory; refusing to overwrite it"
+    fi
+    touch "$agents_file"
+  fi
+  [[ -w "$agents_target" ]] || die "AGENTS.md is not writable: ${agents_target#$repo_root/}"
+
+  block_file="$(mktemp)"
+  tmp="$(mktemp)"
+  agents_block > "$block_file"
+  has_custom="$(
+    awk \
+      -v custom_start="$CUSTOM_START_MARKER" \
+      -v custom_end="$CUSTOM_END_MARKER" '
+      function normalized(line) {
+        sub(/\r$/, "", line)
+        sub(/^[ \t]+/, "", line)
+        sub(/[ \t]+$/, "", line)
+        return line
+      }
+      function is_fence(line,  clean) {
+        clean = line
+        sub(/\r$/, "", clean)
+        return clean ~ /^[ \t]*(```|~~~)/
+      }
+      {
+        if (is_fence($0)) {
+          in_fence = !in_fence
+          next
+        }
+        if (in_fence) next
+        marker = normalized($0)
+        if (!in_custom && marker == custom_start) {
+          in_custom = 1
+          next
+        }
+        if (in_custom && marker == custom_end) {
+          found = 1
+          exit
+        }
+      }
+      END { print found ? 1 : 0 }
+    ' "$agents_target"
+  )"
+
+  awk \
+    -v start="$START_MARKER" \
+    -v end="$END_MARKER" \
+    -v custom_start="$CUSTOM_START_MARKER" \
+    -v custom_end="$CUSTOM_END_MARKER" \
+    -v has_custom="$has_custom" \
+    -v block="$block_file" '
+    function flush_pending_blanks(  i) {
+      for (i = 0; i < pending_blank_count; i++) print ""
+      pending_blank_count = 0
+    }
+    function normalized(line) {
+      sub(/\r$/, "", line)
+      sub(/^[ \t]+/, "", line)
+      sub(/[ \t]+$/, "", line)
+      return line
+    }
+    function is_fence(line,  clean) {
+      clean = line
+      sub(/\r$/, "", clean)
+      return clean ~ /^[ \t]*(```|~~~)/
+    }
+    function print_block(  line) {
+      while ((getline line < block) > 0) print line
+      close(block)
+    }
+    BEGIN {
+      in_block = 0
+      in_custom = 0
+      inserted = 0
+      saw_custom_start = 0
+      pending_blank_count = 0
+    }
+    {
+      marker = normalized($0)
+    }
+    in_block {
+      if (marker == end) in_block = 0
+      next
+    }
+    is_fence($0) {
+      flush_pending_blanks()
+      print
+      in_fence = !in_fence
+      next
+    }
+    !in_fence && marker == start {
+      if (has_custom && !in_custom) {
+        # Stale outside block: drop the blank that preceded it so the
+        # migrated USER CUSTOM section stays clean.
+        pending_blank_count = 0
+        in_block = 1
+        next
+      }
+      flush_pending_blanks()
+      print_block()
+      in_block = 1
+      inserted = 1
+      next
+    }
+    !in_fence && marker == custom_start {
+      flush_pending_blanks()
+      saw_custom_start = 1
+      in_custom = 1
+      print
+      next
+    }
+    !in_fence && marker == custom_end {
+      if (!inserted && saw_custom_start) {
+        print ""
+        print_block()
+        print ""
+        inserted = 1
+      }
+      in_custom = 0
+      print
+      next
+    }
+    has_custom && !in_custom && !in_fence && ($0 == "" || $0 == "\r") {
+      pending_blank_count += 1
+      next
+    }
+    { flush_pending_blanks(); print }
+    END {
+      if (!inserted) {
+        flush_pending_blanks()
+        if (NR > 0) print ""
+        print_block()
+      } else {
+        flush_pending_blanks()
+      }
+    }
+  ' "$agents_target" > "$tmp"
+
+  cp "$tmp" "$agents_target"
+  rm -f "$block_file" "$tmp"
+  info "managed AGENTS.md block installed/refreshed at ${agents_file#$repo_root/}"
+}
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+main() {
+  local command="${1:-}"
+  shift || true
+  case "$command" in
+    doctor)             cmd_doctor "$@" ;;
+    new)                cmd_new "$@" ;;
+    verify)             cmd_verify "$@" ;;
+    verify-lifecycle)   cmd_verify_lifecycle "$@" ;;
+    update)             cmd_update "$@" ;;
+    agents)             cmd_agents_install "$@" ;;
+    -h|--help|"")       usage ;;
+    *)                  die "unknown command: $command" ;;
+  esac
+}
+
+main "$@"

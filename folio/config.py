@@ -198,12 +198,28 @@ class ConversionConfig:
 
 
 @dataclass
+class DefaultsConfig:
+    """Workspace defaults and derivation rules from folio.yaml."""
+
+    client: Optional[str] = None
+    engagement: Optional[str] = None
+    target_root: Optional[str] = None
+    target: Optional[str] = None
+    type: Optional[str] = None
+    date: Optional[str] = None
+    participants: list[str] = field(default_factory=list)
+    derive: dict = field(default_factory=dict)
+
+
+@dataclass
 class FolioConfig:
     """Top-level Folio configuration."""
     library_root: Path = field(default_factory=lambda: Path("./library"))
     sources: list[SourceConfig] = field(default_factory=list)
     llm: LLMConfig = field(default_factory=LLMConfig)
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
+    defaults: DefaultsConfig = field(default_factory=DefaultsConfig)
+    watch: list[dict] = field(default_factory=list)
     providers: dict[str, ProviderRuntimeSettings] = field(
         default_factory=lambda: dict(_DEFAULT_PROVIDER_SETTINGS)
     )
@@ -502,21 +518,24 @@ class FolioConfig:
             large_document_warn_pages=conv_raw.get("large_document_warn_pages", 50),
         )
 
+        defaults = _parse_defaults(raw.get("defaults") or {})
+        watch = _parse_watch(raw.get("watch") or [])
+
         # Parse provider runtime settings (merge onto defaults)
         providers_raw = raw.get("providers") or {}
         providers = dict(_DEFAULT_PROVIDER_SETTINGS)
         for pname, pdata in providers_raw.items():
             if isinstance(pdata, dict) and pname in _DEFAULT_PROVIDER_SETTINGS:
-                defaults = _DEFAULT_PROVIDER_SETTINGS[pname]
+                provider_defaults = _DEFAULT_PROVIDER_SETTINGS[pname]
                 providers[pname] = ProviderRuntimeSettings(
-                    rate_limit_rpm=pdata.get("rate_limit_rpm", defaults.rate_limit_rpm),
-                    rate_limit_tpm=pdata.get("rate_limit_tpm", defaults.rate_limit_tpm),
-                    max_attempts=pdata.get("max_attempts", defaults.max_attempts),
-                    base_delay_seconds=pdata.get("base_delay_seconds", defaults.base_delay_seconds),
-                    max_delay_seconds=pdata.get("max_delay_seconds", defaults.max_delay_seconds),
-                    allowed_endpoints=tuple(pdata.get("allowed_endpoints", defaults.allowed_endpoints)),
-                    excluded_endpoints=tuple(pdata.get("excluded_endpoints", defaults.excluded_endpoints)),
-                    require_store_false=pdata.get("require_store_false", defaults.require_store_false),
+                    rate_limit_rpm=pdata.get("rate_limit_rpm", provider_defaults.rate_limit_rpm),
+                    rate_limit_tpm=pdata.get("rate_limit_tpm", provider_defaults.rate_limit_tpm),
+                    max_attempts=pdata.get("max_attempts", provider_defaults.max_attempts),
+                    base_delay_seconds=pdata.get("base_delay_seconds", provider_defaults.base_delay_seconds),
+                    max_delay_seconds=pdata.get("max_delay_seconds", provider_defaults.max_delay_seconds),
+                    allowed_endpoints=tuple(pdata.get("allowed_endpoints", provider_defaults.allowed_endpoints)),
+                    excluded_endpoints=tuple(pdata.get("excluded_endpoints", provider_defaults.excluded_endpoints)),
+                    require_store_false=pdata.get("require_store_false", provider_defaults.require_store_false),
                 )
             elif isinstance(pdata, dict):
                 raise ValueError(
@@ -532,6 +551,8 @@ class FolioConfig:
             sources=sources,
             llm=llm,
             conversion=conversion,
+            defaults=defaults,
+            watch=watch,
             providers=providers,
             config_dir=config_dir,
         )
@@ -549,3 +570,43 @@ def _find_config() -> Optional[Path]:
             break
         current = parent
     return None
+
+
+def _parse_defaults(raw: object) -> DefaultsConfig:
+    if not isinstance(raw, dict):
+        return DefaultsConfig()
+    participants = raw.get("participants", [])
+    if isinstance(participants, str):
+        participants = [item.strip() for item in participants.split(",") if item.strip()]
+    elif isinstance(participants, list):
+        participants = [str(item).strip() for item in participants if str(item).strip()]
+    else:
+        participants = []
+    derive = raw.get("derive") or {}
+    if not isinstance(derive, dict):
+        derive = {}
+    return DefaultsConfig(
+        client=_str_default(raw.get("client")),
+        engagement=_str_default(raw.get("engagement")),
+        target_root=_str_default(raw.get("target_root")),
+        target=_str_default(raw.get("target")),
+        type=_str_default(raw.get("type")),
+        date=_str_default(raw.get("date")),
+        participants=participants,
+        derive=derive,
+    )
+
+
+def _parse_watch(raw: object) -> list[dict]:
+    if isinstance(raw, list):
+        return [dict(item) for item in raw if isinstance(item, dict)]
+    if isinstance(raw, dict):
+        return [dict(raw)]
+    return []
+
+
+def _str_default(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None

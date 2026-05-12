@@ -1,0 +1,1473 @@
+OpenAI Codex v0.125.0 (research preview)
+--------
+workdir: /Users/jonathanoh/workspaces/folio.love
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/jonathanoh/.codex/memories]
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019e1dd9-dbfd-77a2-9005-1599c3bd137b
+--------
+user
+You are the codex external reviewer for llm-dev strict-P3 Phase B.1, role alignment, deliverable folio-watch-v1-4-0.
+
+Review only the Phase A spec and manifest for this slice. Use these repo files:
+- docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+- docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+- frameworks/manifests/folio-watch-v1-4-0.yaml
+
+Artifact target: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+
+Artifact contract:
+- Write the markdown artifact to the artifact target above.
+- Do not edit any repository file except the artifact target.
+- The artifact must be at least 700 characters.
+- It must begin with this exact YAML frontmatter, with no execution_provider field:
+---
+deliverable_id: folio-watch-v1-4-0
+phase: B.1
+role: alignment
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+- Then include a top-level markdown heading and a section named exactly "## Verdict".
+- The "## Verdict" section must contain exactly one of these words: approve, request changes, reject, or concur.
+- For B.1, assess whether the spec and manifest are adequate to drive the slice without stale evidence reuse.
+- If you identify blockers, use "request changes" and list them with concrete file/path references. If not, use "approve".
+
+2026-05-12T20:21:17.594087Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:21:17.594446Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:21:17.598460Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:21:17.598513Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T20:21:18.851008Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:21:18.851424Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:21:18.854199Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:21:18.854242Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T20:21:19.690892Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:21:19.691095Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:21:19.692490Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:21:19.692521Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’ll keep the review scoped to the three requested inputs and only write the requested artifact. I’m going to load the repo context map from disk rather than regenerate it, because `ontos map` may modify repo files and your artifact contract forbids edits outside the target.
+exec
+/bin/zsh -lc "sed -n '1,140p' Ontos_Context_Map.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: ontos_context_map
+type: reference
+status: generated
+ontos_map_version: 2
+generated_by: ontos map
+generated_at: 2026-05-10 18:57:42
+---
+
+# folio.love Tiered Context Map
+
+> Auto-generated by Ontos 3.0
+> Last updated: 2026-05-10 18:57:42
+
+This document provides a tiered index of the knowledge graph for AI orientation.
+- **Tier 1: Essential Context**: (~2k tokens) Project summary, recent work, and architecture.
+- **Tier 2: Document Index**: Full list of all tracked documents.
+- **Tier 3: Full Graph Details**: Dependency trees, timelines, and health metrics.
+
+## Tier 1: Essential Context
+
+### Project Summary
+- **Name:** folio.love
+- **Doc Count:** 416
+- **Last Updated:** 2026-05-11 01:57:42 UTC
+
+### Recent Activity
+| Log | Status | Summary |
+|-----|--------|---------|
+| log_20260510_root-cleanup | active | No summary |
+| log_20260510_folio-love-vtt-srt-transcript-ingest | active | No summary |
+| log_20260417_v1-0-0-spec-canonical-verdict-r3 | active | No summary |
+| ... and 81 more logs | | |
+
+### Key Documents
+- `doc_02_product_requirements_document` (7 dependents) — docs/product/02_Product_Requirements_Document.md
+- `doc_04_implementation_roadmap` (7 dependents) — docs/product/04_Implementation_Roadmap.md
+- `folio_ontology_architecture` (6 dependents) — docs/architecture/Folio_Ontology_Architecture.md
+
+### Critical Paths
+- **Docs Root:** `docs/`
+- **Logs:** `docs/logs/`
+
+---
+
+## Tier 2: Document Index
+
+
+
+## Documents
+
+| Path | ID | Type | Status |
+|------|-----|------|--------|
+| docs/architecture/Folio_Ontology_Architecture.md | `folio_ontology_architecture` | unknown | active |
+| docs/archive/ontos/Ontos_Context_Map.md | `ontos_context_map` | reference | unknown |
+| docs/archive/reviews/README.md | `archived_review_artifacts` | reference | active |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review.md | `PRD_PhaseB_B1_Adversarial_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R2.md | `PRD_PhaseB_B1_Adversarial_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R3.md | `PRD_PhaseB_B1_Adversarial_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R4.md | `PRD_PhaseB_B1_Adversarial_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Adversarial_Review_R5.md | `PRD_PhaseB_B1_Adversarial_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review.md | `PRD_PhaseB_B1_Alignment_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R2.md | `PRD_PhaseB_B1_Alignment_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R3.md | `PRD_PhaseB_B1_Alignment_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R4.md | `PRD_PhaseB_B1_Alignment_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Alignment_Review_R5.md | `PRD_PhaseB_B1_Alignment_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review.md | `PRD_PhaseB_B1_Peer_Review` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R2.md | `PRD_PhaseB_B1_Peer_Review_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R3.md | `PRD_PhaseB_B1_Peer_Review_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R4.md | `PRD_PhaseB_B1_Peer_Review_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B1_Peer_Review_R5.md | `PRD_PhaseB_B1_Peer_Review_R5` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation.md | `PRD_PhaseB_B2_Consolidation` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R2.md | `PRD_PhaseB_B2_Consolidation_R2` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R3.md | `PRD_PhaseB_B2_Consolidation_R3` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R4.md | `PRD_PhaseB_B2_Consolidation_R4` | unknown | unknown |
+| docs/archive/reviews/pr-d-phase-b/PRD_PhaseB_B2_Consolidation_R5.md | `PRD_PhaseB_B2_Consolidation_R5` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Adversarial_Review.md | `PRE_B1_Adversarial_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Alignment_Review.md | `PRE_B1_Alignment_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B1_Peer_Review.md | `PRE_B1_Peer_Review` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B2_Consolidation.md | `PRE_B2_Consolidation` | unknown | unknown |
+| docs/archive/reviews/pr-e/PRE_B2_Consolidation_R2.md | `PRE_B2_Consolidation_R2` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Adversarial_Product.md | `Folio_Tier4_ProposalReview_R1_Adversarial_Product` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Alignment_Technical.md | `Folio_Tier4_ProposalReview_R1_Alignment_Technical` | unknown | unknown |
+| docs/archive/reviews/tier4-proposal-r1/Folio_Tier4_ProposalReview_R1_Consolidated.md | `Folio_Tier4_ProposalReview_R1_Consolidated` | unknown | unknown |
+| docs/framework-adoption.md | `framework-adoption` | unknown | unknown |
+| docs/guides/agentic_setup.md | `agentic_setup` | unknown | unknown |
+| docs/guides/managed_mac_workflow.md | `managed_mac_workflow` | unknown | unknown |
+| docs/logs/2026-03-02_doc-cleanup-and-ontos-init-for-folio-love.md | `log_20260302_doc-cleanup-and-ontos-init-for-folio-love` | log | active |
+| docs/logs/2026-03-02_source-grounding-multi-pass-extraction-pipeline.md | `log_20260302_source-grounding-multi-pass-extraction-pipeline` | log | active |
+| docs/logs/2026-03-06_analysis-caching-hardening-b1-b3-g1-g4-s1-s2.md | `log_20260306_analysis-caching-hardening-b1-b3-g1-g4-s1-s2` | log | active |
+| docs/logs/2026-03-06_analysis-caching-spec-review.md | `log_20260306_analysis-caching-spec-review` | log | active |
+| docs/logs/2026-03-06_frontmatter-v2-completeness.md | `log_20260306_frontmatter-v2-completeness` | log | active |
+| docs/logs/2026-03-06_frontmatter-v2-spec-review-reviewer1.md | `log_20260306_frontmatter-v2-spec-review-reviewer1` | log | active |
+| docs/logs/2026-03-06_merge-pull-request-2-from-ohjonathan-feat-core-ex.md | `log_20260306_merge-pull-request-2-from-ohjonathan-feat-core-ex` | log | active |
+| docs/logs/2026-03-06_version-tracking-code-review-pr5.md | `2026-03-06_version-tracking-code-review-pr5` | unknown | unknown |
+| docs/logs/2026-03-06_version-tracking-hardening-g1-g8-b1-b3.md | `log_20260306_version-tracking-hardening-g1-g8-b1-b3` | log | active |
+| docs/logs/2026-03-07_docs-multi-provider-docs-alignment-and-merge.md | `log_20260307_docs-multi-provider-docs-alignment-and-merge` | log | active |
+| docs/logs/2026-03-07_managed-laptop-pdf-fallback.md | `log_20260307_managed-laptop-pdf-fallback` | log | active |
+| docs/logs/2026-03-07_pr-8-multi-provider-llm-support-code-review-resolu.md | `log_20260307_pr-8-multi-provider-llm-support-code-review-resolu` | log | active |
+| docs/logs/2026-03-08_pr-10-pptx-renderer-reliability-fix-open-a-two-ste.md | `log_20260308_pr-10-pptx-renderer-reliability-fix-open-a-two-ste` | log | active |
+| docs/logs/2026-03-08_tier1-validation-rerun-prompt-refresh.md | `log_20260308_tier1-validation-rerun-prompt-refresh` | log | active |
+| docs/logs/2026-03-09_pr-12-tier1-rerun-validation-and-merge-readiness.md | `log_20260309_pr-12-tier1-rerun-validation-and-merge-readiness` | log | active |
+| docs/logs/2026-03-13_docs-validation-tighten-tier-2-closeout-criteria.md | `log_20260313_docs-validation-tighten-tier-2-closeout-criteria` | log | active |
+| docs/logs/2026-03-14_docs-test-standardize-pytest-commands-to-venv-b.md | `log_20260314_fr700-reviewability-integration` | log | active |
+| docs/logs/2026-03-14_feat-diagrams-deterministic-page-inspection-with.md | `log_20260314_feat-diagrams-deterministic-page-inspection-with` | log | active |
+| docs/logs/2026-03-14_pr-1-page-inspection-implementation-prompt.md | `log_20260314_pr-1-page-inspection-implementation-prompt` | log | active |
+| docs/logs/2026-03-14_pr-1-som-validation-runbook-and-doc-handoff.md | `log_20260314_pr-1-som-validation-runbook-and-doc-handoff` | log | active |
+| docs/logs/2026-03-14_rewrite-grounding-multipass-prompt.md | `log_20260314_rewrite-grounding-multipass-prompt` | log | active |
+| docs/logs/2026-03-14_source-of-truth-doc-naming-and-docs-sync.md | `log_20260314_source-of-truth-doc-naming-and-docs-sync` | log | active |
+| docs/logs/2026-03-15_add-25-regression-tests-for-type-gate-highlights.md | `log_20260315_pr22-diagram-extraction-tier2-fixes` | log | complete |
+| docs/logs/2026-03-15_add-pr-2-prompts-session-logs-and-update-context.md | `log_20260315_add-pr-2-prompts-session-logs-and-update-context` | log | active |
+| docs/logs/2026-03-15_clean-stray-files-add-tmp-and-output-to-gitign.md | `log_20260315_clean-stray-files-add-tmp-and-output-to-gitign` | log | complete |
+| docs/logs/2026-03-15_fix-p1-frontmatter-fence-must-be-unindented-fi.md | `log_20260315_fix-p1-frontmatter-fence-must-be-unindented-fi` | log | active |
+| docs/logs/2026-03-15_fix-rendering-address-round-3-review-all-block.md | `log_20260315_fix-rendering-address-round-3-review-all-block` | log | active |
+| docs/logs/2026-03-15_fix-rendering-normalize-unrecognized-directions.md | `log_20260315_fix-rendering-normalize-unrecognized-directions` | log | active |
+| docs/logs/2026-03-15_fix-rendering-round-4-fix-4-semantic-renderer.md | `log_20260315_fix-rendering-round-4-fix-4-semantic-renderer` | log | active |
+| docs/logs/2026-03-15_obsidian-mermaid-transclusion-test-runbook.md | `log_20260315_obsidian-mermaid-transclusion-test-runbook` | log | active |
+| docs/logs/2026-03-15_pr-20-reviewer-3-adversarial-review.md | `log_20260315_pr-20-reviewer-3-adversarial-review` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-1-merge-readiness-rerun.md | `log_20260315_pr-21-reviewer-1-merge-readiness-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-2-alignment-review-rerun-head-4c4e5.md | `log_20260315_pr-21-reviewer-2-alignment-review-rerun-head-4c4e5` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-2-alignment-review-rerun.md | `log_20260315_pr-21-reviewer-2-alignment-review-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-3-adversarial-review-rerun.md | `log_20260315_pr-21-reviewer-3-adversarial-review-rerun` | log | active |
+| docs/logs/2026-03-15_pr-21-reviewer-3-adversarial-review.md | `log_20260315_pr-21-reviewer-3-adversarial-review` | log | active |
+| docs/logs/2026-03-15_pr-23-reviewer-2-alignment-review.md | `log_20260315_pr-23-reviewer-2-alignment-review` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer1-peer-review-rerun-head-6a83d3a.md | `log_20260315_pr23-reviewer1-peer-review-rerun-head-6a83d3a` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer1-peer-review.md | `log_20260315_pr23-reviewer1-peer-review` | log | active |
+| docs/logs/2026-03-15_pr23-reviewer3-adversarial-review-rerun-head-172c51a.md | `log_20260315_pr23-reviewer3-adversarial-review-rerun-head-172c51a` | log | active |
+| docs/logs/2026-03-16_update-diagram-extraction-checklist-with-pr-6-comp.md | `log_20260316_update-diagram-extraction-checklist-with-pr-6-comp` | log | active |
+| docs/logs/2026-03-21_cap-diagram-max-tokens-at-32768-proposal-ceiling.md | `log_20260321_cap-diagram-max-tokens-at-32768-proposal-ceiling` | log | active |
+| docs/logs/2026-03-21_maintain-ontos-configuration-and-graph-health.md | `log_20260321_maintain-ontos-configuration-and-graph-health` | log | active |
+| docs/logs/2026-03-21_test-perf-close-residual-test-coverage-frozen.md | `log_20260321_performance-patch-pr30-review` | log | complete |
+| docs/logs/2026-03-22_add-entity-registry-pr-a-prompt.md | `log_20260322_entity-registry-pr-a-implementation-and-review` | log | active |
+| docs/logs/2026-03-22_bump-version-to-0-2-0-and-add-pypi-publish-workflo.md | `log_20260322_pypi-v020-release-prep` | log | complete |
+| docs/logs/2026-03-22_entity-system-kickoff-spec-approved.md | `log_20260322_entity-system-kickoff-spec-approved` | log | complete |
+| docs/logs/2026-03-22_feat-ingest-resolve-remaining-review-items.md | `log_20260322_feat-ingest-resolve-remaining-review-items` | log | active |
+| docs/logs/2026-03-22_merge-pull-request-32-from-ohjonathan-feature-v0.md | `log_20260322_merge-pull-request-32-from-ohjonathan-feature-v0` | log | active |
+| docs/logs/2026-03-22_platform-model-comparison-validation-prompt.md | `log_20260322_platform-model-comparison-validation-prompt` | log | active |
+| docs/logs/2026-03-22_pr-35-ingest-time-entity-resolution.md | `log_20260322_pr-35-ingest-time-entity-resolution` | log | complete |
+| docs/logs/2026-03-22_tier-3-ingest-kickoff-spec-approved-and-merged.md | `log_20260322_tier-3-ingest-kickoff-spec-approved-and-merged` | log | complete |
+| docs/logs/2026-03-27_docs-product-address-pr-review-feedback.md | `log_20260327_docs-product-address-pr-review-feedback` | log | active |
+
+exec
+/bin/zsh -lc "pwd && rg --files -g 'Ontos_Context_Map.md' -g '.llm-dev/config.yaml' -g 'docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md' -g 'docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md' -g 'frameworks/manifests/folio-watch-v1-4-0.yaml' -g 'docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+/Users/jonathanoh/workspaces/folio.love
+frameworks/manifests/folio-watch-v1-4-0.yaml
+Ontos_Context_Map.md
+docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+docs/archive/ontos/Ontos_Context_Map.md
+
+2026-05-12T20:21:31.518481Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:21:31.518702Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:21:31.520484Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:21:31.520516Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Loaded: [`ontos_context_map`]. I found the requested spec, triage note, and manifest; the review artifact does not appear to exist yet, so I’ll create only that file after reading the inputs.
+exec
+/bin/zsh -lc "sed -n '1,260p' docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+# Pre-A Triage: Strict-P3 GitHub Issues Closeout Rerun
+
+Date: 2026-05-12
+
+Framework: `llm-dev-framework@df39e6e3de47b2b5a970b99aa1580c1463dd97e0`
+
+Repository baseline: `origin/main` at `8fbddf7369684ad5609ec3ac450ce986932f21d9`
+
+Evidence rule: prior `folio_*_v1_*` artifacts and the preserved dirty attempt are implementation history only; they are not lifecycle evidence for this rerun.
+
+## Scope Authority
+
+This artifact was regenerated from live GitHub issue bodies and PR #50 metadata after reopening issues #56, #61, #62, #63, #64, #69, #70, and #71 for strict-P3 verification.
+
+## PR #50 Merge-Readiness Scope
+
+- PR: #50 chore(log): ontos session archive — slices 2 merge, 3, 4
+
+- URL: https://github.com/ohjonathan/folio.love/pull/50
+
+- State: MERGED
+
+- Merged at: 2026-05-12T01:35:07Z
+
+- Merge commit: 8fbddf7369684ad5609ec3ac450ce986932f21d9
+
+- Files: docs/logs/2026-04-15_merge-pull-request-45-from-ohjonathan-feat-propos.md, docs/logs/2026-04-15_v0-6-3-emission-time-rejection-memory-queue-cap.md, docs/logs/2026-04-15_v0-6-4-code-adversarial-codex.md
+
+- Closeout requirement: verify the merged change remains docs-only and the archive logs are present on `main`; no re-merge action is needed because PR #50 is already merged.
+
+## Issue-to-Slice Mapping
+
+| Slice | Issues / PR | Scope |
+|---|---|---|
+
+| `folio-github-closeout-v1-0-0` | PR #50, #69 | Verify PR #50 merged/docs-only; verify VTT/SRT support from PR #73; reclose #69 with strict-P3 evidence. |
+
+| `folio-ingest-signals-v1-1-0` | #70, #71 | First-class `action_items`; subtype rendering; deterministic speaker analytics in frontmatter, markdown, and registry. |
+
+| `folio-document-format-coverage-v1-1-1` | #56 | `.docx` conversion through document-oriented MarkItDown path; no slide image extraction; document evidence note and compatibility metadata. |
+
+| `folio-config-defaults-v1-2-0` | #63 | `defaults`/`derive` in `folio.yaml`; metadata resolution order CLI flag -> derivation -> defaults -> error. |
+
+| `folio-correspondence-ingest-v1-3-0` | #61, #64 | Native EML ingest and Message-ID overlap continuation/versioning with `--as-new-entry`. |
+
+| `folio-watch-v1-4-0` | #62 | Watch/drop-zone ingestion routing, stable size waits, success archive, failure quarantine. |
+
+## Live GitHub Issue Records
+
+### Issue #56: folio convert rejects .docx files — normalization gate too narrow
+
+- URL: https://github.com/ohjonathan/folio.love/issues/56
+
+- State at triage: OPEN
+
+- Created: 2026-04-16T16:30:52Z
+
+- Updated: 2026-05-12T19:23:15Z
+
+- Labels: none
+
+#### Body
+
+## Summary
+
+`folio convert` rejects `.docx` files with `Unsupported format: .docx` at the normalization stage, even though `markitdown` (used internally for text extraction) supports DOCX natively.
+
+## Reproduction
+
+```bash
+folio convert "./path/to/sow.docx" --client Acme --engagement "Build"
+```
+
+```
+Converting: sow.docx
+  Normalizing to PDF...
+✗ Conversion failed: Unsupported format: .docx
+```
+
+## Context
+
+Real consulting corpora frequently contain `.docx` artifacts (SOWs, contracts, terms sheets, design documents). Today the workaround is to manually export to PDF via Word, then convert the PDF. This adds an operator step that breaks automation and `folio batch` workflows.
+
+## Suggested behavior
+
+Accept `.docx` at the normalization gate. Since DOCX is not slide-oriented:
+- Skip slide image extraction (or render page images via a document renderer)
+- Use `markitdown` for full-document text extraction (already works)
+- Produce a single evidence note with the full document body rather than per-slide sections
+
+Alternatively, expose a `folio convert --format document` flag that opts into a document-oriented pipeline rather than the slide-oriented one.
+
+## Environment
+
+- folio-love 0.6.4
+- macOS 25.4.0
+- Python 3.12
+
+
+### Issue #61: folio ingest: native .eml / email thread support
+
+- URL: https://github.com/ohjonathan/folio.love/issues/61
+
+- State at triage: OPEN
+
+- Created: 2026-04-17T04:29:35Z
+
+- Updated: 2026-05-12T19:23:17Z
+
+- Labels: none
+
+#### Body
+
+## Summary
+
+`folio` does not natively handle `.eml` files. Email threads — a critical class of consulting engagement evidence — currently require a custom parsing step (extract headers, reconstruct quoted thread, strip Outlook noise, render markdown) before they can be fed into `folio ingest --type internal_sync`. A first-class email pipeline would close a significant gap in the format coverage story alongside #56.
+
+## Today's workaround
+
+On a live engagement we wrote a ~370-line `scripts/parse_emails.py` to:
+- Parse `.eml` via Python's `email` stdlib
+- Extract envelope headers (From, To, CC, Date, Subject)
+- Reconstruct the quoted thread by splitting on Outlook's `From: ...` / `Date: ...` blocks
+- Sort messages chronologically (oldest-first), with the outermost message dated from the EML envelope
+- Strip noise: `<tel:>` / `<mailto:>` / `<https://disclaimer-link>` wrappers, Zoom dial-in tables, SIP/H.323 lines, `____________` separators, repeated signatures, external-sender warnings, scotiabank/firm-wide disclaimers
+- Collapse Outlook's split bullets (`*` on one line, content on the next) into proper markdown bullets
+- Catalog attachments by filename + MIME type (no binary extraction)
+
+The resulting markdown then ingests cleanly via:
+
+```bash
+folio ingest <thread.md> \
+  --type internal_sync \
+  --date <YYYY-MM-DD> \
+  --client <Client> \
+  --engagement <Engagement> \
+  --participants \"<comma-separated-names>\"
+```
+
+For a 3-thread, 11-attachment Scotiabank corpus this produced 3 `review_status: clean` interaction notes with 28 total claims extracted via the Anthropic fallback (Sonnet 4 took over after the OpenAI route 403'd at the AI Gateway).
+
+## Suggested behavior
+
+### 1. New document type: `correspondence`
+
+Email threads aren't really meetings. Add a sibling to `interaction` and `evidence`:
+
+```yaml
+type: correspondence
+subtype: email_thread  # or email_single
+```
+
+This avoids overloading `internal_sync` and gives consumers (e.g., the Folio Library cursor rule) a cleaner lookup vocabulary.
+
+### 2. New CLI: `folio ingest-email <path.eml>`
+
+Or extend `folio ingest` with `--type email_thread` and accept `.eml` directly. Required behavior:
+
+- Parse all `text/plain` parts; fall back to `html` -> markdown via `markitdown`
+- Reconstruct the thread (oldest-first); preserve per-message From/To/CC/Date in frontmatter
+- Strip Outlook/Zoom/disclaimer noise (a curated rules list will get most of it)
+- Resolve participants from To/CC/From across the thread (deduplicated, normalized)
+- Catalog attachments in frontmatter:
+  ```yaml
+  attachments:
+    - filename: SOW_v9.docx
+      content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      size_bytes: 2140160
+      sha256: <hash>
+  ```
+- Optionally extract attachment bodies into the registry (gated by `--extract-attachments`) so that PDFs and images on the thread become first-class documents and can be `impacts:`-linked back to the email
+
+### 3. Registry / frontmatter additions
+
+```yaml
+sender: Mishal Desai <Mishal_Desai@mckinsey.com>
+recipients_to: [Jake Itzkowitz, Tim Vogeler, ...]
+recipients_cc: [Pankaj Kumar, ...]
+thread_message_count: 11
+attachment_count: 3
+external_thread: false   # true if any party is non-McKinsey
+```
+
+### 4. Enrichment hints
+
+The `enrich` step would benefit from email-aware heuristics:
+- Quoted blocks (markdown `>`) should be lower-weight than primary author content
+- Signatures should be detected and excluded from claim extraction
+- Decisions that show up in the most recent message should be boosted
+
+## Why this matters
+
+For a typical engagement, the email thread is where decisions are actually made and where vendor positions are first surfaced. The Scotia corpus we just ingested includes a Microsoft solutions-engineer pitch on Azure vs GCP that doesn't appear in any deck or meeting note, but is essential context for the architecture decision. Without first-class email support, this evidence either gets dropped or gets shoehorned into `internal_sync` with awkward titles like \"Re: [External] AI Platform Vendor Decision Points\".
+
+## Related
+
+- #56 (DOCX normalization gate) — same theme: format coverage gaps push real consulting evidence outside Folio's pipeline.
+
+## Environment
+
+- folio-love 0.6.4
+- macOS 25.4.0
+- Python 3.12
+- QuantumBlack AI Gateway (enterprise proxy)
+
+
+### Issue #62: folio watch <dir>: folder-based auto-ingestion (drop-zone UX)
+
+- URL: https://github.com/ohjonathan/folio.love/issues/62
+
+- State at triage: OPEN
+
+- Created: 2026-04-17T05:03:55Z
+
+- Updated: 2026-05-12T19:23:19Z
+
+- Labels: none
+
+#### Body
+
+## Summary
+
+Add `folio watch <dir>` — a long-running daemon (or `--once` mode for cron / launchd) that monitors a directory for new files and routes each to the appropriate Folio pipeline based on file extension. Closes the "manual CLI invocation per file" gap that today makes Folio feel like a tool you reach for rather than a system that just runs.
+
+## User pain (current state)
+
+To save an email, transcript, deck, or PDF into Folio today, every artifact has the same 4-7 ceremony steps:
+
+1. Get the file into the right subdirectory (`library/<client>/<engagement>/<doctype>/`)
+2. Open terminal, `cd` to workspace, `source .env`
+3. Remember which Folio verb (`ingest` vs `convert`)
+4. Type the right flags (`--type`, `--client`, `--engagement`, `--date`, `--participants`, `--target`)
+5. Wait for processing
+6. Verify the registry entry was written
+
+Steps 2-6 are 100% mechanical given the file. The user always has the same intent ("this is engagement evidence, file it") but has to translate that into Folio's verb-and-flag vocabulary every single time.
+
+For a solo consultant on a live engagement, this friction is the dominant reason artifacts *don't* end up in Folio — the ceremony cost beats the marginal value of any single file.
+
+## Concrete example from a live engagement
+
+Today, ingesting one email thread on the Scotiabank AI Platform engagement looks like this (from our actual workflow):
+
+```bash
+folio ingest \"library/scotiabank/aiplatform/correspondence/2026-04-17_scotia_ai_platform_azure_gcp.md\" \\
+  --type internal_sync \\
+  --date 2026-04-16 \\
+  --client Scotiabank \\
+  --engagement \"AI Platform\" \\
+  --participants \"Chi Wai Cheung, Jonathan Oh, Bishal Dasgupta, Will Lau\" \\
+  --target library/scotiabank/aiplatform/correspondence/ \\
+  -n \"Initial ingest from email thread (Azure/GCP agentic stack discussion)\"
+```
+
+Seven flags. Six of them have the same value across every email on this engagement, or could be derived from the email's headers. Only `-n` is genuinely per-invocation.
+
+Multiply by a dozen artifacts a day and the reason Folio adoption stalls becomes obvious.
+
+## Proposed feature
+
+
+exec
+/bin/zsh -lc "sed -n '1,320p' docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-watch-v1-4-0-phase-a-spec
+deliverable_id: folio-watch-v1-4-0
+phase: A
+role: spec-author
+family: claude-opus
+status: completed
+---
+
+# Phase A Spec: folio-watch-v1-4-0
+## Scope
+This strict-P3 rerun slice addresses issue #62. The scope authority is `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`; prior `folio_*_v1_*` artifacts are not lifecycle evidence.
+## Acceptance Criteria
+- Add `folio watch <dir> [--once] [--dry-run] [--quiet]`.
+- Route by extension and depend on defaults, correspondence, and DOCX support from prior slices.
+- Wait for stable file size, process serially, archive successes, and write failures under `_failed/`.
+## Implementation Surface
+- `folio/watch.py`
+- `folio/cli.py`
+- `tests/test_watch.py`
+## Required Validation
+- `./.venv/bin/python -m pytest tests/test_watch.py -q`
+- `scripts/llm-dev verify <manifest>`
+- Negative control: `scripts/llm-dev verify-lifecycle <manifest>` must fail with `review_pending` before receipts exist.
+- Dispatch B.1, D.2, and D.5 through `dispatch-family-review.sh --append-receipt` for `claude-sonnet`, `codex`, and `gemini`.
+- D.6 final approval must include the exact strict-P3 receipt row and pass `verify-d6-gate.sh --strict-p3 --manifest <manifest> <final_approval>`.
+## Non-Goals
+- Do not count any old artifacts from the prior failed closeout as evidence.
+- Do not commit API keys or local `.env` files.
+
+
+exec
+/bin/zsh -lc "sed -n '1,260p' frameworks/manifests/folio-watch-v1-4-0.yaml" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+manifest_version: 1.6.0
+id: folio-watch-v1-4-0
+slug: folio-watch
+summary: Add serial folder watch/drop-zone ingestion with extension routing, stable-size waits, success archive, failure quarantine, dry-run, and once mode.
+pre_a:
+  entry: triage
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+lifecycle_mode: framework lifecycle
+owners:
+- Jonathan Oh (ohjonathan)
+scope:
+  allowed_paths:
+  - AGENTS.md
+  - Ontos_Context_Map.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d6_final_approval.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_e_retro.md
+  - docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_chat_log.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_prompt.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_report.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_session_log.md
+  - folio/cli.py
+  - folio/watch.py
+  - frameworks/manifests/folio-watch-v1-4-0.yaml
+  - tests/test_watch.py
+  allowed_path_patterns:
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-*.yaml
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-*.txt
+  composition_targets: []
+  forbidden_paths:
+  - .env
+  - tests/validation/.env
+  - frameworks/llm-dev-v1/
+  forbidden_symbols:
+  - API_KEY=
+  - OPENAI_API_KEY=
+  - ANTHROPIC_API_KEY=
+  - GEMINI_API_KEY=
+  cardinality_assertions:
+  - name: folio-watch-v1-4-0 focused contract anchors exist
+    command: test -f folio/watch.py && rg -n "stable|_failed|dry_run|once|archive" folio/watch.py tests/test_watch.py
+    expect: exit-0
+artifacts:
+  spec: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+  family_verdict: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-<phase>-<family>-<role>.md
+  canonical_verdict: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_<phase>_canonical_verdict.md
+  fix_summary: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+  verification: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-<family>-verifier.md
+  final_approval: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d6_final_approval.md
+  retro: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_e_retro.md
+  triage_report: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+model_assignments:
+- phase: A
+  assignments:
+    claude-opus: spec-author
+- phase: B.1
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: B.3
+  assignments:
+    codex: meta-consolidator
+- phase: C
+  assignments:
+    claude-opus: implementation-author
+- phase: D.2
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: D.3
+  assignments:
+    codex: meta-consolidator
+- phase: D.4
+  assignments:
+    claude-opus: fix-author
+- phase: D.5
+  assignments:
+    codex: verifier
+    gemini: verifier
+    claude-sonnet: verifier
+- phase: D.6
+  assignments:
+    claude-opus: final-approval
+- phase: E
+  assignments:
+    claude-opus: retro
+cli_capability_matrix:
+  claude-opus:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sonnet:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  gemini:
+    shell: false
+    git: false
+    test_runner: false
+    doc_index: true
+    evidence_cap: static-inspection
+    fallback_models:
+    - gemini-3.1-pro-preview
+    - gemini-2.5-pro
+    - gemini-2.5-flash
+    writes_files_non_interactively: false
+smoke_checks:
+- phase: C
+  checks:
+  - name: folio-watch-v1-4-0 focused tests pass
+    command: ./.venv/bin/python -m pytest tests/test_watch.py -q
+    expect: exit-0
+- phase: D.6
+  checks:
+  - name: folio-watch-v1-4-0 strict lifecycle verifies
+    command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-watch-v1-4-0.yaml
+    expect: exit-0
+regression_guards: []
+lifecycle_receipt_inventory_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-lifecycle-receipts.yaml
+gate_prerequisites:
+- id: G-test-1
+  category: test
+  description: Focused slice tests pass.
+  verification:
+    command: ./.venv/bin/python -m pytest tests/test_watch.py -q
+    expect: exit-0
+- id: G-scope-1
+  category: scope
+  description: Slice validation artifacts are rooted in the strict-P3 rerun directory.
+  verification:
+    command: test -d docs/validation/strict_p3_rerun_2026_05_12/review-board
+    expect: exit-0
+- id: G-cardinality-1
+  category: cardinality
+  description: Slice contract anchors exist in code/tests.
+  verification:
+    command: test -f folio/watch.py && rg -n "stable|_failed|dry_run|once|archive" folio/watch.py tests/test_watch.py
+    expect: exit-0
+- id: G-verdict-1
+  category: verdict-presence
+  description: D.5 verifier artifacts from three families exist.
+  verification:
+    command: ls docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-*-verifier.md 2>/dev/null | wc -l
+    expect: eq:3
+- id: G-blocker-1
+  category: blocker-closure
+  description: No unresolved blocker marker remains in D.3 canonical verdict.
+  verification:
+    command: test -f docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md && ! rg -n "UNRESOLVED|BLOCKER|REQUEST CHANGES" docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+    expect: exit-0
+- id: G-branch-1
+  category: branch
+  description: Strict rerun branch is active.
+  verification:
+    command: git rev-parse --abbrev-ref HEAD | rg "^codex/github-issues-closeout-strict-p3-rerun$"
+    expect: exit-0
+tracker:
+  path: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_tracker.md
+  columns:
+  - phase
+  - owner
+  - status
+  - artifact
+  - evidence
+  - timestamp
+branch_map:
+  default: codex/github-issues-closeout-strict-p3-rerun
+references:
+- path: https://github.com/ohjonathan/folio.love/issues/62
+  version: '2026-05-12'
+  relevance: Source scope for folio-watch-v1-4-0
+sibling_deliverable_ids: []
+review_rounds: []
+self_review_caveats: []
+consolidation_mode: external
+reviewer_family_substitutes: []
+
+2026-05-12T20:21:37.654695Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:21:37.654915Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:21:37.656555Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:21:37.656581Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The spec is intentionally small, so I’m checking the issue #62 scope in the triage file against the manifest’s path, reviewer, and gate wiring before deciding whether this is enough to drive Phase C without importing old evidence.
+exec
+/bin/zsh -lc 'rg -n "Issue #62|Proposed feature|Extension routing|Success|Failure|--once|dry-run|_failed|Archive|metadata" docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+13:This artifact was regenerated from live GitHub issue bodies and PR #50 metadata after reopening issues #56, #61, #62, #63, #64, #69, #70, and #71 for strict-P3 verification.
+40:| `folio-document-format-coverage-v1-1-1` | #56 | `.docx` conversion through document-oriented MarkItDown path; no slide image extraction; document evidence note and compatibility metadata. |
+42:| `folio-config-defaults-v1-2-0` | #63 | `defaults`/`derive` in `folio.yaml`; metadata resolution order CLI flag -> derivation -> defaults -> error. |
+207:### Issue #62: folio watch <dir>: folder-based auto-ingestion (drop-zone UX)
+223:Add `folio watch <dir>` — a long-running daemon (or `--once` mode for cron / launchd) that monitors a directory for new files and routes each to the appropriate Folio pipeline based on file extension. Closes the "manual CLI invocation per file" gap that today makes Folio feel like a tool you reach for rather than a system that just runs.
+259:## Proposed feature
+264:folio watch <dir> [--config folio.yaml] [--once] [--dry-run] [--quiet]
+270:| `--once` | Single pass: process anything currently in `<dir>` that hasn't been seen, then exit. Suitable for cron / launchd. |
+271:| `--dry-run` | Log what would be processed but don't call the underlying pipeline. |
+319:6. On failure: write `<filename>.error.log` to `<dir>/_failed/`; post a notification with the error
+372:### Issue #63: Engagement defaults & auto-derived ingest metadata in folio.yaml
+429:## Proposed feature
+511:Without this, **`folio watch` (related FR) is impossible** without per-file metadata sidecar files or some other awkward UX. With this, the watcher just calls `folio ingest <file>` and the right thing happens.
+595:Email already carries the relationship metadata. Every reply chain has:
+603:## Proposed feature
+860:- No `owner` / `due` / `status` metadata on findings, even though `_SUBTYPE_PROMPT_HINTS` references "owners".
+
+exec
+/bin/zsh -lc 'nl -ba docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	---
+     2	id: folio-watch-v1-4-0-phase-a-spec
+     3	deliverable_id: folio-watch-v1-4-0
+     4	phase: A
+     5	role: spec-author
+     6	family: claude-opus
+     7	status: completed
+     8	---
+     9	
+    10	# Phase A Spec: folio-watch-v1-4-0
+    11	## Scope
+    12	This strict-P3 rerun slice addresses issue #62. The scope authority is `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`; prior `folio_*_v1_*` artifacts are not lifecycle evidence.
+    13	## Acceptance Criteria
+    14	- Add `folio watch <dir> [--once] [--dry-run] [--quiet]`.
+    15	- Route by extension and depend on defaults, correspondence, and DOCX support from prior slices.
+    16	- Wait for stable file size, process serially, archive successes, and write failures under `_failed/`.
+    17	## Implementation Surface
+    18	- `folio/watch.py`
+    19	- `folio/cli.py`
+    20	- `tests/test_watch.py`
+    21	## Required Validation
+    22	- `./.venv/bin/python -m pytest tests/test_watch.py -q`
+    23	- `scripts/llm-dev verify <manifest>`
+    24	- Negative control: `scripts/llm-dev verify-lifecycle <manifest>` must fail with `review_pending` before receipts exist.
+    25	- Dispatch B.1, D.2, and D.5 through `dispatch-family-review.sh --append-receipt` for `claude-sonnet`, `codex`, and `gemini`.
+    26	- D.6 final approval must include the exact strict-P3 receipt row and pass `verify-d6-gate.sh --strict-p3 --manifest <manifest> <final_approval>`.
+    27	## Non-Goals
+    28	- Do not count any old artifacts from the prior failed closeout as evidence.
+    29	- Do not commit API keys or local `.env` files.
+    30	
+
+exec
+/bin/zsh -lc "nl -ba frameworks/manifests/folio-watch-v1-4-0.yaml | sed -n '1,220p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+     1	manifest_version: 1.6.0
+     2	id: folio-watch-v1-4-0
+     3	slug: folio-watch
+     4	summary: Add serial folder watch/drop-zone ingestion with extension routing, stable-size waits, success archive, failure quarantine, dry-run, and once mode.
+     5	pre_a:
+     6	  entry: triage
+     7	  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+     8	lifecycle_mode: framework lifecycle
+     9	owners:
+    10	- Jonathan Oh (ohjonathan)
+    11	scope:
+    12	  allowed_paths:
+    13	  - AGENTS.md
+    14	  - Ontos_Context_Map.md
+    15	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_B.3_canonical_verdict.md
+    16	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+    17	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+    18	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d6_final_approval.md
+    19	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+    20	  - docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_e_retro.md
+    21	  - docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+    22	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_chat_log.md
+    23	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_prompt.md
+    24	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_report.md
+    25	  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_session_log.md
+    26	  - folio/cli.py
+    27	  - folio/watch.py
+    28	  - frameworks/manifests/folio-watch-v1-4-0.yaml
+    29	  - tests/test_watch.py
+    30	  allowed_path_patterns:
+    31	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-*.md
+    32	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-*.yaml
+    33	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-*.md
+    34	  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-*.txt
+    35	  composition_targets: []
+    36	  forbidden_paths:
+    37	  - .env
+    38	  - tests/validation/.env
+    39	  - frameworks/llm-dev-v1/
+    40	  forbidden_symbols:
+    41	  - API_KEY=
+    42	  - OPENAI_API_KEY=
+    43	  - ANTHROPIC_API_KEY=
+    44	  - GEMINI_API_KEY=
+    45	  cardinality_assertions:
+    46	  - name: folio-watch-v1-4-0 focused contract anchors exist
+    47	    command: test -f folio/watch.py && rg -n "stable|_failed|dry_run|once|archive" folio/watch.py tests/test_watch.py
+    48	    expect: exit-0
+    49	artifacts:
+    50	  spec: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+    51	  family_verdict: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-<phase>-<family>-<role>.md
+    52	  canonical_verdict: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_<phase>_canonical_verdict.md
+    53	  fix_summary: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d4_fix_summary.md
+    54	  verification: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-<family>-verifier.md
+    55	  final_approval: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_d6_final_approval.md
+    56	  retro: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_e_retro.md
+    57	  triage_report: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+    58	model_assignments:
+    59	- phase: A
+    60	  assignments:
+    61	    claude-opus: spec-author
+    62	- phase: B.1
+    63	  assignments:
+    64	    claude-sonnet: peer
+    65	    codex: alignment
+    66	    gemini: adversarial
+    67	- phase: B.3
+    68	  assignments:
+    69	    codex: meta-consolidator
+    70	- phase: C
+    71	  assignments:
+    72	    claude-opus: implementation-author
+    73	- phase: D.2
+    74	  assignments:
+    75	    claude-sonnet: peer
+    76	    codex: alignment
+    77	    gemini: adversarial
+    78	- phase: D.3
+    79	  assignments:
+    80	    codex: meta-consolidator
+    81	- phase: D.4
+    82	  assignments:
+    83	    claude-opus: fix-author
+    84	- phase: D.5
+    85	  assignments:
+    86	    codex: verifier
+    87	    gemini: verifier
+    88	    claude-sonnet: verifier
+    89	- phase: D.6
+    90	  assignments:
+    91	    claude-opus: final-approval
+    92	- phase: E
+    93	  assignments:
+    94	    claude-opus: retro
+    95	cli_capability_matrix:
+    96	  claude-opus:
+    97	    shell: true
+    98	    git: true
+    99	    test_runner: true
+   100	    doc_index: true
+   101	  claude-sonnet:
+   102	    shell: true
+   103	    git: true
+   104	    test_runner: true
+   105	    doc_index: true
+   106	  codex:
+   107	    shell: true
+   108	    git: true
+   109	    test_runner: true
+   110	    doc_index: true
+   111	  gemini:
+   112	    shell: false
+   113	    git: false
+   114	    test_runner: false
+   115	    doc_index: true
+   116	    evidence_cap: static-inspection
+   117	    fallback_models:
+   118	    - gemini-3.1-pro-preview
+   119	    - gemini-2.5-pro
+   120	    - gemini-2.5-flash
+   121	    writes_files_non_interactively: false
+   122	smoke_checks:
+   123	- phase: C
+   124	  checks:
+   125	  - name: folio-watch-v1-4-0 focused tests pass
+   126	    command: ./.venv/bin/python -m pytest tests/test_watch.py -q
+   127	    expect: exit-0
+   128	- phase: D.6
+   129	  checks:
+   130	  - name: folio-watch-v1-4-0 strict lifecycle verifies
+   131	    command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-watch-v1-4-0.yaml
+   132	    expect: exit-0
+   133	regression_guards: []
+   134	lifecycle_receipt_inventory_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-lifecycle-receipts.yaml
+   135	gate_prerequisites:
+   136	- id: G-test-1
+   137	  category: test
+   138	  description: Focused slice tests pass.
+   139	  verification:
+   140	    command: ./.venv/bin/python -m pytest tests/test_watch.py -q
+   141	    expect: exit-0
+   142	- id: G-scope-1
+   143	  category: scope
+   144	  description: Slice validation artifacts are rooted in the strict-P3 rerun directory.
+   145	  verification:
+   146	    command: test -d docs/validation/strict_p3_rerun_2026_05_12/review-board
+   147	    expect: exit-0
+   148	- id: G-cardinality-1
+   149	  category: cardinality
+   150	  description: Slice contract anchors exist in code/tests.
+   151	  verification:
+   152	    command: test -f folio/watch.py && rg -n "stable|_failed|dry_run|once|archive" folio/watch.py tests/test_watch.py
+   153	    expect: exit-0
+   154	- id: G-verdict-1
+   155	  category: verdict-presence
+   156	  description: D.5 verifier artifacts from three families exist.
+   157	  verification:
+   158	    command: ls docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-*-verifier.md 2>/dev/null | wc -l
+   159	    expect: eq:3
+   160	- id: G-blocker-1
+   161	  category: blocker-closure
+   162	  description: No unresolved blocker marker remains in D.3 canonical verdict.
+   163	  verification:
+   164	    command: test -f docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md && ! rg -n "UNRESOLVED|BLOCKER|REQUEST CHANGES" docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_D.3_canonical_verdict.md
+   165	    expect: exit-0
+   166	- id: G-branch-1
+   167	  category: branch
+   168	  description: Strict rerun branch is active.
+   169	  verification:
+   170	    command: git rev-parse --abbrev-ref HEAD | rg "^codex/github-issues-closeout-strict-p3-rerun$"
+   171	    expect: exit-0
+   172	tracker:
+   173	  path: docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_tracker.md
+   174	  columns:
+   175	  - phase
+   176	  - owner
+   177	  - status
+   178	  - artifact
+   179	  - evidence
+   180	  - timestamp
+   181	branch_map:
+   182	  default: codex/github-issues-closeout-strict-p3-rerun
+   183	references:
+   184	- path: https://github.com/ohjonathan/folio.love/issues/62
+   185	  version: '2026-05-12'
+   186	  relevance: Source scope for folio-watch-v1-4-0
+   187	sibling_deliverable_ids: []
+   188	review_rounds: []
+   189	self_review_caveats: []
+   190	consolidation_mode: external
+   191	reviewer_family_substitutes: []
+
+exec
+/bin/zsh -lc "nl -ba docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md | sed -n '130,260p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   130	
+   131	```bash
+   132	folio ingest <thread.md> \
+   133	  --type internal_sync \
+   134	  --date <YYYY-MM-DD> \
+   135	  --client <Client> \
+   136	  --engagement <Engagement> \
+   137	  --participants \"<comma-separated-names>\"
+   138	```
+   139	
+   140	For a 3-thread, 11-attachment Scotiabank corpus this produced 3 `review_status: clean` interaction notes with 28 total claims extracted via the Anthropic fallback (Sonnet 4 took over after the OpenAI route 403'd at the AI Gateway).
+   141	
+   142	## Suggested behavior
+   143	
+   144	### 1. New document type: `correspondence`
+   145	
+   146	Email threads aren't really meetings. Add a sibling to `interaction` and `evidence`:
+   147	
+   148	```yaml
+   149	type: correspondence
+   150	subtype: email_thread  # or email_single
+   151	```
+   152	
+   153	This avoids overloading `internal_sync` and gives consumers (e.g., the Folio Library cursor rule) a cleaner lookup vocabulary.
+   154	
+   155	### 2. New CLI: `folio ingest-email <path.eml>`
+   156	
+   157	Or extend `folio ingest` with `--type email_thread` and accept `.eml` directly. Required behavior:
+   158	
+   159	- Parse all `text/plain` parts; fall back to `html` -> markdown via `markitdown`
+   160	- Reconstruct the thread (oldest-first); preserve per-message From/To/CC/Date in frontmatter
+   161	- Strip Outlook/Zoom/disclaimer noise (a curated rules list will get most of it)
+   162	- Resolve participants from To/CC/From across the thread (deduplicated, normalized)
+   163	- Catalog attachments in frontmatter:
+   164	  ```yaml
+   165	  attachments:
+   166	    - filename: SOW_v9.docx
+   167	      content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+   168	      size_bytes: 2140160
+   169	      sha256: <hash>
+   170	  ```
+   171	- Optionally extract attachment bodies into the registry (gated by `--extract-attachments`) so that PDFs and images on the thread become first-class documents and can be `impacts:`-linked back to the email
+   172	
+   173	### 3. Registry / frontmatter additions
+   174	
+   175	```yaml
+   176	sender: Mishal Desai <Mishal_Desai@mckinsey.com>
+   177	recipients_to: [Jake Itzkowitz, Tim Vogeler, ...]
+   178	recipients_cc: [Pankaj Kumar, ...]
+   179	thread_message_count: 11
+   180	attachment_count: 3
+   181	external_thread: false   # true if any party is non-McKinsey
+   182	```
+   183	
+   184	### 4. Enrichment hints
+   185	
+   186	The `enrich` step would benefit from email-aware heuristics:
+   187	- Quoted blocks (markdown `>`) should be lower-weight than primary author content
+   188	- Signatures should be detected and excluded from claim extraction
+   189	- Decisions that show up in the most recent message should be boosted
+   190	
+   191	## Why this matters
+   192	
+   193	For a typical engagement, the email thread is where decisions are actually made and where vendor positions are first surfaced. The Scotia corpus we just ingested includes a Microsoft solutions-engineer pitch on Azure vs GCP that doesn't appear in any deck or meeting note, but is essential context for the architecture decision. Without first-class email support, this evidence either gets dropped or gets shoehorned into `internal_sync` with awkward titles like \"Re: [External] AI Platform Vendor Decision Points\".
+   194	
+   195	## Related
+   196	
+   197	- #56 (DOCX normalization gate) — same theme: format coverage gaps push real consulting evidence outside Folio's pipeline.
+   198	
+   199	## Environment
+   200	
+   201	- folio-love 0.6.4
+   202	- macOS 25.4.0
+   203	- Python 3.12
+   204	- QuantumBlack AI Gateway (enterprise proxy)
+   205	
+   206	
+   207	### Issue #62: folio watch <dir>: folder-based auto-ingestion (drop-zone UX)
+   208	
+   209	- URL: https://github.com/ohjonathan/folio.love/issues/62
+   210	
+   211	- State at triage: OPEN
+   212	
+   213	- Created: 2026-04-17T05:03:55Z
+   214	
+   215	- Updated: 2026-05-12T19:23:19Z
+   216	
+   217	- Labels: none
+   218	
+   219	#### Body
+   220	
+   221	## Summary
+   222	
+   223	Add `folio watch <dir>` — a long-running daemon (or `--once` mode for cron / launchd) that monitors a directory for new files and routes each to the appropriate Folio pipeline based on file extension. Closes the "manual CLI invocation per file" gap that today makes Folio feel like a tool you reach for rather than a system that just runs.
+   224	
+   225	## User pain (current state)
+   226	
+   227	To save an email, transcript, deck, or PDF into Folio today, every artifact has the same 4-7 ceremony steps:
+   228	
+   229	1. Get the file into the right subdirectory (`library/<client>/<engagement>/<doctype>/`)
+   230	2. Open terminal, `cd` to workspace, `source .env`
+   231	3. Remember which Folio verb (`ingest` vs `convert`)
+   232	4. Type the right flags (`--type`, `--client`, `--engagement`, `--date`, `--participants`, `--target`)
+   233	5. Wait for processing
+   234	6. Verify the registry entry was written
+   235	
+   236	Steps 2-6 are 100% mechanical given the file. The user always has the same intent ("this is engagement evidence, file it") but has to translate that into Folio's verb-and-flag vocabulary every single time.
+   237	
+   238	For a solo consultant on a live engagement, this friction is the dominant reason artifacts *don't* end up in Folio — the ceremony cost beats the marginal value of any single file.
+   239	
+   240	## Concrete example from a live engagement
+   241	
+   242	Today, ingesting one email thread on the Scotiabank AI Platform engagement looks like this (from our actual workflow):
+   243	
+   244	```bash
+   245	folio ingest \"library/scotiabank/aiplatform/correspondence/2026-04-17_scotia_ai_platform_azure_gcp.md\" \\
+   246	  --type internal_sync \\
+   247	  --date 2026-04-16 \\
+   248	  --client Scotiabank \\
+   249	  --engagement \"AI Platform\" \\
+   250	  --participants \"Chi Wai Cheung, Jonathan Oh, Bishal Dasgupta, Will Lau\" \\
+   251	  --target library/scotiabank/aiplatform/correspondence/ \\
+   252	  -n \"Initial ingest from email thread (Azure/GCP agentic stack discussion)\"
+   253	```
+   254	
+   255	Seven flags. Six of them have the same value across every email on this engagement, or could be derived from the email's headers. Only `-n` is genuinely per-invocation.
+   256	
+   257	Multiply by a dozen artifacts a day and the reason Folio adoption stalls becomes obvious.
+   258	
+   259	## Proposed feature
+   260	
+
+2026-05-12T20:21:45.970303Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:21:45.970496Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:21:45.971951Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:21:45.971974Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "nl -ba docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md | sed -n '259,371p'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+   259	## Proposed feature
+   260	
+   261	### CLI
+   262	
+   263	```bash
+   264	folio watch <dir> [--config folio.yaml] [--once] [--dry-run] [--quiet]
+   265	```
+   266	
+   267	| Flag | Behavior |
+   268	|---|---|
+   269	| (default) | Long-running daemon. Watches `<dir>` via `watchdog` (cross-platform: kqueue on macOS, inotify on Linux, ReadDirectoryChangesW on Windows) |
+   270	| `--once` | Single pass: process anything currently in `<dir>` that hasn't been seen, then exit. Suitable for cron / launchd. |
+   271	| `--dry-run` | Log what would be processed but don't call the underlying pipeline. |
+   272	| `--quiet` | Suppress per-file stdout; only log errors. |
+   273	
+   274	### Routing rules
+   275	
+   276	By file extension, with overrides via `folio.yaml`:
+   277	
+   278	| Extension | Default pipeline | CLI equivalent |
+   279	|---|---|---|
+   280	| `.eml` | EML thread ingest (#61) | `folio ingest --type email_thread` |
+   281	| `.pptx`, `.ppt` | Deck conversion | `folio convert` |
+   282	| `.pdf` | Document conversion | `folio convert` |
+   283	| `.docx` | Document conversion (#56) | `folio convert` |
+   284	| `.md`, `.txt` | Interaction ingest | `folio ingest` |
+   285	| Other | Skip with warning |
+   286	
+   287	### Configuration
+   288	
+   289	```yaml
+   290	# folio.yaml
+   291	watch:
+   292	  - path: ~/Folio-Inbox
+   293	    defaults:
+   294	      client: Scotiabank
+   295	      engagement: AI Platform
+   296	    routing:
+   297	      - match: \"*.eml\"
+   298	        action: ingest
+   299	        type: email_thread
+   300	      - match: \"*.pptx\"
+   301	        action: convert
+   302	      - match: \"*.md\"
+   303	        action: ingest
+   304	        type: internal_sync   # or auto-derive (see related FR for defaults)
+   305	    after_process:
+   306	      action: archive          # or \"delete\", \"leave\"
+   307	      to: ~/Folio-Inbox/_archive/
+   308	    notify:
+   309	      backend: macos_notification  # or \"stdout\", \"slack\", \"none\"
+   310	```
+   311	
+   312	### Behavior
+   313	
+   314	1. New file appears in watched directory
+   315	2. Folio matches extension against routing rules
+   316	3. Folio waits until file size is stable for N seconds (configurable; default 3) — guards against partial drops while drag is in progress
+   317	4. Folio runs the appropriate pipeline (calls the existing `folio convert` or `folio ingest` internally), with engagement defaults applied
+   318	5. On success: archive (or delete, or leave) the original; post a notification
+   319	6. On failure: write `<filename>.error.log` to `<dir>/_failed/`; post a notification with the error
+   320	
+   321	### Edge cases
+   322	
+   323	- **Partial files / drag in progress**: wait for file size to be stable for N seconds before processing. Configurable via `watch.stability_seconds`.
+   324	- **Duplicates** (same file dropped twice): hash content; if already in registry, log \"already ingested as <id>\" and skip (or archive directly without re-processing).
+   325	- **Concurrent files dropped together**: process serially to avoid LLM rate limits and to make registry writes atomic.
+   326	- **Daemon hygiene**: log rotation under `~/.folio/logs/`, restart on `folio.yaml` change (config watcher), `folio watch --healthcheck` command for monitoring.
+   327	- **Missing target subdirectory**: if `library/scotiabank/aiplatform/correspondence/` doesn't exist, create it (parent dir derived from `defaults.client` + `defaults.engagement` + routed `type`).
+   328	
+   329	### Composition with other features
+   330	
+   331	This feature depends on or composes with:
+   332	
+   333	- **#56** — `.docx` normalization gate. Without this, the watcher can't route `.docx` properly.
+   334	- **#61** — Native `.eml` support. Without this, the watcher needs an intermediate parser for emails (which we've written as a workaround in this engagement — temporary scaffolding to be deleted when #61 ships).
+   335	- **[FR-defaults]** — Engagement defaults in `folio.yaml`. Without this, the watcher would still need to know `--client`, `--engagement`, `--type` etc. for each file. This is the feature that makes `folio watch` truly zero-ceremony. To be filed as a sibling issue.
+   336	- **[FR-thread-dedup]** — Message-ID-based thread dedup. Without this, dragging a thread continuation creates a duplicate registry entry. With it, thread continuations bump the existing entry's version. To be filed as a sibling issue.
+   337	
+   338	### Why not just a shell wrapper around `fswatch` / `inotifywait`?
+   339	
+   340	We considered this. We declined because:
+   341	
+   342	1. **Routing rules need to evolve with Folio's own format support** (today PPTX/PDF; tomorrow DOCX/EML/CSV/etc.). A shell wrapper has to be re-edited every time Folio adds a format.
+   343	2. **Defaults need to compose with Folio's existing config** (`folio.yaml`). A shell wrapper invents its own config or hardcodes values.
+   344	3. **Dedup needs registry-aware logic**, which a shell wrapper would have to reimplement against `library/registry.json`.
+   345	4. **Notification format / failure handling should match Folio's existing UX**, not diverge across N user-built wrappers.
+   346	5. **The Folio user community would build N divergent shell scripts**; one Folio feature replaces them all.
+   347	
+   348	The same argument holds for asking users to write a Hazel rule, Dropzone action, or macOS Folder Action. They all work, but they all reinvent Folio-aware logic outside of Folio.
+   349	
+   350	### Why this matters
+   351	
+   352	Folio today is a CLI-of-verbs (`convert`, `ingest`, `enrich`). For solo consultants doing live engagements, the cognitive overhead of \"which verb, which flags, where does it go\" is the dominant friction — and it's the reason artifacts don't get filed.
+   353	
+   354	A drop-zone collapses that friction to \"save this thing\" — same gesture for any artifact, no taxonomy decisions at the moment of saving. The taxonomy work happens in `folio.yaml` once and is reused forever.
+   355	
+   356	This pattern is well-established in adjacent tools (Hazel, Dropzone, DropBox folder upload, OneDrive auto-sort). What's missing is something that knows the Folio pipeline.
+   357	
+   358	### Environment
+   359	
+   360	- folio-love 0.6.4
+   361	- macOS 25.4.0 (target: also Linux via `inotify`, Windows via `watchdog`)
+   362	- Python 3.12
+   363	
+   364	### Related issues
+   365	
+   366	- #56 — DOCX support (needed for full extension routing coverage)
+   367	- #61 — Native EML support (needed for `.eml` routing)
+   368	- [FR-defaults] — Engagement defaults in `folio.yaml` (sibling)
+   369	- [FR-thread-dedup] — Message-ID-based email thread dedup (sibling)
+   370	
+   371	
+
+exec
+/bin/zsh -lc 'git status --short -- docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md frameworks/manifests/folio-watch-v1-4-0.yaml docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md Ontos_Context_Map.md AGENTS.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+?? docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+?? docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+?? frameworks/manifests/folio-watch-v1-4-0.yaml
+
+2026-05-12T20:21:49.981643Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:21:49.981901Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:21:49.983654Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:21:49.983681Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The inputs line up: the Phase A spec delegates detailed scope to the freshly regenerated Pre-A triage, and the manifest keeps the lifecycle artifacts under the strict-P3 rerun review-board path with B.1/D.2/D.5 receipt flow. I don’t see a blocker for stale evidence reuse, so I’m writing an approval artifact now.
+exec
+/bin/zsh -lc "test -d docs/validation/strict_p3_rerun_2026_05_12/review-board && printf 'exists\\n' || printf 'missing\\n'" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+exists
+
+2026-05-12T20:22:14.839579Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:22:14.839869Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:22:14.841872Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:22:14.841904Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+apply patch
+patch: completed
+/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f724e447fb264659cf4889fb54995af0035ba2b
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+@@ -0,0 +1,34 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: B.1
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# B.1 Alignment Review: folio-watch-v1-4-0
++
++## Verdict
++approve
++
++## Scope Reviewed
++
++This review is limited to the Phase A specification, the strict-P3 Pre-A triage record, and the manifest for `folio-watch-v1-4-0`:
++
++- `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`
++- `frameworks/manifests/folio-watch-v1-4-0.yaml`
++
++## Alignment Assessment
++
++The Phase A spec is adequate to drive this slice. It identifies issue #62 as the scope authority, points to the regenerated strict-P3 triage artifact, and explicitly states that prior `folio_*_v1_*` artifacts are not lifecycle evidence. Its acceptance criteria cover the core watch/drop-zone behavior needed for the slice: `folio watch <dir>`, `--once`, `--dry-run`, `--quiet`, extension routing, stable file-size waiting, serial processing, success archiving, and `_failed/` failure handling.
++
++The manifest aligns with that scope. Its summary matches the spec, its `pre_a.artifact_path` points at the strict-P3 triage file, and its allowed implementation surface covers `folio/watch.py`, `folio/cli.py`, and `tests/test_watch.py`. The review-board artifact pattern covers this B.1 artifact and the later family review artifacts. The model assignments correctly place Codex in the B.1 alignment role and retain independent peer and adversarial reviewers.
++
++## Evidence Hygiene
++
++The lifecycle wiring is sufficient to prevent stale evidence reuse. The spec rejects old failed-closeout artifacts as evidence, and the manifest routes lifecycle outputs to `docs/validation/strict_p3_rerun_2026_05_12/` plus the slice-specific receipt inventory. Required validation includes both focused tests and strict lifecycle verification, with an explicit negative control requiring `verify-lifecycle` to fail with `review_pending` before receipts exist.
++
++No blocker was found in the Phase A spec or manifest that would prevent Phase C from proceeding under strict-P3 controls.
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f724e447fb264659cf4889fb54995af0035ba2b
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+@@ -0,0 +1,34 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: B.1
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# B.1 Alignment Review: folio-watch-v1-4-0
++
++## Verdict
++approve
++
++## Scope Reviewed
++
++This review is limited to the Phase A specification, the strict-P3 Pre-A triage record, and the manifest for `folio-watch-v1-4-0`:
++
++- `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`
++- `frameworks/manifests/folio-watch-v1-4-0.yaml`
++
++## Alignment Assessment
++
++The Phase A spec is adequate to drive this slice. It identifies issue #62 as the scope authority, points to the regenerated strict-P3 triage artifact, and explicitly states that prior `folio_*_v1_*` artifacts are not lifecycle evidence. Its acceptance criteria cover the core watch/drop-zone behavior needed for the slice: `folio watch <dir>`, `--once`, `--dry-run`, `--quiet`, extension routing, stable file-size waiting, serial processing, success archiving, and `_failed/` failure handling.
++
++The manifest aligns with that scope. Its summary matches the spec, its `pre_a.artifact_path` points at the strict-P3 triage file, and its allowed implementation surface covers `folio/watch.py`, `folio/cli.py`, and `tests/test_watch.py`. The review-board artifact pattern covers this B.1 artifact and the later family review artifacts. The model assignments correctly place Codex in the B.1 alignment role and retain independent peer and adversarial reviewers.
++
++## Evidence Hygiene
++
++The lifecycle wiring is sufficient to prevent stale evidence reuse. The spec rejects old failed-closeout artifacts as evidence, and the manifest routes lifecycle outputs to `docs/validation/strict_p3_rerun_2026_05_12/` plus the slice-specific receipt inventory. Required validation includes both focused tests and strict lifecycle verification, with an explicit negative control requiring `verify-lifecycle` to fail with `review_pending` before receipts exist.
++
++No blocker was found in the Phase A spec or manifest that would prevent Phase C from proceeding under strict-P3 controls.
+
+2026-05-12T20:22:22.995517Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:22:22.995731Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:22:22.997265Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:22:22.997291Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '1,80p' docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+deliverable_id: folio-watch-v1-4-0
+phase: B.1
+role: alignment
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+
+# B.1 Alignment Review: folio-watch-v1-4-0
+
+## Verdict
+approve
+
+## Scope Reviewed
+
+This review is limited to the Phase A specification, the strict-P3 Pre-A triage record, and the manifest for `folio-watch-v1-4-0`:
+
+- `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`
+- `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`
+- `frameworks/manifests/folio-watch-v1-4-0.yaml`
+
+## Alignment Assessment
+
+The Phase A spec is adequate to drive this slice. It identifies issue #62 as the scope authority, points to the regenerated strict-P3 triage artifact, and explicitly states that prior `folio_*_v1_*` artifacts are not lifecycle evidence. Its acceptance criteria cover the core watch/drop-zone behavior needed for the slice: `folio watch <dir>`, `--once`, `--dry-run`, `--quiet`, extension routing, stable file-size waiting, serial processing, success archiving, and `_failed/` failure handling.
+
+The manifest aligns with that scope. Its summary matches the spec, its `pre_a.artifact_path` points at the strict-P3 triage file, and its allowed implementation surface covers `folio/watch.py`, `folio/cli.py`, and `tests/test_watch.py`. The review-board artifact pattern covers this B.1 artifact and the later family review artifacts. The model assignments correctly place Codex in the B.1 alignment role and retain independent peer and adversarial reviewers.
+
+## Evidence Hygiene
+
+The lifecycle wiring is sufficient to prevent stale evidence reuse. The spec rejects old failed-closeout artifacts as evidence, and the manifest routes lifecycle outputs to `docs/validation/strict_p3_rerun_2026_05_12/` plus the slice-specific receipt inventory. Required validation includes both focused tests and strict lifecycle verification, with an explicit negative control requiring `verify-lifecycle` to fail with `review_pending` before receipts exist.
+
+No blocker was found in the Phase A spec or manifest that would prevent Phase C from proceeding under strict-P3 controls.
+
+exec
+/bin/zsh -lc 'wc -c docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md && git status --short -- docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md frameworks/manifests/folio-watch-v1-4-0.yaml Ontos_Context_Map.md AGENTS.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    2136 docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+?? docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md
+?? docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+?? docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+?? frameworks/manifests/folio-watch-v1-4-0.yaml
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f724e447fb264659cf4889fb54995af0035ba2b
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+@@ -0,0 +1,34 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: B.1
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# B.1 Alignment Review: folio-watch-v1-4-0
++
++## Verdict
++approve
++
++## Scope Reviewed
++
++This review is limited to the Phase A specification, the strict-P3 Pre-A triage record, and the manifest for `folio-watch-v1-4-0`:
++
++- `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`
++- `frameworks/manifests/folio-watch-v1-4-0.yaml`
++
++## Alignment Assessment
++
++The Phase A spec is adequate to drive this slice. It identifies issue #62 as the scope authority, points to the regenerated strict-P3 triage artifact, and explicitly states that prior `folio_*_v1_*` artifacts are not lifecycle evidence. Its acceptance criteria cover the core watch/drop-zone behavior needed for the slice: `folio watch <dir>`, `--once`, `--dry-run`, `--quiet`, extension routing, stable file-size waiting, serial processing, success archiving, and `_failed/` failure handling.
++
++The manifest aligns with that scope. Its summary matches the spec, its `pre_a.artifact_path` points at the strict-P3 triage file, and its allowed implementation surface covers `folio/watch.py`, `folio/cli.py`, and `tests/test_watch.py`. The review-board artifact pattern covers this B.1 artifact and the later family review artifacts. The model assignments correctly place Codex in the B.1 alignment role and retain independent peer and adversarial reviewers.
++
++## Evidence Hygiene
++
++The lifecycle wiring is sufficient to prevent stale evidence reuse. The spec rejects old failed-closeout artifacts as evidence, and the manifest routes lifecycle outputs to `docs/validation/strict_p3_rerun_2026_05_12/` plus the slice-specific receipt inventory. Required validation includes both focused tests and strict lifecycle verification, with an explicit negative control requiring `verify-lifecycle` to fail with `review_pending` before receipts exist.
++
++No blocker was found in the Phase A spec or manifest that would prevent Phase C from proceeding under strict-P3 controls.
+
+2026-05-12T20:22:28.422484Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T20:22:28.422713Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T20:22:28.424400Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T20:22:28.424427Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Created the B.1 Codex alignment artifact with verdict `approve`:
+
+[folio-watch-v1-4-0-B.1-codex-alignment.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md)
+
+Verified it has the exact required frontmatter, includes `## Verdict`, and is 2,136 characters. No repository files were edited except the artifact target.
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f724e447fb264659cf4889fb54995af0035ba2b
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+@@ -0,0 +1,34 @@
++---
++deliverable_id: folio-watch-v1-4-0
++phase: B.1
++role: alignment
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# B.1 Alignment Review: folio-watch-v1-4-0
++
++## Verdict
++approve
++
++## Scope Reviewed
++
++This review is limited to the Phase A specification, the strict-P3 Pre-A triage record, and the manifest for `folio-watch-v1-4-0`:
++
++- `docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md`
++- `docs/validation/strict_p3_rerun_2026_05_12/folio-watch-v1-4-0_phase_a_spec.md`
++- `frameworks/manifests/folio-watch-v1-4-0.yaml`
++
++## Alignment Assessment
++
++The Phase A spec is adequate to drive this slice. It identifies issue #62 as the scope authority, points to the regenerated strict-P3 triage artifact, and explicitly states that prior `folio_*_v1_*` artifacts are not lifecycle evidence. Its acceptance criteria cover the core watch/drop-zone behavior needed for the slice: `folio watch <dir>`, `--once`, `--dry-run`, `--quiet`, extension routing, stable file-size waiting, serial processing, success archiving, and `_failed/` failure handling.
++
++The manifest aligns with that scope. Its summary matches the spec, its `pre_a.artifact_path` points at the strict-P3 triage file, and its allowed implementation surface covers `folio/watch.py`, `folio/cli.py`, and `tests/test_watch.py`. The review-board artifact pattern covers this B.1 artifact and the later family review artifacts. The model assignments correctly place Codex in the B.1 alignment role and retain independent peer and adversarial reviewers.
++
++## Evidence Hygiene
++
++The lifecycle wiring is sufficient to prevent stale evidence reuse. The spec rejects old failed-closeout artifacts as evidence, and the manifest routes lifecycle outputs to `docs/validation/strict_p3_rerun_2026_05_12/` plus the slice-specific receipt inventory. Required validation includes both focused tests and strict lifecycle verification, with an explicit negative control requiring `verify-lifecycle` to fail with `review_pending` before receipts exist.
++
++No blocker was found in the Phase A spec or manifest that would prevent Phase C from proceeding under strict-P3 controls.
+
+2026-05-12T20:22:36.193336Z ERROR codex_core::session: failed to record rollout items: thread 019e1dd9-dbfd-77a2-9005-1599c3bd137b not found
+2026-05-12T20:22:36.196761Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 78597: No such process (os error 3)
+tokens used
+31,926
+2026-05-12T20:22:36.244392Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 78596: No such process (os error 3)

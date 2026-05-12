@@ -1,0 +1,10 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-ingest-signals-v1-1-0-B.1-claude-sonnet-peer-r2.md`.
+
+**Verdict: approve.** All four round-1 blockers (originally raised by the codex alignment review) are closed in the updated spec and manifest:
+
+1. **action_items / grounding_summary** — spec now explicitly requires validator acceptance and `grounding_summary` counting; manifest cardinality now anchors the `grounding_summary` symbol.
+2. **speaker_analytics_unavailable** — spec acceptance criteria now directly name the graceful-degradation flag for no-speaker/malformed inputs; `speaker_analytics_unavailable` added to cardinality gate.
+3. **alias merging** — spec now requires merge through the existing confirmed person entity registry; `speaker_aliases` added to cardinality gate.
+4. **LLM-independent computation** — explicitly stated in spec and architecturally guaranteed by the dedicated `speaker_analytics.py` module running before any LLM call.
+
+One non-blocking note left for the Phase C implementer: add at least one test exercising the "LLM unavailable, speaker stats still produced" path explicitly.

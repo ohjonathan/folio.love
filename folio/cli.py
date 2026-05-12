@@ -16,7 +16,8 @@ from typing import Optional
 import click
 
 from .config import FolioConfig
-from .converter import FolioConverter, PPTX_EXTENSIONS
+from .converter import DOCUMENT_EXTENSIONS, FolioConverter, PPTX_EXTENSIONS
+from .correspondence import CorrespondenceIngestError, ingest_email
 from .ingest import (
     SUPPORTED_INGEST_EXTENSIONS,
     IngestAmbiguityError,
@@ -26,6 +27,7 @@ from .ingest import (
 )
 from .pipeline.images import ImageExtractionError
 from .llm.runtime import EndpointNotAllowedError
+from .watch import run_watch_loop, run_watch_once
 
 logger = logging.getLogger(__name__)
 
@@ -390,9 +392,9 @@ def cli(ctx, verbose: bool, config: Optional[str]):
 @click.pass_context
 def convert(ctx, source: str, note: str, client: str, engagement: str, target: str, passes: int, no_cache: bool,
             subtype: str, industry: str, tags: str, llm_profile: str):
-    """Convert a single deck to Folio markdown.
+    """Convert a single deck or document to Folio markdown.
 
-    SOURCE is the path to a PPTX or PDF file.
+    SOURCE is the path to a PPTX, PDF, or DOCX file.
 
     Examples:
 
@@ -425,7 +427,8 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
             llm_profile=llm_profile,
         )
         click.echo(f"✓ {Path(source).name}")
-        click.echo(f"  {result.slide_count} slides → {result.output_path}")
+        unit_label = "document unit" if result.renderer_used == "document-text" else "slides"
+        click.echo(f"  {result.slide_count} {unit_label} → {result.output_path}")
         click.echo(f"  Version: {result.version} | ID: {result.deck_id}")
 
         if result.changes.has_changes and result.version > 1:
@@ -456,11 +459,11 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
 @click.option(
     "--type",
     "subtype",
-    type=click.Choice(["client_meeting", "expert_interview", "internal_sync", "partner_check_in", "workshop"]),
-    required=True,
+    type=click.Choice(["client_meeting", "expert_interview", "internal_sync", "partner_check_in", "workshop", "email_thread"]),
+    required=False,
     help="Interaction subtype.",
 )
-@click.option("--date", "event_date", type=click.DateTime(formats=["%Y-%m-%d"]), required=True, help="Event date (YYYY-MM-DD).")
+@click.option("--date", "event_date", type=click.DateTime(formats=["%Y-%m-%d"]), required=False, help="Event date (YYYY-MM-DD).")
 @click.option("--client", default=None, help="Client name.")
 @click.option("--engagement", default=None, help="Engagement identifier.")
 @click.option("--participants", default=None, help="Comma-separated participant names.")
@@ -475,6 +478,7 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
 @click.option("--target", type=click.Path(path_type=Path), default=None, help="Override output path or directory.")
 @click.option("--llm-profile", default=None, help="Override LLM profile (defined in folio.yaml).")
 @click.option("--note", "-n", default=None, help="Version note (e.g. 'Initial ingest from cleaned transcript').")
+@click.option("--as-new-entry", is_flag=True, default=False, help="Force a new email-thread entry instead of Message-ID continuation.")
 @click.pass_context
 def ingest(
     ctx,
@@ -490,20 +494,43 @@ def ingest(
     target: Path,
     llm_profile: str,
     note: str,
+    as_new_entry: bool,
 ):
-    """Ingest a transcript or notes file (.txt, .md, .vtt, .srt) into an interaction note."""
-    if event_date.date() > datetime.now().date():
+    """Ingest .txt, .md, .vtt, .srt transcript/notes files or a .eml email thread."""
+    if event_date is not None and event_date.date() > datetime.now().date():
         raise click.BadParameter("--date cannot be in the future", param_hint="--date")
 
     config = ctx.obj["config"]
     participant_list = _split_csv_values(participants)
 
     try:
+        if source.suffix.lower() == ".eml" or subtype == "email_thread":
+            if source.suffix.lower() != ".eml":
+                raise IngestError("--type email_thread requires a .eml source")
+            email_result = ingest_email(
+                config,
+                source_path=source,
+                client=client,
+                engagement=engagement,
+                event_date=event_date.date() if event_date else None,
+                participants=participant_list,
+                title=title,
+                target=target,
+                note=note,
+                as_new_entry=as_new_entry,
+            )
+            click.echo(f"✓ {source.name}")
+            click.echo(f"  {email_result.output_path}")
+            status = "Skipped" if email_result.skipped else "Version"
+            click.echo(
+                f"  {status}: {email_result.version} | ID: {email_result.correspondence_id} | Review: {email_result.review_status}"
+            )
+            return
         result = ingest_source(
             config,
             source_path=source,
             subtype=subtype,
-            event_date=event_date.date(),
+            event_date=event_date.date() if event_date else None,
             client=client,
             engagement=engagement,
             participants=participant_list,
@@ -514,7 +541,7 @@ def ingest(
             llm_profile=llm_profile,
             note=note,
         )
-    except (FileNotFoundError, IngestSubtypeMismatchError, IngestAmbiguityError, IngestError) as exc:
+    except (FileNotFoundError, CorrespondenceIngestError, IngestSubtypeMismatchError, IngestAmbiguityError, IngestError) as exc:
         click.echo(f"✗ Ingest failed: {exc}", err=True)
         sys.exit(1)
     except Exception as exc:
@@ -531,6 +558,72 @@ def ingest(
     )
     if result.degraded:
         click.echo("  ⚠ analysis unavailable")
+
+
+@cli.command("ingest-email")
+@click.argument("source", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--client", default=None, help="Client name.")
+@click.option("--engagement", default=None, help="Engagement identifier.")
+@click.option("--title", default=None, help="Override note title.")
+@click.option("--target", type=click.Path(path_type=Path), default=None, help="Override output path or directory.")
+@click.option("--note", "-n", default=None, help="Version note.")
+@click.option("--as-new-entry", is_flag=True, default=False, help="Force a new entry instead of Message-ID continuation.")
+@click.pass_context
+def ingest_email_command(
+    ctx,
+    source: Path,
+    client: str,
+    engagement: str,
+    title: str,
+    target: Path,
+    note: str,
+    as_new_entry: bool,
+):
+    """Ingest a .eml file into a correspondence note."""
+    config = ctx.obj["config"]
+    try:
+        result = ingest_email(
+            config,
+            source_path=source,
+            client=client,
+            engagement=engagement,
+            title=title,
+            target=target,
+            note=note,
+            as_new_entry=as_new_entry,
+        )
+    except (FileNotFoundError, CorrespondenceIngestError) as exc:
+        click.echo(f"✗ Ingest failed: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"✓ {source.name}")
+    click.echo(f"  {result.output_path}")
+    status = "Skipped" if result.skipped else "Version"
+    click.echo(f"  {status}: {result.version} | ID: {result.correspondence_id} | Review: {result.review_status}")
+
+
+@cli.command("watch")
+@click.argument("directory", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--once", is_flag=True, default=False, help="Process current files once and exit.")
+@click.option("--dry-run", is_flag=True, default=False, help="Show routing without running pipelines or moving files.")
+@click.option("--quiet", is_flag=True, default=False, help="Suppress per-file success output.")
+@click.pass_context
+def watch_command(ctx, directory: Path, once: bool, dry_run: bool, quiet: bool):
+    """Watch a directory and route new files into Folio."""
+    config = ctx.obj["config"]
+    emit = click.echo
+    try:
+        if once:
+            run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+            return
+        run_watch_loop(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+    except KeyboardInterrupt:
+        return
+    except Exception as exc:
+        click.echo(f"✗ Watch failed: {exc}", err=True)
+        if ctx.obj.get("verbose"):
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
 
 @cli.command()
@@ -964,7 +1057,7 @@ def scan(ctx, scope: Optional[str]):
     scanned = 0
 
     from .converter import PPTX_EXTENSIONS
-    scan_extensions = PPTX_EXTENSIONS | {".pdf"} | SUPPORTED_INGEST_EXTENSIONS
+    scan_extensions = PPTX_EXTENSIONS | DOCUMENT_EXTENSIONS | {".pdf"} | SUPPORTED_INGEST_EXTENSIONS
 
     for src_config, resolved_root in config.resolve_source_roots():
         if not resolved_root.exists():

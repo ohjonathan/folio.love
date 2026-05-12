@@ -1,0 +1,2916 @@
+OpenAI Codex v0.125.0 (research preview)
+--------
+workdir: /Users/jonathanoh/workspaces/folio.love
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/jonathanoh/.codex/memories]
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019e1e37-87be-7ac3-b50e-aa369cdab718
+--------
+user
+You are the codex external verifier for llm-dev strict-P3 Phase D.5, deliverable folio-correspondence-ingest-v1-3-0.
+
+Do not run Ontos. Do not run a broad test suite. Verify D.3/D.4 against the implementation and focused tests. Slice summary: native correspondence ingest and Message-ID versioning.
+
+Use these files:
+- docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_D.3_canonical_verdict.md
+- docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_d4_fix_summary.md
+- frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml
+- folio/cli.py
+- folio/correspondence.py
+- folio/ingest.py
+- folio/tracking/registry.py
+- tests/test_correspondence_ingest.py
+- tests/test_cli_correspondence.py
+
+Focused validation command reported by orchestrator:
+- ./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
+
+Artifact target: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+
+Artifact contract:
+- Write the markdown artifact to the artifact target above.
+- Do not edit any repository file except the artifact target.
+- The artifact must be at least 700 characters.
+- It must begin with this exact YAML frontmatter:
+---
+deliverable_id: folio-correspondence-ingest-v1-3-0
+phase: D.5
+role: verifier
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+- Include a top-level heading and a section named exactly "## Verdict" containing approve, request changes, reject, or concur.
+- If verification finds a remaining release issue, use "request changes" and cite file paths. Otherwise use "approve".
+
+2026-05-12T22:03:36.629713Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:03:36.630001Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:03:36.631812Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:03:36.631838Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T22:03:37.629816Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:03:37.630179Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:03:37.632574Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:03:37.632614Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+2026-05-12T22:03:38.304795Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:03:38.304971Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:03:38.306269Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:03:38.306289Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+I’ll verify only the named slice and focused tests, and I’ll avoid Ontos and any broad suite. I’ll read the D.3/D.4 evidence, compare it against the implementation and focused tests, then write only the requested verifier artifact.
+  → Read D.3/D.4 evidence and manifest scope
+  • Inspect implementation and focused tests
+  • Run focused validation command
+  • Write D.5 verifier artifact
+2026-05-12T22:03:46.791043Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:03:46.791428Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:03:46.794213Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:03:46.794265Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc 'wc -l docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_D.3_canonical_verdict.md docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_d4_fix_summary.md frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml folio/cli.py folio/correspondence.py folio/ingest.py folio/tracking/registry.py tests/test_correspondence_ingest.py tests/test_cli_correspondence.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+      21 docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_D.3_canonical_verdict.md
+      12 docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_d4_fix_summary.md
+     197 frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml
+    3368 folio/cli.py
+     629 folio/correspondence.py
+     742 folio/ingest.py
+     461 folio/tracking/registry.py
+     135 tests/test_correspondence_ingest.py
+      93 tests/test_cli_correspondence.py
+    5658 total
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+ M folio/cli.py
+ M folio/config.py
+ M folio/converter.py
+ M folio/ingest.py
+ M folio/output/frontmatter.py
+ M folio/output/interaction_markdown.py
+ M folio/pipeline/interaction_analysis.py
+ M folio/pipeline/text.py
+ M folio/tracking/registry.py
+ M tests/test_cli_ingest.py
+ M tests/test_frontmatter.py
+?? docs/validation/strict_p3_rerun_2026_05_12/
+?? folio/correspondence.py
+?? folio/defaults.py
+?? folio/pipeline/speaker_analytics.py
+?? folio/watch.py
+?? frameworks/llm-dev-strict-p3
+?? frameworks/manifests/folio-config-defaults-v1-2-0.yaml
+?? frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml
+?? frameworks/manifests/folio-document-format-coverage-v1-1-1.yaml
+?? frameworks/manifests/folio-github-closeout-v1-0-0.yaml
+?? frameworks/manifests/folio-ingest-signals-v1-1-0.yaml
+?? frameworks/manifests/folio-watch-v1-4-0.yaml
+?? tests/test_cli_correspondence.py
+?? tests/test_config_defaults.py
+?? tests/test_correspondence_ingest.py
+?? tests/test_docx_conversion.py
+?? tests/test_interaction_actions.py
+?? tests/test_speaker_analytics.py
+?? tests/test_watch.py
+
+2026-05-12T22:03:51.251306Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:03:51.251523Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:03:51.253151Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:03:51.253176Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The worktree already has many existing modified and untracked files, including this slice’s new files. I’ll treat those as the implementation under review and avoid touching anything except the requested review-board markdown.
+exec
+/bin/zsh -lc "sed -n '1,220p' docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_d4_fix_summary.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-correspondence-ingest-v1-3-0-d4-fix-summary
+deliverable_id: folio-correspondence-ingest-v1-3-0
+phase: D.4
+role: fix-author
+family: claude-opus
+status: completed
+---
+
+# Phase D.4 Fix Summary: folio-correspondence-ingest-v1-3-0
+
+Implemented native correspondence ingest, CLI routing, correspondence metadata, attachment metadata, Message-ID overlap versioning, and `--as-new-entry`. Later config-defaults fixes also improved the shared `.eml` route by preserving CLI date and participants precedence.
+
+exec
+/bin/zsh -lc "sed -n '1,220p' docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_D.3_canonical_verdict.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+id: folio-correspondence-ingest-v1-3-0-d3-canonical-verdict
+deliverable_id: folio-correspondence-ingest-v1-3-0
+phase: D.3
+role: meta-consolidator
+family: codex
+status: completed
+---
+
+# Phase D.3 Canonical Verdict: folio-correspondence-ingest-v1-3-0
+
+## Verdict
+approve
+
+## Consolidation
+D.2 implementation reviews approved correspondence ingest after the first Codex alignment process was superseded by a narrower same-family round-2 dispatch. Native `.eml` parsing, correspondence frontmatter/registry metadata, attachment metadata, and Message-ID continuation behavior are implemented and tested.
+
+## Evidence
+- `folio/correspondence.py` parses RFC 5322 headers, body text, attachments, and message ids.
+- `folio/cli.py` exposes `ingest-email` and routes `.eml` through `folio ingest --type email_thread`.
+- Focused correspondence tests passed as part of the 108-test rerun.
+
+exec
+/bin/zsh -lc "sed -n '1,260p' frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+manifest_version: 1.6.0
+id: folio-correspondence-ingest-v1-3-0
+slug: folio-correspondence-ingest
+summary: Add native EML correspondence ingest, email-thread routing, attachment metadata, and Message-ID overlap continuation/versioning.
+pre_a:
+  entry: triage
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+lifecycle_mode: framework lifecycle
+owners:
+- Jonathan Oh (ohjonathan)
+scope:
+  allowed_paths:
+  - AGENTS.md
+  - Ontos_Context_Map.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_B.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_D.3_canonical_verdict.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_d4_fix_summary.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_d6_final_approval.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_phase_a_spec.md
+  - docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_phase_e_retro.md
+  - docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_chat_log.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_prompt.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_report.md
+  - docs/validation/strict_p3_rerun_2026_05_12/tier1_strict_p3_rerun_session_log.md
+  - folio/cli.py
+  - folio/correspondence.py
+  - folio/ingest.py
+  - folio/tracking/registry.py
+  - frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml
+  - tests/test_cli_correspondence.py
+  - tests/test_correspondence_ingest.py
+  allowed_path_patterns:
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-*.yaml
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-correspondence-ingest-v1-3-0-*.md
+  - docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-correspondence-ingest-v1-3-0-*.txt
+  composition_targets: []
+  forbidden_paths:
+  - .env
+  - tests/validation/.env
+  - frameworks/llm-dev-v1/
+  forbidden_symbols:
+  - API_KEY=
+  - OPENAI_API_KEY=
+  - ANTHROPIC_API_KEY=
+  - GEMINI_API_KEY=
+  cardinality_assertions:
+  - name: folio-correspondence-ingest-v1-3-0 focused contract anchors exist
+    command: test -f folio/correspondence.py && rg -n "ingest-email|message_ids|email_thread|as-new-entry" folio tests
+    expect: exit-0
+artifacts:
+  spec: docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_phase_a_spec.md
+  family_verdict: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-<phase>-<family>-<role>.md
+  canonical_verdict: docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_<phase>_canonical_verdict.md
+  fix_summary: docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_d4_fix_summary.md
+  verification: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-<family>-verifier.md
+  final_approval: docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_d6_final_approval.md
+  retro: docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_phase_e_retro.md
+  triage_report: docs/validation/strict_p3_rerun_2026_05_12/pre_a_triage.md
+model_assignments:
+- phase: A
+  assignments:
+    claude-opus: spec-author
+- phase: B.1
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: B.3
+  assignments:
+    codex: meta-consolidator
+- phase: C
+  assignments:
+    claude-opus: implementation-author
+- phase: D.2
+  assignments:
+    claude-sonnet: peer
+    codex: alignment
+    gemini: adversarial
+- phase: D.3
+  assignments:
+    codex: meta-consolidator
+- phase: D.4
+  assignments:
+    claude-opus: fix-author
+- phase: D.5
+  assignments:
+    codex: verifier
+    gemini: verifier
+    claude-sonnet: verifier
+- phase: D.6
+  assignments:
+    claude-opus: final-approval
+- phase: E
+  assignments:
+    claude-opus: retro
+cli_capability_matrix:
+  claude-opus:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sonnet:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  gemini:
+    shell: false
+    git: false
+    test_runner: false
+    doc_index: true
+    evidence_cap: static-inspection
+    fallback_models:
+    - gemini-3.1-pro-preview
+    - gemini-2.5-pro
+    - gemini-2.5-flash
+    writes_files_non_interactively: false
+smoke_checks:
+- phase: C
+  checks:
+  - name: folio-correspondence-ingest-v1-3-0 focused tests pass
+    command: ./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
+    expect: exit-0
+- phase: D.6
+  checks:
+  - name: folio-correspondence-ingest-v1-3-0 strict lifecycle verifies
+    command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-correspondence-ingest-v1-3-0.yaml
+    expect: exit-0
+regression_guards: []
+lifecycle_receipt_inventory_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-lifecycle-receipts.yaml
+gate_prerequisites:
+- id: G-test-1
+  category: test
+  description: Focused slice tests pass.
+  verification:
+    command: ./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
+    expect: exit-0
+- id: G-scope-1
+  category: scope
+  description: Slice validation artifacts are rooted in the strict-P3 rerun directory.
+  verification:
+    command: test -d docs/validation/strict_p3_rerun_2026_05_12/review-board
+    expect: exit-0
+- id: G-cardinality-1
+  category: cardinality
+  description: Slice contract anchors exist in code/tests.
+  verification:
+    command: test -f folio/correspondence.py && rg -n "ingest-email|message_ids|email_thread|as-new-entry" folio tests
+    expect: exit-0
+- id: G-verdict-1
+  category: verdict-presence
+  description: D.5 verifier artifacts from three families exist.
+  verification:
+    command: ls docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-*-verifier.md 2>/dev/null | wc -l
+    expect: eq:3
+- id: G-blocker-1
+  category: blocker-closure
+  description: No unresolved blocker marker remains in D.3 canonical verdict.
+  verification:
+    command: test -f docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_D.3_canonical_verdict.md && ! rg -n "UNRESOLVED|BLOCKER|REQUEST CHANGES" docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_D.3_canonical_verdict.md
+    expect: exit-0
+- id: G-branch-1
+  category: branch
+  description: Strict rerun branch is active.
+  verification:
+    command: git rev-parse --abbrev-ref HEAD | rg "^codex/github-issues-closeout-strict-p3-rerun$"
+    expect: exit-0
+tracker:
+  path: docs/validation/strict_p3_rerun_2026_05_12/folio-correspondence-ingest-v1-3-0_tracker.md
+  columns:
+  - phase
+  - owner
+  - status
+  - artifact
+  - evidence
+  - timestamp
+branch_map:
+  default: codex/github-issues-closeout-strict-p3-rerun
+references:
+- path: https://github.com/ohjonathan/folio.love/issues/61
+  version: '2026-05-12'
+  relevance: Source scope for folio-correspondence-ingest-v1-3-0
+- path: https://github.com/ohjonathan/folio.love/issues/64
+  version: '2026-05-12'
+  relevance: Source scope for folio-correspondence-ingest-v1-3-0
+sibling_deliverable_ids: []
+review_rounds: []
+self_review_caveats: []
+consolidation_mode: external
+reviewer_family_substitutes: []
+
+exec
+/bin/zsh -lc "sed -n '1,240p' tests/test_correspondence_ingest.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Tests for native EML correspondence ingest."""
+
+from __future__ import annotations
+
+import json
+from email.message import EmailMessage
+from pathlib import Path
+
+import yaml
+
+from folio.config import FolioConfig
+from folio.correspondence import ingest_email, parse_eml
+
+
+def _write_eml(
+    path: Path,
+    *,
+    message_id: str,
+    subject: str = "Vendor Decision",
+    body: str = "Initial recommendation: use Azure for the pilot.",
+    references: str = "",
+) -> None:
+    msg = EmailMessage()
+    msg["From"] = "Jonathan Oh <jonathan@mckinsey.com>"
+    msg["To"] = "Client Lead <lead@client.com>"
+    msg["Cc"] = "Partner <partner@mckinsey.com>"
+    msg["Date"] = "Fri, 17 Apr 2026 10:15:00 -0400"
+    msg["Subject"] = subject
+    msg["Message-ID"] = message_id
+    if references:
+        msg["References"] = references
+        msg["In-Reply-To"] = references.split()[-1]
+    msg.set_content(body)
+    msg.add_attachment(
+        b"contract bytes",
+        maintype="application",
+        subtype="octet-stream",
+        filename="SOW_v9.docx",
+    )
+    path.write_bytes(msg.as_bytes())
+
+
+def _parse_frontmatter(path: Path) -> dict:
+    return yaml.safe_load(path.read_text().split("---", 2)[1].strip())
+
+
+def test_parse_eml_extracts_headers_message_ids_body_and_attachments(tmp_path):
+    source = tmp_path / "thread.eml"
+    _write_eml(source, message_id="<msg-1@example.com>")
+
+    thread = parse_eml(source)
+
+    assert thread.subject == "Vendor Decision"
+    assert thread.sender == "Jonathan Oh <jonathan@mckinsey.com>"
+    assert thread.recipients_to == ["Client Lead <lead@client.com>"]
+    assert thread.message_ids == ["<msg-1@example.com>"]
+    assert thread.attachments[0].filename == "SOW_v9.docx"
+    assert "Azure for the pilot" in thread.body_text
+
+
+def test_ingest_email_writes_correspondence_note_and_registry(tmp_path):
+    library = tmp_path / "library"
+    source = tmp_path / "thread.eml"
+    _write_eml(source, message_id="<msg-1@example.com>")
+
+    result = ingest_email(
+        FolioConfig(library_root=library),
+        source_path=source,
+        client="Scotiabank",
+        engagement="AI Platform",
+    )
+
+    assert result.version == 1
+    fm = _parse_frontmatter(result.output_path)
+    assert fm["type"] == "correspondence"
+    assert fm["subtype"] == "email_thread"
+    assert fm["source_type"] == "email"
+    assert fm["sender"] == "Jonathan Oh <jonathan@mckinsey.com>"
+    assert fm["message_ids"] == ["<msg-1@example.com>"]
+    assert fm["attachment_count"] == 1
+    assert fm["external_thread"] is True
+    assert "## Messages" in result.output_path.read_text()
+
+    registry = json.loads((library / "registry.json").read_text())
+    entry = registry["decks"][result.correspondence_id]
+    assert entry["type"] == "correspondence"
+    assert entry["message_ids"] == ["<msg-1@example.com>"]
+
+
+def test_message_id_overlap_versions_existing_thread(tmp_path):
+    library = tmp_path / "library"
+    first_source = tmp_path / "thread_v1.eml"
+    second_source = tmp_path / "thread_v2.eml"
+    _write_eml(first_source, message_id="<msg-1@example.com>")
+    _write_eml(
+        second_source,
+        message_id="<msg-2@example.com>",
+        body="Updated recommendation: Azure pilot, GCP later.",
+        references="<msg-1@example.com>",
+    )
+    config = FolioConfig(library_root=library)
+
+    first = ingest_email(config, source_path=first_source, client="ClientA")
+    second = ingest_email(config, source_path=second_source, client="ClientA")
+
+    assert second.correspondence_id == first.correspondence_id
+    assert second.version == 2
+    fm = _parse_frontmatter(second.output_path)
+    assert fm["message_ids"] == ["<msg-1@example.com>", "<msg-2@example.com>"]
+    assert "GCP later" in second.output_path.read_text()
+
+
+def test_as_new_entry_ignores_message_id_overlap(tmp_path):
+    library = tmp_path / "library"
+    first_source = tmp_path / "thread_v1.eml"
+    second_source = tmp_path / "thread_v2.eml"
+    _write_eml(first_source, message_id="<msg-1@example.com>")
+    _write_eml(
+        second_source,
+        message_id="<msg-2@example.com>",
+        body="Forked conversation with a different audience.",
+        references="<msg-1@example.com>",
+    )
+    config = FolioConfig(library_root=library)
+
+    first = ingest_email(config, source_path=first_source, client="ClientA")
+    second = ingest_email(
+        config,
+        source_path=second_source,
+        client="ClientA",
+        as_new_entry=True,
+    )
+
+    assert second.correspondence_id != first.correspondence_id
+    assert second.version == 1
+
+exec
+/bin/zsh -lc "sed -n '1,180p' tests/test_cli_correspondence.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""CLI tests for correspondence ingest."""
+
+from __future__ import annotations
+
+from email.message import EmailMessage
+
+from click.testing import CliRunner
+import yaml
+
+from folio.cli import cli
+
+
+def _write_eml(path, *, message_id="<msg-1@example.com>") -> None:
+    msg = EmailMessage()
+    msg["From"] = "Jonathan Oh <jonathan@mckinsey.com>"
+    msg["To"] = "Client Lead <lead@client.com>"
+    msg["Date"] = "Fri, 17 Apr 2026 10:15:00 -0400"
+    msg["Subject"] = "Vendor Decision"
+    msg["Message-ID"] = message_id
+    msg.set_content("Use Azure for the pilot.")
+    path.write_bytes(msg.as_bytes())
+
+
+def test_ingest_email_command(tmp_path):
+    library = tmp_path / "library"
+    config_path = tmp_path / "folio.yaml"
+    config_path.write_text(f"library_root: {library}\n")
+    source = tmp_path / "thread.eml"
+    _write_eml(source)
+
+    result = CliRunner().invoke(
+        cli,
+        ["--config", str(config_path), "ingest-email", str(source), "--client", "ClientA"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Vendor Decision" not in result.output
+    assert "Review: clean" in result.output
+
+
+def test_ingest_routes_eml_to_correspondence(tmp_path):
+    library = tmp_path / "library"
+    config_path = tmp_path / "folio.yaml"
+    config_path.write_text(f"library_root: {library}\n")
+    source = tmp_path / "thread.eml"
+    _write_eml(source)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--config",
+            str(config_path),
+            "ingest",
+            str(source),
+            "--type",
+            "email_thread",
+            "--client",
+            "ClientA",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Review: clean" in result.output
+
+
+def test_ingest_eml_route_preserves_cli_date_and_participants_precedence(tmp_path):
+    library = tmp_path / "library"
+    config_path = tmp_path / "folio.yaml"
+    config_path.write_text(f"library_root: {library}\n")
+    source = tmp_path / "thread.eml"
+    _write_eml(source)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--config",
+            str(config_path),
+            "ingest",
+            str(source),
+            "--type",
+            "email_thread",
+            "--date",
+            "2026-04-18",
+            "--participants",
+            "Explicit One, Explicit Two",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    [note_path] = library.glob("**/*.md")
+    frontmatter = yaml.safe_load(note_path.read_text().split("---", 2)[1].strip())
+    assert frontmatter["date"] == "2026-04-18"
+    assert frontmatter["participants"] == ["Explicit One", "Explicit Two"]
+
+2026-05-12T22:04:00.921069Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:00.921296Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:00.923010Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:00.923037Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The manifest scope matches the requested files and the D.3/D.4 evidence claims native `.eml` ingest, attachment metadata, CLI routing, Message-ID versioning, and `--as-new-entry`. I’m now checking the implementation paths that actually carry those behaviors.
+exec
+/bin/zsh -lc "sed -n '1,260p' folio/correspondence.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Native correspondence ingestion for RFC 5322 email files."""
+
+from __future__ import annotations
+
+import hashlib
+import html
+import re
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, timezone
+from email.message import EmailMessage, Message
+from email.parser import BytesParser
+from email.policy import default as email_policy
+from email.utils import getaddresses, parsedate_to_datetime
+from pathlib import Path
+from typing import Optional
+
+import yaml
+
+from .config import FolioConfig
+from .defaults import DefaultResolutionError, resolve_ingest_metadata
+from .naming import derive_engagement_short, humanize_token, sanitize_token
+from .tracking import registry, sources, versions
+from .tracking.registry import RegistryEntry
+
+EMAIL_EXTENSIONS = frozenset({".eml"})
+_MESSAGE_ID_RE = re.compile(r"<[^<>]+>")
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+@dataclass(frozen=True)
+class AttachmentInfo:
+    filename: str
+    content_type: str
+    size_bytes: int
+    sha256: str
+
+
+@dataclass(frozen=True)
+class EmailThread:
+    subject: str
+    sender: str
+    recipients_to: list[str]
+    recipients_cc: list[str]
+    event_date: date
+    body_text: str
+    message_ids: list[str]
+    attachments: list[AttachmentInfo] = field(default_factory=list)
+
+    @property
+    def participants(self) -> list[str]:
+        return _dedupe([self.sender, *self.recipients_to, *self.recipients_cc])
+
+    @property
+    def external_thread(self) -> bool:
+        domains = {
+            item.rsplit("@", 1)[1].rstrip(">").lower()
+            for item in self.participants
+            if "@" in item
+        }
+        return len(domains) > 1
+
+
+@dataclass
+class CorrespondenceResult:
+    correspondence_id: str
+    output_path: Path
+    version: int
+    review_status: str
+    skipped: bool = False
+
+
+class CorrespondenceIngestError(RuntimeError):
+    """Raised when correspondence ingestion cannot complete."""
+
+
+def ingest_email(
+    config: FolioConfig,
+    *,
+    source_path: Path,
+    client: Optional[str] = None,
+    engagement: Optional[str] = None,
+    event_date: date | None = None,
+    participants: list[str] | None = None,
+    title: Optional[str] = None,
+    target: Optional[Path] = None,
+    note: Optional[str] = None,
+    as_new_entry: bool = False,
+) -> CorrespondenceResult:
+    """Ingest an RFC 5322 `.eml` file as a correspondence note."""
+
+    source_path = Path(source_path).resolve()
+    if not source_path.exists():
+        raise FileNotFoundError(f"Source file not found: {source_path}")
+    if source_path.suffix.lower() not in EMAIL_EXTENSIONS:
+        raise CorrespondenceIngestError(f"Unsupported email source extension: {source_path.suffix}")
+
+    thread = parse_eml(source_path)
+    thread = replace(thread, event_date=event_date or thread.event_date)
+    effective_participants = participants if participants is not None else thread.participants
+
+    try:
+        resolved = resolve_ingest_metadata(
+            config,
+            source_path=source_path,
+            client=client,
+            engagement=engagement,
+            subtype="email_thread",
+            event_date=thread.event_date,
+            participants=effective_participants,
+            target=target,
+        )
+    except DefaultResolutionError as exc:
+        raise CorrespondenceIngestError(str(exc)) from exc
+    effective_client = resolved.client
+    effective_engagement = resolved.engagement
+    effective_participants = resolved.participants or effective_participants
+    target = resolved.target
+
+    library_root = config.library_root.resolve()
+    registry_data = _load_registry_data(library_root)
+    source_hash = sources.compute_file_hash(source_path)
+    match = None if as_new_entry else _find_message_id_overlap(registry_data, thread.message_ids)
+    if match and match.source_hash == source_hash:
+        output_path = (library_root / match.markdown_path).resolve()
+        return CorrespondenceResult(
+            correspondence_id=match.id,
+            output_path=output_path,
+            version=match.version or 1,
+            review_status=match.review_status or "clean",
+            skipped=True,
+        )
+
+    resolved_title = title or thread.subject or humanize_token(source_path.stem)
+    correspondence_id, output_dir, markdown_path, existing_fm = _resolve_output_identity(
+        library_root=library_root,
+        registry_data=registry_data,
+        source_path=source_path,
+        source_hash=source_hash,
+        thread=thread,
+        title=resolved_title,
+        client=effective_client,
+        engagement=effective_engagement,
+        target=target,
+        match=match,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    source_info = sources.compute_source_info(source_path, markdown_path)
+    version_info = versions.compute_version(
+        deck_dir=output_dir,
+        source_hash=source_info.file_hash,
+        source_path=source_info.relative_path,
+        slide_count=1,
+        new_texts={1: thread.body_text},
+        note=note,
+    )
+    history = versions.load_version_history(output_dir / "version_history.json")
+    all_message_ids = _merge_message_ids(
+        getattr(match, "message_ids", None) or [],
+        thread.message_ids,
+    )
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    frontmatter = _generate_correspondence_frontmatter(
+        correspondence_id=correspondence_id,
+        title=resolved_title,
+        thread=thread,
+        source_relative_path=source_info.relative_path,
+        source_hash=source_info.file_hash,
+        version_info=version_info,
+        client=effective_client,
+        engagement=effective_engagement,
+        participants=effective_participants,
+        message_ids=all_message_ids,
+        existing_frontmatter=existing_fm,
+        now_str=now_str,
+    )
+    markdown = _assemble_correspondence_markdown(
+        title=resolved_title,
+        frontmatter=frontmatter,
+        source_display_path=source_info.relative_path,
+        version_info=version_info,
+        thread=thread,
+        version_history=history,
+    )
+    _atomic_write_text(markdown_path, markdown)
+
+    if _is_within(markdown_path, library_root):
+        registry.upsert_entry(
+            library_root / "registry.json",
+            RegistryEntry(
+                id=correspondence_id,
+                title=resolved_title,
+                markdown_path=_relative_to_root(markdown_path, library_root),
+                deck_dir=_relative_to_root(output_dir, library_root),
+                source_relative_path=source_info.relative_path,
+                source_hash=source_info.file_hash,
+                source_type="email",
+                type="correspondence",
+                subtype="email_thread",
+                version=version_info.version,
+                converted=now_str,
+                modified=now_str,
+                client=effective_client,
+                engagement=effective_engagement,
+                authority=(existing_fm or {}).get("authority", "captured"),
+                curation_level=(existing_fm or {}).get("curation_level", "L0"),
+                staleness_status="current",
+                review_status="clean",
+                review_flags=[],
+                extraction_confidence=1.0,
+                message_ids=all_message_ids,
+            ),
+        )
+
+    return CorrespondenceResult(
+        correspondence_id=correspondence_id,
+        output_path=markdown_path,
+        version=version_info.version,
+        review_status="clean",
+    )
+
+
+def parse_eml(source_path: Path) -> EmailThread:
+    """Parse a single `.eml` envelope into correspondence metadata."""
+
+    msg = _read_email(source_path)
+    subject = _decode_header_value(msg.get("subject", "")) or source_path.stem
+    sender = _format_first_address(msg.get("from", ""))
+    recipients_to = _format_addresses(msg.get("to", ""))
+    recipients_cc = _format_addresses(msg.get("cc", ""))
+    event_date = _parse_email_date(msg.get("date")) or date.today()
+    body_text = _extract_body_text(msg)
+    message_ids = _extract_message_ids(msg)
+    attachments = _extract_attachments(msg)
+    if not body_text.strip():
+        raise CorrespondenceIngestError(f"No text body found in {source_path.name}")
+    return EmailThread(
+        subject=subject,
+        sender=sender,
+        recipients_to=recipients_to,
+        recipients_cc=recipients_cc,
+        event_date=event_date,
+        body_text=body_text,
+        message_ids=message_ids,
+        attachments=attachments,
+    )
+
+
+def _read_email(source_path: Path) -> Message:
+    with Path(source_path).open("rb") as fh:
+        return BytesParser(policy=email_policy).parse(fh)
+
+
+def _extract_body_text(msg: Message) -> str:
+    plain_parts: list[str] = []
+    html_parts: list[str] = []
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.is_multipart() or _is_attachment(part):
+                continue
+            content_type = part.get_content_type()
+
+exec
+/bin/zsh -lc 'rg -n "class Email|def parse_eml|def ingest_email|message_ids|attachment|Correspondence|as_new_entry|external_thread|email_thread" folio/correspondence.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+39:class EmailThread:
+46:    message_ids: list[str]
+47:    attachments: list[AttachmentInfo] = field(default_factory=list)
+54:    def external_thread(self) -> bool:
+64:class CorrespondenceResult:
+72:class CorrespondenceIngestError(RuntimeError):
+76:def ingest_email(
+87:    as_new_entry: bool = False,
+88:) -> CorrespondenceResult:
+95:        raise CorrespondenceIngestError(f"Unsupported email source extension: {source_path.suffix}")
+107:            subtype="email_thread",
+113:        raise CorrespondenceIngestError(str(exc)) from exc
+122:    match = None if as_new_entry else _find_message_id_overlap(registry_data, thread.message_ids)
+125:        return CorrespondenceResult(
+157:    all_message_ids = _merge_message_ids(
+158:        getattr(match, "message_ids", None) or [],
+159:        thread.message_ids,
+172:        message_ids=all_message_ids,
+198:                subtype="email_thread",
+210:                message_ids=all_message_ids,
+214:    return CorrespondenceResult(
+222:def parse_eml(source_path: Path) -> EmailThread:
+232:    message_ids = _extract_message_ids(msg)
+233:    attachments = _extract_attachments(msg)
+235:        raise CorrespondenceIngestError(f"No text body found in {source_path.name}")
+243:        message_ids=message_ids,
+244:        attachments=attachments,
+258:            if part.is_multipart() or _is_attachment(part):
+309:def _extract_message_ids(msg: Message) -> list[str]:
+317:def _extract_attachments(msg: Message) -> list[AttachmentInfo]:
+318:    attachments: list[AttachmentInfo] = []
+320:        if not _is_attachment(part):
+323:        filename = part.get_filename() or "attachment"
+324:        attachments.append(
+332:    return attachments
+335:def _is_attachment(part: Message) -> bool:
+337:    return disposition == "attachment" or bool(part.get_filename())
+369:def _find_message_id_overlap(registry_data: dict, message_ids: list[str]) -> RegistryEntry | None:
+370:    wanted = set(message_ids)
+376:        existing = set(item.get("message_ids") or [])
+476:    message_ids: list[str],
+491:        "subtype": "email_thread",
+510:        "thread_message_count": len(message_ids) or 1,
+511:        "attachment_count": len(thread.attachments),
+512:        "external_thread": thread.external_thread,
+513:        "message_ids": message_ids,
+514:        "attachments": [attachment.__dict__ for attachment in thread.attachments],
+552:    if thread.attachments:
+553:        for attachment in thread.attachments:
+555:                f"- {attachment.filename} ({attachment.content_type}, {attachment.size_bytes} bytes, sha256: {attachment.sha256})"
+569:def _merge_message_ids(existing: list[str], new: list[str]) -> list[str]:
+
+exec
+/bin/zsh -lc 'rg -n "ingest-email|email_thread|as-new-entry|correspondence|ingest_email" folio/cli.py folio/ingest.py folio/tracking/registry.py' in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc "sed -n '260,620p' folio/correspondence.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+folio/ingest.py:13:from .correspondence import EMAIL_EXTENSIONS
+folio/ingest.py:114:        raise IngestError("Use ingest_email() or `folio ingest-email` for .eml sources.")
+folio/cli.py:20:from .correspondence import CorrespondenceIngestError, ingest_email
+folio/cli.py:462:    type=click.Choice(["client_meeting", "expert_interview", "internal_sync", "partner_check_in", "workshop", "email_thread"]),
+folio/cli.py:481:@click.option("--as-new-entry", is_flag=True, default=False, help="Force a new email-thread entry instead of Message-ID continuation.")
+folio/cli.py:507:        if source.suffix.lower() == ".eml" or subtype == "email_thread":
+folio/cli.py:509:                raise IngestError("--type email_thread requires a .eml source")
+folio/cli.py:510:            email_result = ingest_email(
+folio/cli.py:526:                f"  {status}: {email_result.version} | ID: {email_result.correspondence_id} | Review: {email_result.review_status}"
+folio/cli.py:563:@cli.command("ingest-email")
+folio/cli.py:570:@click.option("--as-new-entry", is_flag=True, default=False, help="Force a new entry instead of Message-ID continuation.")
+folio/cli.py:572:def ingest_email_command(
+folio/cli.py:582:    """Ingest a .eml file into a correspondence note."""
+folio/cli.py:585:        result = ingest_email(
+folio/cli.py:601:    click.echo(f"  {status}: {result.version} | ID: {result.correspondence_id} | Review: {result.review_status}")
+
+ succeeded in 0ms:
+            content_type = part.get_content_type()
+            payload = _safe_get_content(part)
+            if not payload:
+                continue
+            if content_type == "text/plain":
+                plain_parts.append(_clean_email_text(payload))
+            elif content_type == "text/html":
+                html_parts.append(_html_to_text(payload))
+    else:
+        payload = _safe_get_content(msg)
+        if msg.get_content_type() == "text/html":
+            html_parts.append(_html_to_text(payload))
+        else:
+            plain_parts.append(_clean_email_text(payload))
+    return "\n\n".join(part for part in (plain_parts or html_parts) if part).strip()
+
+
+def _safe_get_content(part: Message) -> str:
+    try:
+        payload = part.get_content()
+    except Exception:
+        raw = part.get_payload(decode=True) or b""
+        charset = part.get_content_charset() or "utf-8"
+        payload = raw.decode(charset, errors="replace")
+    return str(payload or "")
+
+
+def _clean_email_text(value: str) -> str:
+    lines = []
+    for raw in value.replace("\r\n", "\n").replace("\r", "\n").splitlines():
+        stripped = raw.rstrip()
+        if not stripped:
+            lines.append("")
+            continue
+        if stripped.lower().startswith(("external sender", "confidentiality notice")):
+            continue
+        if re.match(r"^_{6,}$", stripped):
+            continue
+        lines.append(stripped)
+    return "\n".join(lines).strip()
+
+
+def _html_to_text(value: str) -> str:
+    text_value = re.sub(r"(?i)<br\s*/?>", "\n", value)
+    text_value = re.sub(r"(?i)</p\s*>", "\n\n", text_value)
+    text_value = _TAG_RE.sub("", text_value)
+    return _clean_email_text(html.unescape(text_value))
+
+
+def _extract_message_ids(msg: Message) -> list[str]:
+    values = []
+    for header in ("message-id", "in-reply-to", "references"):
+        raw = msg.get(header, "")
+        values.extend(_MESSAGE_ID_RE.findall(str(raw)))
+    return _dedupe(values)
+
+
+def _extract_attachments(msg: Message) -> list[AttachmentInfo]:
+    attachments: list[AttachmentInfo] = []
+    for part in msg.walk() if msg.is_multipart() else []:
+        if not _is_attachment(part):
+            continue
+        payload = part.get_payload(decode=True) or b""
+        filename = part.get_filename() or "attachment"
+        attachments.append(
+            AttachmentInfo(
+                filename=filename,
+                content_type=part.get_content_type(),
+                size_bytes=len(payload),
+                sha256=hashlib.sha256(payload).hexdigest(),
+            )
+        )
+    return attachments
+
+
+def _is_attachment(part: Message) -> bool:
+    disposition = (part.get_content_disposition() or "").lower()
+    return disposition == "attachment" or bool(part.get_filename())
+
+
+def _decode_header_value(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _format_first_address(value: str) -> str:
+    values = _format_addresses(value)
+    return values[0] if values else ""
+
+
+def _format_addresses(value: str) -> list[str]:
+    formatted = []
+    for name, address in getaddresses([value or ""]):
+        label = name.strip() or address.strip()
+        if address and address not in label:
+            label = f"{label} <{address}>"
+        if label:
+            formatted.append(label)
+    return _dedupe(formatted)
+
+
+def _parse_email_date(value: object) -> date | None:
+    if not value:
+        return None
+    try:
+        return parsedate_to_datetime(str(value)).date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _find_message_id_overlap(registry_data: dict, message_ids: list[str]) -> RegistryEntry | None:
+    wanted = set(message_ids)
+    if not wanted:
+        return None
+    for item in registry_data.get("decks", {}).values():
+        if item.get("type") != "correspondence":
+            continue
+        existing = set(item.get("message_ids") or [])
+        if wanted & existing:
+            return registry.entry_from_dict(item)
+    return None
+
+
+def _resolve_output_identity(
+    *,
+    library_root: Path,
+    registry_data: dict,
+    source_path: Path,
+    source_hash: str,
+    thread: EmailThread,
+    title: str,
+    client: Optional[str],
+    engagement: Optional[str],
+    target: Optional[Path],
+    match: RegistryEntry | None,
+) -> tuple[str, Path, Path, dict | None]:
+    if match is not None:
+        markdown_path = (library_root / match.markdown_path).resolve()
+        existing_fm = _read_frontmatter(markdown_path)
+        return match.id, markdown_path.parent, markdown_path, existing_fm
+
+    artifact = _artifact_name(thread.event_date, source_path.stem, title, source_hash)
+    output_dir = _resolve_target_dir(library_root, artifact, client, engagement, target)
+    markdown_path = output_dir / f"{artifact}.md"
+    correspondence_id = _unique_correspondence_id(
+        registry_data,
+        thread.event_date,
+        title,
+        client,
+        engagement,
+        source_hash,
+    )
+    return correspondence_id, output_dir, markdown_path, None
+
+
+def _resolve_target_dir(
+    library_root: Path,
+    artifact: str,
+    client: Optional[str],
+    engagement: Optional[str],
+    target: Optional[Path],
+) -> Path:
+    if target is not None:
+        target = Path(target).resolve()
+        if target.suffix.lower() == ".md":
+            return target.parent
+        return target
+    engagement_short = derive_engagement_short(engagement) if engagement else ""
+    if client and engagement:
+        return (
+            library_root
+            / sanitize_token(client)
+            / sanitize_token(engagement_short or engagement)
+            / "correspondence"
+            / artifact
+        )
+    if client:
+        return library_root / sanitize_token(client) / "correspondence" / artifact
+    return library_root / "correspondence" / artifact
+
+
+def _artifact_name(event_date: date, source_stem: str, title: str, source_hash: str) -> str:
+    descriptor = sanitize_token(title) or sanitize_token(source_stem)
+    return f"{event_date.strftime('%Y-%m-%d')}_{descriptor}_{source_hash[:8]}"
+
+
+def _unique_correspondence_id(
+    registry_data: dict,
+    event_date: date,
+    title: str,
+    client: Optional[str],
+    engagement: Optional[str],
+    source_hash: str,
+) -> str:
+    parts = []
+    if client:
+        parts.append(sanitize_token(client))
+    if engagement:
+        parts.append(sanitize_token(engagement))
+    parts.extend(["correspondence", event_date.strftime("%Y%m%d"), sanitize_token(title)])
+    candidate = "_".join(part for part in parts if part)
+    if candidate not in registry_data.get("decks", {}):
+        return candidate
+    return f"{candidate}_{source_hash[:8]}"
+
+
+def _generate_correspondence_frontmatter(
+    *,
+    correspondence_id: str,
+    title: str,
+    thread: EmailThread,
+    source_relative_path: str,
+    source_hash: str,
+    version_info: versions.VersionInfo,
+    client: Optional[str],
+    engagement: Optional[str],
+    participants: list[str],
+    message_ids: list[str],
+    existing_frontmatter: dict | None,
+    now_str: str,
+) -> str:
+    created = now_str
+    authority = "captured"
+    curation_level = "L0"
+    if isinstance(existing_frontmatter, dict):
+        created = existing_frontmatter.get("created") or created
+        authority = existing_frontmatter.get("authority") or authority
+        curation_level = existing_frontmatter.get("curation_level") or curation_level
+    fm = {
+        "id": correspondence_id,
+        "title": title,
+        "type": "correspondence",
+        "subtype": "email_thread",
+        "status": "active",
+        "authority": authority,
+        "curation_level": curation_level,
+        "review_status": "clean",
+        "review_flags": [],
+        "extraction_confidence": 1.0,
+        "source": source_relative_path,
+        "source_hash": source_hash,
+        "source_type": "email",
+        "version": version_info.version,
+        "created": created,
+        "modified": now_str,
+        "converted": now_str,
+        "date": thread.event_date.isoformat(),
+        "sender": thread.sender,
+        "recipients_to": thread.recipients_to,
+        "recipients_cc": thread.recipients_cc,
+        "participants": participants,
+        "thread_message_count": len(message_ids) or 1,
+        "attachment_count": len(thread.attachments),
+        "external_thread": thread.external_thread,
+        "message_ids": message_ids,
+        "attachments": [attachment.__dict__ for attachment in thread.attachments],
+    }
+    if client:
+        fm["client"] = client
+    if engagement:
+        fm["engagement"] = engagement
+    yaml_str = yaml.dump(fm, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    return f"---\n{yaml_str}---"
+
+
+def _assemble_correspondence_markdown(
+    *,
+    title: str,
+    frontmatter: str,
+    source_display_path: str,
+    version_info: versions.VersionInfo,
+    thread: EmailThread,
+    version_history: list[dict],
+) -> str:
+    lines = [
+        frontmatter,
+        "",
+        f"# {title}",
+        "",
+        f"Source email: `{source_display_path}` | Version: {version_info.version}",
+        "",
+        "## Messages",
+        "",
+        f"### {thread.event_date.isoformat()} — {thread.sender}",
+        "",
+        f"To: {', '.join(thread.recipients_to) if thread.recipients_to else 'None'}",
+        "",
+    ]
+    if thread.recipients_cc:
+        lines.extend([f"CC: {', '.join(thread.recipients_cc)}", ""])
+    lines.extend(thread.body_text.splitlines())
+    lines.append("")
+    lines.extend(["## Attachments", ""])
+    if thread.attachments:
+        for attachment in thread.attachments:
+            lines.append(
+                f"- {attachment.filename} ({attachment.content_type}, {attachment.size_bytes} bytes, sha256: {attachment.sha256})"
+            )
+    else:
+        lines.append("- None")
+    lines.append("")
+    if version_history:
+        lines.extend(["## Version History", ""])
+        lines.extend(
+            f"- v{item.get('version')}: {item.get('timestamp')} ({item.get('source_path')})"
+            for item in version_history
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _merge_message_ids(existing: list[str], new: list[str]) -> list[str]:
+    return _dedupe([*existing, *new])
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = str(value).strip()
+        key = cleaned.lower()
+        if cleaned and key not in seen:
+            seen.add(key)
+            result.append(cleaned)
+    return result
+
+
+def _load_registry_data(library_root: Path) -> dict:
+    registry_path = library_root / "registry.json"
+    if registry_path.exists():
+        data = registry.load_registry(registry_path)
+        if data.get("_corrupt"):
+            data = registry.rebuild_registry(library_root)
+            registry.save_registry(registry_path, data)
+        return data
+    if library_root.exists():
+        data = registry.rebuild_registry(library_root)
+        registry.save_registry(registry_path, data)
+        return data
+    return {"_schema_version": 1, "decks": {}}
+
+
+def _read_frontmatter(md_path: Path) -> dict | None:
+    if not md_path.exists():
+        return None
+    content = md_path.read_text(encoding="utf-8")
+    if not content.startswith("---\n"):
+        return None
+    end = content.find("\n---", 4)
+    if end == -1:
+        return None
+    parsed = yaml.safe_load(content[4:end])
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(content)
+    tmp_path.replace(path)
+
+
+def _is_within(path: Path, root: Path) -> bool:
+
+2026-05-12T22:04:06.315575Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:06.315783Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:06.317335Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:06.317357Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '620,680p' folio/correspondence.py && sed -n '440,620p' folio/cli.py && sed -n '1,160p' folio/ingest.py && sed -n '1,240p' folio/tracking/registry.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _relative_to_root(path: Path, root: Path) -> str:
+    return str(path.resolve().relative_to(root.resolve())).replace("\\", "/")
+                click.echo(f"  Removed: slides {', '.join(str(s) for s in result.changes.removed)}")
+
+        if result.cache_stats and result.cache_stats.total > 0:
+            s = result.cache_stats
+            click.echo(f"  Cache: {s.hits}/{s.total} hits ({s.hit_rate:.0%})")
+
+    except FileNotFoundError as e:
+        click.echo(f"✗ Error: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"✗ Conversion failed: {e}", err=True)
+        if ctx.obj.get("verbose"):
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("source", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--type",
+    "subtype",
+    type=click.Choice(["client_meeting", "expert_interview", "internal_sync", "partner_check_in", "workshop", "email_thread"]),
+    required=False,
+    help="Interaction subtype.",
+)
+@click.option("--date", "event_date", type=click.DateTime(formats=["%Y-%m-%d"]), required=False, help="Event date (YYYY-MM-DD).")
+@click.option("--client", default=None, help="Client name.")
+@click.option("--engagement", default=None, help="Engagement identifier.")
+@click.option("--participants", default=None, help="Comma-separated participant names.")
+@click.option("--duration-minutes", type=click.IntRange(min=1), default=None, help="Meeting duration in minutes.")
+@click.option(
+    "--source-recording",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional source recording path.",
+)
+@click.option("--title", default=None, help="Override note title.")
+@click.option("--target", type=click.Path(path_type=Path), default=None, help="Override output path or directory.")
+@click.option("--llm-profile", default=None, help="Override LLM profile (defined in folio.yaml).")
+@click.option("--note", "-n", default=None, help="Version note (e.g. 'Initial ingest from cleaned transcript').")
+@click.option("--as-new-entry", is_flag=True, default=False, help="Force a new email-thread entry instead of Message-ID continuation.")
+@click.pass_context
+def ingest(
+    ctx,
+    source: Path,
+    subtype: str,
+    event_date: datetime,
+    client: str,
+    engagement: str,
+    participants: str,
+    duration_minutes: int,
+    source_recording: Path,
+    title: str,
+    target: Path,
+    llm_profile: str,
+    note: str,
+    as_new_entry: bool,
+):
+    """Ingest .txt, .md, .vtt, .srt transcript/notes files or a .eml email thread."""
+    if event_date is not None and event_date.date() > datetime.now().date():
+        raise click.BadParameter("--date cannot be in the future", param_hint="--date")
+
+    config = ctx.obj["config"]
+    participant_list = _split_csv_values(participants)
+
+    try:
+        if source.suffix.lower() == ".eml" or subtype == "email_thread":
+            if source.suffix.lower() != ".eml":
+                raise IngestError("--type email_thread requires a .eml source")
+            email_result = ingest_email(
+                config,
+                source_path=source,
+                client=client,
+                engagement=engagement,
+                event_date=event_date.date() if event_date else None,
+                participants=participant_list,
+                title=title,
+                target=target,
+                note=note,
+                as_new_entry=as_new_entry,
+            )
+            click.echo(f"✓ {source.name}")
+            click.echo(f"  {email_result.output_path}")
+            status = "Skipped" if email_result.skipped else "Version"
+            click.echo(
+                f"  {status}: {email_result.version} | ID: {email_result.correspondence_id} | Review: {email_result.review_status}"
+            )
+            return
+        result = ingest_source(
+            config,
+            source_path=source,
+            subtype=subtype,
+            event_date=event_date.date() if event_date else None,
+            client=client,
+            engagement=engagement,
+            participants=participant_list,
+            duration_minutes=duration_minutes,
+            source_recording=source_recording,
+            title=title,
+            target=target,
+            llm_profile=llm_profile,
+            note=note,
+        )
+    except (FileNotFoundError, CorrespondenceIngestError, IngestSubtypeMismatchError, IngestAmbiguityError, IngestError) as exc:
+        click.echo(f"✗ Ingest failed: {exc}", err=True)
+        sys.exit(1)
+    except Exception as exc:
+        click.echo(f"✗ Ingest failed: {exc}", err=True)
+        if ctx.obj.get("verbose"):
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+    click.echo(f"✓ {source.name}")
+    click.echo(f"  {result.output_path}")
+    click.echo(
+        f"  Version: {result.version} | ID: {result.interaction_id} | Review: {result.review_status}"
+    )
+    if result.degraded:
+        click.echo("  ⚠ analysis unavailable")
+
+
+@cli.command("ingest-email")
+@click.argument("source", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--client", default=None, help="Client name.")
+@click.option("--engagement", default=None, help="Engagement identifier.")
+@click.option("--title", default=None, help="Override note title.")
+@click.option("--target", type=click.Path(path_type=Path), default=None, help="Override output path or directory.")
+@click.option("--note", "-n", default=None, help="Version note.")
+@click.option("--as-new-entry", is_flag=True, default=False, help="Force a new entry instead of Message-ID continuation.")
+@click.pass_context
+def ingest_email_command(
+    ctx,
+    source: Path,
+    client: str,
+    engagement: str,
+    title: str,
+    target: Path,
+    note: str,
+    as_new_entry: bool,
+):
+    """Ingest a .eml file into a correspondence note."""
+    config = ctx.obj["config"]
+    try:
+        result = ingest_email(
+            config,
+            source_path=source,
+            client=client,
+            engagement=engagement,
+            title=title,
+            target=target,
+            note=note,
+            as_new_entry=as_new_entry,
+        )
+    except (FileNotFoundError, CorrespondenceIngestError) as exc:
+        click.echo(f"✗ Ingest failed: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"✓ {source.name}")
+    click.echo(f"  {result.output_path}")
+    status = "Skipped" if result.skipped else "Version"
+    click.echo(f"  {status}: {result.version} | ID: {result.correspondence_id} | Review: {result.review_status}")
+
+
+@cli.command("watch")
+@click.argument("directory", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--once", is_flag=True, default=False, help="Process current files once and exit.")
+@click.option("--dry-run", is_flag=True, default=False, help="Show routing without running pipelines or moving files.")
+@click.option("--quiet", is_flag=True, default=False, help="Suppress per-file success output.")
+@click.pass_context
+def watch_command(ctx, directory: Path, once: bool, dry_run: bool, quiet: bool):
+    """Watch a directory and route new files into Folio."""
+    config = ctx.obj["config"]
+    emit = click.echo
+    try:
+        if once:
+            run_watch_once(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+            return
+        run_watch_loop(config, directory, dry_run=dry_run, quiet=quiet, emit=emit)
+    except KeyboardInterrupt:
+        return
+"""Interaction ingestion orchestration."""
+
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from .config import FolioConfig
+from .correspondence import EMAIL_EXTENSIONS
+from .converter import _read_existing_frontmatter
+from .defaults import DefaultResolutionError, resolve_ingest_metadata
+from .llm.runtime import EndpointNotAllowedError
+from .naming import (
+    build_interaction_artifact_name,
+    build_interaction_id,
+    derive_engagement_short,
+    humanize_token,
+    sanitize_token,
+)
+from .output.frontmatter import (
+    generate_interaction,
+    resolve_interaction_preserved_metadata,
+)
+from .output.interaction_markdown import assemble_interaction
+from .pipeline.entity_resolution import resolve_interaction_entities
+from .pipeline.interaction_analysis import (
+    InteractionAnalysisResult,
+    analyze_interaction_text,
+    normalize_source_text,
+)
+from .pipeline.speaker_analytics import SpeakerStats, compute_speaker_stats
+from .pipeline.transcript_formats import (
+    TRANSCRIPT_FORMAT_EXTENSIONS,
+    normalize_transcript_text,
+)
+from .tracking.entities import EntityRegistry, EntityRegistryError
+from .tracking import registry, sources, versions
+from .tracking.registry import RegistryEntry
+
+SUPPORTED_INGEST_EXTENSIONS = frozenset({".md", ".txt"}) | TRANSCRIPT_FORMAT_EXTENSIONS | EMAIL_EXTENSIONS
+_SUPPORTED_EXTENSIONS_LABEL = ".txt, .md, .vtt, .srt, and .eml"
+_TARGET_REINGEST_ERROR = "Use --target <existing-note.md> to disambiguate."
+_TITLE_H1_RE = re.compile(r"(?m)^#\s+(.+?)\s*$")
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class IngestResult:
+    """Result payload for a completed ingest run."""
+
+    interaction_id: str
+    output_path: Path
+    version: int
+    review_status: str
+    llm_status: str
+
+    @property
+    def degraded(self) -> bool:
+        return self.llm_status != "executed"
+
+
+@dataclass
+class _ResolvedIdentity:
+    markdown_path: Optional[Path]
+    existing_frontmatter: Optional[dict]
+    target_dir_override: Optional[Path]
+    matched_entry: Optional[RegistryEntry]
+
+
+class IngestError(RuntimeError):
+    """Base ingest failure."""
+
+
+class IngestAmbiguityError(IngestError):
+    """Raised when re-ingest identity is ambiguous."""
+
+
+class IngestSubtypeMismatchError(IngestError):
+    """Raised when an existing interaction matches but subtype differs."""
+
+
+def ingest_source(
+    config: FolioConfig,
+    *,
+    source_path: Path,
+    subtype: str | None = None,
+    event_date: date | None = None,
+    client: Optional[str] = None,
+    engagement: Optional[str] = None,
+    participants: Optional[list[str]] = None,
+    duration_minutes: Optional[int] = None,
+    source_recording: Optional[Path] = None,
+    title: Optional[str] = None,
+    target: Optional[Path] = None,
+    llm_profile: Optional[str] = None,
+    note: Optional[str] = None,
+) -> IngestResult:
+    """Convert a transcript or notes file into an interaction note."""
+
+    source_path = Path(source_path).resolve()
+    if not source_path.exists():
+        raise FileNotFoundError(f"Source file not found: {source_path}")
+    source_extension = source_path.suffix.lower()
+    if source_extension not in SUPPORTED_INGEST_EXTENSIONS:
+        raise IngestError(
+            f"Unsupported source extension '{source_path.suffix}'. "
+            f"folio ingest supports {_SUPPORTED_EXTENSIONS_LABEL} transcript sources."
+        )
+    if source_extension in EMAIL_EXTENSIONS:
+        raise IngestError("Use ingest_email() or `folio ingest-email` for .eml sources.")
+    if duration_minutes is not None and duration_minutes <= 0:
+        raise IngestError("--duration-minutes must be a positive integer")
+    if source_recording is not None:
+        source_recording = Path(source_recording).resolve()
+        if not source_recording.exists():
+            raise FileNotFoundError(f"Source recording not found: {source_recording}")
+
+    try:
+        resolved_metadata = resolve_ingest_metadata(
+            config,
+            source_path=source_path,
+            client=client,
+            engagement=engagement,
+            subtype=subtype,
+            event_date=event_date,
+            participants=participants,
+            target=target,
+        )
+    except DefaultResolutionError as exc:
+        raise IngestError(str(exc)) from exc
+    client = resolved_metadata.client
+    engagement = resolved_metadata.engagement
+    subtype = resolved_metadata.subtype
+    event_date = resolved_metadata.event_date
+    participants = resolved_metadata.participants
+    target = resolved_metadata.target
+    if event_date > date.today():
+        raise IngestError(f"Event date cannot be in the future: {event_date.isoformat()}")
+
+    explicit_target_md, target_dir_override = _resolve_target(target)
+    library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
+    registry_data = _load_registry_data(library_root)
+
+    raw_source_text = source_path.read_text(encoding="utf-8-sig")
+    normalized_source_body = _normalize_ingest_source_text(
+        raw_source_text,
+        source_extension=source_extension,
+    )
+    speaker_stats = compute_speaker_stats(
+        normalized_source_body,
+        speaker_aliases=_load_speaker_aliases(entities_path),
+    )
+    source_hash = sources.compute_file_hash(source_path)
+
+    identity = _resolve_existing_identity(
+"""Registry: fast library index backed by registry.json."""
+
+import fcntl
+import json
+import logging
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+import yaml as yaml_lib
+
+from .sources import check_staleness, compute_file_hash
+
+logger = logging.getLogger(__name__)
+
+_SCHEMA_VERSION = 2
+
+
+def _str_or_none(value: object) -> str | None:
+    """Cast a value to ``str`` if non-None.
+
+    YAML parsers auto-coerce bare dates like ``2026-03-30`` to
+    ``datetime.date`` objects.  ``json.dumps`` cannot serialise those,
+    so all rebuilt frontmatter strings pass through this helper.
+    """
+    if value is None:
+        return None
+    return str(value)
+
+
+@dataclass
+class RegistryEntry:
+    """A single managed document in the registry.
+
+    Schema v2 generalizes the registry to support source-less managed
+    documents (e.g. context docs).  Source-backed fields are optional;
+    source-less rows leave them as ``None``.
+    """
+    id: str
+    title: str
+    markdown_path: str          # relative to library_root
+    deck_dir: str               # relative to library_root
+    source_relative_path: Optional[str] = None   # None for source-less docs
+    source_hash: Optional[str] = None             # None for source-less docs
+    version: Optional[int] = None                 # None for source-less docs
+    converted: Optional[str] = None               # None for source-less docs
+    source_type: Optional[str] = None
+    type: Optional[str] = None
+    subtype: Optional[str] = None                 # round-trip context subtypes
+    modified: Optional[str] = None
+    client: Optional[str] = None
+    engagement: Optional[str] = None
+    authority: Optional[str] = None
+    curation_level: Optional[str] = None
+    staleness_status: str = "current"  # current | stale | missing
+    # FR-700 reviewability
+    review_status: Optional[str] = None
+    review_flags: Optional[list[str]] = field(default=None)
+    extraction_confidence: Optional[float] = None
+    grounding_summary: Optional[dict] = field(default=None)
+    speaker_summary: Optional[dict] = field(default=None)
+    message_ids: Optional[list[str]] = field(default=None)
+
+    def to_dict(self) -> dict:
+        """Serialize to a dict suitable for JSON storage.
+
+        Review field semantics:
+        - ``None`` means the field has not been computed (legacy doc or LLM failure).
+        - ``[]`` / ``{}`` means the field was computed and is clean (no issues).
+        We preserve empty list/dict so downstream consumers can distinguish
+        "not computed" from "computed, clean".
+        """
+        d = {k: v for k, v in asdict(self).items() if v is not None}
+        # Preserve empty list / dict for review fields (FR-700)
+        if self.review_flags is not None:
+            d["review_flags"] = self.review_flags
+        if self.grounding_summary is not None:
+            d["grounding_summary"] = self.grounding_summary
+        if self.speaker_summary is not None:
+            d["speaker_summary"] = self.speaker_summary
+        if self.message_ids is not None:
+            d["message_ids"] = self.message_ids
+        return d
+
+
+def load_registry(registry_path: Path) -> dict:
+    """Load registry from JSON file.
+
+    Returns the full registry dict including ``_schema_version``,
+    ``updated_at``, and ``decks``.  Returns a fresh empty registry
+    if the file does not exist or is unreadable.
+    """
+    if not registry_path.exists():
+        return _empty_registry()
+    try:
+        data = json.loads(registry_path.read_text())
+        if not isinstance(data, dict):
+            logger.warning("Registry is not a dict — marking corrupt")
+            return _empty_registry(_corrupt=True)
+        # Ensure decks key exists and is a dict
+        if "decks" not in data:
+            data["decks"] = {}
+        if not isinstance(data["decks"], dict):
+            logger.warning("Registry 'decks' is not a dict — marking corrupt")
+            return _empty_registry(_corrupt=True)
+        return data
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load registry: %s — marking corrupt", e)
+        return _empty_registry(_corrupt=True)
+
+
+def save_registry(registry_path: Path, data: dict) -> None:
+    """Write registry atomically."""
+    data.pop("_corrupt", None)  # internal flag, not persisted
+    data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    data["_schema_version"] = _SCHEMA_VERSION
+    _atomic_write_json(registry_path, data)
+
+
+def upsert_entry(registry_path: Path, entry: RegistryEntry) -> None:
+    """Add or update a registry entry."""
+    data = load_registry(registry_path)
+    # M1: rebuild on corrupt to avoid clobbering the full index
+    if data.get("_corrupt"):
+        library_root = registry_path.parent
+        data = rebuild_registry(library_root)
+    data["decks"][entry.id] = entry.to_dict()
+    save_registry(registry_path, data)
+
+
+def remove_entry(registry_path: Path, deck_id: str) -> None:
+    """Remove a registry entry by ID."""
+    data = load_registry(registry_path)
+    data["decks"].pop(deck_id, None)
+    save_registry(registry_path, data)
+
+
+def rebuild_registry(library_root: Path) -> dict:
+    """Bootstrap a registry by walking existing markdown files.
+
+    Scans ``library_root`` for Folio markdown files and creates a registry
+    entry for each note carrying either:
+    - ``source`` + ``source_hash`` (evidence-style docs)
+    - ``source_transcript`` + ``source_hash`` (interaction docs)
+    - ``type: context`` / ``type: analysis`` for source-less managed docs
+    """
+    library_root = Path(library_root).resolve()
+    data = _empty_registry()
+
+    for md_file in sorted(library_root.rglob("*.md")):
+        fm = _read_frontmatter(md_file)
+        if fm is None:
+            continue
+
+        # Source-less managed documents (context + analysis)
+        if fm.get("type") in {"context", "analysis"} and "source" not in fm and "source_transcript" not in fm:
+            deck_id = fm.get("id", md_file.stem)
+            md_rel = str(md_file.relative_to(library_root)).replace("\\", "/")
+            deck_dir_rel = str(md_file.parent.relative_to(library_root)).replace("\\", "/")
+            if deck_dir_rel == ".":
+                deck_dir_rel = ""
+            entry = RegistryEntry(
+                id=deck_id,
+                title=str(fm.get("title", md_file.stem)),
+                markdown_path=md_rel,
+                deck_dir=deck_dir_rel,
+                type=_str_or_none(fm.get("type")) or "context",
+                subtype=_str_or_none(fm.get("subtype")),
+                modified=_str_or_none(fm.get("modified")),
+                client=_str_or_none(fm.get("client")),
+                engagement=_str_or_none(fm.get("engagement")),
+                authority=_str_or_none(fm.get("authority")),
+                curation_level=_str_or_none(fm.get("curation_level")),
+                staleness_status="current",
+                review_status=fm.get("review_status"),
+                review_flags=fm.get("review_flags"),
+                extraction_confidence=fm.get("extraction_confidence"),
+                grounding_summary=fm.get("grounding_summary"),
+                speaker_summary=fm.get("speaker_summary"),
+                message_ids=fm.get("message_ids"),
+            )
+            data["decks"][entry.id] = entry.to_dict()
+            continue
+
+        source_field = None
+        if "source" in fm:
+            source_field = "source"
+        elif "source_transcript" in fm:
+            source_field = "source_transcript"
+
+        # Must have a supported source tracking field to be a Folio document
+        if source_field is None or "source_hash" not in fm:
+            continue
+
+        deck_id = fm.get("id", md_file.stem)
+        md_rel = str(md_file.relative_to(library_root)).replace("\\", "/")
+        deck_dir_rel = str(md_file.parent.relative_to(library_root)).replace("\\", "/")
+        if deck_dir_rel == ".":
+            deck_dir_rel = ""
+
+        # Compute staleness
+        staleness = check_staleness(md_file, fm[source_field], fm["source_hash"])
+
+        entry = RegistryEntry(
+            id=deck_id,
+            title=fm.get("title", md_file.stem),
+            markdown_path=md_rel,
+            deck_dir=deck_dir_rel,
+            source_relative_path=fm[source_field],
+            source_hash=fm["source_hash"],
+            source_type=fm.get("source_type"),
+            version=fm.get("version", 1),
+            converted=fm.get("converted", ""),
+            type=fm.get("type", "evidence"),
+            subtype=fm.get("subtype"),
+            modified=fm.get("modified"),
+            client=fm.get("client"),
+            engagement=fm.get("engagement"),
+            authority=fm.get("authority"),
+            curation_level=fm.get("curation_level"),
+            staleness_status=staleness["status"],
+            review_status=fm.get("review_status"),
+            review_flags=fm.get("review_flags"),
+            extraction_confidence=fm.get("extraction_confidence"),
+            grounding_summary=fm.get("grounding_summary"),
+            speaker_summary=fm.get("speaker_summary"),
+            message_ids=fm.get("message_ids"),
+        )
+        data["decks"][entry.id] = entry.to_dict()
+
+    data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    logger.info("Registry bootstrapped: %d entries", len(data["decks"]))
+    return data
+
+
+def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
+    """Reconcile registry entries against their actual markdown frontmatter.
+
+    Updates registry fields that are frontmatter-authoritative
+
+2026-05-12T22:04:08.704649Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:08.704885Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:08.706677Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:08.706710Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '240,420p' folio/tracking/registry.py" in /Users/jonathanoh/workspaces/folio.love
+exec
+/bin/zsh -lc 'rg -n "def entry_from_dict|message_ids|reconcile_from_frontmatter" folio/tracking/registry.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+63:    message_ids: Optional[list[str]] = field(default=None)
+82:        if self.message_ids is not None:
+83:            d["message_ids"] = self.message_ids
+181:                message_ids=fm.get("message_ids"),
+228:            message_ids=fm.get("message_ids"),
+237:def reconcile_from_frontmatter(library_root: Path, data: dict) -> dict:
+337:def entry_from_dict(d: dict) -> RegistryEntry:
+
+ succeeded in 0ms:
+    Updates registry fields that are frontmatter-authoritative
+    (title, type, client, engagement, authority, curation_level,
+    review_status, review_flags) so the registry stays consistent
+    after manual edits.
+    """
+    library_root = Path(library_root).resolve()
+    changed = 0
+    for deck_id, entry_data in list(data.get("decks", {}).items()):
+        md_rel = entry_data.get("markdown_path", "")
+        md_path = library_root / md_rel
+        if not md_path.exists():
+            continue
+        fm = _read_frontmatter(md_path)
+        if fm is None:
+            continue
+        # Reconcile frontmatter-authoritative fields
+        # review_status and review_flags are frontmatter-authoritative so
+        # manual edits (e.g. setting review_status: reviewed) are respected.
+        #
+        # NOT reconciled (converter-authoritative, recomputed on each conversion):
+        # - extraction_confidence: derived from evidence by assess_review_state()
+        # - grounding_summary: derived from evidence by _compute_grounding_summary()
+        # These are intentionally excluded; the registry retains the last-computed
+        # values and frontmatter is the source of truth only after re-conversion.
+        authoritative = [
+            "title", "type", "subtype", "client", "engagement", "authority",
+            "curation_level", "review_status", "review_flags",
+        ]
+        for field_name in authoritative:
+            if field_name in fm:
+                fm_val = fm[field_name]
+                reg_val = entry_data.get(field_name)
+                if fm_val != reg_val:
+                    entry_data[field_name] = fm_val
+                    changed += 1
+            else:
+                # Key absent from frontmatter = explicit deletion
+                if entry_data.get(field_name) is not None:
+                    entry_data[field_name] = None
+                    changed += 1
+        source_field = None
+        if "source_transcript" in fm:
+            source_field = "source_transcript"
+        elif "source" in fm:
+            source_field = "source"
+        if source_field is not None:
+            source_val = fm.get(source_field)
+            if source_val != entry_data.get("source_relative_path"):
+                entry_data["source_relative_path"] = source_val
+                changed += 1
+        # Also reconcile the ID if frontmatter has one
+        fm_id = fm.get("id")
+        if fm_id and fm_id != deck_id:
+            data["decks"][fm_id] = entry_data
+            entry_data["id"] = fm_id
+            del data["decks"][deck_id]
+            changed += 1
+    if changed:
+        logger.info("Registry reconciled: %d field(s) updated from frontmatter", changed)
+    return data
+
+
+def resolve_entry_source(library_root: Path, entry: RegistryEntry) -> Path:
+    """Resolve the absolute source path for a source-backed registry entry.
+
+    Raises ``ValueError`` for source-less entries (e.g. context docs).
+    Callers must check ``entry.source_relative_path is not None`` first.
+    """
+    if entry.source_relative_path is None:
+        raise ValueError(f"Entry {entry.id} has no source path (source-less document)")
+    library_root = Path(library_root).resolve()
+    md_path = library_root / entry.markdown_path
+    md_dir = md_path.parent
+    return (md_dir / entry.source_relative_path).resolve()
+
+
+def refresh_entry_status(library_root: Path, entry: RegistryEntry) -> RegistryEntry:
+    """Recompute staleness_status for a registry entry.
+
+    Source-less managed docs use file-presence-only staleness.
+    Source-backed entries use source-hash comparison.
+    Mutates ``entry.staleness_status`` in-place and returns the
+    same entry for convenience.
+    """
+    library_root = Path(library_root).resolve()
+    md_path = library_root / entry.markdown_path
+
+    # Source-less managed docs: file-presence-only staleness
+    if entry.source_relative_path is None:
+        entry.staleness_status = "current" if md_path.exists() else "missing"
+        return entry
+
+    result = check_staleness(md_path, entry.source_relative_path, entry.source_hash)
+    entry.staleness_status = result["status"]
+    return entry
+
+
+def entry_from_dict(d: dict) -> RegistryEntry:
+    """Construct a RegistryEntry from a registry dict entry.
+
+    Ignores unknown keys for forward compatibility.
+    Schema v1 rows (missing subtype, optional source fields) are
+    loaded transparently thanks to dataclass defaults.
+    """
+    known_fields = {f.name for f in RegistryEntry.__dataclass_fields__.values()}
+    filtered = {k: v for k, v in d.items() if k in known_fields}
+    if "type" not in filtered:
+        filtered["type"] = _infer_missing_entry_type(d)
+    return RegistryEntry(**filtered)
+
+
+def _infer_missing_entry_type(d: dict) -> str:
+    """Infer a missing registry entry type from the stored row shape."""
+    if d.get("source_transcript"):
+        return "interaction"
+    if _looks_like_legacy_interaction_entry(d):
+        return "interaction"
+    return "evidence"
+
+
+def _looks_like_legacy_interaction_entry(d: dict) -> bool:
+    """Return True when the stored row shape looks like a legacy interaction."""
+    source_type = d.get("source_type")
+    if source_type is not None:
+        return False
+
+    for field_name in ("markdown_path", "deck_dir"):
+        if _path_has_segment(d.get(field_name), "interactions"):
+            return True
+
+    source_relative_path = d.get("source_relative_path")
+    if isinstance(source_relative_path, str):
+        path = Path(source_relative_path)
+        lowered_parts = {part.lower() for part in path.parts}
+        if "transcript" in lowered_parts or "transcripts" in lowered_parts:
+            return True
+
+    return False
+
+
+def _path_has_segment(value: object, segment: str) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return segment.lower() in {part.lower() for part in Path(value).parts}
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _empty_registry(_corrupt: bool = False) -> dict:
+    d = {
+        "_schema_version": _SCHEMA_VERSION,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "decks": {},
+    }
+    if _corrupt:
+        d["_corrupt"] = True
+    return d
+
+
+def _atomic_write_json(path: Path, data: dict) -> None:
+    """Write JSON atomically with file locking.
+
+    Uses an advisory lock (``.lock`` file) to prevent concurrent writers
+    from racing, and cleans up the temp file on write failures
+    (disk-full, read-only filesystem, etc.).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(".lock")
+    tmp_path = path.with_suffix(".tmp")
+
+    try:
+        lock_fd = open(lock_path, "w")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        try:
+            tmp_path.write_text(json.dumps(data, indent=2))
+            tmp_path.rename(path)
+        except OSError as e:
+            # Clean up orphan temp file on disk-full / read-only
+            try:
+
+exec
+/bin/zsh -lc "rg -n \"email_thread|\\.eml|Use ingest_email|SUPPORTED_INGEST_EXTENSIONS\" folio/ingest.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+44:SUPPORTED_INGEST_EXTENSIONS = frozenset({".md", ".txt"}) | TRANSCRIPT_FORMAT_EXTENSIONS | EMAIL_EXTENSIONS
+45:_SUPPORTED_EXTENSIONS_LABEL = ".txt, .md, .vtt, .srt, and .eml"
+108:    if source_extension not in SUPPORTED_INGEST_EXTENSIONS:
+114:        raise IngestError("Use ingest_email() or `folio ingest-email` for .eml sources.")
+
+exec
+/bin/zsh -lc 'rg -n "message_ids|attachments|external_thread|as-new-entry|email_thread|ingest-email" tests/test_correspondence_ingest.py tests/test_cli_correspondence.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+tests/test_cli_correspondence.py:33:        ["--config", str(config_path), "ingest-email", str(source), "--client", "ClientA"],
+tests/test_cli_correspondence.py:56:            "email_thread",
+tests/test_cli_correspondence.py:81:            "email_thread",
+tests/test_correspondence_ingest.py:47:def test_parse_eml_extracts_headers_message_ids_body_and_attachments(tmp_path):
+tests/test_correspondence_ingest.py:56:    assert thread.message_ids == ["<msg-1@example.com>"]
+tests/test_correspondence_ingest.py:57:    assert thread.attachments[0].filename == "SOW_v9.docx"
+tests/test_correspondence_ingest.py:76:    assert fm["subtype"] == "email_thread"
+tests/test_correspondence_ingest.py:79:    assert fm["message_ids"] == ["<msg-1@example.com>"]
+tests/test_correspondence_ingest.py:81:    assert fm["external_thread"] is True
+tests/test_correspondence_ingest.py:87:    assert entry["message_ids"] == ["<msg-1@example.com>"]
+tests/test_correspondence_ingest.py:109:    assert fm["message_ids"] == ["<msg-1@example.com>", "<msg-2@example.com>"]
+
+2026-05-12T22:04:13.473129Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:13.473371Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:13.475131Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:13.475160Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "rg -n \"def _split_csv_values|_split_csv_values\" folio/cli.py && sed -n '1,80p' folio/cli.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+230:def _split_csv_values(value: Optional[str]) -> list[str] | None:
+504:    participant_list = _split_csv_values(participants)
+"""CLI interface for Folio."""
+
+import hashlib
+import json
+import logging
+import os
+import re
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+import click
+
+from .config import FolioConfig
+from .converter import DOCUMENT_EXTENSIONS, FolioConverter, PPTX_EXTENSIONS
+from .correspondence import CorrespondenceIngestError, ingest_email
+from .ingest import (
+    SUPPORTED_INGEST_EXTENSIONS,
+    IngestAmbiguityError,
+    IngestError,
+    IngestSubtypeMismatchError,
+    ingest_source,
+)
+from .pipeline.images import ImageExtractionError
+from .llm.runtime import EndpointNotAllowedError
+from .watch import run_watch_loop, run_watch_once
+
+logger = logging.getLogger(__name__)
+
+
+class ScopeOrCommandGroup(click.Group):
+    """Click group that accepts either a subcommand or a bare scope argument.
+
+    v1.2 extension (folio-enrich-diagnose CB-2 closure): handles BOTH
+    bare-positional-first (`folio enrich ClientA`) AND option-before-scope
+    (`folio enrich --dry-run ClientA`) forms by walking args, recognizing
+    Click option-with-value pairs, and rewriting the FIRST non-option,
+    non-subcommand token as `--scope X` regardless of position.
+
+    v1.3 extension (folio-enrich-diagnose CB-2 final closure): once a
+    registered subcommand token is encountered, the parser passes the
+    subcommand token AND all remaining tokens verbatim — no further
+    `--scope` rewrites. Prevents subcommand positional args from being
+    rewritten to group-level `--scope`.
+    """
+
+    def parse_args(self, ctx, args):
+        # Determine which group-level options take a value (so their value
+        # token is not mistaken for a positional scope).
+        value_taking_short = set()
+        value_taking_long = set()
+        for param in self.params:
+            if isinstance(param, click.Option) and not param.is_flag and not param.count:
+                for opt in param.opts:
+                    if opt.startswith("--"):
+                        value_taking_long.add(opt)
+                    elif opt.startswith("-"):
+                        value_taking_short.add(opt)
+
+        new_args: list[str] = []
+        rewrote = False
+        skip_next = False
+        saw_subcommand = False
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if saw_subcommand:
+                # v1.3 closure: pass subcommand args verbatim (do NOT rewrite
+                # the subcommand's positional scope to group-level --scope).
+                new_args.extend(args[i:])
+                break
+            if skip_next:
+                new_args.append(arg)
+                skip_next = False
+                i += 1
+                continue
+
+2026-05-12T22:04:18.598264Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:18.598497Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:18.600272Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:18.600301Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '220,245p' folio/cli.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while True:
+            chunk = fh.read(_HASH_CHUNK_SIZE)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _split_csv_values(value: Optional[str]) -> list[str] | None:
+    """Split a comma-separated option into a trimmed, deduplicated list."""
+    if not value:
+        return None
+
+    values: list[str] = []
+    seen: set[str] = set()
+    for raw in value.split(","):
+        cleaned = raw.strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(cleaned)
+
+2026-05-12T22:04:20.274547Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:20.274855Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:20.276855Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:20.276887Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '245,260p' folio/cli.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+        values.append(cleaned)
+    return values or None
+
+
+# AppleScript error codes are 4-digit negative numbers following "error number"
+# or "error (" patterns.  We anchor to these patterns to avoid false matches
+# on arbitrary negative numbers in unrelated error messages.
+_APPLESCRIPT_ERROR_RE = re.compile(r"error\s+(?:number\s+)?(-\d{4,})")
+
+
+def _configure_logging(verbose: bool) -> None:
+    """Configure CLI logging without adding new user-facing flags."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(message)s" if not verbose else "%(name)s: %(message)s",
+
+2026-05-12T22:04:21.863554Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:21.863796Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:21.865583Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:21.865612Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc 'rg -n "def compute_source_info|class SourceInfo|relative_path" folio/tracking/sources.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+14:class SourceInfo:
+17:    relative_path: str  # Relative to markdown file, forward slashes
+24:def compute_source_info(
+40:    relative = _compute_relative_path(source_path, markdown_dir)
+45:        relative_path=relative,
+69:    stored_relative_path: str,
+76:        stored_relative_path: Relative path from frontmatter.
+82:    source_path = resolve_source_path(markdown_path, stored_relative_path)
+99:def resolve_source_path(markdown_path: Path, relative_path: str) -> Path:
+104:        relative_path: Relative path stored in frontmatter.
+110:    # relative_path uses forward slashes; Path handles conversion
+111:    resolved = (markdown_dir / relative_path).resolve()
+115:def _compute_relative_path(source_path: Path, from_dir: Path) -> str:
+
+exec
+/bin/zsh -lc 'rg -n "def compute_version|version_history|slide_count|new_texts" folio/tracking/versions.py' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+67:    slide_count: int
+77:            "slide_count": self.slide_count,
+84:    new_texts: dict[int, SlideTextLike],
+100:        new_texts: Current version's slide texts {slide_num: str or SlideText}.
+106:    new_slides = set(new_texts.keys())
+117:        new_text = _normalize_text(_to_str(new_texts[slide_num]))
+141:def compute_version(
+145:    slide_count: int,
+146:    new_texts: dict[int, SlideTextLike],
+152:        deck_dir: Directory for this deck (contains version_history.json).
+155:        slide_count: Number of tracked content units.
+156:        new_texts: Current tracked texts (str or SlideText values). Callers
+164:    history_path = deck_dir / "version_history.json"
+171:    changes = detect_changes(old_texts, new_texts)
+174:    history = load_version_history(history_path, strict=True)
+182:                added=sorted(new_texts.keys()),
+196:        slide_count=slide_count,
+204:    save_texts_cache(cache_path, new_texts)
+206:        save_version_history(history_path, history)
+219:def load_version_history(history_path: Path, strict: bool = False) -> list[dict]:
+283:def save_version_history(history_path: Path, versions: list[dict]):
+366:    if version_history.json can't be written, the next conversion would start
+380:    """Append a promotion event to version_history.json.
+392:                    "Corrupt version_history.json (not a dict) backed up to %s",
+403:                "Corrupt version_history.json backed up to %s: %s", backup, exc,
+
+2026-05-12T22:04:34.734387Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:34.734644Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:34.736576Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:34.736608Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '1,135p' folio/tracking/sources.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+"""Source file tracking: relative paths, hashing, staleness detection."""
+
+import hashlib
+import logging
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SourceInfo:
+    """Metadata about a source file."""
+    absolute_path: Path
+    relative_path: str  # Relative to markdown file, forward slashes
+    file_hash: str      # SHA256, first 12 chars
+    exists: bool
+    file_name: str
+    file_size: int
+
+
+def compute_source_info(
+    source_path: Path,
+    markdown_path: Path,
+) -> SourceInfo:
+    """Compute source tracking metadata.
+
+    Args:
+        source_path: Absolute path to the source file.
+        markdown_path: Path where the markdown file will be written.
+
+    Returns:
+        SourceInfo with relative path, hash, and existence check.
+    """
+    source_path = Path(source_path).resolve()
+    markdown_dir = Path(markdown_path).resolve().parent
+
+    relative = _compute_relative_path(source_path, markdown_dir)
+    file_hash = compute_file_hash(source_path)
+
+    return SourceInfo(
+        absolute_path=source_path,
+        relative_path=relative,
+        file_hash=file_hash,
+        exists=source_path.exists(),
+        file_name=source_path.name,
+        file_size=source_path.stat().st_size if source_path.exists() else 0,
+    )
+
+
+def compute_file_hash(file_path: Path) -> str:
+    """Compute SHA256 hash of a file, returning first 12 hex chars.
+
+    12 hex chars = 48 bits, giving ~1-in-280-trillion collision probability
+    for realistic deck counts (<10,000). Sufficient for staleness detection;
+    not intended as a cryptographic identifier.
+    """
+    sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()[:12]
+
+
+def check_staleness(
+    markdown_path: Path,
+    stored_relative_path: str,
+    stored_hash: str,
+) -> dict:
+    """Check if the source file has changed since conversion.
+
+    Args:
+        markdown_path: Path to the markdown file.
+        stored_relative_path: Relative path from frontmatter.
+        stored_hash: Hash from frontmatter.
+
+    Returns:
+        Dict with 'status' ('current', 'stale', or 'missing') and details.
+    """
+    source_path = resolve_source_path(markdown_path, stored_relative_path)
+
+    if not source_path.exists():
+        return {"status": "missing", "source_path": str(source_path)}
+
+    current_hash = compute_file_hash(source_path)
+
+    if current_hash != stored_hash:
+        return {
+            "status": "stale",
+            "stored_hash": stored_hash,
+            "current_hash": current_hash,
+        }
+
+    return {"status": "current"}
+
+
+def resolve_source_path(markdown_path: Path, relative_path: str) -> Path:
+    """Resolve a relative source path from a markdown file location.
+
+    Args:
+        markdown_path: Path to the markdown file.
+        relative_path: Relative path stored in frontmatter.
+
+    Returns:
+        Resolved absolute path to the source file.
+    """
+    markdown_dir = Path(markdown_path).resolve().parent
+    # relative_path uses forward slashes; Path handles conversion
+    resolved = (markdown_dir / relative_path).resolve()
+    return resolved
+
+
+def _compute_relative_path(source_path: Path, from_dir: Path) -> str:
+    """Compute relative path from a directory to a file, using forward slashes."""
+    rel = os.path.relpath(str(source_path), str(from_dir))
+    # Normalize to forward slashes for cross-platform portability
+    return rel.replace("\\", "/")
+
+exec
+/bin/zsh -lc "sed -n '135,220p' folio/tracking/versions.py" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    else:
+        logger.info("No changes detected across %d slides", len(unchanged))
+
+    return changes
+
+
+def compute_version(
+    deck_dir: Path,
+    source_hash: str,
+    source_path: str,
+    slide_count: int,
+    new_texts: dict[int, SlideTextLike],
+    note: Optional[str] = None,
+) -> VersionInfo:
+    """Compute version info for a conversion, including change detection.
+
+    Args:
+        deck_dir: Directory for this deck (contains version_history.json).
+        source_hash: Current source file hash.
+        source_path: Relative path to source.
+        slide_count: Number of tracked content units.
+        new_texts: Current tracked texts (str or SlideText values). Callers
+            may provide a synthetic single-unit map such as
+            ``{1: normalized_source_body}`` for non-slide documents.
+        note: Optional version note.
+
+    Returns:
+        VersionInfo for this conversion.
+    """
+    history_path = deck_dir / "version_history.json"
+    cache_path = deck_dir / ".texts_cache.json"
+
+    # Load previous texts for change detection
+    old_texts = load_texts_cache(cache_path)
+
+    # Detect changes
+    changes = detect_changes(old_texts, new_texts)
+
+    # Determine version number
+    history = load_version_history(history_path, strict=True)
+    if history:
+        version_num = history[-1]["version"] + 1
+    else:
+        version_num = 1
+        # First version: all slides are "added"
+        if not changes.has_changes:
+            changes = ChangeSet(
+                added=sorted(new_texts.keys()),
+                removed=[],
+                modified=[],
+                unchanged=[],
+            )
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    version_info = VersionInfo(
+        version=version_num,
+        timestamp=timestamp,
+        source_hash=source_hash,
+        source_path=source_path,
+        note=note,
+        slide_count=slide_count,
+        changes=changes,
+    )
+
+    # Persist with rollback: if history write fails after cache write,
+    # restore the previous texts cache before re-raising.
+    history.append(version_info.to_dict())
+    had_cache = cache_path.exists()
+    save_texts_cache(cache_path, new_texts)
+    try:
+        save_version_history(history_path, history)
+    except OSError as err:
+        try:
+            _restore_texts_cache(cache_path, old_texts, had_cache=had_cache)
+        except OSError as rollback_err:
+            raise OSError(
+                f"{err}; rollback of texts cache also failed: {rollback_err}"
+            ) from rollback_err
+        raise
+
+    return version_info
+
+
+def load_version_history(history_path: Path, strict: bool = False) -> list[dict]:
+    """Load version history from JSON file.
+
+2026-05-12T22:04:37.949479Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:37.949731Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:37.951750Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:37.951788Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+The correspondence path preserves explicit CLI date and participant values before handing metadata into defaults, stores Message-IDs in frontmatter and registry, and routes `.eml` through the CLI without dropping into the transcript ingest path. Next I’m running exactly the orchestrator’s focused pytest command.
+  ✓ Read D.3/D.4 evidence and manifest scope
+  ✓ Inspect implementation and focused tests
+  → Run focused validation command
+  • Write D.5 verifier artifact
+2026-05-12T22:04:42.046568Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:42.046972Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:42.049829Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:42.049871Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc './.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q' in /Users/jonathanoh/workspaces/folio.love
+2026-05-12T22:04:44.122063Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:44.122282Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:44.123916Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:44.123942Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+ succeeded in 305ms:
+.......                                                                  [100%]
+7 passed in 0.11s
+
+codex
+The focused validation passed: `7 passed in 0.11s`. I don’t see a release-blocking mismatch in the named slice, so I’m writing an approve artifact with the direct-run evidence and static verification notes.
+  ✓ Read D.3/D.4 evidence and manifest scope
+  ✓ Inspect implementation and focused tests
+  ✓ Run focused validation command
+  → Write D.5 verifier artifact
+2026-05-12T22:04:47.891146Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:47.891542Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:47.894614Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:47.894674Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "test -d docs/validation/strict_p3_rerun_2026_05_12/review-board && ls docs/validation/strict_p3_rerun_2026_05_12/review-board | rg 'folio-correspondence-ingest-v1-3-0-D\\.5|"'^$'"'" in /Users/jonathanoh/workspaces/folio.love
+ exited 1 in 0ms:
+2026-05-12T22:04:52.854631Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:52.854895Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:52.856842Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:52.856884Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc 'ls -ld docs/validation/strict_p3_rerun_2026_05_12/review-board' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+drwxr-xr-x@ 87 jonathanoh  staff  2784 May 12 15:03 docs/validation/strict_p3_rerun_2026_05_12/review-board
+
+2026-05-12T22:04:54.971189Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:04:54.971553Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:04:54.974098Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:04:54.974141Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+apply patch
+patch: completed
+/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..f69ce1b3757106b0c938f181a6a7cebc2581f367
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+@@ -0,0 +1,39 @@
++---
++deliverable_id: folio-correspondence-ingest-v1-3-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex External Verification
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified D.3 and D.4 for `folio-correspondence-ingest-v1-3-0` against the named implementation and focused tests only. I did not run Ontos and did not run a broad suite.
++
++## Evidence
++
++Direct focused validation command:
++
++```bash
++./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
++```
++
++Result: exit code 0, `7 passed in 0.11s`.
++
++Static inspection confirmed the D.3/D.4 claims are represented in implementation:
++
++- `folio/correspondence.py` provides native `.eml` parsing through `parse_eml`, including RFC 5322 headers, message ID extraction from `Message-ID`, `In-Reply-To`, and `References`, body extraction from plain text or HTML, attachment filename/type/size/hash metadata, and correspondence markdown/frontmatter generation.
++- `folio/correspondence.py` implements Message-ID overlap continuation in `ingest_email`, merges prior and new IDs, increments version history on matched correspondence entries, and honors `as_new_entry` by bypassing overlap matching.
++- `folio/cli.py` exposes `ingest-email` and routes `folio ingest --type email_thread` or `.eml` sources into `ingest_email`, while preserving explicit CLI date and participant precedence for the email route.
++- `folio/ingest.py` includes `.eml` in supported extension messaging but prevents transcript ingest from processing `.eml` directly, keeping the correspondence route authoritative.
++- `folio/tracking/registry.py` carries `message_ids` through `RegistryEntry`, serialization, registry rebuild, and entry loading.
++
++The focused tests cover header/body/attachment parsing, correspondence frontmatter and registry metadata, Message-ID continuation to version 2, `--as-new-entry`, the dedicated CLI command, generic ingest email routing, and CLI date/participants precedence. I found no remaining release issue in this slice.
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..f69ce1b3757106b0c938f181a6a7cebc2581f367
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+@@ -0,0 +1,39 @@
++---
++deliverable_id: folio-correspondence-ingest-v1-3-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex External Verification
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified D.3 and D.4 for `folio-correspondence-ingest-v1-3-0` against the named implementation and focused tests only. I did not run Ontos and did not run a broad suite.
++
++## Evidence
++
++Direct focused validation command:
++
++```bash
++./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
++```
++
++Result: exit code 0, `7 passed in 0.11s`.
++
++Static inspection confirmed the D.3/D.4 claims are represented in implementation:
++
++- `folio/correspondence.py` provides native `.eml` parsing through `parse_eml`, including RFC 5322 headers, message ID extraction from `Message-ID`, `In-Reply-To`, and `References`, body extraction from plain text or HTML, attachment filename/type/size/hash metadata, and correspondence markdown/frontmatter generation.
++- `folio/correspondence.py` implements Message-ID overlap continuation in `ingest_email`, merges prior and new IDs, increments version history on matched correspondence entries, and honors `as_new_entry` by bypassing overlap matching.
++- `folio/cli.py` exposes `ingest-email` and routes `folio ingest --type email_thread` or `.eml` sources into `ingest_email`, while preserving explicit CLI date and participant precedence for the email route.
++- `folio/ingest.py` includes `.eml` in supported extension messaging but prevents transcript ingest from processing `.eml` directly, keeping the correspondence route authoritative.
++- `folio/tracking/registry.py` carries `message_ids` through `RegistryEntry`, serialization, registry rebuild, and entry loading.
++
++The focused tests cover header/body/attachment parsing, correspondence frontmatter and registry metadata, Message-ID continuation to version 2, `--as-new-entry`, the dedicated CLI command, generic ingest email routing, and CLI date/participants precedence. I found no remaining release issue in this slice.
+
+2026-05-12T22:05:10.302026Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:05:10.304013Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:05:10.321971Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:05:10.322141Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '1,120p' docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md" in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+---
+deliverable_id: folio-correspondence-ingest-v1-3-0
+phase: D.5
+role: verifier
+family: codex
+status: completed
+evidence_labels_used:
+  - direct-run
+---
+
+# D.5 Codex External Verification
+
+## Verdict
+
+approve
+
+## Scope
+
+Verified D.3 and D.4 for `folio-correspondence-ingest-v1-3-0` against the named implementation and focused tests only. I did not run Ontos and did not run a broad suite.
+
+## Evidence
+
+Direct focused validation command:
+
+```bash
+./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
+```
+
+Result: exit code 0, `7 passed in 0.11s`.
+
+Static inspection confirmed the D.3/D.4 claims are represented in implementation:
+
+- `folio/correspondence.py` provides native `.eml` parsing through `parse_eml`, including RFC 5322 headers, message ID extraction from `Message-ID`, `In-Reply-To`, and `References`, body extraction from plain text or HTML, attachment filename/type/size/hash metadata, and correspondence markdown/frontmatter generation.
+- `folio/correspondence.py` implements Message-ID overlap continuation in `ingest_email`, merges prior and new IDs, increments version history on matched correspondence entries, and honors `as_new_entry` by bypassing overlap matching.
+- `folio/cli.py` exposes `ingest-email` and routes `folio ingest --type email_thread` or `.eml` sources into `ingest_email`, while preserving explicit CLI date and participant precedence for the email route.
+- `folio/ingest.py` includes `.eml` in supported extension messaging but prevents transcript ingest from processing `.eml` directly, keeping the correspondence route authoritative.
+- `folio/tracking/registry.py` carries `message_ids` through `RegistryEntry`, serialization, registry rebuild, and entry loading.
+
+The focused tests cover header/body/attachment parsing, correspondence frontmatter and registry metadata, Message-ID continuation to version 2, `--as-new-entry`, the dedicated CLI command, generic ingest email routing, and CLI date/participants precedence. I found no remaining release issue in this slice.
+
+exec
+/bin/zsh -lc 'wc -c docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+    2063 docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+
+exec
+/bin/zsh -lc 'git status --short docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md' in /Users/jonathanoh/workspaces/folio.love
+ succeeded in 0ms:
+?? docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..f69ce1b3757106b0c938f181a6a7cebc2581f367
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+@@ -0,0 +1,39 @@
++---
++deliverable_id: folio-correspondence-ingest-v1-3-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex External Verification
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified D.3 and D.4 for `folio-correspondence-ingest-v1-3-0` against the named implementation and focused tests only. I did not run Ontos and did not run a broad suite.
++
++## Evidence
++
++Direct focused validation command:
++
++```bash
++./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
++```
++
++Result: exit code 0, `7 passed in 0.11s`.
++
++Static inspection confirmed the D.3/D.4 claims are represented in implementation:
++
++- `folio/correspondence.py` provides native `.eml` parsing through `parse_eml`, including RFC 5322 headers, message ID extraction from `Message-ID`, `In-Reply-To`, and `References`, body extraction from plain text or HTML, attachment filename/type/size/hash metadata, and correspondence markdown/frontmatter generation.
++- `folio/correspondence.py` implements Message-ID overlap continuation in `ingest_email`, merges prior and new IDs, increments version history on matched correspondence entries, and honors `as_new_entry` by bypassing overlap matching.
++- `folio/cli.py` exposes `ingest-email` and routes `folio ingest --type email_thread` or `.eml` sources into `ingest_email`, while preserving explicit CLI date and participant precedence for the email route.
++- `folio/ingest.py` includes `.eml` in supported extension messaging but prevents transcript ingest from processing `.eml` directly, keeping the correspondence route authoritative.
++- `folio/tracking/registry.py` carries `message_ids` through `RegistryEntry`, serialization, registry rebuild, and entry loading.
++
++The focused tests cover header/body/attachment parsing, correspondence frontmatter and registry metadata, Message-ID continuation to version 2, `--as-new-entry`, the dedicated CLI command, generic ingest email routing, and CLI date/participants precedence. I found no remaining release issue in this slice.
+
+2026-05-12T22:05:15.654492Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:05:15.654773Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:05:15.656943Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:05:15.656983Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+  ✓ Read D.3/D.4 evidence and manifest scope
+  ✓ Inspect implementation and focused tests
+  ✓ Run focused validation command
+  ✓ Write D.5 verifier artifact
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..f69ce1b3757106b0c938f181a6a7cebc2581f367
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+@@ -0,0 +1,39 @@
++---
++deliverable_id: folio-correspondence-ingest-v1-3-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex External Verification
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified D.3 and D.4 for `folio-correspondence-ingest-v1-3-0` against the named implementation and focused tests only. I did not run Ontos and did not run a broad suite.
++
++## Evidence
++
++Direct focused validation command:
++
++```bash
++./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
++```
++
++Result: exit code 0, `7 passed in 0.11s`.
++
++Static inspection confirmed the D.3/D.4 claims are represented in implementation:
++
++- `folio/correspondence.py` provides native `.eml` parsing through `parse_eml`, including RFC 5322 headers, message ID extraction from `Message-ID`, `In-Reply-To`, and `References`, body extraction from plain text or HTML, attachment filename/type/size/hash metadata, and correspondence markdown/frontmatter generation.
++- `folio/correspondence.py` implements Message-ID overlap continuation in `ingest_email`, merges prior and new IDs, increments version history on matched correspondence entries, and honors `as_new_entry` by bypassing overlap matching.
++- `folio/cli.py` exposes `ingest-email` and routes `folio ingest --type email_thread` or `.eml` sources into `ingest_email`, while preserving explicit CLI date and participant precedence for the email route.
++- `folio/ingest.py` includes `.eml` in supported extension messaging but prevents transcript ingest from processing `.eml` directly, keeping the correspondence route authoritative.
++- `folio/tracking/registry.py` carries `message_ids` through `RegistryEntry`, serialization, registry rebuild, and entry loading.
++
++The focused tests cover header/body/attachment parsing, correspondence frontmatter and registry metadata, Message-ID continuation to version 2, `--as-new-entry`, the dedicated CLI command, generic ingest email routing, and CLI date/participants precedence. I found no remaining release issue in this slice.
+
+2026-05-12T22:05:18.512138Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-05-12T22:05:18.512442Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-05-12T22:05:18.514749Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/twilio-developer-kit/.codex-plugin/plugin.json
+2026-05-12T22:05:18.514786Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/jonathanoh/.codex/.tmp/plugins/plugins/openai-developers/.codex-plugin/plugin.json
+codex
+Done. Wrote the D.5 verifier artifact at [folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md](/Users/jonathanoh/workspaces/folio.love/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md:1).
+
+Verdict: `approve`.
+
+Validation run: `./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q`
+
+Result: `7 passed in 0.11s`.
+
+I did not run Ontos, did not run a broad suite, and did not edit any other repository file.
+diff --git a/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..f69ce1b3757106b0c938f181a6a7cebc2581f367
+--- /dev/null
++++ b/docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-correspondence-ingest-v1-3-0-D.5-codex-verifier.md
+@@ -0,0 +1,39 @@
++---
++deliverable_id: folio-correspondence-ingest-v1-3-0
++phase: D.5
++role: verifier
++family: codex
++status: completed
++evidence_labels_used:
++  - direct-run
++---
++
++# D.5 Codex External Verification
++
++## Verdict
++
++approve
++
++## Scope
++
++Verified D.3 and D.4 for `folio-correspondence-ingest-v1-3-0` against the named implementation and focused tests only. I did not run Ontos and did not run a broad suite.
++
++## Evidence
++
++Direct focused validation command:
++
++```bash
++./.venv/bin/python -m pytest tests/test_correspondence_ingest.py tests/test_cli_correspondence.py -q
++```
++
++Result: exit code 0, `7 passed in 0.11s`.
++
++Static inspection confirmed the D.3/D.4 claims are represented in implementation:
++
++- `folio/correspondence.py` provides native `.eml` parsing through `parse_eml`, including RFC 5322 headers, message ID extraction from `Message-ID`, `In-Reply-To`, and `References`, body extraction from plain text or HTML, attachment filename/type/size/hash metadata, and correspondence markdown/frontmatter generation.
++- `folio/correspondence.py` implements Message-ID overlap continuation in `ingest_email`, merges prior and new IDs, increments version history on matched correspondence entries, and honors `as_new_entry` by bypassing overlap matching.
++- `folio/cli.py` exposes `ingest-email` and routes `folio ingest --type email_thread` or `.eml` sources into `ingest_email`, while preserving explicit CLI date and participant precedence for the email route.
++- `folio/ingest.py` includes `.eml` in supported extension messaging but prevents transcript ingest from processing `.eml` directly, keeping the correspondence route authoritative.
++- `folio/tracking/registry.py` carries `message_ids` through `RegistryEntry`, serialization, registry rebuild, and entry loading.
++
++The focused tests cover header/body/attachment parsing, correspondence frontmatter and registry metadata, Message-ID continuation to version 2, `--as-new-entry`, the dedicated CLI command, generic ingest email routing, and CLI date/participants precedence. I found no remaining release issue in this slice.
+
+2026-05-12T22:05:21.403691Z ERROR codex_core::session: failed to record rollout items: thread 019e1e37-87be-7ac3-b50e-aa369cdab718 not found
+tokens used
+75,548
+2026-05-12T22:05:21.414744Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 99483: No such process (os error 3)
+2026-05-12T22:05:21.468192Z  WARN codex_rmcp_client::stdio_server_launcher: Failed to terminate MCP process group 99482: No such process (os error 3)

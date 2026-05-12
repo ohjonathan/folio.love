@@ -1,0 +1,9 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-B.1-claude-sonnet-peer.md`.
+
+**Verdict: approve.** The spec and manifest are adequate to drive phase C without stale evidence reuse. Key checks passed:
+
+- Stale evidence exclusion is stated in both `pre_a_triage.md` and the spec's Non-Goals; no prior artifacts were consulted.
+- All three acceptance criteria (accept `.docx`, document-path extraction, `source_type: document` + `slide_count: 1`) are binary-testable and anchor to `folio/converter.py`.
+- Manifest satisfies all strict-P3 structural requirements: `manifest_version: 1.6.0`, `lifecycle_receipt_inventory_path`, correct role assignments across all phases, external consolidation mode.
+
+Two non-blocking observations noted: the cardinality assertion regex is coarse (middle `docx` branch matches too broadly), and the `slide_count: 1` compatibility shim is unaccompanied by a rationale comment. Neither requires changes before implementation.

@@ -1,0 +1,1 @@
+Error executing tool read_file: File path '/Users/jonathanoh/workspaces/folio.love/folio/output/interaction_markdown.py' is ignored by configured ignore patterns.

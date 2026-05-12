@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Optional
 
 from .config import FolioConfig
+from .correspondence import EMAIL_EXTENSIONS
 from .converter import _read_existing_frontmatter
+from .defaults import DefaultResolutionError, resolve_ingest_metadata
 from .llm.runtime import EndpointNotAllowedError
 from .naming import (
     build_interaction_artifact_name,
@@ -30,16 +32,17 @@ from .pipeline.interaction_analysis import (
     analyze_interaction_text,
     normalize_source_text,
 )
+from .pipeline.speaker_analytics import SpeakerStats, compute_speaker_stats
 from .pipeline.transcript_formats import (
     TRANSCRIPT_FORMAT_EXTENSIONS,
     normalize_transcript_text,
 )
-from .tracking.entities import EntityRegistryError
+from .tracking.entities import EntityRegistry, EntityRegistryError
 from .tracking import registry, sources, versions
 from .tracking.registry import RegistryEntry
 
-SUPPORTED_INGEST_EXTENSIONS = frozenset({".md", ".txt"}) | TRANSCRIPT_FORMAT_EXTENSIONS
-_SUPPORTED_EXTENSIONS_LABEL = ".txt, .md, .vtt, and .srt"
+SUPPORTED_INGEST_EXTENSIONS = frozenset({".md", ".txt"}) | TRANSCRIPT_FORMAT_EXTENSIONS | EMAIL_EXTENSIONS
+_SUPPORTED_EXTENSIONS_LABEL = ".txt, .md, .vtt, .srt, and .eml"
 _TARGET_REINGEST_ERROR = "Use --target <existing-note.md> to disambiguate."
 _TITLE_H1_RE = re.compile(r"(?m)^#\s+(.+?)\s*$")
 logger = logging.getLogger(__name__)
@@ -84,8 +87,8 @@ def ingest_source(
     config: FolioConfig,
     *,
     source_path: Path,
-    subtype: str,
-    event_date: date,
+    subtype: str | None = None,
+    event_date: date | None = None,
     client: Optional[str] = None,
     engagement: Optional[str] = None,
     participants: Optional[list[str]] = None,
@@ -99,8 +102,6 @@ def ingest_source(
     """Convert a transcript or notes file into an interaction note."""
 
     source_path = Path(source_path).resolve()
-    if event_date > date.today():
-        raise IngestError(f"Event date cannot be in the future: {event_date.isoformat()}")
     if not source_path.exists():
         raise FileNotFoundError(f"Source file not found: {source_path}")
     source_extension = source_path.suffix.lower()
@@ -109,6 +110,8 @@ def ingest_source(
             f"Unsupported source extension '{source_path.suffix}'. "
             f"folio ingest supports {_SUPPORTED_EXTENSIONS_LABEL} transcript sources."
         )
+    if source_extension in EMAIL_EXTENSIONS:
+        raise IngestError("Use ingest_email() or `folio ingest-email` for .eml sources.")
     if duration_minutes is not None and duration_minutes <= 0:
         raise IngestError("--duration-minutes must be a positive integer")
     if source_recording is not None:
@@ -116,14 +119,41 @@ def ingest_source(
         if not source_recording.exists():
             raise FileNotFoundError(f"Source recording not found: {source_recording}")
 
+    try:
+        resolved_metadata = resolve_ingest_metadata(
+            config,
+            source_path=source_path,
+            client=client,
+            engagement=engagement,
+            subtype=subtype,
+            event_date=event_date,
+            participants=participants,
+            target=target,
+        )
+    except DefaultResolutionError as exc:
+        raise IngestError(str(exc)) from exc
+    client = resolved_metadata.client
+    engagement = resolved_metadata.engagement
+    subtype = resolved_metadata.subtype
+    event_date = resolved_metadata.event_date
+    participants = resolved_metadata.participants
+    target = resolved_metadata.target
+    if event_date > date.today():
+        raise IngestError(f"Event date cannot be in the future: {event_date.isoformat()}")
+
     explicit_target_md, target_dir_override = _resolve_target(target)
     library_root = config.library_root.resolve()
+    entities_path = library_root / "entities.json"
     registry_data = _load_registry_data(library_root)
 
     raw_source_text = source_path.read_text(encoding="utf-8-sig")
     normalized_source_body = _normalize_ingest_source_text(
         raw_source_text,
         source_extension=source_extension,
+    )
+    speaker_stats = compute_speaker_stats(
+        normalized_source_body,
+        speaker_aliases=_load_speaker_aliases(entities_path),
     )
     source_hash = sources.compute_file_hash(source_path)
 
@@ -188,8 +218,15 @@ def ingest_source(
         analysis_result = _degraded_analysis_result(
             f"LLM analysis did not run: {exc}",
         )
+    _apply_speaker_analytics_state(
+        analysis_result,
+        speaker_stats,
+        mark_unavailable=_should_flag_speaker_analytics_unavailable(
+            normalized_source_body,
+            source_extension=source_extension,
+        ),
+    )
 
-    entities_path = library_root / "entities.json"
     try:
         resolution_result = resolve_interaction_entities(
             entities_path=entities_path,
@@ -271,6 +308,7 @@ def ingest_source(
         version_info=version_info,
         analysis_result=analysis_result,
         raw_transcript=normalized_source_body,
+        subtype=subtype,
     )
     _atomic_write_text(markdown_path, markdown)
 
@@ -299,6 +337,11 @@ def ingest_source(
                 review_flags=list(analysis_result.review_flags),
                 extraction_confidence=analysis_result.extraction_confidence,
                 grounding_summary=analysis_result.grounding_summary,
+                speaker_summary=(
+                    analysis_result.speaker_stats.to_summary()
+                    if analysis_result.speaker_stats
+                    else None
+                ),
             ),
         )
 
@@ -317,6 +360,60 @@ def _normalize_ingest_source_text(raw_source_text: str, *, source_extension: str
     return normalize_source_text(
         raw_source_text,
         strip_markdown_frontmatter=source_extension == ".md",
+    )
+
+
+def _load_speaker_aliases(entities_path: Path) -> dict[str, str]:
+    """Build a lowercased speaker alias map from confirmed person entities."""
+
+    if not entities_path.exists():
+        return {}
+    try:
+        entity_registry = EntityRegistry(entities_path)
+        entity_registry.load()
+    except EntityRegistryError as exc:
+        logger.warning("Speaker analytics skipped entity aliases: %s", exc)
+        return {}
+
+    aliases: dict[str, str] = {}
+    for _entity_type, _key, entry in entity_registry.iter_entities(entity_type="person"):
+        canonical = entry.canonical_name.strip()
+        if not canonical or entry.needs_confirmation:
+            continue
+        aliases[canonical.lower()] = canonical
+        for alias in entry.aliases or []:
+            cleaned = alias.strip()
+            if cleaned:
+                aliases[cleaned.lower()] = canonical
+    return aliases
+
+
+def _apply_speaker_analytics_state(
+    analysis_result: InteractionAnalysisResult,
+    speaker_stats: SpeakerStats | None,
+    *,
+    mark_unavailable: bool = True,
+) -> None:
+    analysis_result.speaker_stats = speaker_stats
+    if speaker_stats is not None or not mark_unavailable:
+        return
+    if "speaker_analytics_unavailable" not in analysis_result.review_flags:
+        analysis_result.review_flags.append("speaker_analytics_unavailable")
+    analysis_result.review_status = "flagged"
+
+
+def _should_flag_speaker_analytics_unavailable(
+    normalized_source_body: str,
+    *,
+    source_extension: str,
+) -> bool:
+    if source_extension in TRANSCRIPT_FORMAT_EXTENSIONS:
+        return True
+    return bool(
+        re.search(
+            r"(?m)^(?:\[?\d{1,2}:\d{2}(?::\d{2})?|Speaker\s+\d+\s*:)",
+            normalized_source_body,
+        )
     )
 
 

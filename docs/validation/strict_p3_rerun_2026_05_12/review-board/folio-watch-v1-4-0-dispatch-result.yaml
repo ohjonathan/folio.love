@@ -1,0 +1,660 @@
+results:
+- dispatch_id: folio-watch-v1-4-0-B.1-claude-sonnet-peer
+  family: claude-sonnet
+  role: peer
+  execution_provider: claude
+  execution_cli: claude
+  resolved_executable: /Users/jonathanoh/.local/bin/claude
+  resolved_executable_realpath: /Users/jonathanoh/.local/share/claude/versions/2.1.138
+  cli_version: 2.1.138 (Claude Code)
+  provider_probe_hash: sha256:a1f1c965f6fd90e0be01b1df599b6093773d07a25d575e6ceb8d0b0a4c8747c5
+  model_id: sonnet
+  resolved_model: sonnet
+  model_probe_command: (none) same-family literal accepted under P14
+  model_candidate_list:
+  - sonnet
+  model_selection_rule: same-family-literal
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - claude
+  - --permission-mode
+  - bypassPermissions
+  - --add-dir
+  - .
+  - -p
+  - <prompt-body-redacted>
+  - --model
+  - sonnet
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md
+  prompt_sha256: sha256:f1ace7202c10b73885f50116a90273ffa711cdaa9511c3227723d7e8478a902d
+  stdin_path: null
+  stdin_sha256: null
+  exit_code: 0
+  started_at: '2026-05-12T20:19:45Z'
+  ended_at: '2026-05-12T20:21:16Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-B.1-claude-sonnet-peer.raw.txt
+  raw_output_hash: sha256:cda06786fe9de8c2a655653276d7201a6516963f7c306c4bb6389602ec19df41
+  evidence_cap: direct-run
+  evidence_labels_used:
+  - direct-run
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-claude-sonnet-peer.md
+  artifact_sha256: sha256:add59643969d35733911ea0db058bcb44cb7c5bdddbdb9074fd7fdd588dd343b
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: sonnet
+  model_used: sonnet
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: sonnet
+    exit_code: 0
+    started_at: '2026-05-12T20:19:45Z'
+    ended_at: '2026-05-12T20:21:16Z'
+    detected_429: false
+    stderr_tail_200: ''
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: worker_file
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-B.1-codex-alignment
+  family: codex
+  role: alignment
+  execution_provider: codex
+  execution_cli: codex
+  resolved_executable: /opt/homebrew/bin/codex
+  resolved_executable_realpath: /opt/homebrew/Caskroom/codex/0.125.0/codex-aarch64-apple-darwin
+  cli_version: codex-cli 0.125.0
+  provider_probe_hash: sha256:6b03cece86df59111946c6b4156710c549bc348ad2e6aa2bb9f8129b3c526339
+  model_id: auto
+  resolved_model: gpt-5.5
+  model_probe_command: '(post-dispatch) grep -E ''^model: '' <raw_stderr> | head -1'
+  model_candidate_list:
+  - cli-config-default
+  model_selection_rule: cli-config-default+post-dispatch-banner-parse
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - codex
+  - exec
+  - --full-auto
+  - '-'
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-codex-alignment.md
+  prompt_sha256: sha256:a0f960c41dcc1b799fdc90a4aaf7adf0557b052167e1eaa6753ecc98200df4be
+  stdin_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-codex-alignment.md
+  stdin_sha256: sha256:a0f960c41dcc1b799fdc90a4aaf7adf0557b052167e1eaa6753ecc98200df4be
+  exit_code: 0
+  started_at: '2026-05-12T20:21:17Z'
+  ended_at: '2026-05-12T20:22:36Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-B.1-codex-alignment.raw.txt
+  raw_output_hash: sha256:465fdfe347a7754521ab64e5e505713e7e5b0a9f6e30d2270c2cb03fda3d9609
+  evidence_cap: direct-run
+  evidence_labels_used:
+  - direct-run
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-codex-alignment.md
+  artifact_sha256: sha256:78d430b5923c46e7a65b3174b018e0b8afde9497cc16e0f67b8b851e6e03e64f
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: null
+  model_used: gpt-5.5
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: ''
+    exit_code: 0
+    started_at: '2026-05-12T20:21:17Z'
+    ended_at: '2026-05-12T20:22:36Z'
+    detected_429: false
+    stderr_tail_200: ': No such process (os error 3)
+
+      tokens used
+
+      31,926
+
+      2026-05-12T20:22:36.244392Z  WARN codex_rmcp_client::stdio_server_launcher:
+      Failed to terminate MCP process group 78596: No such process (os error 3)'
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: worker_file
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-B.1-gemini-adversarial
+  family: gemini
+  role: adversarial
+  execution_provider: gemini
+  execution_cli: gemini
+  resolved_executable: /opt/homebrew/bin/gemini
+  resolved_executable_realpath: /opt/homebrew/Cellar/gemini-cli/0.38.2/libexec/lib/node_modules/@google/gemini-cli/bundle/gemini.js
+  cli_version: 0.38.2
+  provider_probe_hash: sha256:f64620764754f8e003bd18be394159b3550f7812e8c0504f2424af67d8197398
+  model_id: auto
+  resolved_model: cli-default-unknown
+  model_probe_command: (post-dispatch) grep -iE 'model:' <raw_stderr> | head -1
+  model_candidate_list:
+  - cli-config-default
+  model_selection_rule: cli-config-default+post-dispatch-best-effort
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - gemini
+  - -p
+  - <prompt-body-redacted>
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-B.1-gemini-adversarial.md
+  prompt_sha256: sha256:726d35645e6f918cf4a657d74584a99dbeaf7a4a970479df6cfc04ea34b9f5fa
+  stdin_path: null
+  stdin_sha256: null
+  exit_code: 0
+  started_at: '2026-05-12T20:22:37Z'
+  ended_at: '2026-05-12T20:23:07Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-B.1-gemini-adversarial.raw.txt
+  raw_output_hash: sha256:fe1b03c1b64b4f0c61a2e7c8120f5af132d6556e307860120e78551af7cc5379
+  evidence_cap: static-inspection
+  evidence_labels_used:
+  - static-inspection
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-B.1-gemini-adversarial.md
+  artifact_sha256: sha256:fe1b03c1b64b4f0c61a2e7c8120f5af132d6556e307860120e78551af7cc5379
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: null
+  model_used: cli-default-unknown
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: ''
+    exit_code: 0
+    started_at: '2026-05-12T20:22:37Z'
+    ended_at: '2026-05-12T20:23:07Z'
+    detected_429: false
+    stderr_tail_200: ''
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: raw_stdout
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-D.2-claude-sonnet-peer
+  family: claude-sonnet
+  role: peer
+  execution_provider: claude
+  execution_cli: claude
+  resolved_executable: /Users/jonathanoh/.local/bin/claude
+  resolved_executable_realpath: /Users/jonathanoh/.local/share/claude/versions/2.1.138
+  cli_version: 2.1.138 (Claude Code)
+  provider_probe_hash: sha256:a1f1c965f6fd90e0be01b1df599b6093773d07a25d575e6ceb8d0b0a4c8747c5
+  model_id: sonnet
+  resolved_model: sonnet
+  model_probe_command: (none) same-family literal accepted under P14
+  model_candidate_list:
+  - sonnet
+  model_selection_rule: same-family-literal
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - claude
+  - --permission-mode
+  - bypassPermissions
+  - --add-dir
+  - .
+  - -p
+  - <prompt-body-redacted>
+  - --model
+  - sonnet
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-claude-sonnet-peer.md
+  prompt_sha256: sha256:ab35949b637fd9e39cddc258f165d30616e437ca52b12d69546e05cfd57c65c3
+  stdin_path: null
+  stdin_sha256: null
+  exit_code: 0
+  started_at: '2026-05-12T21:31:46Z'
+  ended_at: '2026-05-12T21:32:58Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-D.2-claude-sonnet-peer.raw.txt
+  raw_output_hash: sha256:3d48202333c69584ede9ffb545767d0bb5bc0a47e2941dcf5aeedea7e1279be8
+  evidence_cap: direct-run
+  evidence_labels_used:
+  - direct-run
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-claude-sonnet-peer.md
+  artifact_sha256: sha256:fef1347c4eb4cf72ccfbc80a7aee9a4221a2a480c8cf7477d0ebc6d5bd93d2c6
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: sonnet
+  model_used: sonnet
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: sonnet
+    exit_code: 0
+    started_at: '2026-05-12T21:31:46Z'
+    ended_at: '2026-05-12T21:32:58Z'
+    detected_429: false
+    stderr_tail_200: ''
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: worker_file
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-D.2-codex-alignment
+  family: codex
+  role: alignment
+  execution_provider: codex
+  execution_cli: codex
+  resolved_executable: /opt/homebrew/bin/codex
+  resolved_executable_realpath: /opt/homebrew/Caskroom/codex/0.125.0/codex-aarch64-apple-darwin
+  cli_version: codex-cli 0.125.0
+  provider_probe_hash: sha256:6b03cece86df59111946c6b4156710c549bc348ad2e6aa2bb9f8129b3c526339
+  model_id: auto
+  resolved_model: gpt-5.5
+  model_probe_command: '(post-dispatch) grep -E ''^model: '' <raw_stderr> | head -1'
+  model_candidate_list:
+  - cli-config-default
+  model_selection_rule: cli-config-default+post-dispatch-banner-parse
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - codex
+  - exec
+  - --full-auto
+  - '-'
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-codex-alignment.md
+  prompt_sha256: sha256:ac08496c506d7824be20ffa641237f1c7fc65023d7af72137a0fcacc6f40e8bc
+  stdin_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-codex-alignment.md
+  stdin_sha256: sha256:ac08496c506d7824be20ffa641237f1c7fc65023d7af72137a0fcacc6f40e8bc
+  exit_code: 0
+  started_at: '2026-05-12T21:32:59Z'
+  ended_at: '2026-05-12T21:34:26Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-D.2-codex-alignment.raw.txt
+  raw_output_hash: sha256:bf4d5de8d410f1c80e41268f9ff77d6980296d46cf35e35f8f910a88e8571003
+  evidence_cap: direct-run
+  evidence_labels_used:
+  - direct-run
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment.md
+  artifact_sha256: sha256:f905a256e67510061013fa5464cb1b2df1e2903c20cc362c194d7f5e9c034e8b
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: null
+  model_used: gpt-5.5
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: ''
+    exit_code: 0
+    started_at: '2026-05-12T21:32:59Z'
+    ended_at: '2026-05-12T21:34:26Z'
+    detected_429: false
+    stderr_tail_200: 'process group 94320: No such process (os error 3)
+
+      2026-05-12T21:34:26.263586Z  WARN codex_rmcp_client::stdio_server_launcher:
+      Failed to terminate MCP process group 94319: No such process (os error 3)'
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: worker_file
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-D.2-gemini-adversarial
+  family: gemini
+  role: adversarial
+  execution_provider: gemini
+  execution_cli: gemini
+  resolved_executable: /opt/homebrew/bin/gemini
+  resolved_executable_realpath: /opt/homebrew/Cellar/gemini-cli/0.38.2/libexec/lib/node_modules/@google/gemini-cli/bundle/gemini.js
+  cli_version: 0.38.2
+  provider_probe_hash: sha256:f64620764754f8e003bd18be394159b3550f7812e8c0504f2424af67d8197398
+  model_id: auto
+  resolved_model: cli-default-unknown
+  model_probe_command: (post-dispatch) grep -iE 'model:' <raw_stderr> | head -1
+  model_candidate_list:
+  - cli-config-default
+  model_selection_rule: cli-config-default+post-dispatch-best-effort
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - gemini
+  - -p
+  - <prompt-body-redacted>
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-gemini-adversarial.md
+  prompt_sha256: sha256:2e9115e869a0d7124dae79299f7ef571f366f3498c6f8a3a575de7a5e6dde19d
+  stdin_path: null
+  stdin_sha256: null
+  exit_code: 0
+  started_at: '2026-05-12T21:34:27Z'
+  ended_at: '2026-05-12T21:36:55Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-D.2-gemini-adversarial.raw.txt
+  raw_output_hash: sha256:ae4bc835dd732e8b36cd385e2608071a9b716bdbd451d5b1bca0c4d406e3d890
+  evidence_cap: static-inspection
+  evidence_labels_used:
+  - static-inspection
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-gemini-adversarial.md
+  artifact_sha256: sha256:ae4bc835dd732e8b36cd385e2608071a9b716bdbd451d5b1bca0c4d406e3d890
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: null
+  model_used: cli-default-unknown
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: ''
+    exit_code: 0
+    started_at: '2026-05-12T21:34:27Z'
+    ended_at: '2026-05-12T21:36:55Z'
+    detected_429: false
+    stderr_tail_200: 'Error executing tool run_shell_command: Tool execution denied
+      by policy.'
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: raw_stdout
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-D.2-codex-alignment-r2
+  family: codex
+  role: alignment
+  execution_provider: codex
+  execution_cli: codex
+  resolved_executable: /opt/homebrew/bin/codex
+  resolved_executable_realpath: /opt/homebrew/Caskroom/codex/0.125.0/codex-aarch64-apple-darwin
+  cli_version: codex-cli 0.125.0
+  provider_probe_hash: sha256:6b03cece86df59111946c6b4156710c549bc348ad2e6aa2bb9f8129b3c526339
+  model_id: auto
+  resolved_model: gpt-5.5
+  model_probe_command: '(post-dispatch) grep -E ''^model: '' <raw_stderr> | head -1'
+  model_candidate_list:
+  - cli-config-default
+  model_selection_rule: cli-config-default+post-dispatch-banner-parse
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - codex
+  - exec
+  - --full-auto
+  - '-'
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-codex-alignment-r2.md
+  prompt_sha256: sha256:a4f0d25644b50550841c2a04387b9b018cf192934e19bbbd788c4ca5b4764468
+  stdin_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-codex-alignment-r2.md
+  stdin_sha256: sha256:a4f0d25644b50550841c2a04387b9b018cf192934e19bbbd788c4ca5b4764468
+  exit_code: 0
+  started_at: '2026-05-12T21:44:44Z'
+  ended_at: '2026-05-12T21:46:14Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-D.2-codex-alignment-r2.raw.txt
+  raw_output_hash: sha256:11c9d509b73a419139bf3186bfaf33bca8a796a4fa7e347254dd4709f834a27e
+  evidence_cap: direct-run
+  evidence_labels_used:
+  - direct-run
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-codex-alignment-r2.md
+  artifact_sha256: sha256:fe5add5a2cc0e32839e1399fe299ebdc0498938f2cdf4b94507610f9226a7cef
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: null
+  model_used: gpt-5.5
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: ''
+    exit_code: 0
+    started_at: '2026-05-12T21:44:44Z'
+    ended_at: '2026-05-12T21:46:14Z'
+    detected_429: false
+    stderr_tail_200: 'process group 95821: No such process (os error 3)
+
+      2026-05-12T21:46:14.658731Z  WARN codex_rmcp_client::stdio_server_launcher:
+      Failed to terminate MCP process group 95822: No such process (os error 3)'
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: worker_file
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-D.2-gemini-adversarial-r2
+  family: gemini
+  role: adversarial
+  execution_provider: gemini
+  execution_cli: gemini
+  resolved_executable: /opt/homebrew/bin/gemini
+  resolved_executable_realpath: /opt/homebrew/Cellar/gemini-cli/0.38.2/libexec/lib/node_modules/@google/gemini-cli/bundle/gemini.js
+  cli_version: 0.38.2
+  provider_probe_hash: sha256:f64620764754f8e003bd18be394159b3550f7812e8c0504f2424af67d8197398
+  model_id: auto
+  resolved_model: cli-default-unknown
+  model_probe_command: (post-dispatch) grep -iE 'model:' <raw_stderr> | head -1
+  model_candidate_list:
+  - cli-config-default
+  model_selection_rule: cli-config-default+post-dispatch-best-effort
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - gemini
+  - -p
+  - <prompt-body-redacted>
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.2-gemini-adversarial-r2.md
+  prompt_sha256: sha256:7bb946c230d3ddf329905fc96c451e641b91c096445494cb2c19d94080d662ea
+  stdin_path: null
+  stdin_sha256: null
+  exit_code: 0
+  started_at: '2026-05-12T21:46:15Z'
+  ended_at: '2026-05-12T21:46:39Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-D.2-gemini-adversarial-r2.raw.txt
+  raw_output_hash: sha256:f891cc8755fd3ba52ed0c2341c1dab8f328455d0ec67b20049900db17b7ca4f0
+  evidence_cap: static-inspection
+  evidence_labels_used:
+  - static-inspection
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.2-gemini-adversarial-r2.md
+  artifact_sha256: sha256:f891cc8755fd3ba52ed0c2341c1dab8f328455d0ec67b20049900db17b7ca4f0
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: null
+  model_used: cli-default-unknown
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: ''
+    exit_code: 0
+    started_at: '2026-05-12T21:46:15Z'
+    ended_at: '2026-05-12T21:46:39Z'
+    detected_429: false
+    stderr_tail_200: ''
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: raw_stdout
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-D.5-codex-verifier
+  family: codex
+  role: verifier
+  execution_provider: codex
+  execution_cli: codex
+  resolved_executable: /opt/homebrew/bin/codex
+  resolved_executable_realpath: /opt/homebrew/Caskroom/codex/0.125.0/codex-aarch64-apple-darwin
+  cli_version: codex-cli 0.125.0
+  provider_probe_hash: sha256:6b03cece86df59111946c6b4156710c549bc348ad2e6aa2bb9f8129b3c526339
+  model_id: auto
+  resolved_model: gpt-5.5
+  model_probe_command: '(post-dispatch) grep -E ''^model: '' <raw_stderr> | head -1'
+  model_candidate_list:
+  - cli-config-default
+  model_selection_rule: cli-config-default+post-dispatch-banner-parse
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - codex
+  - exec
+  - --full-auto
+  - '-'
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.5-codex-verifier.md
+  prompt_sha256: sha256:b5029a987757c3a7048a4bf9dbdf21615db1fe6bce4b739dc41841135a18fd94
+  stdin_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.5-codex-verifier.md
+  stdin_sha256: sha256:b5029a987757c3a7048a4bf9dbdf21615db1fe6bce4b739dc41841135a18fd94
+  exit_code: 0
+  started_at: '2026-05-12T22:07:08Z'
+  ended_at: '2026-05-12T22:08:08Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-D.5-codex-verifier.raw.txt
+  raw_output_hash: sha256:6f9eddaa84a7688b5a9f38e838552d9f1e3f05a449b76778215d46b2297df118
+  evidence_cap: direct-run
+  evidence_labels_used:
+  - direct-run
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-codex-verifier.md
+  artifact_sha256: sha256:56dce87430202d623fcc4b98c21287d440d67c01e4efb7bae7a47326d79bfa21
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: null
+  model_used: gpt-5.5
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: ''
+    exit_code: 0
+    started_at: '2026-05-12T22:07:08Z'
+    ended_at: '2026-05-12T22:08:08Z'
+    detected_429: false
+    stderr_tail_200: '40: No such process (os error 3)
+
+      tokens used
+
+      51,416
+
+      2026-05-12T22:08:08.477046Z  WARN codex_rmcp_client::stdio_server_launcher:
+      Failed to terminate MCP process group 839: No such process (os error 3)'
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: worker_file
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-D.5-gemini-verifier
+  family: gemini
+  role: verifier
+  execution_provider: gemini
+  execution_cli: gemini
+  resolved_executable: /opt/homebrew/bin/gemini
+  resolved_executable_realpath: /opt/homebrew/Cellar/gemini-cli/0.38.2/libexec/lib/node_modules/@google/gemini-cli/bundle/gemini.js
+  cli_version: 0.38.2
+  provider_probe_hash: sha256:f64620764754f8e003bd18be394159b3550f7812e8c0504f2424af67d8197398
+  model_id: auto
+  resolved_model: cli-default-unknown
+  model_probe_command: (post-dispatch) grep -iE 'model:' <raw_stderr> | head -1
+  model_candidate_list:
+  - cli-config-default
+  model_selection_rule: cli-config-default+post-dispatch-best-effort
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - gemini
+  - -p
+  - <prompt-body-redacted>
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.5-gemini-verifier.md
+  prompt_sha256: sha256:6921474e48485a98ccf24e89208278eb8b65cdd6db38a0655051902ed8a5e7f7
+  stdin_path: null
+  stdin_sha256: null
+  exit_code: 0
+  started_at: '2026-05-12T22:08:09Z'
+  ended_at: '2026-05-12T22:08:34Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-D.5-gemini-verifier.raw.txt
+  raw_output_hash: sha256:bdc3f2ee22dd75a6acd5a18911c7c3b839243ae0eca844d0c43c273dc3501d92
+  evidence_cap: static-inspection
+  evidence_labels_used:
+  - static-inspection
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-gemini-verifier.md
+  artifact_sha256: sha256:bdc3f2ee22dd75a6acd5a18911c7c3b839243ae0eca844d0c43c273dc3501d92
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: null
+  model_used: cli-default-unknown
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: ''
+    exit_code: 0
+    started_at: '2026-05-12T22:08:09Z'
+    ended_at: '2026-05-12T22:08:34Z'
+    detected_429: false
+    stderr_tail_200: ''
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: raw_stdout
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null
+- dispatch_id: folio-watch-v1-4-0-D.5-claude-sonnet-verifier
+  family: claude-sonnet
+  role: verifier
+  execution_provider: claude
+  execution_cli: claude
+  resolved_executable: /Users/jonathanoh/.local/bin/claude
+  resolved_executable_realpath: /Users/jonathanoh/.local/share/claude/versions/2.1.138
+  cli_version: 2.1.138 (Claude Code)
+  provider_probe_hash: sha256:a1f1c965f6fd90e0be01b1df599b6093773d07a25d575e6ceb8d0b0a4c8747c5
+  model_id: sonnet
+  resolved_model: sonnet
+  model_probe_command: (none) same-family literal accepted under P14
+  model_candidate_list:
+  - sonnet
+  model_selection_rule: same-family-literal
+  model_selection_rule_version: v1.3.0
+  command_argv_redacted:
+  - claude
+  - --permission-mode
+  - bypassPermissions
+  - --add-dir
+  - .
+  - -p
+  - <prompt-body-redacted>
+  - --model
+  - sonnet
+  prompt_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.prompts/folio-watch-v1-4-0-D.5-claude-sonnet-verifier.md
+  prompt_sha256: sha256:62f12fe07749563c06a4d526a4136fa5f124b36569a23967a1a644a4a281a6c6
+  stdin_path: null
+  stdin_sha256: null
+  exit_code: 0
+  started_at: '2026-05-12T22:08:35Z'
+  ended_at: '2026-05-12T22:09:37Z'
+  raw_output_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/.raw/folio-watch-v1-4-0-D.5-claude-sonnet-verifier.raw.txt
+  raw_output_hash: sha256:639ab7c0a71cbc6fcc49020261619b913be2cb0a6161bfd7584c2be136bca4ed
+  evidence_cap: direct-run
+  evidence_labels_used:
+  - direct-run
+  evidence_cap_violations: 0
+  artifact_path: docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-watch-v1-4-0-D.5-claude-sonnet-verifier.md
+  artifact_sha256: sha256:b149726264103451f470907135032b08cb747586eceaec721a046ece20178198
+  status: completed
+  dispatch_method: external-cli
+  test_mode: false
+  primary_model_requested: sonnet
+  model_used: sonnet
+  fallback_candidate_chain: []
+  fallback_attempts:
+  - attempt: 1
+    mode: primary
+    model_requested: sonnet
+    exit_code: 0
+    started_at: '2026-05-12T22:08:35Z'
+    ended_at: '2026-05-12T22:09:37Z'
+    detected_429: false
+    stderr_tail_200: ''
+    stdout_substantive: true
+  fallback_reason: none
+  wrapper_429_classification: none
+  artifact_source: worker_file
+  artifact_write_conflict: false
+  artifact_prewrite_sha256: null

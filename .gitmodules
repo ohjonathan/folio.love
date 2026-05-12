@@ -1,0 +1,3 @@
+[submodule ".llm-dev/framework"]
+	path = .llm-dev/framework
+	url = https://github.com/ohjonathan/llm-dev-framework.git

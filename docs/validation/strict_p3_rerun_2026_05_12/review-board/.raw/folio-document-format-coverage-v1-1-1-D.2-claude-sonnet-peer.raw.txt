@@ -1,0 +1,10 @@
+Artifact written to `docs/validation/strict_p3_rerun_2026_05_12/review-board/folio-document-format-coverage-v1-1-1-D.2-claude-sonnet-peer.md`.
+
+**Verdict: approve.** The Phase C implementation is clean and complete against spec:
+
+- `.docx` routing is correctly gated on `DOCUMENT_EXTENSIONS` before the PPTX/PDF image pipeline (`converter.py:160`).
+- `_convert_document` uses `text.extract_document_text` (MarkItDown) and never touches `normalize.to_pdf` or `images.extract_with_metadata` — the test enforces this with `AssertionError` side-effect patches.
+- `source_type="document"` and `slide_count=1` appear in both frontmatter and the registry entry, matching the spec's compatibility requirement.
+- Both focused tests pass (`2 passed in 0.07s`, exit 0, `direct-run` evidence).
+
+No blockers.

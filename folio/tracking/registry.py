@@ -59,6 +59,8 @@ class RegistryEntry:
     review_flags: Optional[list[str]] = field(default=None)
     extraction_confidence: Optional[float] = None
     grounding_summary: Optional[dict] = field(default=None)
+    speaker_summary: Optional[dict] = field(default=None)
+    message_ids: Optional[list[str]] = field(default=None)
 
     def to_dict(self) -> dict:
         """Serialize to a dict suitable for JSON storage.
@@ -75,6 +77,10 @@ class RegistryEntry:
             d["review_flags"] = self.review_flags
         if self.grounding_summary is not None:
             d["grounding_summary"] = self.grounding_summary
+        if self.speaker_summary is not None:
+            d["speaker_summary"] = self.speaker_summary
+        if self.message_ids is not None:
+            d["message_ids"] = self.message_ids
         return d
 
 
@@ -170,6 +176,9 @@ def rebuild_registry(library_root: Path) -> dict:
                 review_status=fm.get("review_status"),
                 review_flags=fm.get("review_flags"),
                 extraction_confidence=fm.get("extraction_confidence"),
+                grounding_summary=fm.get("grounding_summary"),
+                speaker_summary=fm.get("speaker_summary"),
+                message_ids=fm.get("message_ids"),
             )
             data["decks"][entry.id] = entry.to_dict()
             continue
@@ -215,6 +224,8 @@ def rebuild_registry(library_root: Path) -> dict:
             review_flags=fm.get("review_flags"),
             extraction_confidence=fm.get("extraction_confidence"),
             grounding_summary=fm.get("grounding_summary"),
+            speaker_summary=fm.get("speaker_summary"),
+            message_ids=fm.get("message_ids"),
         )
         data["decks"][entry.id] = entry.to_dict()
 
