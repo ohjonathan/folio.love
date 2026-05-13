@@ -5,6 +5,52 @@ All notable changes to folio.love are documented here. The format loosely follow
 the `folio enrich diagnose` slice, which closes a roadmap-named, formerly-Tier-4-deferred
 deliverable per parent enrich spec §7.7. Subsequent breaking changes follow standard semver.
 
+## [v1.4.0] — 2026-05-12
+
+First PyPI release since `v0.6.4`. This release publishes the already-documented
+`v0.6.5` through `v1.0.0` work plus the May 2026 GitHub-issue closeout slices.
+
+### Added
+
+- **Transcript ingest for VTT and SRT.** `folio ingest` now accepts `.vtt` and
+  `.srt` transcript sources, normalizes caption headers, cue numbers, cue
+  settings, timestamps, caption markup, and speaker labels, and preserves the
+  degraded-analysis behavior when LLM analysis is unavailable.
+- **Action items and deterministic speaker analytics for interaction notes.**
+  Interaction analysis now includes `action_items` with `element_type: action`,
+  `owner`, and `due` metadata; renders action-like sections as `Next Steps` or
+  `Action Items` by subtype; computes speaker counts/shares/durations
+  deterministically; and exposes speaker summaries in frontmatter, markdown,
+  and registry summaries.
+- **Document-oriented DOCX conversion.** `folio convert` accepts `.docx` inputs
+  through a document-oriented MarkItDown path, skips slide image extraction,
+  writes one evidence note with full document text, emits `source_type:
+  document`, and keeps `slide_count: 1` only for compatibility with existing
+  evidence consumers.
+- **Config defaults and derivation.** `folio.yaml` supports `defaults` and
+  `defaults.derive`; metadata resolution now follows CLI flag, derivation,
+  defaults, then error. Ingest date/type arguments are optional at the Click
+  layer when they can be resolved after config/default derivation.
+- **Correspondence ingest.** New `folio ingest-email <path.eml>` command and
+  `.eml` routing through `folio ingest <path.eml> --type email_thread`. Email
+  ingest emits `type: correspondence`, parses headers, messages, attachments,
+  and `message_ids`, uses Message-ID overlap for continuation/versioning, and
+  supports `--as-new-entry` to override continuation detection.
+- **Watch/drop-zone ingest.** New `folio watch <dir> [--once] [--dry-run]
+  [--quiet]` command routes by extension, waits for stable file size, processes
+  serially, archives successful source files, and quarantines failures under
+  `_failed/`.
+- **Strict-P3 release evidence.** The repository now carries the strict-P3
+  llm-dev adopter surface and validation artifacts for the GitHub issue
+  closeout rerun.
+
+### Fixed
+
+- Closed GitHub issues `#56`, `#61`, `#62`, `#63`, `#64`, `#69`, `#70`, and
+  `#71` with split strict-P3 lifecycle evidence.
+- Preserved PR `#50` log archival state and verified the VTT/SRT transcript
+  implementation from PR `#73`.
+
 ## [v1.0.0] — 2026-04-17
 
 ### Added
