@@ -128,6 +128,12 @@ folio convert deck.pptx --passes 2
 # Force fresh analysis, ignore cache
 folio convert deck.pptx --no-cache
 
+# Surgically retry only diagram slides that hit transient provider failures
+folio convert deck.pptx --retry-failed-diagrams
+
+# Re-run diagram extraction for specific slides only (skips Pass 1/2)
+folio convert deck.pptx --slides 35,36,39 --diagrams-only
+
 # Full metadata
 folio convert deck.pptx \
   --client Acme \
@@ -152,6 +158,10 @@ folio convert deck.pptx \
 | `--industry` | Industry tags, comma-separated |
 | `--tags` | Manual tags to merge with auto-generated, comma-separated |
 | `--llm-profile` | Override the configured LLM profile for this run |
+| `--diagrams-only` | Re-run only diagram extraction on diagram/mixed slides (no Pass 1/2; deck body preserved); optionally scope to specific slides with `--slides`. Requires a prior conversion |
+| `--slides` | Comma-separated slide numbers for diagram retry (e.g. `35,36,39`); requires `--diagrams-only` or a `--retry-*-diagrams` flag, and scopes those retries to the listed slides |
+| `--retry-failed-diagrams` | Retry only diagram slides whose sidecar shows a provider failure (`pass_a_parse_outcome: provider_failure`) |
+| `--retry-review-required-diagrams` | Retry only diagram slides whose sidecar is flagged `review_required` |
 
 ### `folio batch`
 
