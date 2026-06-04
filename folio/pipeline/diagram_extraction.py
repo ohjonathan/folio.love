@@ -583,7 +583,11 @@ def _anchor_bboxes(
 
 # B4: v1-supported diagram types — system architecture and data flow only
 # Per proposal L62: "System architecture and data flow only. All other types abstain."
-_SUPPORTED_DIAGRAM_TYPES = {"architecture", "data-flow"}
+# Issue #76: concept-map and process are now first-class. Their node/edge
+# structure renders as a Mermaid graph plus a structured inventory; when Mermaid
+# is unavailable the inventory and component/connection tables are still emitted
+# (rendering distinguishes "cannot render Mermaid" from "cannot extract structure").
+_SUPPORTED_DIAGRAM_TYPES = {"architecture", "data-flow", "concept-map", "process"}
 
 
 def _select_pass_a_images(
@@ -607,6 +611,23 @@ def _select_pass_a_images(
             detail="auto",
         ),)
     return tuple(prepare_images(page_img, profile))
+
+
+def _reduced_pass_a_images(page_img: Image.Image) -> tuple[ImagePart, ...]:
+    """Issue #76: minimal single global image at reduced detail.
+
+    Used as a payload-reduction fallback when a tiled/high-detail Pass A request
+    returns no output (likely a gateway/payload-size failure). A smaller request
+    often succeeds where the larger one repeatedly fails.
+    """
+    from .image_strategy import _resize_to_max_edge, _to_png_bytes, _MAX_LONG_EDGE
+    global_img = _resize_to_max_edge(page_img, _MAX_LONG_EDGE)
+    return (ImagePart(
+        image_data=_to_png_bytes(global_img),
+        role="global",
+        media_type="image/png",
+        detail="auto",
+    ),)
 
 
 def _select_pass_c_images(
@@ -1503,6 +1524,35 @@ def analyze_diagram_pages(
         pass_a_escalation_succeeded = False
         pass_a_parse_outcome = "unknown"
 
+        # Issue #76: payload-reduction fallback before declaring provider failure.
+        # A reduced single-image, lower-detail request often succeeds when a
+        # tiled/high-detail request triggers gateway/payload-size errors.
+        payload_reduction_attempted = False
+        payload_reduction_succeeded = False
+        if (pass_a_out is None or not pass_a_out.raw_text) and len(pass_a_images) > 1:
+            payload_reduction_attempted = True
+            logger.info(
+                "Slide %d: Pass A returned no output — retrying with reduced image payload",
+                slide_num,
+            )
+            reduced_images = _reduced_pass_a_images(page_img)
+            reduced_out, reduced_usage = _call_llm(
+                provider, client, model, pass_a_prompt,
+                reduced_images, primary_settings, limiter,
+                max_tokens=pass_a_requested_tokens,
+            )
+            total_usage = TokenUsage(
+                input_tokens=total_usage.input_tokens + reduced_usage.input_tokens,
+                output_tokens=total_usage.output_tokens + reduced_usage.output_tokens,
+                total_tokens=total_usage.total_tokens + reduced_usage.total_tokens,
+            )
+            if reduced_out and reduced_out.raw_text:
+                pass_a_out = reduced_out
+                pass_a_images = reduced_images
+                pass_a_truncated = reduced_out.truncated
+                pass_a_raw_len = len(reduced_out.raw_text)
+                payload_reduction_succeeded = True
+
         if pass_a_out is None or not pass_a_out.raw_text:
             pass_a_parse_outcome = "provider_failure"
             # #5 fix: explicit log for provider failure
@@ -1518,6 +1568,7 @@ def analyze_diagram_pages(
                 "pass_a_raw_response_length": pass_a_raw_len,
                 "pass_a_escalation_retry_attempted": False,
                 "pass_a_escalation_retry_succeeded": False,
+                "pass_a_payload_reduction_attempted": payload_reduction_attempted,
                 "pass_a_parse_outcome": pass_a_parse_outcome,
             })
             results[slide_num] = analysis
@@ -1978,6 +2029,8 @@ def analyze_diagram_pages(
             "pass_a_raw_response_length": pass_a_raw_len,
             "pass_a_escalation_retry_attempted": pass_a_escalation_attempted,
             "pass_a_escalation_retry_succeeded": pass_a_escalation_succeeded,
+            "pass_a_payload_reduction_attempted": payload_reduction_attempted,
+            "pass_a_payload_reduction_succeeded": payload_reduction_succeeded,
             "pass_a_parse_outcome": pass_a_parse_outcome,
             "pass_b_mutations": mutation_accounting,
             "pass_b_sanity_triggered": sanity_triggered,
