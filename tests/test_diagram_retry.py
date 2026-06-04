@@ -424,6 +424,44 @@ class TestConvertDiagramsOrchestration:
         assert "diagram_review_required_slide_2" not in text_after
         assert text_after.rstrip().endswith("Body.")
 
+    def test_slides_scopes_retry_to_named_slides(self, tmp_path, monkeypatch):
+        # Review fix: `--slides 35 --retry-failed-diagrams` must touch ONLY slide
+        # 35 even when slide 36 also failed.
+        library = tmp_path / "library"
+        deck_dir = library / "evidence" / "deck"
+        deck_dir.mkdir(parents=True)
+        deck_md = deck_dir / "deck.md"
+        deck_md.write_text(
+            "---\nid: deck-1\ncreated: '2026-06-04'\nreview_status: flagged\n"
+            "review_flags: []\n---\n\n# Deck\n\nBody.\n"
+        )
+        for page in (35, 36):
+            _write_sidecar(deck_dir, "deck", "20260604", page, review_required=True,
+                           _extraction_metadata={"pass_a_parse_outcome": "provider_failure"})
+        source = tmp_path / "deck.pptx"
+        source.write_bytes(b"fake-pptx")
+
+        config = FolioConfig(library_root=library)
+        converter = FolioConverter(config)
+        monkeypatch.setattr(converter, "_resolve_target", lambda *a, **k: deck_dir)
+
+        emit_calls = {}
+
+        def fake_emit(**kwargs):
+            emit_calls.update(kwargs)
+            return {}
+        monkeypatch.setattr("folio.output.diagram_notes.emit_diagram_notes", fake_emit)
+
+        page_profiles = {35: _profile("diagram"), 36: _profile("diagram")}
+        retried = {35: DiagramAnalysis(diagram_type="process"),
+                   36: DiagramAnalysis(diagram_type="process")}
+        self._patch_stages(monkeypatch, converter, page_profiles, retried)
+
+        result = converter.convert_diagrams(source, slides=[35], retry_failed=True)
+
+        assert result.retried_slides == [35]
+        assert set(emit_calls["analyses"].keys()) == {35}
+
 
 # ---------------------------------------------------------------------------
 # CLI flag parsing + dispatch

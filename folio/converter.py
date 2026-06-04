@@ -306,6 +306,19 @@ class FolioConverter:
             else:
                 targets = set(candidate_slides)
 
+            # An explicit --slides scopes the retry even when a retry flag is
+            # used, so `--slides 35 --retry-failed-diagrams` only ever touches
+            # slide 35 (never every failed sidecar).
+            if slides and (retry_failed or retry_review_required):
+                requested = set(slides)
+                dropped = targets - requested
+                targets &= requested
+                if dropped:
+                    logger.info(
+                        "Restricting retry to --slides %s (skipped %s)",
+                        sorted(requested), sorted(dropped),
+                    )
+
             if not targets:
                 logger.info("No diagram slides to retry.")
                 return DiagramRetryResult(
