@@ -109,6 +109,8 @@ def _append_findings(lines: list[str], findings: Iterable[InteractionFinding]) -
             lines.append(f"  - speaker: {finding.speaker}")
         if finding.timestamp:
             lines.append(f"  - timestamp: {finding.timestamp}")
+        elif finding.timestamp_review:
+            lines.append("  - timestamp: needs-review")
         if finding.attribution:
             lines.append(f"  - attribution: {finding.attribution}")
         if finding.owner:
@@ -139,6 +141,8 @@ def _append_quotes(lines: list[str], quotes: Iterable[InteractionQuote]) -> None
             lines.append(f"  - speaker: {quote.speaker}")
         if quote.timestamp:
             lines.append(f"  - timestamp: {quote.timestamp}")
+        elif quote.timestamp_review:
+            lines.append("  - timestamp: needs-review")
         lines.append(f"  - validated: {'yes' if quote.validated else 'no'}")
 
 
