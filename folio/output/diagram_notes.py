@@ -181,6 +181,47 @@ def _build_note_frontmatter(
     return fm
 
 
+def _build_structured_inventory(graph: "DiagramGraph | None") -> list[str]:
+    """Issue #76: surface zones/lanes, stages, decisions, and callouts derived
+    from the extracted graph, so consulting process/concept diagrams carry a
+    structured inventory even when Mermaid rendering is unavailable.
+
+    Returns [] when none of the inventory categories apply (e.g. a pure
+    architecture graph), leaving existing architecture/data-flow notes unchanged.
+    """
+    if graph is None or not getattr(graph, "nodes", None):
+        return []
+    stage_kinds = {"process", "start", "end"}
+    zones = list(graph.groups)
+    containers = [n for n in graph.nodes if (n.kind or "") == "container"]
+    stages = [n for n in graph.nodes if (n.kind or "") in stage_kinds]
+    decisions = [n for n in graph.nodes if (n.kind or "") == "decision"]
+    callouts = [n for n in graph.nodes if (n.kind or "") == "note"]
+    if not (zones or containers or stages or decisions or callouts):
+        return []
+
+    lines = ["## Structured Inventory", ""]
+
+    def _emit(label: str, items: list[str]) -> None:
+        if not items:
+            return
+        lines.append(f"**{label}:**")
+        lines.append("")
+        for item in items:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    zone_items = [
+        f"{g.name} ({len(g.contains)} component{'s' if len(g.contains) != 1 else ''})"
+        for g in zones
+    ] + [n.label for n in containers]
+    _emit("Zones / Lanes", zone_items)
+    _emit("Stages", [n.label for n in stages])
+    _emit("Decisions", [n.label for n in decisions])
+    _emit("Callouts", [n.label for n in callouts])
+    return lines
+
+
 def _build_note_body(
     analysis: DiagramAnalysis,
     deck_slug: str,
@@ -268,6 +309,10 @@ def _build_note_body(
             lines.append("")
             lines.append("> No connection table available.")
             lines.append("")
+
+        # Structured Inventory (issue #76): zones/lanes/stages/decisions/callouts.
+        # Empty for pure architecture/data-flow graphs, so those notes are unchanged.
+        lines.extend(_build_structured_inventory(analysis.graph))
 
         # Summary
         if analysis.description:
@@ -543,6 +588,100 @@ def _extract_section(content: str, section_name: str) -> str | None:
                 break
 
     return content[start:end].strip()
+
+
+def discover_retry_candidates(
+    deck_dir: Path,
+    deck_slug: str,
+    created_date: str,
+    page_profiles: dict[int, Any],
+    *,
+    mode: str,
+) -> dict[int, str]:
+    """Issue #76: scan emitted diagram sidecars for surgical-retry candidates.
+
+    Reads each diagram note's frontmatter and returns ``{page_number: reason}``
+    for notes that warrant a retry under ``mode``:
+
+    - ``"failed"``: ``_extraction_metadata.pass_a_parse_outcome`` is
+      ``"provider_failure"``.
+    - ``"review_required"``: ``review_required`` is true.
+
+    Frozen notes (``folio_freeze: true``) are skipped — they are intentionally
+    pinned and must not be rewritten.
+    """
+    candidates: dict[int, str] = {}
+    for page_num, profile in page_profiles.items():
+        classification = getattr(profile, "classification", "text")
+        if classification not in DIAGRAM_CLASSIFICATIONS:
+            continue
+        basename = build_note_basename(created_date, deck_slug, page_num)
+        note_path = deck_dir / f"{basename}.md"
+        if not note_path.exists():
+            continue
+        try:
+            content = note_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        fm = _parse_frontmatter_from_content(content)
+        if not isinstance(fm, dict) or fm.get("folio_freeze"):
+            continue
+        reason = _retry_reason(fm, mode)
+        if reason:
+            candidates[page_num] = reason
+    return candidates
+
+
+def _retry_reason(fm: dict, mode: str) -> str | None:
+    if mode == "failed":
+        meta = fm.get("_extraction_metadata")
+        outcome = meta.get("pass_a_parse_outcome") if isinstance(meta, dict) else None
+        return "provider_failure" if outcome == "provider_failure" else None
+    if mode == "review_required":
+        return "review_required" if fm.get("review_required") else None
+    raise ValueError(f"Unknown retry mode: {mode}")
+
+
+def collect_diagram_retry_candidates(
+    analyses: dict[int, Any],
+) -> list[tuple[int, str]]:
+    """Issue #76: in-memory retry-candidate scan for end-of-run summaries.
+
+    Returns a sorted ``[(slide, reason)]`` list for DiagramAnalysis instances
+    that are provider failures or still flagged for review. ``provider_failure``
+    takes precedence over ``review_required`` in the reason label.
+    """
+    candidates: list[tuple[int, str]] = []
+    for slide_num in sorted(analyses):
+        analysis = analyses[slide_num]
+        if not isinstance(analysis, DiagramAnalysis):
+            continue
+        meta = getattr(analysis, "_extraction_metadata", {}) or {}
+        if meta.get("pass_a_parse_outcome") == "provider_failure":
+            candidates.append((slide_num, "provider_failure"))
+        elif getattr(analysis, "review_required", False):
+            candidates.append((slide_num, "review_required"))
+    return candidates
+
+
+def format_retry_candidate_summary(
+    candidates: list[tuple[int, str]],
+    *,
+    source_name: str,
+) -> str | None:
+    """Render the end-of-run retry-candidate summary block (issue #76).
+
+    Returns None when there are no candidates.
+    """
+    if not candidates:
+        return None
+    lines = ["Diagram retry candidates:"]
+    for slide_num, reason in candidates:
+        lines.append(f"- slide {slide_num}: {reason}")
+    has_failure = any(reason == "provider_failure" for _, reason in candidates)
+    flag = "--retry-failed-diagrams" if has_failure else "--retry-review-required-diagrams"
+    lines.append(f"Run: folio convert {source_name} {flag}")
+    return "\n".join(lines)
 
 
 def discover_frozen_notes(

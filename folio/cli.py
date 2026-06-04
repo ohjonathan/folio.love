@@ -374,6 +374,15 @@ def cli(ctx, verbose: bool, config: Optional[str]):
         ctx.obj["config"] = FolioConfig.load(config_path)
 
 
+def _echo_retry_candidates(candidates, source_name: str) -> None:
+    """Print the issue #76 diagram retry-candidate summary, if any."""
+    from .output.diagram_notes import format_retry_candidate_summary
+    summary = format_retry_candidate_summary(candidates, source_name=source_name)
+    if summary:
+        click.echo("")
+        click.echo(summary)
+
+
 @cli.command()
 @click.argument("source", type=click.Path(exists=True))
 @click.option("--note", "-n", default=None, help="Version note (e.g. 'Updated per client feedback').")
@@ -389,9 +398,20 @@ def cli(ctx, verbose: bool, config: Optional[str]):
 @click.option("--industry", default=None, help="Industry tags (comma-separated, e.g. 'retail,ecommerce').")
 @click.option("--tags", default=None, help="Manual tags to merge with auto-generated (comma-separated).")
 @click.option("--llm-profile", default=None, help="Override LLM profile (defined in folio.yaml).")
+@click.option("--slides", default=None,
+              help="Comma-separated slide numbers for diagram retry (e.g. '35,36,39'). "
+                   "Requires --diagrams-only or a --retry-*-diagrams flag.")
+@click.option("--diagrams-only", is_flag=True, default=False,
+              help="Re-run only diagram extraction on selected slides (no Pass 1/2; deck body preserved).")
+@click.option("--retry-failed-diagrams", is_flag=True, default=False,
+              help="Retry diagram slides whose sidecar shows a provider failure.")
+@click.option("--retry-review-required-diagrams", is_flag=True, default=False,
+              help="Retry diagram slides whose sidecar is flagged review_required.")
 @click.pass_context
 def convert(ctx, source: str, note: str, client: str, engagement: str, target: str, passes: int, no_cache: bool,
-            subtype: str, industry: str, tags: str, llm_profile: str):
+            subtype: str, industry: str, tags: str, llm_profile: str,
+            slides: str, diagrams_only: bool, retry_failed_diagrams: bool,
+            retry_review_required_diagrams: bool):
     """Convert a single deck or document to Folio markdown.
 
     SOURCE is the path to a PPTX, PDF, or DOCX file.
@@ -412,7 +432,44 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
     industry_list = [s.strip() for s in industry.split(",") if s.strip()] if industry else None
     tags_list = [s.strip() for s in tags.split(",") if s.strip()] if tags else None
 
+    diagram_retry_mode = diagrams_only or retry_failed_diagrams or retry_review_required_diagrams
     try:
+        slides_list = [int(s.strip()) for s in slides.split(",") if s.strip()] if slides else None
+    except ValueError:
+        click.echo("✗ Error: --slides must be comma-separated integers (e.g. '35,36,39').", err=True)
+        sys.exit(1)
+    if slides_list and not diagram_retry_mode:
+        click.echo(
+            "✗ Error: --slides requires --diagrams-only or a --retry-*-diagrams flag.",
+            err=True,
+        )
+        sys.exit(1)
+
+    try:
+        if diagram_retry_mode:
+            retry_result = converter.convert_diagrams(
+                source_path=Path(source),
+                slides=slides_list,
+                retry_failed=retry_failed_diagrams,
+                retry_review_required=retry_review_required_diagrams,
+                client=client,
+                engagement=engagement,
+                target=Path(target) if target else None,
+                llm_profile=llm_profile,
+            )
+            click.echo(f"✓ {Path(source).name} (diagram retry)")
+            if retry_result.retried_slides:
+                slides_str = ", ".join(str(s) for s in retry_result.retried_slides)
+                click.echo(f"  Retried slides: {slides_str}")
+                click.echo(
+                    f"  {retry_result.refreshed_notes} diagram note(s) refreshed "
+                    f"→ {retry_result.output_path}"
+                )
+            else:
+                click.echo("  No diagram slides matched the retry selection.")
+            _echo_retry_candidates(retry_result.remaining_candidates, Path(source).name)
+            return
+
         result = converter.convert(
             source_path=Path(source),
             note=note,
@@ -442,6 +499,8 @@ def convert(ctx, source: str, note: str, client: str, engagement: str, target: s
         if result.cache_stats and result.cache_stats.total > 0:
             s = result.cache_stats
             click.echo(f"  Cache: {s.hits}/{s.total} hits ({s.hit_rate:.0%})")
+
+        _echo_retry_candidates(result.diagram_retry_candidates, Path(source).name)
 
     except FileNotFoundError as e:
         click.echo(f"✗ Error: {e}", err=True)

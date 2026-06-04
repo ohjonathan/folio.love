@@ -738,7 +738,7 @@ class TestExtractionMetadata:
 
 
 class TestSupportedDiagramTypes:
-    """Regression tests for v1 type gate narrowing."""
+    """Regression tests for the first-class diagram type gate."""
 
     def test_architecture_supported(self):
         assert "architecture" in _SUPPORTED_DIAGRAM_TYPES
@@ -746,9 +746,19 @@ class TestSupportedDiagramTypes:
     def test_data_flow_supported(self):
         assert "data-flow" in _SUPPORTED_DIAGRAM_TYPES
 
-    def test_only_two_types_supported(self):
-        """v1 is strictly architecture + data-flow per proposal L62."""
-        assert len(_SUPPORTED_DIAGRAM_TYPES) == 2
+    def test_concept_map_supported(self):
+        # Issue #76: concept-map is now first-class (no longer abstains).
+        assert "concept-map" in _SUPPORTED_DIAGRAM_TYPES
+
+    def test_process_supported(self):
+        # Issue #76: process is now first-class (no longer abstains).
+        assert "process" in _SUPPORTED_DIAGRAM_TYPES
+
+    def test_first_class_type_set(self):
+        """Exactly architecture, data-flow, concept-map, and process."""
+        assert _SUPPORTED_DIAGRAM_TYPES == {
+            "architecture", "data-flow", "concept-map", "process"
+        }
 
     @pytest.mark.parametrize("unsupported", [
         "flowchart", "sequence", "class", "entity-relationship",
@@ -756,7 +766,7 @@ class TestSupportedDiagramTypes:
         "unknown", "state-machine", "deployment",
     ])
     def test_other_types_abstain(self, unsupported):
-        """All non-v1 diagram types must NOT be in the supported set."""
+        """Non-first-class diagram types must NOT be in the supported set."""
         assert unsupported not in _SUPPORTED_DIAGRAM_TYPES
 
 

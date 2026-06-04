@@ -7,6 +7,30 @@ deliverable per parent enrich spec §7.7. Subsequent breaking changes follow sta
 
 ## [Unreleased]
 
+### Added
+
+- **Slide-scoped diagram retries (issue #76).** `folio convert` gains
+  `--diagrams-only`, `--slides 35,36,39`, `--retry-failed-diagrams`, and
+  `--retry-review-required-diagrams`. These dispatch to a new surgical
+  `FolioConverter.convert_diagrams()` path that re-extracts only the targeted
+  diagram slides, refreshes their standalone note sidecars, and updates the deck
+  frontmatter's diagram review flags and registry entry in place — without
+  re-running Pass 1/Pass 2 or rewriting the deck body. Candidates are detected
+  from sidecar metadata (`pass_a_parse_outcome: provider_failure`,
+  `review_required: true`).
+- **`concept-map` and `process` are first-class diagram types (issue #76).**
+  They no longer abstain; their node/edge structure renders as Mermaid plus a new
+  **Structured Inventory** section (zones/lanes, stages, decisions, callouts)
+  derived from the graph, emitted even when Mermaid is unavailable. "Cannot
+  render Mermaid" is now distinct from "cannot extract structure" (only the
+  latter abstains).
+- **Diagram provider-failure resilience (issue #76).** Pass A retries once with
+  a reduced single-image payload before declaring a provider failure, and each
+  run ends with a `Diagram retry candidates:` summary suggesting the matching
+  `--retry-*` command. Successful diagram work persists to
+  `.analysis_cache_diagram_*.json` even on `--no-cache` runs so later retries are
+  surgical.
+
 ### Fixed
 
 - **VTT/SRT analysis timestamps are normalized (issue #75).** Timestamps in

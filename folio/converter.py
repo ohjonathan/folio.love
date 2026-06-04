@@ -3,7 +3,7 @@
 import logging
 import re
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -54,6 +54,73 @@ class ConversionResult:
     deck_id: str
     renderer_used: str = "unknown"
     cache_stats: Optional["analysis.CacheStats"] = None
+    # Issue #76: diagram slides still needing a retry after this run.
+    diagram_retry_candidates: list = field(default_factory=list)
+
+
+@dataclass
+class DiagramRetryResult:
+    """Result of a surgical diagram-only retry (issue #76)."""
+    output_path: Path
+    retried_slides: list
+    refreshed_notes: int
+    remaining_candidates: list
+    cache_stats: Optional["analysis.CacheStats"] = None
+
+
+_DECK_FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.DOTALL)
+_DIAGRAM_SLIDE_FLAG_PREFIXES = (
+    "diagram_abstained_slide_",
+    "diagram_review_required_slide_",
+    "diagram_open_questions_slide_",
+)
+
+
+def _replace_leading_frontmatter(content: str, fm: dict) -> str:
+    """Replace the leading YAML frontmatter block, preserving the body exactly."""
+    yaml_str = yaml_lib.dump(
+        fm, default_flow_style=False, sort_keys=False, allow_unicode=True
+    )
+    block = f"---\n{yaml_str}---\n"
+    if _DECK_FRONTMATTER_RE.match(content):
+        return _DECK_FRONTMATTER_RE.sub(lambda _m: block, content, count=1)
+    return f"{block}\n{content}"
+
+
+def _recompute_diagram_review_flags(
+    existing_flags: list,
+    retried: dict,
+) -> list:
+    """Issue #76: recompute diagram review flags for surgically-retried slides.
+
+    Removes stale ``diagram_*_slide_{n}`` flags for the retried slides and
+    re-adds them from the refreshed analyses, preserving every other flag.
+    Mirrors ``analysis.assess_review_state``'s diagram-flag logic so a
+    diagrams-only retry keeps deck frontmatter consistent without Pass 1.
+    """
+    targets = set(retried)
+
+    def _slide_of(flag: str) -> Optional[int]:
+        for prefix in _DIAGRAM_SLIDE_FLAG_PREFIXES:
+            if flag.startswith(prefix):
+                try:
+                    return int(flag[len(prefix):])
+                except ValueError:
+                    return None
+        return None
+
+    kept = [f for f in existing_flags if _slide_of(str(f)) not in targets]
+
+    added: list[str] = []
+    for slide_num, a in retried.items():
+        if getattr(a, "abstained", False):
+            added.append(f"diagram_abstained_slide_{slide_num}")
+        else:
+            if getattr(a, "review_required", False):
+                added.append(f"diagram_review_required_slide_{slide_num}")
+            if getattr(a, "review_questions", None):
+                added.append(f"diagram_open_questions_slide_{slide_num}")
+    return sorted(set(kept) | set(added))
 
 
 class FolioConverter:
@@ -110,6 +177,258 @@ class FolioConverter:
                     profile.model,
                     warning_reason,
                 )
+
+    def convert_diagrams(
+        self,
+        source_path: Path,
+        *,
+        slides: Optional[list[int]] = None,
+        retry_failed: bool = False,
+        retry_review_required: bool = False,
+        client: Optional[str] = None,
+        engagement: Optional[str] = None,
+        target: Optional[Path] = None,
+        llm_profile: Optional[str] = None,
+    ) -> "DiagramRetryResult":
+        """Surgically re-run diagram extraction on selected slides (issue #76).
+
+        Unlike :meth:`convert`, this never re-runs Pass 1/Pass 2 or rewrites the
+        deck body. It re-extracts the targeted diagram slides, refreshes their
+        standalone note sidecars, and updates the deck frontmatter's diagram
+        review flags and the registry entry in place. Requires a prior full
+        conversion (raises ``FileNotFoundError`` otherwise).
+
+        Targets are resolved as: explicit ``slides`` (intersected with diagram
+        slides), else ``retry_failed`` (sidecars with ``provider_failure``), else
+        ``retry_review_required`` (sidecars with ``review_required``), else all
+        non-frozen diagram slides.
+        """
+        from .output.diagram_notes import (
+            collect_diagram_retry_candidates,
+            discover_frozen_notes,
+            discover_retry_candidates,
+            emit_diagram_notes,
+        )
+        from .output import diagram_rendering
+        from .pipeline import diagram_extraction as diag_ext
+
+        source_path = Path(source_path).resolve()
+        if not source_path.exists():
+            raise FileNotFoundError(f"Source file not found: {source_path}")
+        if source_path.suffix.lower() in DOCUMENT_EXTENSIONS:
+            raise ValueError(
+                "Diagram retry is only supported for slide decks, not documents."
+            )
+
+        resolved_metadata = resolve_convert_metadata(
+            self.config,
+            source_path=source_path,
+            client=client,
+            engagement=engagement,
+            target=target,
+        )
+        client = resolved_metadata.client
+        engagement = resolved_metadata.engagement
+        target = resolved_metadata.target
+
+        deck_name = _sanitize_name(source_path.stem)
+        inferred_client, inferred_engagement = self._infer_from_source_root(
+            source_path, client, engagement
+        )
+        effective_client = client if client is not None else inferred_client
+        effective_engagement = engagement if engagement is not None else inferred_engagement
+        deck_dir = self._resolve_target(
+            source_path, deck_name, effective_client, effective_engagement, target
+        )
+        markdown_path = deck_dir / f"{deck_name}.md"
+        if not markdown_path.exists():
+            raise FileNotFoundError(
+                f"No prior conversion found at {markdown_path}. "
+                f"Run `folio convert {source_path.name}` first."
+            )
+        existing_fm = _read_existing_frontmatter(markdown_path)
+
+        created_date = datetime.now(timezone.utc).strftime("%Y%m%d")
+        if isinstance(existing_fm, dict):
+            prev_created = existing_fm.get("created", "")
+            if isinstance(prev_created, str) and len(prev_created) >= 10:
+                created_date = prev_created[:10].replace("-", "")
+
+        profile = self.config.llm.resolve_profile(llm_profile, task="convert")
+        all_provider_settings = self.config.providers
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            norm_result = normalize.to_pdf(
+                source_path, tmpdir,
+                timeout=self.config.conversion.libreoffice_timeout,
+                renderer=self.config.conversion.pptx_renderer,
+            )
+            pdf_path = norm_result.pdf_path
+            page_profiles = inspect.inspect_pages(pdf_path)
+            image_results = images.extract_with_metadata(
+                pdf_path, deck_dir,
+                dpi=self.config.conversion.image_dpi,
+                page_profiles=page_profiles,
+                max_image_pixels=self.config.conversion.max_image_pixels,
+            )
+            slide_texts = text.extract_structured(source_path)
+            slide_count = len(image_results)
+            reconciliation = text.reconcile_slide_count(slide_texts, slide_count)
+            slide_texts = reconciliation.slide_texts
+
+            diagram_or_mixed_slides = {
+                p for p, prof in page_profiles.items()
+                if prof.classification in {"diagram", "mixed"}
+            }
+            frozen_payloads = discover_frozen_notes(
+                deck_dir, deck_name, created_date, page_profiles
+            )
+            candidate_slides = diagram_or_mixed_slides - set(frozen_payloads)
+
+            if retry_failed:
+                targets = set(discover_retry_candidates(
+                    deck_dir, deck_name, created_date, page_profiles, mode="failed"
+                ))
+            elif retry_review_required:
+                targets = set(discover_retry_candidates(
+                    deck_dir, deck_name, created_date, page_profiles,
+                    mode="review_required",
+                ))
+            elif slides:
+                requested = set(slides)
+                targets = requested & candidate_slides
+                skipped = requested - candidate_slides
+                if skipped:
+                    logger.warning(
+                        "Skipping non-diagram or frozen slides: %s", sorted(skipped)
+                    )
+            else:
+                targets = set(candidate_slides)
+
+            # An explicit --slides scopes the retry even when a retry flag is
+            # used, so `--slides 35 --retry-failed-diagrams` only ever touches
+            # slide 35 (never every failed sidecar).
+            if slides and (retry_failed or retry_review_required):
+                requested = set(slides)
+                dropped = targets - requested
+                targets &= requested
+                if dropped:
+                    logger.info(
+                        "Restricting retry to --slides %s (skipped %s)",
+                        sorted(requested), sorted(dropped),
+                    )
+
+            if not targets:
+                logger.info("No diagram slides to retry.")
+                return DiagramRetryResult(
+                    output_path=markdown_path,
+                    retried_slides=[],
+                    refreshed_notes=0,
+                    remaining_candidates=[],
+                    cache_stats=None,
+                )
+
+            # Build minimal DiagramAnalysis placeholders (no Pass 1 available).
+            results: dict[int, Any] = {}
+            for slide_num in targets:
+                prof = page_profiles.get(slide_num)
+                dtype = prof.classification if prof else "unknown"
+                results[slide_num] = analysis.DiagramAnalysis(diagram_type=dtype)
+
+            self._run_profile_preflight([profile])
+            retried, diagram_stats, _meta = diag_ext.analyze_diagram_pages(
+                pass1_results=results,
+                page_profiles=page_profiles,
+                image_results=image_results,
+                slide_texts=slide_texts,
+                cache_dir=deck_dir,
+                force_miss=True,
+                provider_name=profile.provider,
+                model=profile.model,
+                api_key_env=profile.api_key_env,
+                base_url_env=profile.base_url_env,
+                all_provider_settings=all_provider_settings,
+                slide_numbers=sorted(targets),
+                diagram_max_tokens=self.config.conversion.diagram_max_tokens,
+            )
+            retried = diagram_rendering.render_diagram_analyses(retried)
+
+            # Refresh ONLY the targeted sidecars (non-targets are left untouched).
+            emit_diagram_notes(
+                deck_dir=deck_dir,
+                deck_slug=deck_name,
+                deck_title=_title_from_name(deck_name),
+                created_date=created_date,
+                analyses=retried,
+                page_profiles=page_profiles,
+            )
+
+        # Refresh deck frontmatter diagram review flags + registry (body-preserving).
+        self._refresh_deck_diagram_flags(markdown_path, retried)
+
+        remaining = collect_diagram_retry_candidates(retried)
+        refreshed = sum(
+            1 for s in retried if isinstance(retried[s], analysis.DiagramAnalysis)
+        )
+        logger.info(
+            "  ✓ Retried diagram slides %s (%d notes refreshed, %d still flagged)",
+            sorted(targets), refreshed, len(remaining),
+        )
+        return DiagramRetryResult(
+            output_path=markdown_path,
+            retried_slides=sorted(targets),
+            refreshed_notes=refreshed,
+            remaining_candidates=remaining,
+            cache_stats=diagram_stats,
+        )
+
+    def _refresh_deck_diagram_flags(self, markdown_path: Path, retried: dict) -> None:
+        """Issue #76: update deck frontmatter diagram review flags + registry.
+
+        Recomputes only the ``diagram_*_slide_{n}`` flags for the retried slides
+        (all other flags preserved), rewrites the deck frontmatter in place
+        without touching the body, and syncs the registry entry's
+        frontmatter-authoritative review fields.
+        """
+        try:
+            content = markdown_path.read_text(encoding="utf-8")
+        except OSError:
+            return
+        fm = _read_existing_frontmatter(markdown_path)
+        if not isinstance(fm, dict):
+            return
+
+        existing_flags = fm.get("review_flags")
+        existing_flags = existing_flags if isinstance(existing_flags, list) else []
+        existing_status = fm.get("review_status")
+        new_flags = _recompute_diagram_review_flags(existing_flags, retried)
+        if new_flags:
+            new_status = "flagged"
+        elif existing_status in {"reviewed", "overridden"}:
+            new_status = existing_status
+        else:
+            new_status = "clean"
+
+        fm["review_flags"] = new_flags
+        fm["review_status"] = new_status
+        new_content = _replace_leading_frontmatter(content, fm)
+        tmp = markdown_path.with_suffix(".md.tmp")
+        tmp.write_text(new_content)
+        tmp.rename(markdown_path)
+
+        # Registry review fields are frontmatter-authoritative.
+        deck_id = fm.get("id")
+        if not deck_id:
+            return
+        library_root = self.config.library_root.resolve()
+        registry_path = library_root / "registry.json"
+        data = registry.load_registry(registry_path)
+        decks = data.get("decks", {})
+        if deck_id in decks:
+            decks[deck_id]["review_status"] = new_status
+            decks[deck_id]["review_flags"] = new_flags
+            registry.save_registry(registry_path, data)
 
     def convert(
         self,
@@ -740,6 +1059,11 @@ class FolioConverter:
             markdown_path.name, version_info.version, slide_count,
         )
 
+        # Issue #76: surface diagram slides still needing a retry (e.g. transient
+        # provider failures) so the operator can run a surgical retry.
+        from .output.diagram_notes import collect_diagram_retry_candidates
+        diagram_retry_candidates = collect_diagram_retry_candidates(slide_analyses)
+
         return ConversionResult(
             output_path=markdown_path,
             slide_count=slide_count,
@@ -748,6 +1072,7 @@ class FolioConverter:
             deck_id=deck_id,
             renderer_used=renderer_used,
             cache_stats=combined_stats,
+            diagram_retry_candidates=diagram_retry_candidates,
         )
 
     def _convert_document(
