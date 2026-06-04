@@ -89,6 +89,17 @@ def _analysis_payload(*, quote: str = "We reduced downtime from twelve hours to 
 """.strip()
 
 
+def _payload_with_claim_timestamp(timestamp: str) -> str:
+    return (
+        '{"summary":"Summary text.","tags":[],'
+        '"findings":{"claims":[{"statement":"A clear statement.",'
+        '"quote":"Q","element_type":"statement","confidence":"high",'
+        '"timestamp":"' + timestamp + '"}],'
+        '"data_points":[],"decisions":[],"open_questions":[],"action_items":[]},'
+        '"entities":{},"notable_quotes":[],"warnings":[]}'
+    )
+
+
 class TestNormalizeHelpers:
     def test_strip_leading_frontmatter(self):
         text = "---\ntitle: Example\n---\n\n# Heading\nBody\n"
@@ -98,6 +109,130 @@ class TestNormalizeHelpers:
         text = "\n---\ntitle: Example\n---\n\nLine 1\r\nLine 2\r\n"
         result = normalize_source_text(text, strip_markdown_frontmatter=True)
         assert result == "Line 1\nLine 2"
+
+    def test_plain_text_timestamps_in_body_are_not_reformatted(self):
+        # Issue #75: .txt/.md ingest must not parse or rewrite timestamps in the
+        # transcript body; only extracted finding fields are canonicalized.
+        text = "Speaker at 04:21:900 said hello, then 01:20:49:519 later."
+        assert normalize_source_text(text) == text
+
+
+class TestTimestampNormalization:
+    """Issue #75: canonicalize timestamps in extracted findings/quotes."""
+
+    def test_coerce_findings_repairs_colon_milliseconds(self):
+        findings = interaction_analysis_module._coerce_findings(
+            [
+                {"statement": "A", "quote": "q", "timestamp": "01:20:49:519"},
+                {"statement": "B", "quote": "q", "timestamp": "01:22:44:700"},
+                {"statement": "C", "quote": "q", "timestamp": "04:21:900"},
+            ],
+            "",
+        )
+        assert [f.timestamp for f in findings] == [
+            "01:20:49.519",
+            "01:22:44.700",
+            "00:04:21.900",
+        ]
+        assert all(f.timestamp_review is False for f in findings)
+
+    def test_coerce_findings_flags_inverted_range(self):
+        findings = interaction_analysis_module._coerce_findings(
+            [{"statement": "A", "quote": "q", "timestamp": "03:03:03.650 - 03:18:819"}],
+            "",
+        )
+        assert findings[0].timestamp is None
+        assert findings[0].timestamp_review is True
+
+    def test_coerce_findings_preserves_valid_and_absent_timestamps(self):
+        findings = interaction_analysis_module._coerce_findings(
+            [
+                {"statement": "A", "quote": "q", "timestamp": "00:03:03.650 - 00:03:18.819"},
+                {"statement": "B", "quote": "q", "timestamp": "00:04:15"},
+                {"statement": "C", "quote": "q"},
+            ],
+            "",
+        )
+        assert findings[0].timestamp == "00:03:03.650 - 00:03:18.819"
+        assert findings[1].timestamp == "00:04:15"
+        assert findings[2].timestamp is None
+        assert all(f.timestamp_review is False for f in findings)
+
+    def test_coerce_quotes_repairs_and_flags(self):
+        quotes = interaction_analysis_module._coerce_quotes(
+            [
+                {"quote": "q1", "timestamp": "01:22:44:700"},
+                {"quote": "q2", "timestamp": "not-a-timestamp"},
+            ],
+            "",
+        )
+        assert quotes[0].timestamp == "01:22:44.700"
+        assert quotes[0].timestamp_review is False
+        assert quotes[1].timestamp is None
+        assert quotes[1].timestamp_review is True
+
+    @patch("folio.pipeline.interaction_analysis.get_provider")
+    @patch("folio.pipeline.interaction_analysis.execute_with_retry")
+    def test_end_to_end_repairs_colon_timestamp(self, mock_execute, mock_get_provider):
+        mock_get_provider.return_value = _FakeProvider()
+        mock_execute.return_value = ProviderOutput(
+            raw_text=_payload_with_claim_timestamp("01:20:49:519"),
+            provider_name="fake",
+            model_name="model-x",
+            usage=TokenUsage(total_tokens=10),
+        )
+        result = analyze_interaction_text(
+            "Some transcript content here.",
+            "internal_sync",
+            provider_name="fake",
+            model="model-x",
+        )
+        assert result.claims[0].timestamp == "01:20:49.519"
+        assert not any(f.startswith("timestamp_review") for f in result.review_flags)
+
+    @patch("folio.pipeline.interaction_analysis.get_provider")
+    @patch("folio.pipeline.interaction_analysis.execute_with_retry")
+    def test_end_to_end_flags_unrepairable_timestamp(self, mock_execute, mock_get_provider):
+        mock_get_provider.return_value = _FakeProvider()
+        mock_execute.return_value = ProviderOutput(
+            raw_text=_payload_with_claim_timestamp("03:03:03.650 - 03:18:819"),
+            provider_name="fake",
+            model_name="model-x",
+            usage=TokenUsage(total_tokens=10),
+        )
+        result = analyze_interaction_text(
+            "Some transcript content here.",
+            "internal_sync",
+            provider_name="fake",
+            model="model-x",
+        )
+        assert result.claims[0].timestamp is None
+        assert result.claims[0].timestamp_review is True
+        assert "timestamp_review_claim_1" in result.review_flags
+        assert result.review_status == "flagged"
+
+    def test_markdown_renders_needs_review_and_hides_malformed_value(self):
+        analysis = InteractionAnalysisResult(
+            summary="S",
+            claims=[
+                InteractionFinding(
+                    statement="A",
+                    quote="Q",
+                    timestamp=None,
+                    timestamp_review=True,
+                )
+            ],
+        )
+        rendered = assemble_interaction(
+            title="T",
+            frontmatter="---\nid: n\n---",
+            source_display_path="meeting.vtt",
+            version_info=_version_info(),
+            analysis_result=analysis,
+            raw_transcript="x",
+        )
+        assert "- timestamp: needs-review" in rendered
+        assert "03:18:819" not in rendered
 
 
 class TestAnalyzeInteractionText:

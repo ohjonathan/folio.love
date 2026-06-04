@@ -51,3 +51,19 @@ def test_vtt_multispeaker_cue_renders_one_line_per_utterance():
         "[00:00:01.000 - 00:00:04.000] Jane Smith: Hello there.",
         "[00:00:01.000 - 00:00:04.000] Johnny Oh: Thanks for joining.",
     ]
+
+
+def test_vtt_cue_range_renders_canonical_timestamps():
+    # Issue #75 representative cue: both ends stay canonical HH:MM:SS.mmm so the
+    # downstream analysis prompt never sees malformed timestamps.
+    text = """WEBVTT
+
+00:03:03.650 --> 00:03:18.819
+<v Jane Smith>We reduced downtime.
+"""
+
+    normalized = normalize_transcript_text(text, ".vtt")
+
+    assert normalized.splitlines() == [
+        "[00:03:03.650 - 00:03:18.819] Jane Smith: We reduced downtime.",
+    ]

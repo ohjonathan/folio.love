@@ -31,6 +31,20 @@ deliverable per parent enrich spec §7.7. Subsequent breaking changes follow sta
   `.analysis_cache_diagram_*.json` even on `--no-cache` runs so later retries are
   surgical.
 
+### Fixed
+
+- **VTT/SRT analysis timestamps are normalized (issue #75).** Timestamps in
+  extracted claims, data points, decisions, open questions, action items, and
+  notable quotes are canonicalized to `HH:MM:SS.mmm` (or
+  `HH:MM:SS.mmm - HH:MM:SS.mmm` ranges) by a new shared
+  `folio.pipeline.timestamps.canonicalize_timestamp` helper, applied both to
+  VTT/SRT cue normalization and to LLM-extracted timestamp fields. Unambiguously
+  malformed values such as `04:21:900` or `01:20:49:519` (a colon before the
+  milliseconds) are repaired; values that cannot be repaired safely — e.g. the
+  inverted range `03:03:03.650 - 03:18:819` — are dropped and the finding is
+  flagged `timestamp_review` for manual review instead of emitting invalid data.
+  Plain `.txt`/`.md` ingest behavior is unchanged.
+
 ## [v1.4.0] — 2026-05-12
 
 First PyPI release since `v0.6.4`. This release publishes the already-documented
