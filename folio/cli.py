@@ -402,7 +402,8 @@ def _echo_retry_candidates(candidates, source_name: str) -> None:
               help="Comma-separated slide numbers for diagram retry (e.g. '35,36,39'). "
                    "Requires --diagrams-only or a --retry-*-diagrams flag.")
 @click.option("--diagrams-only", is_flag=True, default=False,
-              help="Re-run only diagram extraction on selected slides (no Pass 1/2; deck body preserved).")
+              help="Re-run only diagram extraction on diagram/mixed slides (no Pass 1/2; deck body "
+                   "preserved); optionally scope to specific slides with --slides.")
 @click.option("--retry-failed-diagrams", is_flag=True, default=False,
               help="Retry diagram slides whose sidecar shows a provider failure.")
 @click.option("--retry-review-required-diagrams", is_flag=True, default=False,

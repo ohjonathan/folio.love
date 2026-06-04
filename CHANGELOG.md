@@ -5,7 +5,7 @@ All notable changes to folio.love are documented here. The format loosely follow
 the `folio enrich diagnose` slice, which closes a roadmap-named, formerly-Tier-4-deferred
 deliverable per parent enrich spec §7.7. Subsequent breaking changes follow standard semver.
 
-## [Unreleased]
+## [v1.5.0] — 2026-06-04
 
 ### Added
 
