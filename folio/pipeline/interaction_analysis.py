@@ -14,6 +14,7 @@ from ..llm import ProviderInput, RateLimiter, execute_with_retry, get_provider
 from ..llm.runtime import EndpointNotAllowedError
 from ..llm.types import FallbackProfileSpec, ProviderRuntimeSettings
 from .speaker_analytics import SpeakerStats
+from .timestamps import canonicalize_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,7 @@ class InteractionFinding:
     validated: bool = False
     owner: Optional[str] = None
     due: Optional[str] = None
+    timestamp_review: bool = False
 
 
 @dataclass
@@ -192,6 +194,7 @@ class InteractionQuote:
     speaker: Optional[str] = None
     timestamp: Optional[str] = None
     validated: bool = False
+    timestamp_review: bool = False
 
 
 @dataclass
@@ -585,6 +588,7 @@ def _coerce_findings(value: Any, normalized_text: str) -> list[InteractionFindin
         confidence = str(item.get("confidence", "medium")).strip().lower()
         if confidence not in _CONFIDENCE_SCORES:
             confidence = "medium"
+        timestamp, timestamp_review = _coerce_timestamp(item.get("timestamp"))
         findings.append(
             InteractionFinding(
                 statement=statement,
@@ -592,11 +596,12 @@ def _coerce_findings(value: Any, normalized_text: str) -> list[InteractionFindin
                 element_type=element_type,
                 confidence=confidence,
                 speaker=_clean_optional(item.get("speaker")),
-                timestamp=_clean_optional(item.get("timestamp")),
+                timestamp=timestamp,
                 attribution=_clean_optional(item.get("attribution")),
                 validated=_validate_quote(quote, normalized_text),
                 owner=_clean_optional(item.get("owner")),
                 due=_clean_optional(item.get("due")),
+                timestamp_review=timestamp_review,
             )
         )
     return findings
@@ -618,14 +623,16 @@ def _coerce_quotes(value: Any, normalized_text: str) -> list[InteractionQuote]:
         confidence = str(item.get("confidence", "medium")).strip().lower()
         if confidence not in _CONFIDENCE_SCORES:
             confidence = "medium"
+        timestamp, timestamp_review = _coerce_timestamp(item.get("timestamp"))
         quotes.append(
             InteractionQuote(
                 quote=quote,
                 element_type=element_type,
                 confidence=confidence,
                 speaker=_clean_optional(item.get("speaker")),
-                timestamp=_clean_optional(item.get("timestamp")),
+                timestamp=timestamp,
                 validated=_validate_quote(quote, normalized_text),
+                timestamp_review=timestamp_review,
             )
         )
     return quotes
@@ -636,6 +643,22 @@ def _clean_optional(value: Any) -> Optional[str]:
         return None
     cleaned = str(value).strip()
     return cleaned or None
+
+
+def _coerce_timestamp(value: Any) -> tuple[Optional[str], bool]:
+    """Canonicalize an LLM-extracted timestamp field (issue #75).
+
+    Returns ``(canonical_value, needs_review)``. An absent timestamp yields
+    ``(None, False)``; a malformed-but-unrepairable one yields ``(None, True)``
+    so the finding is flagged for review rather than emitting an invalid value.
+    """
+    cleaned = _clean_optional(value)
+    if cleaned is None:
+        return None, False
+    result = canonicalize_timestamp(cleaned)
+    if result.value is not None:
+        return result.value, False
+    return None, True
 
 
 def _apply_review_state(result: InteractionAnalysisResult) -> None:
@@ -658,6 +681,13 @@ def _apply_review_state(result: InteractionAnalysisResult) -> None:
         else:
             summary["unvalidated"] += 1
             flags.append(f"unvalidated_claim_{index}")
+
+        if finding.timestamp_review:
+            flags.append(f"timestamp_review_claim_{index}")
+
+    for q_index, quote in enumerate(result.notable_quotes, start=1):
+        if quote.timestamp_review:
+            flags.append(f"timestamp_review_quote_{q_index}")
 
     result.grounding_summary = summary
     result.review_flags = flags

@@ -5,6 +5,8 @@ from __future__ import annotations
 import html
 import re
 
+from .timestamps import canonicalize_timestamp
+
 TRANSCRIPT_FORMAT_EXTENSIONS = frozenset({".vtt", ".srt"})
 
 _TIMING_LINE_RE = re.compile(
@@ -93,14 +95,11 @@ def _find_timing_line(block: list[str]) -> int | None:
 
 
 def _normalize_timestamp(value: str) -> str:
-    value = value.replace(",", ".")
-    parts = value.split(":")
-    if len(parts) == 2:
-        hours = "00"
-        minutes, seconds = parts
-    else:
-        hours, minutes, seconds = parts
-    return f"{int(hours):02d}:{int(minutes):02d}:{seconds}"
+    # Cue timing values are already well-formed (guaranteed by _TIMING_LINE_RE);
+    # route them through the shared canonicalizer so every emitted timestamp uses
+    # one canonical format and odd input degrades gracefully instead of raising.
+    result = canonicalize_timestamp(value)
+    return result.value if result.value is not None else value.replace(",", ".")
 
 
 def _cue_utterances(text_lines: list[str]) -> list[str]:
