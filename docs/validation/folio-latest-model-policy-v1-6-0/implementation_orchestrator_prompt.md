@@ -89,8 +89,8 @@ The design must settle, with review evidence:
 
 Current external facts to re-verify during proposal/spec work:
 
-- Anthropic marks `claude-sonnet-4-20250514` deprecated, with retirement on
-  2026-06-15, and lists `claude-sonnet-4-6` as active.
+- Anthropic lists `claude-sonnet-4-20250514` as retired as of 2026-06-15
+  and lists `claude-sonnet-4-6` as active.
 - Anthropic states Claude 4.6+ dateless IDs such as `claude-sonnet-4-6` are
   pinned snapshots, not evergreen pointers.
 - Gemini documents `*-latest` aliases as hot-swapped model variation aliases,

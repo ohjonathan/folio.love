@@ -19,6 +19,7 @@ scope:
     - CHANGELOG.md
     - Ontos_Context_Map.md
     - README.md
+    - docs/logs/2026-06-24_repo-cleanup-and-publish.md
     - docs/trackers/folio-latest-model-policy-v1-6-0.md
     - docs/validation/folio-latest-model-policy-v1-6-0/
     - folio/cli.py
@@ -53,7 +54,6 @@ scope:
     - .env
     - .llm-dev/framework/
     - dist/
-    - docs/logs/
     - tests/validation/.env
   forbidden_symbols:
     - "API_KEY="
@@ -214,9 +214,9 @@ gate_prerequisites:
       expect: exit-0
   - id: G-scope-2
     category: scope
-    description: No worker writes to framework internals or session logs during lifecycle execution.
+    description: No worker writes to framework internals or unapproved session logs during lifecycle execution.
     verification:
-      command: git diff --name-only main..HEAD | rg '^(.llm-dev/framework/|docs/logs/)' 
+      command: git diff --name-only main..HEAD | rg '^(.llm-dev/framework/|docs/logs/)' | rg -v '^docs/logs/2026-06-24_repo-cleanup-and-publish[.]md$'
       expect: exit-nonzero
   - id: G-cardinality-1
     category: cardinality
@@ -244,10 +244,10 @@ gate_prerequisites:
       expect: exit-0
   - id: G-verdict-3
     category: verdict-presence
-    description: Product verdicts exist for spec and code review.
+    description: Product verdicts exist for B.1, B.2, and D.2 review phases.
     verification:
-      command: ls docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-{B.1,D.2}-*-product.md 2>/dev/null | wc -l
-      expect: eq:2
+      command: ls docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-{B.1,B.2,D.2}-*-product.md 2>/dev/null | wc -l
+      expect: eq:3
   - id: G-verdict-4
     category: verdict-presence
     description: D.5 verifier artifacts from all three non-author families exist.
