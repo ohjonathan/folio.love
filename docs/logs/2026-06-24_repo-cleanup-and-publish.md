@@ -1,7 +1,7 @@
 ---
 id: log_20260624_repo-cleanup-and-publish
 type: log
-status: active
+status: complete
 event_type: chore
 source: codex
 branch: codex/folio-latest-model-policy-v1-6-0
@@ -58,6 +58,18 @@ Performed repository cleanup and publish preparation for
 - Local ignored caches were removed and can be recreated by normal development
   commands.
 
+## Merge Approval Closeout
+
+- Addressed review findings in commit `a67ecc4`:
+  - Required `B.1`, `B.2`, and `D.2` Product artifacts in `G-verdict-3`.
+  - Allowed only this cleanup session log while keeping unapproved `docs/logs/`
+    writes blocked by the scope gate.
+  - Updated the Anthropic external-facts prompt wording to describe
+    `claude-sonnet-4-20250514` as retired as of 2026-06-15.
+  - Removed the manifest trailing whitespace reported by `git diff --check`.
+- Confirmed PR #81 was approved to merge, clean against `main`, still draft
+  before final merge, and had green GitHub pytest checks.
+
 ## Testing
 
 - `scripts/llm-dev doctor` passed.
@@ -70,3 +82,8 @@ Performed repository cleanup and publish preparation for
   passed manifest conformance checks.
 - `.venv/bin/python -m pytest tests/ -q` passed with 2162 passed, 6 skipped,
   and 5 warnings.
+- After review fixes, `git diff --check origin/main...HEAD` passed.
+- After review fixes, `G-scope-2` exited 1 as expected.
+- `scripts/llm-dev verify-lifecycle frameworks/manifests/folio-latest-model-policy-v1-6-0.yaml`
+  reported `review_pending` because lifecycle receipts do not exist yet, which
+  is expected for this scaffold state.
