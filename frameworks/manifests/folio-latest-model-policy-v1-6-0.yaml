@@ -1,0 +1,310 @@
+manifest_version: "1.6.0"
+id: folio-latest-model-policy-v1-6-0
+slug: folio-latest-model-policy
+summary: Add an explicit model policy layer so Folio can offer opt-in provider "latest" profiles while keeping the default path auditable, release-tested, and safe against model retirement.
+
+user_facing: true
+lifecycle_mode: framework lifecycle
+
+pre_a:
+  entry: proposal
+  artifact_path: docs/validation/folio-latest-model-policy-v1-6-0/pre_a_proposal_review.md
+
+owners:
+  - Jonathan Oh (ohjonathan)
+
+scope:
+  allowed_paths:
+    - AGENTS.md
+    - CHANGELOG.md
+    - Ontos_Context_Map.md
+    - README.md
+    - docs/logs/2026-06-24_repo-cleanup-and-publish.md
+    - docs/trackers/folio-latest-model-policy-v1-6-0.md
+    - docs/validation/folio-latest-model-policy-v1-6-0/
+    - folio/cli.py
+    - folio/config.py
+    - folio/converter.py
+    - folio/llm/
+    - folio/pipeline/analysis.py
+    - folio/pipeline/diagram_extraction.py
+    - frameworks/manifests/folio-latest-model-policy-v1-6-0.yaml
+    - tests/test_analysis_cache.py
+    - tests/test_cli.py
+    - tests/test_config.py
+    - tests/test_converter_integration.py
+    - tests/test_frontmatter.py
+    - tests/test_ingest_integration.py
+    - tests/test_llm_metadata_frontmatter.py
+    - tests/test_llm_providers.py
+    - tests/test_model_policy.py
+  allowed_path_patterns:
+    - docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-*.md
+    - docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-*.yaml
+    - docs/validation/folio-latest-model-policy-v1-6-0/review-board/.prompts/folio-latest-model-policy-v1-6-0-*.md
+    - docs/validation/folio-latest-model-policy-v1-6-0/review-board/.raw/folio-latest-model-policy-v1-6-0-*.txt
+  composition_targets:
+    - path: docs/specs/v0.4.0_multi_provider_llm_support_spec.md
+      rationale: Read-through historical source for profile/routing semantics; this deliverable may cite it but must not rewrite the old spec.
+      shares_with_deliverable_id: folio-multi-provider-llm-support
+    - path: docs/product/02_Product_Requirements_Document.md
+      rationale: Read-through historical product context for LLM metadata and profile names; this deliverable may cite it but should avoid retroactive PRD churn unless a later docs slice owns that update.
+      shares_with_deliverable_id: folio-product-docs
+  forbidden_paths:
+    - .env
+    - .llm-dev/framework/
+    - dist/
+    - tests/validation/.env
+  forbidden_symbols:
+    - "API_KEY="
+    - "OPENAI_API_KEY="
+    - "ANTHROPIC_API_KEY="
+    - "GEMINI_API_KEY="
+  cardinality_assertions:
+    - name: Runtime default Anthropic model is centralized
+      command: "rg -n 'claude-sonnet-4-20250514|claude-sonnet-4-6' folio/config.py folio/pipeline/analysis.py folio/pipeline/diagram_extraction.py folio/llm | wc -l"
+      expect: "lte:8"
+    - name: Latest policy has tests
+      command: "test -f tests/test_model_policy.py && rg -q 'latest' tests/test_model_policy.py && rg -q 'retire|deprecat|warning' tests/test_model_policy.py"
+      expect: exit-0
+    - name: README documents stable and latest policy modes
+      command: "rg -q 'model_policy|latest' README.md && rg -q 'stable' README.md"
+      expect: exit-0
+
+artifacts:
+  spec: docs/validation/folio-latest-model-policy-v1-6-0/phase_a_spec.md
+  family_verdict: docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-<phase>-<family>-<role>.md
+  canonical_verdict: docs/validation/folio-latest-model-policy-v1-6-0/folio-latest-model-policy-v1-6-0_<phase>_canonical_verdict.md
+  product_verdict: docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-<phase>-<family>-product.md
+  fix_summary: docs/validation/folio-latest-model-policy-v1-6-0/d4_fix_summary.md
+  verification: docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-D.5-<family>-verifier.md
+  final_approval: docs/validation/folio-latest-model-policy-v1-6-0/d6_final_approval.md
+  retro: docs/validation/folio-latest-model-policy-v1-6-0/phase_e_retro.md
+  proposal_verdict: docs/validation/folio-latest-model-policy-v1-6-0/pre_a_proposal_review.md
+
+model_assignments:
+  - phase: "-A.proposal"
+    assignments:
+      codex: proposal-reviewer
+  - phase: A
+    assignments:
+      claude-opus: spec-author
+  - phase: B.1
+    assignments:
+      claude-sonnet: peer
+      codex: alignment
+      gemini: adversarial
+  - phase: B.2
+    assignments:
+      claude-sonnet: peer
+      codex: alignment
+      gemini: adversarial
+  - phase: B.3
+    assignments:
+      codex: meta-consolidator
+  - phase: C
+    assignments:
+      claude-opus: implementation-author
+  - phase: D.1
+    assignments:
+      codex: peer
+  - phase: D.2
+    assignments:
+      claude-sonnet: peer
+      codex: alignment
+      gemini: adversarial
+  - phase: D.3
+    assignments:
+      codex: meta-consolidator
+  - phase: D.4
+    assignments:
+      claude-opus: fix-author
+  - phase: D.5
+    assignments:
+      codex: verifier
+      gemini: verifier
+      claude-sonnet: verifier
+  - phase: D.6
+    assignments:
+      codex: final-approval
+  - phase: E
+    assignments:
+      gemini: retro
+  - phase: B.1
+    assignments:
+      codex: product
+  - phase: B.2
+    assignments:
+      codex: product
+  - phase: D.2
+    assignments:
+      claude-sonnet: product
+
+cli_capability_matrix:
+  claude-opus:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  claude-sonnet:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  codex:
+    shell: true
+    git: true
+    test_runner: true
+    doc_index: true
+  gemini:
+    shell: false
+    git: false
+    test_runner: false
+    doc_index: true
+    evidence_cap: static-inspection
+    fallback_models:
+      - gemini-3.1-pro-preview
+      - gemini-2.5-pro
+      - gemini-2.5-flash
+    writes_files_non_interactively: false
+
+smoke_checks:
+  - phase: C
+    checks:
+      - name: focused model-policy tests pass
+        command: ./.venv/bin/python -m pytest tests/test_config.py tests/test_model_policy.py tests/test_llm_providers.py -q
+        expect: exit-0
+      - name: full test suite passes
+        command: ./.venv/bin/python -m pytest tests/ -q
+        expect: exit-0
+  - phase: D.6
+    checks:
+      - name: strict lifecycle verifies
+        command: scripts/llm-dev verify-lifecycle frameworks/manifests/folio-latest-model-policy-v1-6-0.yaml
+        expect: exit-0
+
+regression_guards:
+  - name: Cache model key regression guard
+    command: ./.venv/bin/python -m pytest tests/test_analysis_cache.py -q
+    owns_deliverable_id: folio-analysis-cache
+  - name: User config preservation regression guard
+    command: ./.venv/bin/python -m pytest tests/test_config.py tests/test_model_policy.py -q
+    owns_deliverable_id: folio-multi-provider-llm-support
+
+lifecycle_receipt_inventory_path: docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-lifecycle-receipts.yaml
+
+gate_prerequisites:
+  - id: G-test-1
+    category: test
+    description: Focused model-policy tests pass.
+    verification:
+      command: ./.venv/bin/python -m pytest tests/test_config.py tests/test_model_policy.py tests/test_llm_providers.py -q
+      expect: exit-0
+  - id: G-test-2
+    category: test
+    description: Full test suite passes.
+    verification:
+      command: ./.venv/bin/python -m pytest tests/ -q
+      expect: exit-0
+  - id: G-scope-1
+    category: scope
+    description: Validation artifacts are rooted in the deliverable validation directory.
+    verification:
+      command: test -d docs/validation/folio-latest-model-policy-v1-6-0/review-board
+      expect: exit-0
+  - id: G-scope-2
+    category: scope
+    description: No worker writes to framework internals or unapproved session logs during lifecycle execution.
+    verification:
+      command: git diff --name-only main..HEAD | rg '^(.llm-dev/framework/|docs/logs/)' | rg -v '^docs/logs/2026-06-24_repo-cleanup-and-publish[.]md$'
+      expect: exit-nonzero
+  - id: G-cardinality-1
+    category: cardinality
+    description: Runtime model defaults are centralized enough to avoid future scattered string replacement.
+    verification:
+      command: rg -n 'claude-sonnet-4-20250514|claude-sonnet-4-6' folio/config.py folio/pipeline/analysis.py folio/pipeline/diagram_extraction.py folio/llm | wc -l
+      expect: lte:8
+  - id: G-cardinality-2
+    category: cardinality
+    description: README documents both stable and latest/auto policy behavior.
+    verification:
+      command: rg -q 'model_policy|latest' README.md && rg -q 'stable' README.md
+      expect: exit-0
+  - id: G-verdict-1
+    category: verdict-presence
+    description: Canonical B.3 verdict exists.
+    verification:
+      command: test -f docs/validation/folio-latest-model-policy-v1-6-0/folio-latest-model-policy-v1-6-0_B.3_canonical_verdict.md
+      expect: exit-0
+  - id: G-verdict-2
+    category: verdict-presence
+    description: Canonical D.3 verdict exists.
+    verification:
+      command: test -f docs/validation/folio-latest-model-policy-v1-6-0/folio-latest-model-policy-v1-6-0_D.3_canonical_verdict.md
+      expect: exit-0
+  - id: G-verdict-3
+    category: verdict-presence
+    description: Product verdicts exist for B.1, B.2, and D.2 review phases.
+    verification:
+      command: ls docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-{B.1,B.2,D.2}-*-product.md 2>/dev/null | wc -l
+      expect: eq:3
+  - id: G-verdict-4
+    category: verdict-presence
+    description: D.5 verifier artifacts from all three non-author families exist.
+    verification:
+      command: ls docs/validation/folio-latest-model-policy-v1-6-0/review-board/folio-latest-model-policy-v1-6-0-D.5-*-verifier.md 2>/dev/null | wc -l
+      expect: eq:3
+  - id: G-blocker-1
+    category: blocker-closure
+    description: No unresolved blocker marker remains in D.3 canonical verdict.
+    verification:
+      command: test -f docs/validation/folio-latest-model-policy-v1-6-0/folio-latest-model-policy-v1-6-0_D.3_canonical_verdict.md && ! rg -n 'UNRESOLVED|BLOCKER|REQUEST CHANGES' docs/validation/folio-latest-model-policy-v1-6-0/folio-latest-model-policy-v1-6-0_D.3_canonical_verdict.md
+      expect: exit-0
+  - id: G-branch-1
+    category: branch
+    description: Deliverable branch is active.
+    verification:
+      command: git rev-parse --abbrev-ref HEAD | rg '^codex/folio-latest-model-policy-v1-6-0$'
+      expect: exit-0
+
+tracker:
+  path: docs/trackers/folio-latest-model-policy-v1-6-0.md
+  columns:
+    - phase
+    - owner
+    - status
+    - artifact
+    - evidence
+    - timestamp
+
+branch_map:
+  default: codex/folio-latest-model-policy-v1-6-0
+
+references:
+  - path: https://platform.claude.com/docs/en/about-claude/models/overview
+    version: "2026-06-05"
+    relevance: Anthropic current model IDs and statement that Claude 4.6+ dateless IDs are pinned snapshots.
+  - path: https://platform.claude.com/docs/en/about-claude/model-deprecations
+    version: "2026-06-05"
+    relevance: Sonnet 4 dated model retirement timeline and active replacement candidates.
+  - path: https://ai.google.dev/gemini-api/docs/models
+    version: "2026-06-01"
+    relevance: Gemini stable/latest/preview/experimental model version semantics and hot-swap warning.
+  - path: https://developers.openai.com/api/docs/models
+    version: "2026-06-05"
+    relevance: OpenAI current model catalog and recommended model classes.
+  - path: https://developers.openai.com/api/docs/deprecations
+    version: "2026-06-05"
+    relevance: OpenAI model/alias deprecation behavior for latest-style aliases.
+  - path: docs/specs/v0.4.0_multi_provider_llm_support_spec.md
+    version: "2026-03-07"
+    relevance: Historical multi-provider profile/routing contract this slice extends.
+  - path: docs/logs/2026-06-04_v1-5-0-release-publish.md
+    version: "2026-06-04"
+    relevance: Current release baseline and post-release follow-up that identified the model-default risk.
+
+sibling_deliverable_ids: []
+review_rounds: []
+self_review_caveats: []
+consolidation_mode: external
+reviewer_family_substitutes: []
