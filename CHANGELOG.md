@@ -5,6 +5,25 @@ All notable changes to folio.love are documented here. The format loosely follow
 the `folio enrich diagnose` slice, which closes a roadmap-named, formerly-Tier-4-deferred
 deliverable per parent enrich spec §7.7. Subsequent breaking changes follow standard semver.
 
+## [v1.5.1] — 2026-06-25
+
+### Changed
+
+- **Release alignment maintenance.** Published the post-`v1.5.0` repository
+  maintenance state under a patch version so GitHub tags, package metadata, and
+  PyPI latest-version discovery no longer point only at the earlier `v1.5.0`
+  release line.
+- Archived the `v1.5.0` release-publish record and the
+  `folio-latest-model-policy-v1-6-0` llm-dev lifecycle scaffold in the release
+  history.
+
+### Notes
+
+- No runtime CLI behavior changes are included relative to `v1.5.0`.
+- This release does **not** ship the pending latest-model policy feature. That
+  `v1.6.0` work remains in llm-dev lifecycle planning/review before runtime
+  implementation.
+
 ## [v1.5.0] — 2026-06-04
 
 ### Added
